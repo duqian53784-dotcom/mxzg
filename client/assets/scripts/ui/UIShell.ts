@@ -7,14 +7,16 @@ import { Toast } from "./Toast";
 import { uiNode } from "./UiKit";
 
 /**
- * 挂在同一个 Canvas 上的三层：Page / Popup / Toast。
+ * 挂在同一个 Canvas 上的四层：Page / Chrome / Popup / Toast。
  * 场景里不用摆节点，MainApp 调 mount 即可。
- * Page / Toast 会按安全区平移并在必要时缩小；弹窗层只平移，遮罩仍盖住画面。
+ * Page / Chrome / Toast 会按安全区平移并在必要时缩小；弹窗层只平移，遮罩仍盖住画面。
+ * Chrome 不进页面栈，顶栏和底栏在打开面板时仍留在上面。
  */
 export class UIShell {
   readonly pages = new PageStack();
   readonly popups = new PopupQueue();
   readonly pageLayer: Node;
+  readonly chromeLayer: Node;
   readonly popupLayer: Node;
   readonly toastLayer: Node;
   readonly toast: Toast;
@@ -23,6 +25,7 @@ export class UIShell {
 
   private constructor(canvas: Node) {
     this.pageLayer = this.makeLayer(canvas, "LayerPage");
+    this.chromeLayer = this.makeLayer(canvas, "LayerChrome");
     this.popupLayer = this.makeLayer(canvas, "LayerPopup");
     this.toastLayer = this.makeLayer(canvas, "LayerToast");
     this.toast = new Toast(this.toastLayer);
@@ -30,6 +33,7 @@ export class UIShell {
       canvas,
       targets: [
         { node: this.pageLayer },
+        { node: this.chromeLayer },
         { node: this.popupLayer, scale: false },
         { node: this.toastLayer },
       ],

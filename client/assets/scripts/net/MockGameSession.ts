@@ -28,7 +28,14 @@ export interface MockSessionSeed {
   /** 下一关。缺省是 clearedStage + 1。 */
   stageId?: number;
   clearedStage?: number;
+  /** 不填则用新号起步：金币 100、钻石 20。 */
+  gold?: number;
+  diamond?: number;
 }
+
+/** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
+export const MOCK_STARTER_GOLD = 100;
+export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
@@ -50,6 +57,8 @@ export class MockGameSession {
   /** 下一关。 */
   stageId = 1;
   clearedStage = 0;
+  gold = MOCK_STARTER_GOLD;
+  diamond = MOCK_STARTER_DIAMOND;
   battleSeq = 0;
   battleId = "";
 
@@ -77,6 +86,8 @@ export class MockGameSession {
         level: 0,
         openDay: this.openDay,
         stageId: 1,
+        gold: 0,
+        diamond: 0,
       };
     }
     return {
@@ -87,10 +98,12 @@ export class MockGameSession {
       level: this.role.level,
       openDay: this.openDay,
       stageId: this.stageId,
+      gold: this.gold,
+      diamond: this.diamond,
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线进度和开服天重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天和钱包重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -101,6 +114,8 @@ export class MockGameSession {
     if (this.account) this.roleAccount = this.account;
     this.clearedStage = 0;
     this.stageId = 1;
+    this.gold = MOCK_STARTER_GOLD;
+    this.diamond = MOCK_STARTER_DIAMOND;
     this.battleId = "";
     this.syncDerived(true);
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
@@ -134,6 +149,8 @@ export class MockGameSession {
         rewards: [],
         openDay: this.openDay,
         level: this.role.level,
+        gold: this.gold,
+        diamond: this.diamond,
       };
     }
     if (win && stageId > this.clearedStage) {
@@ -142,15 +159,19 @@ export class MockGameSession {
     }
     const nextStageId = win ? this.clearedStage + 1 : stageId;
     if (win) this.stageId = nextStageId;
+    const rewards = win ? [{ id: 1, count: 10 }] : [];
+    this.addRewards(rewards);
     this.battleId = "";
     return {
       ok: true,
       stageId,
       win,
       nextStageId,
-      rewards: win ? [{ id: 1, count: 10 }] : [],
+      rewards,
       openDay: this.openDay,
       level: this.role.level,
+      gold: this.gold,
+      diamond: this.diamond,
     };
   }
 
@@ -179,6 +200,21 @@ export class MockGameSession {
     }
     if (typeof seed.openDay === "number" && isFinite(seed.openDay) && seed.openDay >= 1) {
       this.openDay = Math.floor(seed.openDay);
+    }
+    if (typeof seed.gold === "number" && isFinite(seed.gold)) this.gold = Math.max(0, Math.floor(seed.gold));
+    if (typeof seed.diamond === "number" && isFinite(seed.diamond)) {
+      this.diamond = Math.max(0, Math.floor(seed.diamond));
+    }
+  }
+
+  /** id 1 金币，id 2 钻石。其它 id 先忽略。 */
+  private addRewards(rewards: { id: number; count: number }[]): void {
+    for (let i = 0; i < rewards.length; i++) {
+      const reward = rewards[i];
+      const count = typeof reward.count === "number" && isFinite(reward.count) ? Math.floor(reward.count) : 0;
+      if (count <= 0) continue;
+      if (reward.id === 1) this.gold += count;
+      else if (reward.id === 2) this.diamond += count;
     }
   }
 

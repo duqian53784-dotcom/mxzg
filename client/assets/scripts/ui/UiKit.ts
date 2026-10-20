@@ -137,7 +137,8 @@ export function createButton(
   onClick: () => void,
   width = 300,
   height = 56,
-  fill?: Color
+  fill?: Color,
+  fontSize = 24
 ): Node {
   const root = uiNode("Btn");
   const ui = root.addComponent(UITransform);
@@ -146,7 +147,7 @@ export function createButton(
   const bg = createRect("bg", width, height, fill ?? new Color(46, 110, 190, 255));
   bg.parent = root;
 
-  const label = createLabel(text, 24, { width: width - 16, color: new Color(255, 255, 255, 255) });
+  const label = createLabel(text, fontSize, { width: width - 12, color: new Color(255, 255, 255, 255) });
   label.parent = root;
 
   const button = root.addComponent(Button);

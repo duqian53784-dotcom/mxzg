@@ -1,25 +1,40 @@
 /**
- * B3–C1 自检（不启动 Creator）。
+ * B3–C2 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isEntryOpen, isServerGateOpen, listOpenEntries } from "../assets/scripts/config/gates";
+import {
+  entryAccess,
+  findNavEntry,
+  NavHistory,
+  rootTabFor,
+  tabLabel,
+} from "../assets/scripts/config/nav";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
 import { GameLog } from "../assets/scripts/core/GameLog";
 import { loadLoginPrefs, LoginPrefs, PrefStore, resolveAccount, saveLoginPrefs } from "../assets/scripts/core/LoginPrefs";
-import { formatHubIdentity, Session } from "../assets/scripts/core/Session";
+import {
+  formatDiamondLine,
+  formatGoldLine,
+  formatHubIdentity,
+  formatNameLine,
+  formatSubLine,
+  Session,
+} from "../assets/scripts/core/Session";
 import { findServer, MOCK_SERVERS } from "../assets/scripts/core/servers";
 import { ErrorCode, errorText, failureCode, GameError, messageOf } from "../assets/scripts/core/errors";
 import { parseMockFixture } from "../assets/scripts/net/MockFixture";
-import { MockGameSession } from "../assets/scripts/net/MockGameSession";
+import { MOCK_STARTER_DIAMOND, MOCK_STARTER_GOLD, MockGameSession } from "../assets/scripts/net/MockGameSession";
 import { MockTransport } from "../assets/scripts/net/MockTransport";
 import { NetClient } from "../assets/scripts/net/NetClient";
 import { NetState } from "../assets/scripts/net/NetTypes";
 import { ReplayTransport } from "../assets/scripts/net/ReplayTransport";
 import { Cmd, P0_CMDS, Proto } from "../assets/scripts/net/protocol";
 import { PageStack } from "../assets/scripts/ui/PageStack";
+import { PanelNav } from "../assets/scripts/ui/PanelNav";
 import { PopupQueue } from "../assets/scripts/ui/PopupQueue";
 import {
   applySafeFrame,
@@ -154,6 +169,7 @@ function checkGates(): void {
   assert(war && magic, "gate rows");
   assert(!isServerGateOpen(war, 1) && isServerGateOpen(war, 3), "clan war D3");
   assert(!isServerGateOpen(magic, 29) && isServerGateOpen(magic, 30), "magic gate D30");
+  checkNav(rows, gateFile.rows);
 }
 
 async function checkNet(): Promise<void> {
@@ -242,6 +258,7 @@ async function checkSession(): Promise<void> {
   await net.connect("mock://local");
   const role = await Proto.roleEnter({}, net);
   assert(role.name === "MockHero" && role.level === 1 && role.stageId === 1 && role.openDay === 1, "fresh session");
+  assert(role.gold === MOCK_STARTER_GOLD && role.diamond === MOCK_STARTER_DIAMOND, "starter wallet");
 
   let next = 1;
   for (let i = 0; i < 5; i++) {
@@ -253,8 +270,10 @@ async function checkSession(): Promise<void> {
   }
   const after = await Proto.roleEnter({}, net);
   assert(after.level === 6 && after.stageId === 6 && after.openDay === 2 && after.name === "MockHero", "after 5 clears");
+  assert(after.gold === MOCK_STARTER_GOLD + 50 && after.diamond === MOCK_STARTER_DIAMOND, "gold from five clears");
   const lost = await Proto.stageResult({ stageId: 6, win: false }, net);
   assert(lost.ok && lost.nextStageId === 6 && lost.level === 6 && lost.openDay === 2 && lost.rewards.length === 0, "loss keeps progress");
+  assert(lost.gold === MOCK_STARTER_GOLD + 50 && lost.diamond === MOCK_STARTER_DIAMOND, "loss keeps wallet");
   const still = await Proto.roleEnter({}, net);
   assert(still.stageId === 6 && still.level === 6 && still.openDay === 2, "enter after loss");
 
@@ -262,6 +281,7 @@ async function checkSession(): Promise<void> {
   assert(created.ok && created.name === "新人" && created.level === 1, "create resets level");
   const reset = await Proto.roleEnter({}, net);
   assert(reset.name === "新人" && reset.level === 1 && reset.stageId === 1 && reset.openDay === 1, "create resets progress");
+  assert(reset.gold === MOCK_STARTER_GOLD && reset.diamond === MOCK_STARTER_DIAMOND, "create resets wallet");
   net.close();
 
   const seeded = new MockGameSession({ clearedStage: 3, openDay: 9, role: { name: "老号" } });
@@ -272,6 +292,9 @@ async function checkSession(): Promise<void> {
   await kept.connect("mock://local");
   const old = await Proto.roleEnter({}, kept);
   assert(old.name === "老号" && old.level === 4 && old.openDay === 9 && old.stageId === 4, "seeded enter");
+  assert(old.gold === MOCK_STARTER_GOLD && old.diamond === MOCK_STARTER_DIAMOND, "seed keeps starter wallet");
+  const rich = new MockGameSession({ gold: 7, diamond: 3, clearedStage: 1 });
+  assert(rich.gold === 7 && rich.diamond === 3 && rich.role.level === 2, "seed wallet");
   kept.simulateDrop();
   await waitFor(() => kept.state === "connected" && states.indexOf("reconnecting") >= 0, 2000);
   const again = await Proto.roleEnter({}, kept);
@@ -502,9 +525,28 @@ function checkLoginPrefs(): void {
   Session.serverName = "提审";
   Session.role = { roleId: 1001, name: "倩", level: 3 };
   assert(formatHubIdentity() === "倩 Lv3 · 提审", "hub shows role and server");
+  const prevDay = Session.openDay;
+  const prevStage = Session.stageId;
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  Session.openDay = 2;
+  Session.gold = 110;
+  Session.diamond = 20;
+  assert(formatNameLine() === "倩 Lv3", "name line");
+  assert(formatSubLine() === "提审 · 开服D2", "sub line");
+  assert(formatGoldLine() === "金币 110" && formatDiamondLine() === "钻石 20", "currency lines");
+  Session.applyEnter({ roleId: 9, name: "甲", level: 4, openDay: 6, stageId: 5, gold: 8.9, diamond: -3 });
+  assert(Session.role?.name === "甲" && Session.role?.level === 4 && Session.openDay === 6 && Session.stageId === 5, "apply enter progress");
+  assert(Session.gold === 8 && Session.diamond === 0, "apply enter floors wallet");
+  Session.applyEnter({ roleId: 9, name: "甲", level: 1 });
+  assert(Session.gold === 0 && Session.diamond === 0 && Session.openDay === 1 && Session.stageId === 1, "missing wallet clears");
   Session.account = prevAccount;
   Session.serverName = prevServer;
   Session.role = prevRole;
+  Session.openDay = prevDay;
+  Session.stageId = prevStage;
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
 }
 
 async function checkNoRole(): Promise<void> {
@@ -513,7 +555,7 @@ async function checkNoRole(): Promise<void> {
   const login = await Proto.login({ account: "qian", serverId: 2 }, net);
   assert(login.ok && login.account === "qian" && login.serverId === 2, "login other account");
   const none = await Proto.roleEnter({ account: "qian" }, net);
-  assert(none.ok === true && none.hasRole === false && none.name === "", "other account has no role");
+  assert(none.ok === true && none.hasRole === false && none.name === "" && none.gold === 0 && none.diamond === 0, "other account has no role");
   const bad = await Proto.roleCreate({ account: "qian", name: "  " }, net);
   assert(bad.ok === false && bad.code === ErrorCode.ROLE_NAME_EMPTY, "empty create still rejected");
   const stillGone = await Proto.roleEnter({}, net);
@@ -535,10 +577,74 @@ async function checkNoRole(): Promise<void> {
   net.close();
 }
 
+function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
+  const db = { opencondition: rows, systemGate: gates };
+  const city = findNavEntry("city");
+  const summon = findNavEntry("summon");
+  const smith = findNavEntry("smith");
+  const magic = findNavEntry("magic");
+  assert(city && summon && smith && magic, "nav entries");
+  assert(entryAccess(city, 1, 1, null).open, "city always open");
+  assert(entryAccess(summon, 1, 1, db).open, "summon open at lv1");
+  const smithLock = entryAccess(smith, 1, 1, db);
+  assert(!smithLock.open && smithLock.hint.indexOf("Lv5") >= 0, "smith hint");
+  assert(!entryAccess(smith, 4, 30, db).open && entryAccess(smith, 5, 1, db).open, "smith opens at lv5");
+  const magicLock = entryAccess(magic, 99, 1, db);
+  assert(!magicLock.open && magicLock.hint.split("开服第30天").length === 2, "magic hint once");
+  assert(!entryAccess(magic, 1, 29, db).open && entryAccess(magic, 1, 30, db).open, "magic opens on D30");
+  assert(!entryAccess(smith, 9, 30, null).open && entryAccess(smith, 9, 30, null).hint.indexOf("配置未加载") >= 0, "gated without config");
+  assert(tabLabel("铁匠铺", false) === "锁·铁匠铺" && tabLabel("铁匠铺", true) === "铁匠铺", "locked label");
+  assert(rootTabFor("arena") === "plays" && rootTabFor("log") === "city" && rootTabFor("smith") === "smith", "root tab");
+
+  const history = new NavHistory();
+  history.reset("city");
+  history.push("plays");
+  history.push("arena");
+  assert(history.current === "arena" && history.rootTab() === "plays" && history.depth === 3, "history child");
+  assert(history.pop() === "arena" && history.current === "plays", "history pop");
+  history.push("magic");
+  history.popTo("city");
+  assert(history.current === "city" && history.depth === 1, "history pop to city");
+  assert(history.pop() === null && history.current === "city", "history keeps root");
+}
+
+function checkPanelNav(): void {
+  const stack = new PageStack();
+  const closed: string[] = [];
+  const host = {
+    pages: stack,
+    openPage(name: string, _view: string) {
+      stack.open(name, {
+        setVisible() {},
+        dispose() {},
+      });
+    },
+    closePage() {
+      return stack.close();
+    },
+  };
+  const nav = new PanelNav<string>(host, (id) => id, (id) => closed.push(id));
+  nav.start("city");
+  assert(nav.current === "city" && stack.depth === 1 && stack.current === "city", "panel start");
+  nav.openChild("plays");
+  nav.openChild("arena");
+  assert(nav.current === "arena" && nav.rootTab === "plays" && stack.depth === 3, "panel child");
+  assert(nav.back() && nav.current === "plays" && closed[0] === "arena", "panel back");
+  nav.openRoot("hero");
+  assert(nav.current === "hero" && stack.current === "hero" && stack.depth === 2, "panel root replaces");
+  assert(closed.indexOf("plays") >= 0, "plays closed by root switch");
+  nav.openRoot("hero");
+  assert(stack.depth === 2 && nav.current === "hero", "same root is a no-op");
+  nav.openRoot("city");
+  assert(nav.current === "city" && stack.depth === 1 && stack.current === "city", "back to city");
+  assert(nav.back() === false && nav.current === "city", "city has no back");
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
   checkGates();
+  checkPanelNav();
   checkSafeArea();
   checkLog();
   checkLoginPrefs();

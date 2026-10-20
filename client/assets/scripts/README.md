@@ -4,7 +4,7 @@
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
 - `module/` 业务系统（尚未开始）
-- `ui/` 页面栈、弹窗队列、Toast、主城壳、安全区（`SafeArea.ts`）
+- `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
 
 场景在 `assets/scenes/`。Boot / Main / Battle 已建好。本目录脚本不会写进 `.scene`，需要在 Creator 里挂一次组件。
 
@@ -16,7 +16,7 @@
 4. 属性检查器 → **添加组件** → 自定义脚本 → **Boot**（`scripts/core/Boot.ts`）。
 5. **保存场景**。启动场景保持 Boot，点预览。
 6. 屏幕上是 Mock 登录面板：账号、密码（可留空）、三个服务器（本地Mock / 提审 / 正式占位）。账号默认 `mock`（或上次记下的账号）。点一个服务器，再点 **进入游戏**。
-7. 应进入 Main，并看到主城标题和按钮（主线 · 第N关 / 召唤 / 英雄 / 背包 / 公告 / 模拟断线），右上角还有「日志」。标题下面一行是角色名、等级和所选服务器，例如 `MockHero Lv1 · 本地Mock`。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会补挂。
+7. 应进入 Main。顶栏左侧是角色名、等级、所选服务器和开服天，右侧是金币、钻石，例如 `MockHero Lv1`、`本地Mock · 开服D1`、`金币 100`、`钻石 20`。底栏是主城 / 英雄 / 召唤 / 铁匠铺 / 玩法。画面中间是「主线 · 第N关」，旁边有日志、公告、模拟断线。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会补挂。
 8. 控制台标记：`[Boot] stage=version` → `hot-update` → `config` → `login` → `enter-main`，以及 `[Net] connect mock://local`、`[Config] loaded`。这些行现在带 `[mxzg]` 前缀，例如 `[mxzg][info][Boot] stage=version`。
 
 可选：
@@ -24,8 +24,8 @@
 - Boot 上勾选 `skipLogin`：不显示面板，仍用检查器里的账号进 Main。该账号在 Mock 里没有角色时，用账号名自动创角，不会停在创角面板。
 - `account` 默认 `mock`，可在检查器里改。面板会优先填上次登录的账号。
 - 只预览 Main：给 Main 场景的 Canvas 挂 **MainApp**。没有 Boot 时账号是空的，读表仍会自己加载。
-- 背包：打开第二页，返回关掉。公告：连续入队两张弹窗。模拟断线：看底部「网络」从 connected 到 reconnecting 再回到 connected。主线进度在断线后还在。
-- 主线：点「主线 · 第N关」会 `stage.enter` 再按胜利 `stage.result`（没有战斗画面）。Toast 给出下一关和奖励，等级和开服天跟着变。详见 `docs/mock-replay.md`。
+- 背包在底栏「玩法」里。打开后点返回关掉。公告：连续入队两张弹窗。模拟断线：看主城「网络」从 connected 到 reconnecting 再回到 connected。主线进度在断线后还在。
+- 主线：点「主线 · 第N关」会 `stage.enter` 再按胜利 `stage.result`（没有战斗画面）。Toast 给出下一关和奖励，顶栏等级、金币和开服天跟着变。详见 `docs/mock-replay.md`。
 - 发布构建前，构建场景列表要包含 Boot 和 Main，启动场景为 Boot。
 
 热更和真 socket 都不在这一步。网络是 `mock://local`。
@@ -45,9 +45,10 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 - `core/GameLog.ts`：`debug` / `info` / `warn` / `error`。环形缓冲默认 80 条。`mirrorConsole` 为 true 时打到控制台，前缀 `[mxzg]`。
 - `core/errors.ts`：错误码 → 中文。已覆盖空角色名、关卡无效、网络未连接 / 断开 / 超时、未知指令、回放结束或不匹配。
 - 登录、进关、结算失败会 Toast 这句中文，不再只写「见控制台」。
-- 主城「日志」打开最近 10 条，新的在上（代码生成，不改场景）。里面两个按钮用来验收：
+- 主城「日志」打开最近 10 条，新的在上（代码生成，不改场景）。里面三个按钮用来验收：
   1. **空名创角**：Toast「角色名不能为空」。当前角色不变。
   2. **断开提示**：Toast「网络已断开」，并关掉 Mock 连接。要继续主线请重新预览。「模拟断线」仍会重连，不会停在断开。
+  3. **开服D30**：只改本界面的开服天，用来看幻魔塔解锁。下一关结算会按 Mock 进度把天数改回去。
 
 ## 安全区（B8）
 
@@ -70,3 +71,22 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 - 登录成功后把账号、服务器写到 `localStorage`（`mxzg.account`、`mxzg.serverId`）。Creator 里优先 `sys.localStorage`。下次打开面板会填上。不记密码，不记角色名（角色在 Mock 进程里，重新预览会回到 MockHero）。
 
 `skipLogin` 仍不显示这两块面板。
+
+## 主城导航（C2）
+
+进 Main 之后整页都是代码生成的，不改 `.scene`，也不用新挂组件。C1 已经给 Boot 的 Canvas 挂过 `Boot` 的话，直接预览。
+
+顶栏和底栏在 `UIShell` 的 chrome 层，不进页面栈，打开面板时还在。系统面板走 `PanelNav`：底栏是换根页面（先回到主城再打开），玩法列表和日志是往上压一层，返回只关一层。
+
+底栏五个：主城、英雄、召唤、铁匠铺、玩法。解锁看 `opencondition`（主线等级）和 `system_gate`（幻魔塔的开服天）。未开启的按钮仍显示，文案是「锁·」，底色变灰；点击只 Toast 条件，不打开面板。
+
+| 入口 | 条件 | 点进去 |
+|------|------|--------|
+| 英雄 / 召唤 | 主线 Lv1 | 占位（C5 / C6） |
+| 铁匠铺 | 主线 Lv5 | 占位（C9）。Lv1 时应带锁 |
+| 玩法 | 随时 | 背包、羁绊、邮件、竞技场、许愿池、咖啡馆、日常副本、幻境之塔、幻魔塔 |
+| 幻魔塔 | 开服第 30 天（`opencondition` 和 `magic_tower_open_day`） | 占位。D1 点它应 Toast「开服第30天」 |
+
+金币、钻石来自 Mock 会话：新号 100 / 20，主线胜利每次 +10 金币。顶栏在结算后刷新。
+
+日志里的 **开服D30** 把 `Session.openDay` 设成 30，再进玩法时幻魔塔应能打开。这只影响本界面；再打一关主线，天数回到 Mock 按关卡算出的值。
