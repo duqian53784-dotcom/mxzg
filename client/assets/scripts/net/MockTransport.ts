@@ -201,6 +201,14 @@ export class MockTransport implements ITransport {
       this.emit(encodeRequest(Cmd.goal7Claim, session.goal7Claim(msg.data)));
       return;
     }
+    if (msg.cmd === Cmd.shopView) {
+      this.emit(encodeRequest(Cmd.shopView, session.shopView()));
+      return;
+    }
+    if (msg.cmd === Cmd.shopBuy) {
+      this.emit(encodeRequest(Cmd.shopBuy, session.shopBuy(msg.data)));
+      return;
+    }
     this.emit(encodeRequest(msg.cmd, { ok: true, echo: msg.data ?? null }));
   }
 

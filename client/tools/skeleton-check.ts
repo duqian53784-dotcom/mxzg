@@ -1,5 +1,5 @@
 /**
- * B3–C15 自检（不启动 Creator）。
+ * B3–C15 与基础商店自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -186,7 +186,33 @@ import {
   goal7WalletLine,
   heroLevelsToUpgrades,
 } from "../assets/scripts/module/goal7/tasks";
-import { Goal7Task } from "../assets/scripts/net/protocol/types";
+import {
+  applyShopBuy,
+  findShopOffer,
+  listShopSkus,
+  SHOP_BAG_LIMIT,
+  SHOP_BAG_PRICE,
+  SHOP_GOLD_BAG_ID,
+  SHOP_OFFERS,
+  SHOP_POTION_ID,
+  SHOP_POTION_LIMIT,
+  SHOP_POTION_PRICE,
+  SHOP_STONE_COUNT,
+  SHOP_STONE_ID,
+  SHOP_STONE_LIMIT,
+  SHOP_STONE_PRICE,
+  shopBuyButton,
+  shopBuyToast,
+  shopDiamondShortToast,
+  shopFailToast,
+  shopGoldShortToast,
+  shopMissingToast,
+  shopRefreshLine,
+  shopSkuLine,
+  shopSoldOutToast,
+  shopWalletLine,
+} from "../assets/scripts/module/shop/catalog";
+import { Goal7Task, ShopSku } from "../assets/scripts/net/protocol/types";
 import {
   applySummon,
   diamondShortToast,
@@ -857,6 +883,19 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(entryAccess(goal7Entry, 1, 1, null).open && entryAccess(goal7Entry, 1, 1, db).open, "goal7 open on day 1");
   assert(entryAccess(goal7Entry, 1, 30, db).open && goal7Entry.blurb.indexOf("70") >= 0, "goal7 ignores open day");
   assert(rootTabFor("goal7") === "plays", "goal7 stays on plays");
+  const shopEntry = findNavEntry("shop");
+  assert(shopEntry !== null && !shopEntry.gateId && !shopEntry.serverGateKey, "shop has no gate");
+  assert(entryAccess(shopEntry, 1, 1, null).open && entryAccess(shopEntry, 1, 1, db).open, "shop open on day 1");
+  assert(entryAccess(shopEntry, 1, 30, db).open && shopEntry.blurb.indexOf("金币") >= 0, "shop ignores open day");
+  assert(rootTabFor("shop") === "plays", "shop stays on plays");
+  const shopFromCity = new NavHistory();
+  shopFromCity.reset("city");
+  shopFromCity.push("shop");
+  assert(shopFromCity.current === "shop" && shopFromCity.rootTab() === "plays", "shop opened from city");
+  shopFromCity.pop();
+  shopFromCity.push("plays");
+  shopFromCity.push("shop");
+  assert(shopFromCity.current === "shop" && shopFromCity.rootTab() === "plays" && shopFromCity.pop() === "shop", "shop opened from plays");
   const goalFromCity = new NavHistory();
   goalFromCity.reset("city");
   goalFromCity.push("goal7");
@@ -2440,6 +2479,7 @@ async function main(): Promise<void> {
   await checkLogin7();
   await checkGoal7();
   await checkStagePush();
+  await checkShop();
   console.log("skeleton-check ok");
 }
 
@@ -2713,6 +2753,162 @@ async function checkStagePush(): Promise<void> {
   const ids = P0_CMDS.filter((row) => row.cmd === Cmd.stagePush).map((row) => row.id);
   assert(ids.length === 1 && ids[0] === 1203, "stage push cmd id");
   net.close();
+}
+
+async function checkShop(): Promise<void> {
+  assert(SHOP_OFFERS.length === 3, "three skus");
+  const stone = findShopOffer(SHOP_STONE_ID);
+  const bag = findShopOffer(SHOP_GOLD_BAG_ID);
+  const potion = findShopOffer(SHOP_POTION_ID);
+  assert(stone !== null && stone.itemId === IDLE_ITEM_ID && stone.price === SHOP_STONE_PRICE && stone.limit === SHOP_STONE_LIMIT, "stone offer");
+  assert(bag !== null && bag.currency === "diamond" && bag.price === SHOP_BAG_PRICE && bag.limit === SHOP_BAG_LIMIT, "bag offer");
+  assert(potion !== null && potion.currency === "gold" && potion.price === SHOP_POTION_PRICE && potion.limit === SHOP_POTION_LIMIT, "potion offer");
+  assert(findShopOffer(99) === null, "unknown offer");
+  const listed = listShopSkus(
+    () => 0,
+    (itemId) => (itemId === ITEM_GOLD_BAG ? STARTER_GOLD_BAG : 0)
+  );
+  assert(listed.length === 3 && listed[0].name === "强化石" && listed[1].owned === STARTER_GOLD_BAG, "list order");
+  assert(shopRefreshLine(1) === "限购随开服天刷新 · 当前开服第 1 天", "refresh line");
+  assert(shopWalletLine(100, 20) === "持有金币 100 · 钻石 20", "wallet line");
+  assert(shopSkuLine(listed[0]) === "强化石 ×5 · 金币 40 · 今日 0/3 · 背包 ×0", "stone line");
+  assert(shopBuyButton(listed[0]) === "购买", "buy label");
+  const sold: ShopSku = {
+    id: SHOP_STONE_ID,
+    itemId: IDLE_ITEM_ID,
+    name: "强化石",
+    count: 5,
+    currency: "gold",
+    price: 40,
+    bought: 3,
+    limit: 3,
+    owned: 15,
+  };
+  assert(shopBuyButton(sold) === "已售罄" && shopSkuLine(sold).indexOf("今日 3/3") >= 0, "sold line");
+  assert(shopBuyToast("强化石", 5, "gold", 40) === "购买成功：强化石 ×5，消耗金币 40", "gold toast");
+  assert(shopBuyToast("小金币袋", 1, "diamond", 8) === "购买成功：小金币袋 ×1，消耗钻石 8", "diamond toast");
+  assert(shopGoldShortToast(40) === "金币不足，购买需要 40", "gold short copy");
+  assert(shopDiamondShortToast(8) === "钻石不足，购买需要 8", "diamond short copy");
+  assert(shopSoldOutToast("小金币袋") === "小金币袋今日已售罄" && shopMissingToast() === "没有这个商品", "sold and missing copy");
+  assert(errorText(ErrorCode.SHOP_GOLD_SHORT) === "金币不足" && errorText(ErrorCode.SHOP_SOLD_OUT) === "今日已售罄", "shop error text");
+
+  const fresh = new MockGameSession();
+  const view = fresh.shopView();
+  assert(view.ok && view.openDay === 1 && view.gold === MOCK_STARTER_GOLD && view.diamond === MOCK_STARTER_DIAMOND, "fresh view");
+  assert(view.skus.length === 3 && view.skus[0].bought === 0 && view.skus[1].owned === STARTER_GOLD_BAG, "fresh shelf");
+  assert(fresh.clearedStage === 0 && fresh.arenaUsed === 0 && fresh.dailyUsed === 0 && fresh.loginDay === 1, "view leaves modes");
+
+  const stones = fresh.shopBuy({ id: SHOP_STONE_ID });
+  assert(stones.ok && stones.count === SHOP_STONE_COUNT && stones.price === SHOP_STONE_PRICE, "buy stones");
+  assert(stones.gold === MOCK_STARTER_GOLD - SHOP_STONE_PRICE && stones.diamond === MOCK_STARTER_DIAMOND, "stone spend");
+  assert(stones.owned === SHOP_STONE_COUNT && stones.bought === 1 && fresh.itemCounts[IDLE_ITEM_ID] === SHOP_STONE_COUNT, "stones land in bag");
+  assert(shopBuyToast(stones.name, stones.count, stones.currency, stones.price) === "购买成功：强化石 ×5，消耗金币 40", "stone toast from session");
+  const bag = fresh.bagList();
+  const stoneRow = bagItem(bag.items, IDLE_ITEM_ID);
+  assert(stoneRow !== null && stoneRow.name === "强化石" && stoneRow.count === SHOP_STONE_COUNT, "bag lists stones");
+  assert(fresh.shopView().skus[0].bought === 1 && fresh.shopView().gold === stones.gold, "same day keeps stock");
+
+  const broke = new MockGameSession({ gold: SHOP_POTION_PRICE - 1, diamond: SHOP_BAG_PRICE - 1 });
+  const noGold = broke.shopBuy({ id: SHOP_POTION_ID });
+  assert(noGold.ok === false && noGold.code === ErrorCode.SHOP_GOLD_SHORT && shopFailToast(noGold) === "金币不足，购买需要 50", "gold short");
+  assert(broke.gold === SHOP_POTION_PRICE - 1 && broke.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION && broke.shopView().skus[2].bought === 0, "gold short changes nothing");
+  const noDiamond = broke.shopBuy({ id: SHOP_GOLD_BAG_ID });
+  assert(noDiamond.ok === false && noDiamond.code === ErrorCode.SHOP_DIAMOND_SHORT && shopFailToast(noDiamond) === "钻石不足，购买需要 8", "diamond short");
+  assert(broke.diamond === SHOP_BAG_PRICE - 1 && broke.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG, "diamond short changes nothing");
+  const missing = broke.shopBuy({ id: 99 });
+  assert(missing.ok === false && missing.code === ErrorCode.SHOP_NOT_FOUND && shopFailToast(missing) === "没有这个商品", "missing sku");
+  const blank = broke.shopBuy({});
+  assert(blank.ok === false && blank.code === ErrorCode.SHOP_NOT_FOUND && broke.gold === SHOP_POTION_PRICE - 1, "blank id");
+
+  const bags = new MockGameSession();
+  for (let i = 0; i < SHOP_BAG_LIMIT; i++) {
+    const once = bags.shopBuy({ id: SHOP_GOLD_BAG_ID });
+    assert(once.ok && once.bought === i + 1, "bag buy " + (i + 1));
+  }
+  assert(bags.diamond === MOCK_STARTER_DIAMOND - SHOP_BAG_PRICE * SHOP_BAG_LIMIT, "two bags spend diamonds");
+  assert(bags.gold === MOCK_STARTER_GOLD && bags.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG + SHOP_BAG_LIMIT, "bags stack");
+  const soldOut = bags.shopBuy({ id: SHOP_GOLD_BAG_ID });
+  assert(soldOut.ok === false && soldOut.code === ErrorCode.SHOP_SOLD_OUT && shopFailToast(soldOut) === "小金币袋今日已售罄", "sold out");
+  assert(bags.diamond === MOCK_STARTER_DIAMOND - SHOP_BAG_PRICE * SHOP_BAG_LIMIT && bags.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG + SHOP_BAG_LIMIT, "sold out keeps wallet");
+  const summoner = new MockGameSession();
+  assert(summoner.shopBuy({ id: SHOP_GOLD_BAG_ID }).ok, "one bag before summon");
+  const summoned = summoner.summonPull({ count: 1 });
+  assert(summoned.ok && summoner.diamond === MOCK_STARTER_DIAMOND - SHOP_BAG_PRICE - SUMMON_SINGLE_COST, "summon still spends diamonds");
+  const afterSummon = summoner.shopBuy({ id: SHOP_GOLD_BAG_ID });
+  assert(afterSummon.ok === false && afterSummon.code === ErrorCode.SHOP_DIAMOND_SHORT && summoner.summonCursor === 1, "second bag waits for diamonds");
+
+  const seeded = new MockGameSession({
+    openDay: 4,
+    shopDay: 4,
+    shopBought: [
+      { id: SHOP_STONE_ID, count: 9 },
+      { id: 99, count: 2 },
+    ],
+    gold: 80,
+  });
+  const seededView = seeded.shopView();
+  assert(seededView.skus[0].bought === SHOP_STONE_LIMIT && seededView.openDay === 4, "seed clamps to limit");
+  const seededSold = seeded.shopBuy({ id: SHOP_STONE_ID });
+  assert(seededSold.ok === false && seededSold.code === ErrorCode.SHOP_SOLD_OUT && seeded.gold === 80, "seeded sold out");
+  const nextDay = new MockGameSession({
+    openDay: 2,
+    shopDay: 1,
+    shopBought: [{ id: SHOP_POTION_ID, count: SHOP_POTION_LIMIT }],
+    items: [{ id: ITEM_EXP_POTION, count: 4 }],
+  });
+  const restocked = nextDay.shopView();
+  assert(restocked.skus[2].bought === 0 && restocked.skus[2].owned === 4, "open day restocks");
+  const again = nextDay.shopBuy({ id: SHOP_POTION_ID });
+  assert(again.ok && again.owned === 5 && nextDay.gold === MOCK_STARTER_GOLD - SHOP_POTION_PRICE, "buy after restock");
+
+  const pushed = new MockGameSession();
+  assert(pushed.shopBuy({ id: SHOP_STONE_ID }).ok, "buy before push");
+  const rush = pushed.stagePush({});
+  assert(rush.ok && pushed.openDay === 15 && pushed.itemCounts[IDLE_ITEM_ID] === SHOP_STONE_COUNT, "push keeps stones");
+  assert(pushed.shopView().skus[0].bought === 0 && pushed.shopView().skus[0].owned === SHOP_STONE_COUNT, "push restocks on next view");
+  assert(pushed.gold === MOCK_STARTER_GOLD - SHOP_STONE_PRICE + 700, "push gold stacks on the purchase");
+
+  const reset = new MockGameSession({ gold: 10, shopBought: [{ id: SHOP_STONE_ID, count: 2 }], shopDay: 3, openDay: 3 });
+  assert(reset.shopView().skus[0].bought === 2, "preset bought");
+  assert(reset.roleCreate({ name: "新人" }).ok, "create");
+  assert(reset.gold === MOCK_STARTER_GOLD && reset.shopView().skus[0].bought === 0, "create clears purchases");
+  assert(reset.itemCounts[IDLE_ITEM_ID] === undefined && reset.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG, "create restores starter bag");
+  assert(reset.shopView().openDay === 1 && reset.arenaUsed === 0 && reset.dailyUsed === 0, "create leaves other modes reset");
+
+  const transport = new MockTransport({ latencyMs: 5 });
+  const net = quietNet(transport);
+  await net.connect("mock://local");
+  const remoteView = await Proto.shopView({}, net);
+  assert(remoteView.ok && remoteView.skus.length === 3 && remoteView.skus[0].bought === 0, "proto view");
+  const remoteBuy = await Proto.shopBuy({ id: SHOP_STONE_ID }, net);
+  const remoteBuyAgain = await Proto.shopBuy({ id: SHOP_STONE_ID }, net);
+  assert(remoteBuy.ok && remoteBuyAgain.ok && remoteBuyAgain.owned === SHOP_STONE_COUNT * 2, "proto buy twice");
+  assert(remoteBuyAgain.gold === MOCK_STARTER_GOLD - SHOP_STONE_PRICE * 2, "proto stone spend");
+  const remoteShort = await Proto.shopBuy({ id: SHOP_POTION_ID }, net);
+  assert(remoteShort.ok === false && remoteShort.code === ErrorCode.SHOP_GOLD_SHORT && remoteShort.gold === remoteBuyAgain.gold, "proto gold short");
+  const remoteBag = await Proto.bagList({}, net);
+  const remoteStones = bagItem(remoteBag.items, IDLE_ITEM_ID);
+  const remotePotion = bagItem(remoteBag.items, ITEM_EXP_POTION);
+  assert(remoteStones !== null && remoteStones.count === SHOP_STONE_COUNT * 2, "proto bag sees stones");
+  assert(remotePotion !== null && remotePotion.count === STARTER_EXP_POTION, "proto potion untouched");
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.shopView || row.cmd === Cmd.shopBuy).map((row) => row.id);
+  assert(ids.length === 2 && ids[0] === 2401 && ids[1] === 2402, "shop cmd ids");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyShopBuy(remoteBuy);
+  assert(Session.gold === remoteBuy.gold && Session.diamond === remoteBuy.diamond, "apply shop");
+  applyShopBuy({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteBuy.gold && Session.diamond === remoteBuy.diamond, "failed shop ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  net.close();
+}
+
+function bagItem(items: { id: number; name?: string; count: number }[], id: number): { id: number; name?: string; count: number } | null {
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].id === id) return items[i];
+  }
+  return null;
 }
 
 void main().catch((err) => {

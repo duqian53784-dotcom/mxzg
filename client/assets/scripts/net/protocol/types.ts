@@ -800,3 +800,63 @@ export interface Goal7ClaimResp {
    */
   code?: number;
 }
+
+/** 商店计价。gold 扣顶栏金币，diamond 扣顶栏钻石。 */
+export type ShopCurrency = "gold" | "diamond";
+
+/** 货架上的一格。bought 是今日已购次数，owned 是背包里该道具的数量。 */
+export interface ShopSku {
+  id: number;
+  itemId: number;
+  name: string;
+  /** 一次购买获得的个数。 */
+  count: number;
+  currency: ShopCurrency;
+  price: number;
+  bought: number;
+  /** 今日限购次数。Mock 都大于 0。 */
+  limit: number;
+  owned: number;
+}
+
+export interface ShopViewReq {
+  /** 占位。Mock 不看请求体。打开时按当前开服天刷新今日限购。 */
+  clientTime?: number;
+}
+
+export interface ShopViewResp {
+  ok: boolean;
+  skus: ShopSku[];
+  /** 当前开服天。限购跟着它走，不是墙钟倒计时。 */
+  openDay: number;
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface ShopBuyReq {
+  /** 商品 id，不是道具 id。 */
+  id: number;
+}
+
+export interface ShopBuyResp {
+  ok: boolean;
+  id: number;
+  name: string;
+  itemId: number;
+  count: number;
+  currency: ShopCurrency;
+  price: number;
+  bought: number;
+  limit: number;
+  /** 购买后背包里该道具的数量。失败时是购买前的数量。 */
+  owned: number;
+  gold: number;
+  diamond: number;
+  /**
+   * 没有这个商品 SHOP_NOT_FOUND，今日售罄 SHOP_SOLD_OUT，
+   * 金币不足 SHOP_GOLD_SHORT，钻石不足 SHOP_DIAMOND_SHORT。
+   * 成功可以不带。失败不改钱包、背包和已购次数。
+   */
+  code?: number;
+}

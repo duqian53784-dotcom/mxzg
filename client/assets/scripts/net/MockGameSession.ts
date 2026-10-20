@@ -78,6 +78,7 @@ import {
   tallyGoal7,
   Goal7Progress,
 } from "../module/goal7/tasks";
+import { findShopOffer, listShopSkus } from "../module/shop/catalog";
 import {
   isSummonCount,
   poolAt,
@@ -119,6 +120,8 @@ import {
   Login7ViewResp,
   Goal7ClaimResp,
   Goal7ViewResp,
+  ShopBuyResp,
+  ShopViewResp,
 } from "./protocol/types";
 
 /** 一场预览里的假服状态。同一 MockTransport 上多次请求共用这一份。 */
@@ -200,6 +203,16 @@ export interface MockSessionSeed {
   idleClaimCount?: number;
   /** 已经领取的七日目标 id。不认识的字符串会记下，但不出现在任务列表里。 */
   goalClaimed?: string[];
+  /**
+   * 今日各商品已购次数。id 是商品 id，不是道具 id。
+   * 不认识的 id 忽略。超过该商品限购时按限购计。
+   */
+  shopBought?: { id: number; count: number }[];
+  /**
+   * 已购次数所属的开服天。不填则跟当前 openDay 对齐，避免一打开就把次数清掉。
+   * 和 openDay 不一致时，下一次查看或购买会把次数清零，背包里已经买到的不收回。
+   */
+  shopDay?: number;
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -208,7 +221,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录和七日目标都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录、七日目标和基础商店都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -277,6 +290,11 @@ export class MockGameSession {
   idleClaimCount = 0;
   /** 七日目标 id → 已领取。 */
   private goalClaimed: { [id: string]: boolean } = {};
+  /** 商品 id → 当前 shopDay 上已经购买的次数。 */
+  private shopBought: { [id: number]: number } = {};
+  /** 已购次数所属开服天。和 openDay 不同时，下一次商店操作清零。 */
+  shopDay = 1;
+  private shopDaySeeded = false;
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
@@ -286,6 +304,7 @@ export class MockGameSession {
     if (!this.arenaDaySeeded) this.arenaDay = this.openDay;
     if (!this.towerDaySeeded) this.towerDay = this.openDay;
     if (!this.dailyDaySeeded) this.dailyDay = this.openDay;
+    if (!this.shopDaySeeded) this.shopDay = this.openDay;
     this.ensureHeroes();
     this.ensureStarterGear();
     if (!this.itemsSeeded) this.grantStarterItems();
@@ -329,7 +348,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数、七日登录和七日目标重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数、七日登录、七日目标和商店已购重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -361,6 +380,7 @@ export class MockGameSession {
     this.dailyDay = this.openDay;
     this.resetLogin7();
     this.resetGoal7();
+    this.resetShop();
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
 
@@ -824,6 +844,58 @@ export class MockGameSession {
       diamond: this.diamond,
       used: this.dailyUsed,
       limit: DAILY_GOLD_LIMIT,
+    };
+  }
+
+  /**
+   * 只读基础商店。按当前开服天刷新今日限购，不改钱包和背包。
+   * 样例 opencondition 没有商店，这里不判断主线等级。
+   */
+  shopView(): ShopViewResp {
+    this.refreshShopDay();
+    return {
+      ok: true,
+      skus: listShopSkus(
+        (id) => this.shopBoughtCount(id),
+        (itemId) => this.itemCount(itemId)
+      ),
+      openDay: this.openDay,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 买一件商品。金币商品扣金币，钻石商品扣钻石，道具写入背包。
+   * 没有这个商品、今日已达限购、货币不足时拒绝，钱包、背包和已购次数都不变。
+   * 不改英雄、武器、挂机、主线、召唤和各玩法次数。
+   */
+  shopBuy(data: unknown): ShopBuyResp {
+    this.refreshShopDay();
+    const id = Math.floor(numField(asRecord(data), "id", 0));
+    const offer = findShopOffer(id);
+    if (!offer) return this.shopFail(id, ErrorCode.SHOP_NOT_FOUND);
+    const bought = this.shopBoughtCount(id);
+    if (offer.limit > 0 && bought >= offer.limit) return this.shopFail(id, ErrorCode.SHOP_SOLD_OUT);
+    if (offer.currency === "gold" && this.gold < offer.price) return this.shopFail(id, ErrorCode.SHOP_GOLD_SHORT);
+    if (offer.currency === "diamond" && this.diamond < offer.price) return this.shopFail(id, ErrorCode.SHOP_DIAMOND_SHORT);
+    if (offer.currency === "gold") this.gold -= offer.price;
+    else this.diamond -= offer.price;
+    this.addItem(offer.itemId, offer.count);
+    this.shopBought[id] = bought + 1;
+    return {
+      ok: true,
+      id,
+      name: offer.name,
+      itemId: offer.itemId,
+      count: offer.count,
+      currency: offer.currency,
+      price: offer.price,
+      bought: bought + 1,
+      limit: offer.limit,
+      owned: this.itemCount(offer.itemId),
+      gold: this.gold,
+      diamond: this.diamond,
     };
   }
 
@@ -1337,6 +1409,23 @@ export class MockGameSession {
       const count = Math.floor(seed.idleClaimCount);
       this.idleClaimCount = count > 0 ? count : 0;
     }
+    if (Array.isArray(seed.shopBought)) {
+      for (let i = 0; i < seed.shopBought.length; i++) {
+        const row = seed.shopBought[i];
+        if (!row || typeof row.id !== "number" || !isFinite(row.id)) continue;
+        const offer = findShopOffer(row.id);
+        if (!offer) continue;
+        if (typeof row.count !== "number" || !isFinite(row.count)) continue;
+        let count = Math.floor(row.count);
+        if (count < 0) count = 0;
+        if (count > offer.limit) count = offer.limit;
+        if (count > 0) this.shopBought[offer.id] = count;
+      }
+    }
+    if (typeof seed.shopDay === "number" && isFinite(seed.shopDay) && seed.shopDay >= 1) {
+      this.shopDay = Math.floor(seed.shopDay);
+      this.shopDaySeeded = true;
+    }
     if (Array.isArray(seed.goalClaimed)) {
       for (let i = 0; i < seed.goalClaimed.length; i++) {
         const raw = seed.goalClaimed[i];
@@ -1529,6 +1618,24 @@ export class MockGameSession {
     this.dailyUsed = 0;
   }
 
+  /** 开服天变了就把商店今日已购清零。背包里已经买到的留下。 */
+  private refreshShopDay(): void {
+    if (this.shopDay === this.openDay) return;
+    this.shopDay = this.openDay;
+    this.shopBought = {};
+  }
+
+  private resetShop(): void {
+    this.shopBought = {};
+    this.shopDay = this.openDay;
+  }
+
+  private shopBoughtCount(id: number): number {
+    const raw = this.shopBought[id];
+    if (typeof raw !== "number" || !isFinite(raw) || raw <= 0) return 0;
+    return Math.floor(raw);
+  }
+
   private resetLogin7(): void {
     this.loginDay = 1;
     for (let i = 0; i < this.loginClaimed.length; i++) this.loginClaimed[i] = false;
@@ -1584,6 +1691,25 @@ export class MockGameSession {
       gold: this.gold,
       diamond: this.diamond,
       loginDay: this.loginDay,
+      code,
+    };
+  }
+
+  private shopFail(id: number, code: number): ShopBuyResp {
+    const offer = findShopOffer(id);
+    return {
+      ok: false,
+      id,
+      name: offer ? offer.name : "",
+      itemId: offer ? offer.itemId : 0,
+      count: offer ? offer.count : 0,
+      currency: offer ? offer.currency : "gold",
+      price: offer ? offer.price : 0,
+      bought: this.shopBoughtCount(id),
+      limit: offer ? offer.limit : 0,
+      owned: offer ? this.itemCount(offer.itemId) : 0,
+      gold: this.gold,
+      diamond: this.diamond,
       code,
     };
   }
