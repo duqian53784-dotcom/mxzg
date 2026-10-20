@@ -3,6 +3,12 @@ export { Cmd, CmdId, P0_CMDS } from "./cmds";
 export type { CmdName, CmdSpec } from "./cmds";
 export { Proto } from "./Proto";
 export type {
+  BagItem,
+  BagItemKind,
+  BagListReq,
+  BagListResp,
+  BagUseReq,
+  BagUseResp,
   HeartbeatReq,
   HeartbeatResp,
   HeroCard,

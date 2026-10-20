@@ -16,6 +16,8 @@ export interface HeroRosterEntry {
   name: string;
   level: number;
   star: number;
+  /** 经验药水累加。缺省当 0。金币升级不改这项。 */
+  exp?: number;
 }
 
 export interface HeroSeed {

@@ -28,6 +28,7 @@ import {
 import { NetClient } from "../net/NetClient";
 import { NetState } from "../net/NetTypes";
 import { Proto } from "../net/protocol";
+import { BagPage, buildBagPage } from "./BagPage";
 import { CityChrome, mountCityChrome, TabState } from "./CityChrome";
 import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage } from "./HeroPage";
 import { buildSummonPage, SummonPage } from "./SummonPage";
@@ -46,6 +47,7 @@ const GATE_COLOR = new Color(170, 190, 170, 255);
 const LOCKED_FILL = new Color(78, 84, 98, 255);
 const OPEN_FILL = new Color(46, 110, 190, 255);
 const IDLE_FILL = new Color(168, 116, 42, 255);
+const BAG_FILL = new Color(36, 128, 96, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -58,6 +60,7 @@ export class MainApp extends Component {
   private heroList: HeroListPage | null = null;
   private heroDetail: HeroDetailPage | null = null;
   private summon: SummonPage | null = null;
+  private bag: BagPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -83,6 +86,8 @@ export class MainApp extends Component {
     this.heroDetail = null;
     this.summon?.dispose();
     this.summon = null;
+    this.bag?.dispose();
+    this.bag = null;
     this.shell?.dispose();
   }
 
@@ -160,10 +165,10 @@ export class MainApp extends Component {
     if (id === "hero") return this.mountHeroList();
     if (id === "hero-detail") return this.mountHeroDetail();
     if (id === "summon") return this.mountSummon();
+    if (id === "bag") return this.mountBag();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
-    if (entry && entry.id === "bag") return this.buildBag(entry);
     return this.buildPlaceholder(entry, id);
   }
 
@@ -176,8 +181,9 @@ export class MainApp extends Component {
       0,
       280
     );
-    place(createButton("挂机", () => this.openIdle(), 420, 64, IDLE_FILL), page, 0, 185);
-    place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, 95);
+    place(createButton("挂机", () => this.openIdle(), 420, 64, IDLE_FILL), page, 0, 200);
+    place(createButton("背包", () => this.openBag(), 420, 64, BAG_FILL), page, 0, 120);
+    place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, 30);
     place(
       createButton("公告", () => {
         GameLog.shared.info("MainApp", "click notice");
@@ -187,7 +193,7 @@ export class MainApp extends Component {
       }, 140, 48),
       page,
       0,
-      95
+      30
     );
     place(
       createButton("模拟断线", () => {
@@ -197,10 +203,10 @@ export class MainApp extends Component {
       }, 160, 48),
       page,
       190,
-      95
+      30
     );
-    place(createLabel("主城场景占位", 26, { color: MUTED }), page, 0, -20);
-    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -70);
+    place(createLabel("主城场景占位", 26, { color: MUTED }), page, 0, -50);
+    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -100);
 
     this.gateNode = place(
       createLabel(this.gateText(), 20, { color: GATE_COLOR, width: 680, height: 72 }),
@@ -256,14 +262,6 @@ export class MainApp extends Component {
     place(createLabel(title, 40, { color: TITLE_COLOR }), page, 0, 80);
     place(createLabel(blurb, 22, { color: MUTED, width: 560 }), page, 0, 16);
     place(createButton("返回", () => this.back(), 220, 52), page, 0, -70);
-    return page;
-  }
-
-  private buildBag(entry: NavEntry): Node {
-    const page = this.pageRoot("BagPage");
-    place(createLabel("背包（占位）", 40, { color: TITLE_COLOR }), page, 0, 80);
-    place(createLabel(entry.blurb, 22, { color: MUTED }), page, 0, 20);
-    place(createButton("返回", () => this.back(), 220, 52), page, 0, -60);
     return page;
   }
 
@@ -356,6 +354,36 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.summon = page;
+    return page.node;
+  }
+
+  /**
+   * 主城和玩法都能进。opencondition 未开时只 Toast，和底栏锁一样。
+   * 没连上时不压页面。
+   */
+  private openBag(): void {
+    GameLog.shared.info("MainApp", "click bag");
+    if (!this.allow("bag")) return;
+    if (!this.ensureNet()) return;
+    this.panels?.openChild("bag");
+    this.refreshChrome();
+  }
+
+  private mountBag(): Node {
+    this.bag?.dispose();
+    const page = buildBagPage({
+      showToast: (text) => this.shell?.showToast(text, 2200),
+      alive: () => this.isValid,
+      list: () => Proto.bagList({}, NetClient.shared),
+      use: (id, count) => Proto.bagUse({ id, count }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.heroList?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.bag = page;
     return page.node;
   }
 
@@ -505,6 +533,10 @@ export class MainApp extends Component {
     if (id === "summon") {
       this.summon?.dispose();
       this.summon = null;
+    }
+    if (id === "bag") {
+      this.bag?.dispose();
+      this.bag = null;
     }
   }
 

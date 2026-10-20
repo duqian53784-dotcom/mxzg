@@ -1,5 +1,5 @@
 /**
- * B3–C6 自检（不启动 Creator）。
+ * B3–C7 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -14,6 +14,23 @@ import {
   tabLabel,
 } from "../assets/scripts/config/nav";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
+import {
+  applyBagUse,
+  applyHeroExp,
+  bagFailToast,
+  bagRowText,
+  bagUseToast,
+  emptyBagToast,
+  EXP_PER_LEVEL,
+  EXP_POTION_GAIN,
+  GOLD_BAG_GAIN,
+  ITEM_EXP_POTION,
+  ITEM_GOLD_BAG,
+  notEnoughToast,
+  notUsableTip,
+  STARTER_EXP_POTION,
+  STARTER_GOLD_BAG,
+} from "../assets/scripts/module/bag/items";
 import {
   applyHeroUpgrade,
   goldShortToast,
@@ -238,10 +255,10 @@ async function checkNet(): Promise<void> {
   const role = await net.request("role.enter", {});
   const roleData = role.data as { name?: string; level?: number };
   assert(roleData.name === "MockHero" && roleData.level === 1, "role payload");
-  const echo = await net.request("bag.list", { page: 1 });
-  const echoData = echo.data as { ok?: boolean };
-  assert(echoData.ok === true, "echo payload");
-  assert(seen.indexOf("login") >= 0 && seen.indexOf("role.enter") >= 0 && seen.indexOf("bag.list") >= 0, "dispatch");
+  const echo = await net.request("mail.list", { page: 1 });
+  const echoData = echo.data as { ok?: boolean; echo?: { page?: number } };
+  assert(echoData.ok === true && echoData.echo && echoData.echo.page === 1, "echo payload");
+  assert(seen.indexOf("login") >= 0 && seen.indexOf("role.enter") >= 0 && seen.indexOf("mail.list") >= 0, "dispatch");
 
   const typedLogin = await Proto.login({ account: "mock", serverId: 3 }, net);
   assert(typedLogin.ok && typedLogin.token === "mock-token" && typedLogin.serverId === 3, "proto login");
@@ -665,6 +682,19 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   idleNav.push("plays");
   idleNav.push("idle");
   assert(idleNav.current === "idle" && idleNav.rootTab() === "plays", "idle opened from plays");
+  const bagEntry = findNavEntry("bag");
+  assert(bagEntry !== null && bagEntry.gateId === "bag", "bag entry");
+  assert(entryAccess(bagEntry, 1, 1, db).open, "bag open at lv1");
+  const bagLock = entryAccess(bagEntry, 0, 1, db);
+  assert(!bagLock.open && bagLock.hint.indexOf("Lv1") >= 0, "bag locked below lv1");
+  const bagFromCity = new NavHistory();
+  bagFromCity.reset("city");
+  bagFromCity.push("bag");
+  assert(bagFromCity.current === "bag" && bagFromCity.rootTab() === "city", "bag opened from city");
+  bagFromCity.reset("city");
+  bagFromCity.push("plays");
+  bagFromCity.push("bag");
+  assert(bagFromCity.current === "bag" && bagFromCity.rootTab() === "plays", "bag opened from plays");
 
   const history = new NavHistory();
   history.reset("city");
@@ -1091,6 +1121,146 @@ async function checkSummon(): Promise<void> {
   net.close();
 }
 
+async function checkBag(): Promise<void> {
+  assert(GOLD_BAG_GAIN === 50 && EXP_POTION_GAIN === 100 && EXP_PER_LEVEL === 100, "bag amounts");
+  assert(bagRowText({ id: ITEM_GOLD_BAG, name: "小金币袋", count: 2, kind: "consumable", usable: true, desc: "" }) === "小金币袋 ×2 · 可使用", "bag row");
+  assert(bagUseToast({ ok: true, id: ITEM_GOLD_BAG, name: "小金币袋", spent: 1, owned: 1, gold: 150, diamond: 20, goldGain: 50 }) === "使用成功：金币 +50", "gold toast");
+  assert(
+    bagUseToast({
+      ok: true,
+      id: ITEM_EXP_POTION,
+      name: "经验药水",
+      spent: 1,
+      owned: 1,
+      gold: 100,
+      diamond: 20,
+      heroName: "光耀骑士",
+      heroLevel: 2,
+      expGain: 100,
+      leveled: true,
+    }) === "使用成功：光耀骑士升至 Lv2",
+    "exp toast"
+  );
+  assert(emptyBagToast() === "背包是空的" && notEnoughToast() === "数量不足", "empty and short text");
+  assert(notUsableTip("material", "强化石") === "强化石不能直接使用", "stone tip");
+  assert(notUsableTip("fragment", "光耀骑士碎片") === "英雄碎片不能直接使用", "shard tip");
+  assert(errorText(ErrorCode.BAG_EMPTY) === "背包是空的", "empty code text");
+  assert(errorText(ErrorCode.BAG_NOT_FOUND) === "没有这个道具", "missing item text");
+  assert(errorText(ErrorCode.BAG_NOT_ENOUGH) === "数量不足", "not enough text");
+  assert(errorText(ErrorCode.BAG_NOT_USABLE) === "该道具不能直接使用", "not usable text");
+  assert(errorText(ErrorCode.BAG_COUNT_INVALID) === "使用数量无效", "bad count text");
+  assert(errorText(ErrorCode.BAG_HERO_MAX) === "英雄已满级，无法使用", "hero max text");
+  const stepped = applyHeroExp(1, 0, 100, HERO_MAX_LEVEL);
+  assert(stepped.level === 2 && stepped.exp === 0 && stepped.leveled, "exp levels once");
+  const capped = applyHeroExp(HERO_MAX_LEVEL, 0, 100, HERO_MAX_LEVEL);
+  assert(capped.level === HERO_MAX_LEVEL && capped.leveled === false, "exp at max stays");
+
+  const fresh = new MockGameSession();
+  const anchor = fresh.idleAnchorMs;
+  const listed = fresh.bagList();
+  assert(listed.ok && listed.items.length === 2 && listed.gold === MOCK_STARTER_GOLD, "starter bag");
+  assert(listed.items[0].id === ITEM_GOLD_BAG && listed.items[0].count === STARTER_GOLD_BAG && listed.items[0].usable, "gold bags first");
+  assert(listed.items[1].id === ITEM_EXP_POTION && listed.items[1].count === STARTER_EXP_POTION && listed.items[1].name === "经验药水", "potions second");
+  const goldUse = fresh.bagUse({ id: ITEM_GOLD_BAG, count: 1 });
+  assert(goldUse.ok && goldUse.goldGain === GOLD_BAG_GAIN && goldUse.spent === 1 && goldUse.owned === 1, "use one gold bag");
+  assert(fresh.gold === MOCK_STARTER_GOLD + GOLD_BAG_GAIN && fresh.diamond === MOCK_STARTER_DIAMOND, "gold bag adds gold only");
+  assert(fresh.heroes[0].level === 1 && fresh.idleAnchorMs === anchor && fresh.stageId === 1 && fresh.summonCursor === 0, "gold bag leaves hero idle and summon");
+  const expUse = fresh.bagUse({ id: ITEM_EXP_POTION });
+  assert(expUse.ok && expUse.leveled && expUse.heroName === "光耀骑士" && expUse.heroLevel === 2 && expUse.expGain === EXP_POTION_GAIN, "potion levels lead");
+  assert(fresh.heroes[0].level === 2 && fresh.heroes[1].level === 1 && fresh.heroes[0].star === 3, "only lead hero levels");
+  assert(fresh.gold === MOCK_STARTER_GOLD + GOLD_BAG_GAIN && fresh.itemCounts[ITEM_EXP_POTION] === 1, "potion does not spend gold");
+  const upgraded = fresh.heroUpgrade({ heroId: 10001 });
+  assert(upgraded.ok && upgraded.cost === 50 && upgraded.hero && upgraded.hero.level === 3 && fresh.gold === MOCK_STARTER_GOLD + GOLD_BAG_GAIN - 50, "gold upgrade follows potion level");
+  const missing = fresh.bagUse({ id: 999 });
+  assert(missing.ok === false && missing.code === ErrorCode.BAG_NOT_FOUND && fresh.gold === MOCK_STARTER_GOLD + GOLD_BAG_GAIN - 50, "unknown item");
+  const badCount = fresh.bagUse({ id: ITEM_GOLD_BAG, count: 0 });
+  assert(badCount.ok === false && badCount.code === ErrorCode.BAG_COUNT_INVALID && fresh.itemCounts[ITEM_GOLD_BAG] === 1, "zero count");
+  const tooMany = fresh.bagUse({ id: ITEM_GOLD_BAG, count: 5 });
+  assert(tooMany.ok === false && tooMany.code === ErrorCode.BAG_NOT_ENOUGH && tooMany.need === 5 && fresh.itemCounts[ITEM_GOLD_BAG] === 1, "not enough bags");
+  fresh.bagUse({ id: ITEM_GOLD_BAG, count: 1 });
+  fresh.bagUse({ id: ITEM_EXP_POTION, count: 1 });
+  assert(fresh.itemCounts[ITEM_GOLD_BAG] === undefined && fresh.itemCounts[ITEM_EXP_POTION] === undefined, "consumables removed at zero");
+  assert(fresh.heroes[0].level === 4, "second potion levels again");
+  fresh.roleCreate({ name: "新人" });
+  assert(fresh.role.name === "新人" && fresh.gold === MOCK_STARTER_GOLD && fresh.heroes[0].level === 1, "create resets wallet and hero");
+  assert(fresh.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG && fresh.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION, "create restores consumables");
+  assert(fresh.itemCounts[IDLE_ITEM_ID] === undefined, "create still clears stones");
+
+  const seeded = new MockGameSession({
+    items: [
+      { id: IDLE_ITEM_ID, count: 3 },
+      { id: shardItemId(10001), count: SUMMON_SHARD_GAIN },
+      { id: 9, count: 0 },
+    ],
+  });
+  assert(seeded.itemCounts[ITEM_GOLD_BAG] === undefined && seeded.bagList().items.length === 2, "seed skips starters");
+  const stone = seeded.bagList().items[0];
+  const frag = seeded.bagList().items[1];
+  assert(stone.id === IDLE_ITEM_ID && stone.name === "强化石" && stone.kind === "material" && stone.usable === false && stone.count === 3, "stone listed");
+  assert(frag.kind === "fragment" && frag.name === "光耀骑士碎片" && frag.usable === false && frag.count === SUMMON_SHARD_GAIN, "shard listed");
+  const stoneUse = seeded.bagUse({ id: IDLE_ITEM_ID });
+  assert(stoneUse.ok === false && stoneUse.code === ErrorCode.BAG_NOT_USABLE && bagFailToast(stoneUse) === "强化石不能直接使用", "stone tip from use");
+  assert(seeded.itemCounts[IDLE_ITEM_ID] === 3 && seeded.gold === MOCK_STARTER_GOLD, "stone use changes nothing");
+  const fragUse = seeded.bagUse({ id: shardItemId(10001), count: 1 });
+  assert(fragUse.ok === false && fragUse.code === ErrorCode.BAG_NOT_USABLE && bagFailToast(fragUse) === "英雄碎片不能直接使用", "shard tip from use");
+  assert(seeded.itemCounts[shardItemId(10001)] === SUMMON_SHARD_GAIN, "shard use changes nothing");
+  const shortStone = seeded.bagUse({ id: IDLE_ITEM_ID, count: 9 });
+  assert(shortStone.ok === false && shortStone.code === ErrorCode.BAG_NOT_ENOUGH && seeded.itemCounts[IDLE_ITEM_ID] === 3, "short stone");
+
+  const empty = new MockGameSession({ items: [] });
+  assert(empty.bagList().items.length === 0, "empty list");
+  const emptyUse = empty.bagUse({ id: ITEM_GOLD_BAG });
+  assert(emptyUse.ok === false && emptyUse.code === ErrorCode.BAG_EMPTY && bagFailToast(emptyUse) === "背包是空的", "empty use");
+  assert(empty.gold === MOCK_STARTER_GOLD && empty.heroes[0].level === 1, "empty use changes nothing");
+
+  const maxed = new MockGameSession({
+    heroes: [{ id: 10001, name: "光耀骑士", level: HERO_MAX_LEVEL, star: 3 }],
+    items: [{ id: ITEM_EXP_POTION, count: 1 }],
+  });
+  const denied = maxed.bagUse({ id: ITEM_EXP_POTION });
+  assert(denied.ok === false && denied.code === ErrorCode.BAG_HERO_MAX && bagFailToast(denied) === "光耀骑士已达最高等级，无法使用", "potion at max");
+  assert(maxed.itemCounts[ITEM_EXP_POTION] === 1 && maxed.heroes[0].level === HERO_MAX_LEVEL && maxed.gold === MOCK_STARTER_GOLD, "max potion not consumed");
+
+  const now = Date.now();
+  const idle = new MockGameSession({ idleAnchorMs: now - 60000 });
+  const claimed = idle.idleClaim();
+  assert(claimed.ok && claimed.ownedItem === 2, "idle still grants stones");
+  const afterIdle = idle.bagList().items;
+  const ownedStone = afterIdle.filter((item) => item.id === IDLE_ITEM_ID);
+  const ownedBag = afterIdle.filter((item) => item.id === ITEM_GOLD_BAG);
+  assert(ownedStone.length === 1 && ownedStone[0].count === 2 && ownedBag.length === 1 && ownedBag[0].count === STARTER_GOLD_BAG, "bag shows stones and starters");
+
+  const summoner = new MockGameSession({ diamond: SUMMON_SINGLE_COST * 2 });
+  const first = summoner.summon({ count: 1 });
+  const second = summoner.summon({ count: 1 });
+  assert(first.ok && first.drops[0].kind === "new" && second.ok && second.drops[0].kind === "shard", "summon still new then shard");
+  const shardRow = summoner.bagList().items.filter((item) => item.id === shardItemId(10001));
+  assert(shardRow.length === 1 && shardRow[0].count === SUMMON_SHARD_GAIN && shardRow[0].name === "光耀骑士碎片", "dupe shard is in the bag");
+  assert(summoner.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG && summoner.heroes.length === 4, "summon keeps starter bags and roster");
+
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const remote = await Proto.bagList({}, net);
+  assert(remote.ok && remote.items.length === 2 && remote.items[0].name === "小金币袋", "proto list");
+  const remoteUse = await Proto.bagUse({ id: ITEM_GOLD_BAG, count: 1 }, net);
+  assert(remoteUse.ok && remoteUse.gold === MOCK_STARTER_GOLD + GOLD_BAG_GAIN && remoteUse.owned === 1, "proto use");
+  const again = await Proto.bagList({}, net);
+  assert(again.items[0].count === 1 && again.gold === remoteUse.gold, "proto list after use");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyBagUse(remoteUse);
+  assert(Session.gold === remoteUse.gold && Session.diamond === remoteUse.diamond, "apply bag");
+  applyBagUse({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteUse.gold && Session.diamond === remoteUse.diamond, "failed bag ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const blocked = await Proto.bagUse({ id: IDLE_ITEM_ID, count: 1 }, net);
+  assert(blocked.ok === false && blocked.code === ErrorCode.BAG_NOT_FOUND, "proto missing stone");
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.bagList || row.cmd === Cmd.bagUse).map((row) => row.id);
+  assert(ids.length === 2 && ids[0] === 1601 && ids[1] === 1602, "bag cmd ids");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -1108,6 +1278,7 @@ async function main(): Promise<void> {
   await checkIdleSession();
   await checkHero();
   await checkSummon();
+  await checkBag();
   console.log("skeleton-check ok");
 }
 

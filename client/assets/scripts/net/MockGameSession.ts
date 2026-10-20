@@ -1,4 +1,14 @@
 import { ErrorCode } from "../core/errors";
+import {
+  applyHeroExp,
+  EXP_POTION_GAIN,
+  GOLD_BAG_GAIN,
+  ITEM_EXP_POTION,
+  ITEM_GOLD_BAG,
+  listBagItems,
+  STARTER_EXP_POTION,
+  STARTER_GOLD_BAG,
+} from "../module/bag/items";
 import { HeroRosterEntry, HeroSeed, normalizeRoster, starterRoster, toHeroCard, upgradeCost, HERO_MAX_LEVEL } from "../module/hero/growth";
 import { buildIdleView, elapsedSince, IDLE_ITEM_ID, IDLE_ITEM_NAME } from "../module/idle/rewards";
 import {
@@ -9,6 +19,8 @@ import {
   summonCost,
 } from "../module/summon/pull";
 import {
+  BagListResp,
+  BagUseResp,
   HeroListResp,
   HeroUpgradeResp,
   IdleClaimResp,
@@ -48,7 +60,10 @@ export interface MockSessionSeed {
   diamond?: number;
   /** 挂机起算时刻（毫秒）。不填则从构造这一刻起算。 */
   idleAnchorMs?: number;
-  /** 已持有的挂机道具。id 101 是强化石。 */
+  /**
+   * 已持有的道具。id 101 是强化石，201 小金币袋，202 经验药水。
+   * 不填则发起步消耗品。填了（含空数组）就只用这里的数量。
+   */
   items?: { id: number; count: number }[];
   /** 英雄名册。不填或空数组则种下三名起步英雄。 */
   heroes?: HeroSeed[];
@@ -62,7 +77,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级和召唤都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤和背包使用都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -89,8 +104,10 @@ export class MockGameSession {
    * 断线重连不新建会话，所以不会把已累计的时间清掉。
    */
   idleAnchorMs = 0;
-  /** 道具 id → 数量。顶栏不显示，挂机页用来写「已有强化石」。 */
+  /** 道具 id → 数量。顶栏不显示。挂机页写强化石，背包页列出全部。 */
   itemCounts: { [id: number]: number } = {};
+  /** 为 true 时构造函数不再补起步消耗品。创角会重新发一份。 */
+  private itemsSeeded = false;
   /** 已拥有的英雄。空名册会在构造、创角和读列表时种下起步三名。 */
   heroes: HeroRosterEntry[] = [];
   /** 下一抽出 SUMMON_POOL 的下标。单抽走 1 格，十连走 10 格。不足时不动。 */
@@ -102,6 +119,7 @@ export class MockGameSession {
     this.idleAnchorMs = this.clock();
     this.applySeed(seed);
     this.ensureHeroes();
+    if (!this.itemsSeeded) this.grantStarterItems();
   }
 
   login(data: unknown): LoginResp {
@@ -141,7 +159,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、英雄和召唤游标重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄和召唤游标重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -156,6 +174,7 @@ export class MockGameSession {
     this.diamond = MOCK_STARTER_DIAMOND;
     this.battleId = "";
     this.itemCounts = {};
+    this.grantStarterItems();
     this.heroes = starterRoster();
     this.summonCursor = 0;
     this.idleAnchorMs = this.clock();
@@ -424,6 +443,84 @@ export class MockGameSession {
     };
   }
 
+  /** 只读背包。数量为 0 的不出现。不改钱包，也不改英雄。 */
+  bagList(): BagListResp {
+    return {
+      ok: true,
+      items: listBagItems(this.itemCounts, (heroId) => this.heroNameById(heroId)),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 使用道具，默认 1 个。
+   * 小金币袋加金币。经验药水给名册第一名加经验，满 100 升 1 级。
+   * 强化石和碎片拒绝，数量不动。
+   * 背包是空的、没有这个道具、数量不够、数量小于 1、领队已满级时拒绝。
+   * 不改钻石、挂机起算、主线和召唤游标。
+   */
+  bagUse(data: unknown): BagUseResp {
+    const body = asRecord(data);
+    const id = Math.floor(numField(body, "id", 0));
+    const count = readUseCount(body);
+    if (count === null) return this.bagFail(id, ErrorCode.BAG_COUNT_INVALID);
+    const owned = this.itemCount(id);
+    const view = this.findBagView(id);
+    if (owned <= 0 || !view) {
+      const empty = listBagItems(this.itemCounts, (heroId) => this.heroNameById(heroId)).length === 0;
+      return this.bagFail(id, empty ? ErrorCode.BAG_EMPTY : ErrorCode.BAG_NOT_FOUND);
+    }
+    if (count > owned) return this.bagFail(id, ErrorCode.BAG_NOT_ENOUGH, { need: count });
+    if (!view.usable) return this.bagFail(id, ErrorCode.BAG_NOT_USABLE);
+    if (id === ITEM_GOLD_BAG) {
+      this.spendItem(id, count);
+      const goldGain = GOLD_BAG_GAIN * count;
+      this.gold += goldGain;
+      return {
+        ok: true,
+        id,
+        name: view.name,
+        kind: view.kind,
+        spent: count,
+        owned: this.itemCount(id),
+        gold: this.gold,
+        diamond: this.diamond,
+        goldGain,
+      };
+    }
+    if (id === ITEM_EXP_POTION) {
+      this.ensureHeroes();
+      const hero = this.heroes[0];
+      if (!hero || hero.level >= HERO_MAX_LEVEL) {
+        return this.bagFail(id, ErrorCode.BAG_HERO_MAX, {
+          heroName: hero ? hero.name : "",
+          heroLevel: hero ? hero.level : 0,
+        });
+      }
+      this.spendItem(id, count);
+      const next = applyHeroExp(hero.level, hero.exp || 0, EXP_POTION_GAIN * count, HERO_MAX_LEVEL);
+      hero.level = next.level;
+      hero.exp = next.exp;
+      return {
+        ok: true,
+        id,
+        name: view.name,
+        kind: view.kind,
+        spent: count,
+        owned: this.itemCount(id),
+        gold: this.gold,
+        diamond: this.diamond,
+        heroId: hero.id,
+        heroName: hero.name,
+        heroLevel: hero.level,
+        expGain: EXP_POTION_GAIN * count,
+        leveled: next.leveled,
+      };
+    }
+    return this.bagFail(id, ErrorCode.BAG_NOT_USABLE);
+  }
+
   private applySeed(seed?: MockSessionSeed): void {
     if (!seed) return;
     if (typeof seed.account === "string") {
@@ -458,6 +555,7 @@ export class MockGameSession {
       this.idleAnchorMs = Math.floor(seed.idleAnchorMs);
     }
     if (Array.isArray(seed.items)) {
+      this.itemsSeeded = true;
       for (let i = 0; i < seed.items.length; i++) {
         const row = seed.items[i];
         if (!row || typeof row.id !== "number" || !isFinite(row.id)) continue;
@@ -485,6 +583,54 @@ export class MockGameSession {
   private addItem(id: number, count: number): void {
     if (count <= 0) return;
     this.itemCounts[id] = this.itemCount(id) + count;
+  }
+
+  private spendItem(id: number, count: number): void {
+    const left = this.itemCount(id) - count;
+    if (left <= 0) delete this.itemCounts[id];
+    else this.itemCounts[id] = left;
+  }
+
+  private grantStarterItems(): void {
+    this.addItem(ITEM_GOLD_BAG, STARTER_GOLD_BAG);
+    this.addItem(ITEM_EXP_POTION, STARTER_EXP_POTION);
+  }
+
+  private findBagView(id: number): ReturnType<typeof listBagItems>[number] | null {
+    const items = listBagItems(this.itemCounts, (heroId) => this.heroNameById(heroId));
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].id === id) return items[i];
+    }
+    return null;
+  }
+
+  private bagFail(
+    id: number,
+    code: number,
+    extra?: { need?: number; heroName?: string; heroLevel?: number }
+  ): BagUseResp {
+    const view = this.findBagView(id);
+    const heroName = extra && extra.heroName ? extra.heroName : undefined;
+    const heroLevel = extra && typeof extra.heroLevel === "number" ? extra.heroLevel : undefined;
+    return {
+      ok: false,
+      id,
+      name: view ? view.name : "",
+      kind: view ? view.kind : undefined,
+      spent: 0,
+      owned: this.itemCount(id),
+      gold: this.gold,
+      diamond: this.diamond,
+      need: extra && typeof extra.need === "number" ? extra.need : undefined,
+      heroName,
+      heroLevel,
+      code,
+    };
+  }
+
+  private heroNameById(heroId: number): string {
+    const hero = this.findHero(heroId);
+    return hero ? hero.name : "";
   }
 
   private ensureHeroes(): void {
@@ -531,4 +677,12 @@ function strField(body: Record<string, unknown>, key: string): string {
 function numField(body: Record<string, unknown>, key: string, fallback: number): number {
   const value = body[key];
   return typeof value === "number" && isFinite(value) ? value : fallback;
+}
+
+/** 缺省 1。写了但小于 1、或不是数字，则整次无效。 */
+function readUseCount(body: Record<string, unknown>): number | null {
+  if (!Object.prototype.hasOwnProperty.call(body, "count") || body.count === undefined) return 1;
+  const value = body.count;
+  if (typeof value !== "number" || !isFinite(value) || value < 1) return null;
+  return Math.floor(value);
 }

@@ -5,7 +5,7 @@ import { SummonDrop } from "../../net/protocol/types";
 /**
  * 召唤（C6）。单抽和十连都花钻石。
  * 顺序固定，方便预览对照名册：新英雄进 C5 列表，已拥有的转碎片。
- * 碎片先记在 Mock 道具里，背包界面留到 C7。
+ * 碎片记在 Mock 道具里，背包页会列出来。
  */
 
 export const SUMMON_SINGLE_COST = 10;

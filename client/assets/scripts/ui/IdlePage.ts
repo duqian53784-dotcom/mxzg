@@ -173,7 +173,7 @@ class IdleController implements IdlePage {
       view.itemName + " +" + view.pendingItem + "（" + formatItemEvery(view.itemEveryMs) + "）"
     );
     this.write(this.capLabel, capPreviewLine(view.capGold, view.capItem));
-    this.write(this.ownedLabel, "已有" + view.itemName + " " + view.ownedItem + "（背包留到 C7）");
+    this.write(this.ownedLabel, "已有" + view.itemName + " " + view.ownedItem + "（可在背包查看）");
     this.write(this.quickButton?.getChildByName("Label") ?? null, this.quickLabel(stageId));
   }
 

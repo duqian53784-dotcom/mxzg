@@ -105,7 +105,7 @@ class SummonController implements SummonPage {
       -90
     );
     place(
-      createLabel("新英雄出现在底栏「英雄」。碎片先记在会话里，背包留到以后", 18, { color: MUTED, width: 640 }),
+      createLabel("新英雄出现在底栏「英雄」。碎片可在背包查看", 18, { color: MUTED, width: 640 }),
       this.body,
       0,
       -280

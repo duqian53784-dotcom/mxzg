@@ -23,12 +23,13 @@
 
 - `login` 记下账号和 `serverId`，token 固定 `mock-token`。不重置角色和主线。
 - 默认角色属于账号 `mock`。还没登录，或登录账号就是所属账号时，`role.enter` 回当前角色，并带 `openDay`、`stageId`、`gold`、`diamond`。登录别的账号时 `hasRole` 为 false，金币钻石回 0，不改掉已有角色。`role.create` 成功后角色改归当前登录账号。Boot 在有角色时把结果写进 `Session`（含所选服务器名和钱包）。
-- `role.create` 名字去空白后为空则拒绝，不改状态。成功则改名，`roleId` 仍是 1001，主线、等级、开服天回到新号，钱包回到金币 100、钻石 20，挂机时长和强化石清掉，英雄回到起步三名 Lv1。
+- `role.create` 名字去空白后为空则拒绝，不改状态。成功则改名，`roleId` 仍是 1001，主线、等级、开服天回到新号，钱包回到金币 100、钻石 20，挂机时长、强化石和召唤碎片清掉，背包重新放上小金币袋 ×2 和经验药水 ×2，英雄回到起步三名 Lv1。
 - `stage.enter` 的 `stageId < 1` 失败。成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。Mock 仍允许跳关，方便自检。主线界面只放行下一关（C3）。
 - `stage.result` 胜利且关卡高于已通关：`clearedStage` 推进，`level = 1 + clearedStage`，`openDay` 至少为 `1 + floor(clearedStage / 5)`（只升不降）。`nextStageId = clearedStage + 1`。奖励占位 `{ id: 1, count: 10 }`，id 1 加金币、id 2 加钻石。失败停在本关，奖励空，进度和钱包不变。回包带结算后的 `gold` / `diamond`。不改挂机起算时刻。
 - `idle.query` / `idle.claim`：时长从会话创建、上次领取或创角起算，上限 8 小时。收益按当前已通关关数乘整段时长。领取把金币和强化石（id 101）写入会话。不够 1 个单位时拒绝。创角清空强化石并重新起算。断线重连沿用同一会话，时长还在。
 - `hero.list` / `hero.upgrade`：名册空时种下起步三名。升级只扣金币、升 1 级，星级不变，不动挂机计时和主线。金币不足、满级或没有这名英雄时拒绝。默认录包没有这两条；预览仍走 MockTransport。
 - `summon.pull`：单抽扣 10 钻石，十连扣 90。新英雄追加到名册，重复转碎片（id = 40000 + 英雄 id，每次 +10）。钻石不足或次数不是 1/10 时整次拒绝。创角把召唤游标和碎片清掉。默认录包没有这条；预览仍走 MockTransport。
+- `bag.list` / `bag.use`：列出数量大于 0 的道具。新号自带小金币袋 ×2（每个 +50 金币）和经验药水 ×2（给名册第一名 +100 经验，满 100 升 1 级）。强化石和碎片不能直接使用。空背包、数量不足、领队满级时拒绝。创角清掉强化石和碎片后重新发起步消耗品。默认录包没有这两条；预览仍走 MockTransport。
 - 心跳和其它 cmd 不改进度。其它 cmd 仍 echo。
 
 `openDay` / `stageId` / `level` / `gold` / `diamond` 是 Mock 多带的字段。真服可以不带，调用方用缺省值。
@@ -78,6 +79,10 @@ Boot 进 Main 之后，点 **主线 · 第 N 关** 打开关卡列表，挑战�
 
 底栏点 **召唤** 打开召唤页。单抽和十连走 `Proto.summonPull`，顶栏钻石跟着变。新英雄再进 **英雄** 能看到。见 `client/assets/scripts/README.md` 的 C6。默认录包没有召唤消息。
 
+## 主城「背包」
+
+主城点 **背包**，或从玩法列表进入。列表和「使用」走 `Proto.bagList` / `Proto.bagUse`。金币袋刷新顶栏金币；经验药水升级领队，再开英雄列表能看到。强化石和碎片点使用只 Toast。见 `client/assets/scripts/README.md` 的 C7。默认录包没有背包消息。
+
 ## 自检
 
 仓库根目录：
@@ -86,7 +91,7 @@ Boot 进 Main 之后，点 **主线 · 第 N 关** 打开关卡列表，挑战�
 npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
 ```
 
-覆盖：五连胜后的等级、开服天和金币、失败不回退、创角重置钱包、重连后进度还在、底栏解锁提示、面板返回栈、录包按序播放、挂机时长上限与领取、快速结算不重置挂机计时、英雄升级扣金币、金币不足和满级不改等级、升级不重置挂机计时、召唤单抽新英雄与重复碎片、钻石不足不改名册、十连一次扣费。
+覆盖：五连胜后的等级、开服天和金币、失败不回退、创角重置钱包、重连后进度还在、底栏解锁提示、面板返回栈、录包按序播放、挂机时长上限与领取、快速结算不重置挂机计时、英雄升级扣金币、金币不足和满级不改等级、升级不重置挂机计时、召唤单抽新英雄与重复碎片、钻石不足不改名册、十连一次扣费、背包使用金币袋和经验药水、强化石和碎片不可使用、空背包与数量不足。
 
 ## 倩：Creator 里点一次
 
@@ -98,3 +103,4 @@ npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --form
 6. 点「挂机」看时长和收益。领取、快速作战见 `client/assets/scripts/README.md` 的 C4。不需要起 server，也不用改场景。
 7. 底栏点「英雄」，再点光耀骑士升级。见 README 的 C5。挂机按钮还在主城。
 8. 底栏点「召唤」，再点「召唤一次」。见 README 的 C6。然后回「英雄」应能看到霜刃刺客。
+9. 主城点「背包」。见 README 的 C7。小金币袋会加顶栏金币，经验药水会让光耀骑士升级。玩法列表里的「背包」进的是同一页。
