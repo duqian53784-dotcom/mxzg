@@ -2,7 +2,7 @@
 
 export interface LoginReq {
   account: string;
-  /** 选服占位。C1 再接 UI；Mock 原样回传，缺省为 1。 */
+  /** 选服。Mock 原样回传，缺省为 1。 */
   serverId?: number;
 }
 

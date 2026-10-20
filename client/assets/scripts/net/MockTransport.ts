@@ -17,7 +17,8 @@ export interface MockTransportOptions {
  * 业务状态在 MockGameSession：开服天、角色等级、主线进度，同一局里多次请求都改它。
  * 内置回包：login、heartbeat、role.enter、role.create、stage.enter、stage.result。
  * 其它 cmd 原样 echo。引擎 websocket 模块当前是关的，这里故意不用 WebSocket。
- * 默认已有角色 MockHero，Boot 只调 role.enter 也能进主城。
+ * 默认已有角色 MockHero，且属于账号 mock。Boot 只调 role.enter 也能进主城。
+ * 登录别的账号时 role.enter 的 hasRole 为 false，直到 role.create。
  */
 export class MockTransport implements ITransport {
   readonly session: MockGameSession;

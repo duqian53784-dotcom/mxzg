@@ -15,14 +15,14 @@
 3. 层级里选中 **Canvas**（不要挂到 Camera）。
 4. 属性检查器 → **添加组件** → 自定义脚本 → **Boot**（`scripts/core/Boot.ts`）。
 5. **保存场景**。启动场景保持 Boot，点预览。
-6. 屏幕上是 Mock 登录面板。点 **进入游戏**。
-7. 应进入 Main，并看到主城标题和按钮（主线 · 第N关 / 召唤 / 英雄 / 背包 / 公告 / 模拟断线），右上角还有「日志」。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会补挂。
+6. 屏幕上是 Mock 登录面板：账号、密码（可留空）、三个服务器（本地Mock / 提审 / 正式占位）。账号默认 `mock`（或上次记下的账号）。点一个服务器，再点 **进入游戏**。
+7. 应进入 Main，并看到主城标题和按钮（主线 · 第N关 / 召唤 / 英雄 / 背包 / 公告 / 模拟断线），右上角还有「日志」。标题下面一行是角色名、等级和所选服务器，例如 `MockHero Lv1 · 本地Mock`。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会补挂。
 8. 控制台标记：`[Boot] stage=version` → `hot-update` → `config` → `login` → `enter-main`，以及 `[Net] connect mock://local`、`[Config] loaded`。这些行现在带 `[mxzg]` 前缀，例如 `[mxzg][info][Boot] stage=version`。
 
 可选：
 
-- Boot 上勾选 `skipLogin`：不显示面板，仍用 Mock 账号进 Main。
-- `account` 默认 `mock`，可在检查器里改。
+- Boot 上勾选 `skipLogin`：不显示面板，仍用检查器里的账号进 Main。该账号在 Mock 里没有角色时，用账号名自动创角，不会停在创角面板。
+- `account` 默认 `mock`，可在检查器里改。面板会优先填上次登录的账号。
 - 只预览 Main：给 Main 场景的 Canvas 挂 **MainApp**。没有 Boot 时账号是空的，读表仍会自己加载。
 - 背包：打开第二页，返回关掉。公告：连续入队两张弹窗。模拟断线：看底部「网络」从 connected 到 reconnecting 再回到 connected。主线进度在断线后还在。
 - 主线：点「主线 · 第N关」会 `stage.enter` 再按胜利 `stage.result`（没有战斗画面）。Toast 给出下一关和奖励，等级和开服天跟着变。详见 `docs/mock-replay.md`。
@@ -34,7 +34,7 @@
 
 Boot 的登录不再手写 `request("login")`，改走 `Proto.login` / `Proto.roleEnter`。回包仍由 MockTransport 发出。
 
-P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`。名字和 B4 的 Mock cmd 一致。主城「主线」已经会打进关和结算；创角 UI 仍留给 C1。
+P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`。名字和 B4 的 Mock cmd 一致。主城「主线」会打进关和结算。创角从登录面板进，见下面 C1。
 
 同一局 Mock 会记住开服天、等级和主线进度。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
 
@@ -56,3 +56,17 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 `ui/SafeArea.ts` 在 Boot 和主城 `start` 时读可见区域与 `sys.getSafeAreaRect()`，窗口变化后再算。登录面板、主城按钮和 Toast 会让开刘海；安全区比设计分辨率小时只缩小不放大。不用改 `.scene`，也不要给 Canvas 再挂引擎自带的 SafeArea。
 
 `GameLog` 的 `minLevel` 为 `debug`（默认）时，左上角有一行尺寸。桌面没有刘海时，控制台执行 `localStorage.setItem("mxzg.safe", "88,0,34,0")` 再拖一下窗口。说明见 `docs/safe-area.md`。
+
+## 账号 / 选服 / 创角（C1）
+
+登录面板在 Boot 的安全区里用代码生成，不改 `.scene`。密码只是占位，Mock 不校验，也不写进本地。
+
+选服三个：`本地Mock`（id 1）、`提审`（id 2）、`正式占位`（id 3）。点中的会随 `Proto.login` 的 `serverId` 记下，主城标题下显示这个名字。三个服共用这一局里的一个角色槽；换服不另开角色，换账号才会被 Mock 看成「还没有角色」。
+
+- 账号 `mock` 点 **进入游戏**：已有角色 MockHero，直接进主城。
+- 点 **创角**，或把账号改成别的名字再点 **进入游戏**：创角面板。确认走 `Proto.roleCreate`，成功后再 `Proto.roleEnter`。
+- 创角名字留空或只有空格：Toast「角色名不能为空」，停在创角面板，原来的角色不变。
+- **返回** 回到登录面板。
+- 登录成功后把账号、服务器写到 `localStorage`（`mxzg.account`、`mxzg.serverId`）。Creator 里优先 `sys.localStorage`。下次打开面板会填上。不记密码，不记角色名（角色在 Mock 进程里，重新预览会回到 MockHero）。
+
+`skipLogin` 仍不显示这两块面板。

@@ -1,5 +1,5 @@
 /**
- * B3–B8 自检（不启动 Creator）。
+ * B3–C1 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -8,6 +8,9 @@ import { join } from "node:path";
 import { isEntryOpen, isServerGateOpen, listOpenEntries } from "../assets/scripts/config/gates";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
 import { GameLog } from "../assets/scripts/core/GameLog";
+import { loadLoginPrefs, LoginPrefs, PrefStore, resolveAccount, saveLoginPrefs } from "../assets/scripts/core/LoginPrefs";
+import { formatHubIdentity, Session } from "../assets/scripts/core/Session";
+import { findServer, MOCK_SERVERS } from "../assets/scripts/core/servers";
 import { ErrorCode, errorText, failureCode, GameError, messageOf } from "../assets/scripts/core/errors";
 import { parseMockFixture } from "../assets/scripts/net/MockFixture";
 import { MockGameSession } from "../assets/scripts/net/MockGameSession";
@@ -451,14 +454,97 @@ function checkLog(): void {
   assert(log.recent()[log.recent().length - 1].message === "mirrored", "mirror still buffers");
 }
 
+function memoryStore(seed?: Record<string, string>): PrefStore & { data: Record<string, string> } {
+  const data: Record<string, string> = seed ? { ...seed } : {};
+  return {
+    data,
+    getItem(key: string): string | null {
+      return Object.prototype.hasOwnProperty.call(data, key) ? data[key] : null;
+    },
+    setItem(key: string, value: string): void {
+      data[key] = value;
+    },
+  };
+}
+
+function checkLoginPrefs(): void {
+  assert(MOCK_SERVERS.length === 3, "three servers");
+  assert(findServer(1).name === "本地Mock" && findServer(2).name === "提审" && findServer(3).name === "正式占位", "server names");
+  assert(findServer(99).id === 1 && findServer(Number.NaN).name === "本地Mock", "unknown server");
+  assert(resolveAccount("  ", "mock") === "mock", "blank account falls back");
+  assert(resolveAccount(" qian ", "mock") === "qian", "account trimmed");
+  assert(resolveAccount("", "") === "mock", "default account");
+
+  const empty = memoryStore();
+  assert(loadLoginPrefs(empty) === null, "empty prefs");
+  assert(loadLoginPrefs(null) === null, "missing store");
+  saveLoginPrefs({ account: " 倩 ", serverId: 2 }, empty);
+  const loaded = loadLoginPrefs(empty);
+  assert(loaded !== null && loaded.account === "倩" && loaded.serverId === 2, "saved prefs");
+  assert(empty.data["mxzg.account"] === "倩" && empty.data["mxzg.serverId"] === "2", "storage keys");
+  saveLoginPrefs({ account: "a", serverId: 99 }, empty);
+  const fallback = loadLoginPrefs(empty) as LoginPrefs;
+  assert(fallback.account === "a" && fallback.serverId === 1 && empty.data["mxzg.serverId"] === "1", "unknown server stored as local");
+  const serverOnly = memoryStore({ "mxzg.serverId": "3" });
+  const onlyServer = loadLoginPrefs(serverOnly);
+  assert(onlyServer !== null && onlyServer.account === "" && onlyServer.serverId === 3, "server without account");
+  const junk = memoryStore({ "mxzg.account": "qian", "mxzg.serverId": "nope" });
+  const junkLoaded = loadLoginPrefs(junk);
+  assert(junkLoaded !== null && junkLoaded.account === "qian" && junkLoaded.serverId === 1, "bad server id");
+
+  const prevAccount = Session.account;
+  const prevServer = Session.serverName;
+  const prevRole = Session.role;
+  Session.account = "";
+  Session.role = null;
+  assert(formatHubIdentity() === "未登录（请从 Boot 进入）", "hub logged out");
+  Session.account = "qian";
+  Session.serverName = "提审";
+  Session.role = { roleId: 1001, name: "倩", level: 3 };
+  assert(formatHubIdentity() === "倩 Lv3 · 提审", "hub shows role and server");
+  Session.account = prevAccount;
+  Session.serverName = prevServer;
+  Session.role = prevRole;
+}
+
+async function checkNoRole(): Promise<void> {
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const login = await Proto.login({ account: "qian", serverId: 2 }, net);
+  assert(login.ok && login.account === "qian" && login.serverId === 2, "login other account");
+  const none = await Proto.roleEnter({ account: "qian" }, net);
+  assert(none.ok === true && none.hasRole === false && none.name === "", "other account has no role");
+  const bad = await Proto.roleCreate({ account: "qian", name: "  " }, net);
+  assert(bad.ok === false && bad.code === ErrorCode.ROLE_NAME_EMPTY, "empty create still rejected");
+  const stillGone = await Proto.roleEnter({}, net);
+  assert(stillGone.hasRole === false, "empty create does not grant a role");
+  const back = await Proto.login({ account: "mock", serverId: 1 }, net);
+  assert(back.ok && back.serverId === 1, "login mock again");
+  const hero = await Proto.roleEnter({}, net);
+  assert(hero.hasRole === true && hero.name === "MockHero" && hero.level === 1, "mock account keeps MockHero");
+  const again = await Proto.login({ account: "qian", serverId: 3 }, net);
+  assert(again.ok && again.serverId === 3, "login qian on placeholder server");
+  const created = await Proto.roleCreate({ account: "qian", name: "倩" }, net);
+  assert(created.ok && created.name === "倩" && created.level === 1, "create named role");
+  const entered = await Proto.roleEnter({}, net);
+  assert(entered.hasRole === true && entered.name === "倩" && entered.level === 1 && entered.stageId === 1, "enter after create");
+  const switched = await Proto.login({ account: "mock", serverId: 1 }, net);
+  assert(switched.ok, "switch back");
+  const hidden = await Proto.roleEnter({}, net);
+  assert(hidden.hasRole === false, "created role stays with qian");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
   checkGates();
   checkSafeArea();
   checkLog();
+  checkLoginPrefs();
   await checkNet();
   await checkSession();
+  await checkNoRole();
   await checkReplay();
   console.log("skeleton-check ok");
 }
