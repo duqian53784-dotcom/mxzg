@@ -1,5 +1,5 @@
 /**
- * B3–C2 自检（不启动 Creator）。
+ * B3–C3 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -28,6 +28,15 @@ import { findServer, MOCK_SERVERS } from "../assets/scripts/core/servers";
 import { ErrorCode, errorText, failureCode, GameError, messageOf } from "../assets/scripts/core/errors";
 import { parseMockFixture } from "../assets/scripts/net/MockFixture";
 import { MOCK_STARTER_DIAMOND, MOCK_STARTER_GOLD, MockGameSession } from "../assets/scripts/net/MockGameSession";
+import {
+  applyStageProgress,
+  challengeBlock,
+  listStages,
+  loseToast,
+  planBattle,
+  rewardLines,
+  winToast,
+} from "../assets/scripts/module/mainline/battle";
 import { MockTransport } from "../assets/scripts/net/MockTransport";
 import { NetClient } from "../assets/scripts/net/NetClient";
 import { NetState } from "../assets/scripts/net/NetTypes";
@@ -595,6 +604,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(!entryAccess(smith, 9, 30, null).open && entryAccess(smith, 9, 30, null).hint.indexOf("配置未加载") >= 0, "gated without config");
   assert(tabLabel("铁匠铺", false) === "锁·铁匠铺" && tabLabel("铁匠铺", true) === "铁匠铺", "locked label");
   assert(rootTabFor("arena") === "plays" && rootTabFor("log") === "city" && rootTabFor("smith") === "smith", "root tab");
+  assert(rootTabFor("mainline") === "city", "mainline stays on city tab");
 
   const history = new NavHistory();
   history.reset("city");
@@ -640,6 +650,111 @@ function checkPanelNav(): void {
   assert(nav.back() === false && nav.current === "city", "city has no back");
 }
 
+function checkMainline(): void {
+  const first = listStages(1);
+  assert(first.length === 6 && first[0].stageId === 1 && first[0].state === "current", "stage 1 window");
+  assert(first[1].state === "locked" && first[5].stageId === 6, "later stages locked");
+  const second = listStages(2);
+  assert(second[0].state === "cleared" && second[1].state === "current" && second[2].state === "locked", "stage 2 window");
+  const around = listStages(70);
+  assert(around[0].stageId === 68 && around[0].state === "cleared", "stage 70 lookback");
+  assert(around[2].stageId === 70 && around[2].state === "current" && around[3].state === "locked", "stage 70 current");
+  assert(challengeBlock(1, 1) === null && challengeBlock(70, 70) === null, "current stage can enter");
+  assert(challengeBlock(2, 1) === "请先通关第1关", "skip blocked");
+  assert(challengeBlock(1, 3) === "第1关已通关", "cleared blocked");
+
+  const win = planBattle({ stageId: 1, level: 1, roleName: "MockHero" });
+  assert(win.win && win.reason === "clear" && win.rounds.length === 4, "stage 1 script");
+  assert(win.rounds[0].allies[0].name === "MockHero" && win.rounds[0].line.indexOf("突进") >= 0, "ally name");
+  const last = win.rounds[win.rounds.length - 1];
+  let enemiesDead = true;
+  let allyAlive = false;
+  for (let i = 0; i < last.enemies.length; i++) if (last.enemies[i].hp !== 0) enemiesDead = false;
+  for (let i = 0; i < last.allies.length; i++) if (last.allies[i].hp > 0) allyAlive = true;
+  assert(enemiesDead && allyAlive && last.actor === "ally", "win wipes enemies");
+
+  for (let stage = 1; stage <= 70; stage++) {
+    const plan = planBattle({ stageId: stage, level: stage, roleName: "MockHero" });
+    assert(plan.win && plan.reason === "clear", "stage " + stage + " winnable at the same level");
+  }
+  const ahead = planBattle({ stageId: 80, level: 70, roleName: "MockHero" });
+  assert(!ahead.win && ahead.reason === "overreach", "overreach loses");
+  const aheadLast = ahead.rounds[ahead.rounds.length - 1];
+  let alliesDead = true;
+  let enemyAlive = false;
+  for (let i = 0; i < aheadLast.allies.length; i++) if (aheadLast.allies[i].hp !== 0) alliesDead = false;
+  for (let i = 0; i < aheadLast.enemies.length; i++) if (aheadLast.enemies[i].hp > 0) enemyAlive = true;
+  assert(alliesDead && enemyAlive, "overreach wipes allies");
+  const fled = planBattle({ stageId: 4, level: 4, roleName: "MockHero", retreat: true });
+  assert(!fled.win && fled.reason === "retreat" && fled.rounds[0].line.indexOf("撤退") >= 0, "retreat loses");
+  assert(loseToast(4) === "第4关挑战失败，进度不变", "lose toast");
+  assert(winToast(1, [{ id: 1, count: 10 }]) === "第1关胜利，金币 +10", "win toast");
+  assert(rewardLines([])[0] === "没有奖励" && rewardLines([{ id: 2, count: 3 }])[0] === "钻石 +3", "reward lines");
+
+  const prevAccount = Session.account;
+  const prevRole = Session.role;
+  const prevDay = Session.openDay;
+  const prevStage = Session.stageId;
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  Session.role = { roleId: 1, name: "甲", level: 1 };
+  Session.stageId = 1;
+  Session.openDay = 1;
+  Session.gold = 5;
+  Session.diamond = 2;
+  applyStageProgress({
+    ok: true,
+    stageId: 1,
+    win: true,
+    nextStageId: 2,
+    rewards: [
+      { id: 1, count: 10 },
+      { id: 2, count: 3 },
+    ],
+    level: 2,
+  });
+  assert(Session.stageId === 2 && Session.role.level === 2 && Session.gold === 15 && Session.diamond === 5, "fallback wallet");
+  applyStageProgress({
+    ok: false,
+    stageId: 9,
+    win: true,
+    nextStageId: 9,
+    rewards: [{ id: 1, count: 100 }],
+    gold: 999,
+    level: 9,
+    code: ErrorCode.STAGE_ID_INVALID,
+  });
+  assert(Session.stageId === 2 && Session.gold === 15 && Session.role.level === 2, "failed result ignored");
+
+  const mock = new MockGameSession();
+  Session.role = { roleId: mock.role.roleId, name: mock.role.name, level: mock.role.level };
+  Session.stageId = mock.stageId;
+  Session.openDay = mock.openDay;
+  Session.gold = mock.gold;
+  Session.diamond = mock.diamond;
+  for (let stage = 1; stage <= 70; stage++) {
+    const plan = planBattle({ stageId: stage, level: stage, roleName: mock.role.name });
+    const entered = mock.stageEnter({ stageId: stage });
+    assert(entered.ok && plan.win, "push enter " + stage);
+    const result = mock.stageResult({ stageId: stage, battleId: entered.battleId, win: plan.win });
+    applyStageProgress(result);
+  }
+  assert(Session.stageId === 71 && Session.role.level === 71, "cleared through 70");
+  assert(Session.gold === MOCK_STARTER_GOLD + 700 && Session.diamond === MOCK_STARTER_DIAMOND, "gold through 70");
+  assert(Session.openDay === 15, "open day through 70");
+  const lost = mock.stageResult({ stageId: 71, win: false });
+  applyStageProgress(lost);
+  assert(Session.stageId === 71 && Session.role.level === 71 && Session.gold === MOCK_STARTER_GOLD + 700, "loss after 70 stays");
+  assert(mock.stageId === 71 && mock.clearedStage === 70 && mock.gold === MOCK_STARTER_GOLD + 700, "mock stays at 70");
+
+  Session.account = prevAccount;
+  Session.role = prevRole;
+  Session.openDay = prevDay;
+  Session.stageId = prevStage;
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -648,6 +763,7 @@ async function main(): Promise<void> {
   checkSafeArea();
   checkLog();
   checkLoginPrefs();
+  checkMainline();
   await checkNet();
   await checkSession();
   await checkNoRole();

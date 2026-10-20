@@ -29,6 +29,7 @@ import { NetClient } from "../net/NetClient";
 import { NetState } from "../net/NetTypes";
 import { Proto } from "../net/protocol";
 import { CityChrome, mountCityChrome, TabState } from "./CityChrome";
+import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
@@ -48,7 +49,7 @@ export class MainApp extends Component {
   private panels: PanelNav<Node> | null = null;
   private chrome: CityChrome | null = null;
   private built = false;
-  private stageBusy = false;
+  private mainline: MainlinePage | null = null;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
   private logLabel: Node | null = null;
@@ -134,6 +135,7 @@ export class MainApp extends Component {
   }
 
   private buildPage(id: string): Node {
+    if (id === "mainline") return this.mountMainline();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -145,10 +147,7 @@ export class MainApp extends Component {
     const page = this.pageRoot("CityPage");
     place(createLabel("主城", 48, { color: TITLE_COLOR }), page, 0, 400);
     this.mainButton = place(
-      createButton(this.stageButtonText(), () => {
-        GameLog.shared.info("MainApp", "click main_battle");
-        void this.playMainStage();
-      }, 420, 76),
+      createButton(this.stageButtonText(), () => this.openMainline(), 420, 76),
       page,
       0,
       250
@@ -265,84 +264,34 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 无战斗场景：进关后立刻按胜利结算，进度和钱包记在 Mock 会话里。 */
-  private async playMainStage(): Promise<void> {
-    if (this.stageBusy) return;
-    const shell = this.shell;
+  /** 打开关卡列表。战斗和结算在 MainlinePage 里，不改场景。 */
+  private openMainline(): void {
+    GameLog.shared.info("MainApp", "click mainline");
     const net = NetClient.shared;
     if (net.state !== "connected") {
-      shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
       return;
     }
-    this.stageBusy = true;
-    const stageId = Session.stageId >= 1 ? Session.stageId : 1;
-    this.setMainButton("主线 · 结算中");
-    try {
-      const entered = await Proto.stageEnter({ stageId }, net);
-      if (!this.isValid) return;
-      if (!entered.ok) {
-        shell?.showToast(errorText(entered.code ?? ErrorCode.STAGE_ID_INVALID), 2200);
-        return;
-      }
-      GameLog.shared.info("MainApp", "stage enter " + entered.stageId + " " + entered.battleId);
-      const result = await Proto.stageResult(
-        { stageId: entered.stageId, battleId: entered.battleId, win: true },
-        net
-      );
-      if (!this.isValid) return;
-      if (!result.ok) {
-        shell?.showToast(errorText(result.code ?? ErrorCode.STAGE_ID_INVALID), 2200);
-        return;
-      }
-      Session.stageId = result.nextStageId >= 1 ? result.nextStageId : stageId + 1;
-      if (Session.role && typeof result.level === "number") Session.role.level = result.level;
-      if (typeof result.openDay === "number" && result.openDay >= 1) Session.openDay = result.openDay;
-      if (typeof result.gold === "number" || typeof result.diamond === "number") {
-        Session.applyCurrencies(result.gold, result.diamond);
-      } else {
-        this.applyRewardFallback(result.rewards);
-      }
-      const reward = result.rewards.length > 0 ? result.rewards[0] : null;
-      const rewardText = reward ? "奖励 " + reward.count : "无奖励";
-      shell?.showToast(
-        "第" + result.stageId + "关胜利，下一关 " + Session.stageId + "，" + rewardText,
-        2200
-      );
-      GameLog.shared.info(
-        "MainApp",
-        "stage result " +
-          result.stageId +
-          " next " +
-          Session.stageId +
-          " lv " +
-          (Session.role?.level ?? "") +
-          " day " +
-          Session.openDay +
-          " gold " +
-          Session.gold
-      );
-      this.refreshHub();
-    } catch (err) {
-      const text = messageOf(err);
-      GameLog.shared.error("MainApp", "stage " + text);
-      if (this.isValid) shell?.showToast(text, 2200);
-    } finally {
-      this.stageBusy = false;
-      if (this.isValid) this.setMainButton(this.stageButtonText());
-    }
+    this.openChild("mainline");
   }
 
-  /** 回包没带钱包时，按奖励 id 在本地加上，避免顶栏不动。 */
-  private applyRewardFallback(rewards: { id: number; count: number }[]): void {
-    let gold = Session.gold;
-    let diamond = Session.diamond;
-    for (let i = 0; i < rewards.length; i++) {
-      const count = rewards[i].count;
-      if (typeof count !== "number" || !isFinite(count) || count <= 0) continue;
-      if (rewards[i].id === 1) gold += Math.floor(count);
-      else if (rewards[i].id === 2) diamond += Math.floor(count);
-    }
-    Session.applyCurrencies(gold, diamond);
+  private mountMainline(): Node {
+    this.mainline?.dispose();
+    const page = buildMainlinePage({
+      level: () => this.level(),
+      roleName: () => Session.role?.name || "勇者",
+      stageId: () => (Session.stageId >= 1 ? Session.stageId : 1),
+      showToast: (text) => this.shell?.showToast(text, 2200),
+      alive: () => this.isValid,
+      enter: (stageId) => Proto.stageEnter({ stageId }, NetClient.shared),
+      settle: (req) => Proto.stageResult(req, NetClient.shared),
+      onProgress: () => {
+        if (this.isValid) this.refreshHub();
+      },
+      close: () => this.back(),
+    });
+    this.mainline = page;
+    return page.node;
   }
 
   private stageButtonText(): string {
@@ -422,6 +371,10 @@ export class MainApp extends Component {
 
   private noteClose(id: string): void {
     if (id === "log") this.detachLog();
+    if (id === "mainline") {
+      this.mainline?.dispose();
+      this.mainline = null;
+    }
   }
 
   private detachLog(): void {
