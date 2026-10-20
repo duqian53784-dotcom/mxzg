@@ -1,0 +1,15 @@
+{
+  "table": "opencondition",
+  "note": "样例，不是全表。真实数据以后由 config/opencondition.xlsx 导出，字段保持 id/name/condition_type/level/open_server_day。condition_type=1 为主线等级。open_server_day=0 表示不按开服日卡。",
+  "rows": [
+    { "id": "main_summon", "name": "召唤", "condition_type": 1, "level": 1, "open_server_day": 0 },
+    { "id": "main_fetter", "name": "羁绊", "condition_type": 1, "level": 1, "open_server_day": 0 },
+    { "id": "main_smith_shop", "name": "铁匠铺", "condition_type": 1, "level": 5, "open_server_day": 0 },
+    { "id": "main_pvp", "name": "竞技场", "condition_type": 1, "level": 8, "open_server_day": 0 },
+    { "id": "main_blessingpool", "name": "许愿池", "condition_type": 1, "level": 10, "open_server_day": 0 },
+    { "id": "main_cafe", "name": "咖啡馆", "condition_type": 1, "level": 12, "open_server_day": 0 },
+    { "id": "main_mission", "name": "日常副本", "condition_type": 1, "level": 15, "open_server_day": 0 },
+    { "id": "main_fantasy_tower", "name": "幻境之塔", "condition_type": 1, "level": 16, "open_server_day": 0 },
+    { "id": "magic_tower", "name": "幻魔塔", "condition_type": 1, "level": 1, "open_server_day": 30 }
+  ]
+}

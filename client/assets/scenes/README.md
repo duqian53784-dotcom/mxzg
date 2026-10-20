@@ -1,9 +1,7 @@
-﻿# 场景（请在 Creator 内创建）
+﻿# 场景
 
-请用 Cocos Creator 打开本工程后：
+Boot / Main / Battle 已在 Creator 里建好。启动场景应为 Boot。
 
-1. 在 `assets/scenes` 新建场景 `Boot`、`Main`、`Battle`
-2. 项目设置 → 启动场景设为 `Boot`
-3. 构建面板勾选 **Web Mobile**，构建一次确认通过（对应规划 A9）
+脚本不会写进 `.scene`。预览前把 **Boot** 挂到 Boot 场景的 **Canvas** 上，步骤见 `assets/scripts/README.md`。
 
-脚本占位：`scripts/core/Boot.ts` 可挂到 Boot 场景根节点。
+构建发布前，场景列表包含 Boot 与 Main（Battle 可先不进包）。Web Mobile 构建仍可后补。
