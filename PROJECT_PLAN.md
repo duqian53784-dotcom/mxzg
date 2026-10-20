@@ -33,7 +33,7 @@
 
 **当前焦点（唯一）：** 搭 P0 工程骨架（目录、构建 Web Mobile、网络占位、主界面 / 主线战斗壳）。
 
-**上次更新：** 2026-10-20（Asia/Shanghai）— 建仓推送完成；本规划首版写入。
+**上次更新：** 2026-10-20（Asia/Shanghai）— 规划首版写入并推送；day60 文档已入 `docs/`。
 
 ---
 
@@ -184,7 +184,7 @@ flowchart TD
 - [x] A5 Git 初始化并 force push 到 `duqian53784-dotcom/mxzg`
 - [x] A6 清理残留 `mxzg-client` 目录
 - [x] A7 写入本规划 `PROJECT_PLAN.md`
-- [ ] A8 将「前60天-按开服自然日」拷贝到 `docs/day60-open-server.md`
+- [x] A8 将「前60天-按开服自然日」拷贝到 `docs/day60-open-server.md`
 - [ ] A9 Creator 构建目标确认：Web Mobile 能空场景预览/构建
 - [ ] A10 约定 `client` 内目录规范并建空目录（见 A10 明细）
 
