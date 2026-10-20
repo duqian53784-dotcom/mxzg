@@ -21,6 +21,7 @@ import { PopupQueue } from "../assets/scripts/ui/PopupQueue";
 import {
   applySafeFrame,
   formatAdapt,
+  formatAdaptShort,
   layoutSafeFrame,
   metricsFrom,
   parseInsetOverride,
@@ -366,6 +367,9 @@ function checkSafeArea(): void {
   near(forcedFrame.offsetY, (34 - 88) / 2, "preview shift");
   assert(formatAdapt(forced, forcedFrame).indexOf("T88") >= 0, "format notch");
   assert(formatAdapt(forced, forcedFrame).indexOf("B34") >= 0, "format home");
+  const corner = formatAdaptShort(forced, forcedFrame);
+  assert(corner.indexOf("720x1280") >= 0 && corner.indexOf("T88") >= 0 && corner.indexOf("B34") >= 0, "short label");
+  assert(corner.indexOf("design") < 0, "short label skips design");
 
   const overflow = layoutSafeFrame(
     metricsFrom(720, 1280, 720, 1280, null, { top: 2000, right: 0, bottom: 2000, left: 0 })

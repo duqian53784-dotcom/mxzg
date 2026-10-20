@@ -15,6 +15,7 @@ import { GameLog } from "../core/GameLog";
 import {
   applySafeFrame,
   formatAdapt,
+  formatAdaptShort,
   layoutSafeFrame,
   metricsFrom,
   parseInsetOverride,
@@ -23,7 +24,7 @@ import {
 import { createLabel, setText } from "./UiKit";
 
 const PREVIEW_KEY = "mxzg.safe";
-const DEBUG_W = 420;
+const DEBUG_W = 360;
 const DEBUG_H = 28;
 
 export interface SafeTarget {
@@ -87,7 +88,7 @@ export function bindSafeArea(options: BindSafeAreaOptions): SafeAreaBinding {
     label = syncDebugLabel(
       options.canvas,
       label,
-      text,
+      formatAdaptShort(metrics, frame),
       metrics.visibleWidth,
       metrics.visibleHeight,
       frame.insets.left,

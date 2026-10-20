@@ -162,6 +162,26 @@ export function formatAdapt(metrics: AdaptMetrics, frame: SafeFrame): string {
   );
 }
 
+/** 左上角一行，比控制台短，避免被 Label 裁掉。 */
+export function formatAdaptShort(metrics: AdaptMetrics, frame: SafeFrame): string {
+  const n = (value: number) => String(Math.round(value));
+  return (
+    n(metrics.visibleWidth) +
+    "x" +
+    n(metrics.visibleHeight) +
+    " L" +
+    n(frame.insets.left) +
+    " T" +
+    n(frame.insets.top) +
+    " R" +
+    n(frame.insets.right) +
+    " B" +
+    n(frame.insets.bottom) +
+    " x" +
+    frame.scale.toFixed(2)
+  );
+}
+
 function nonNeg(value: number): number {
   return typeof value === "number" && isFinite(value) && value > 0 ? value : 0;
 }
