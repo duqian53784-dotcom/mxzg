@@ -1,4 +1,7 @@
 ﻿import { MockTransport } from "./MockTransport";
+import { encodeRequest } from "./protocol/codec";
+import { Cmd } from "./protocol/cmds";
+import { HeartbeatReq } from "./protocol/types";
 import { ITransport, NetHandler, NetMessage, NetState } from "./NetTypes";
 
 export type { ITransport, NetHandler, NetMessage, NetState } from "./NetTypes";
@@ -79,7 +82,7 @@ export class NetClient {
       console.warn("[Net] drop send " + cmd + " state=" + this.state);
       return;
     }
-    this.transport.send({ cmd, data });
+    this.transport.send(encodeRequest(cmd, data));
   }
 
   /** 订阅 cmd。传 "*" 接收全部。返回取消函数。同一 cmd 可多个监听。 */
@@ -102,7 +105,7 @@ export class NetClient {
     };
   }
 
-  request(cmd: string, data?: unknown, timeoutMs?: number): Promise<NetMessage> {
+  request<T = unknown>(cmd: string, data?: unknown, timeoutMs?: number): Promise<NetMessage<T>> {
     if (this.state !== "connected") {
       return Promise.reject(new Error("[Net] request before connected: " + cmd));
     }
@@ -117,7 +120,7 @@ export class NetClient {
       off = this.subscribe(cmd, (msg) => {
         clearTimeout(timer);
         off();
-        resolve(msg);
+        resolve(msg as NetMessage<T>);
       });
       this.send(cmd, data);
     });
@@ -131,7 +134,7 @@ export class NetClient {
   }
 
   private dispatch(msg: NetMessage): void {
-    if (msg.cmd === "heartbeat") {
+    if (msg.cmd === Cmd.heartbeat) {
       this.heartbeatAcks += 1;
       if (this.heartbeatAcks === 1) console.log("[Net] heartbeat ack");
     } else {
@@ -178,7 +181,8 @@ export class NetClient {
     this.stopHeartbeat();
     this.heartbeat = setInterval(() => {
       if (this.state !== "connected") return;
-      this.transport.send({ cmd: "heartbeat", data: { clientTime: Date.now() } });
+      const beat: HeartbeatReq = { clientTime: Date.now() };
+      this.transport.send(encodeRequest(Cmd.heartbeat, beat));
     }, this.heartbeatMs);
     this.dontBlock(this.heartbeat);
   }

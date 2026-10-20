@@ -26,14 +26,14 @@
 | server 进 Git | ⏸ 暂不 | 本机 **junction** → `F:\源码\mj\program\server` |
 | 旧仓 / 旧客户端 | 📦 归档参考 | 旧代码在 `F:\源码\mj\program`；GitHub 旧大体积内容勿再整仓硬推 |
 | 进度文档 | ✅ 本文 | `PROJECT_PLAN.md` |
-| P0 可玩闭环 | ❌ 未开始 | 玩法未开始；技术骨架 B1–B4 已完成 |
+| P0 可玩闭环 | ❌ 未开始 | 玩法未开始；技术骨架 B1–B5 已完成 |
 | 连真实服 | ❌ 未开始 | 协议 / 网关 / 登录 |
 | 微信小游戏 | ❌ 未开始 | H5 稳定后再做 |
 | App 包 | ❌ 未开始 | H5 之后 |
 
-**当前焦点（唯一）：** B5 — 协议 stub（梳理旧 Protobuf；P0 会用到的消息先手写，仍可不连真服）。
+**当前焦点（唯一）：** B6 — 本地 Mock 服或录包回放（无真实服前可玩）。
 
-**上次更新：** 2026-10-20（Asia/Shanghai）— B1–B4 完成：Boot 分阶段启动并 Mock 登录进 Main、UI 壳（页面栈 / 弹窗队列 / Toast）、JSON 读表样例、NetClient Mock。
+**上次更新：** 2026-10-20（Asia/Shanghai）— B5 完成：P0 协议手写 stub（login / role.enter / role.create / stage.enter / stage.result / heartbeat），仍走 MockTransport。
 
 ---
 
@@ -219,7 +219,7 @@ client/assets/
 - [x] B2 UI 框架：一层 Canvas、页面栈、弹窗队列、Toast
 - [x] B3 配置加载：先支持 JSON（从 config 导出的精简表）；xlsx 导表流程文档化
 - [x] B4 网络层占位：连接状态机、心跳、断线重连、消息派发（可先 Mock）
-- [ ] B5 协议：梳理旧 Protobuf 列表；P0 只用到的先生成/手写 stub
+- [x] B5 协议：梳理旧 Protobuf 列表；P0 只用到的先生成/手写 stub（旧 .proto 不在本仓；手写 stub 见 `docs/protocol-stubs.md`）
 - [ ] B6 本地 Mock 服或录包回放（无真实服前可玩）
 - [ ] B7 日志与错误码展示
 - [ ] B8 多分辨率 / 安全区（H5）
@@ -287,7 +287,7 @@ client/assets/
 4. 协议变更需极小且双边同步；能客户端兼容就不改服  
 
 - [ ] `docs/server-local-run.md`（如何起服、端口、依赖）  
-- [ ] P0 协议 ID / 消息名清单  
+- [ ] P0 协议 ID / 消息名清单（B5 已有手写占位 `docs/protocol-stubs.md`；与旧 .proto 对齐后再勾）  
 
 ---
 
@@ -333,12 +333,13 @@ client/assets/
 | 2026-10-20 | A10：创建 scripts/scenes 目录与 Boot/NetClient/MainApp 占位；焦点改为 A9 |
 | 2026-10-20 | A9/A10.6：Boot/Main/Battle 场景 + 启动场景 Boot + Web 桌面端构建通过；焦点改为 B1–B4 |
 | 2026-10-20（Asia/Shanghai） | B1–B4：Boot 分阶段启动 + Mock 登录进 Main；UI 页面栈/弹窗队列/Toast；resources JSON 读表样例；NetClient 状态机与 MockTransport。焦点改为 B5 |
+| 2026-10-20（Asia/Shanghai） | B5：P0 手写协议 stub（`Proto.login` / `roleEnter` / `roleCreate` / `stageEnter` / `stageResult` / `heartbeat`），MockTransport 补创角与主线进关/结算。焦点改为 B6 |
 
 ---
 
 ## 13. 下一步（写给下一回合的自己）
 
-1. 推进 **B5**：梳理旧 Protobuf 列表，P0 会用到的消息先手写 stub（仍可不连真服）。  
-2. B1–B4 已可预览：Creator 打开 `client`，Boot 场景 Canvas 挂 `Boot` 后预览，Mock 登录进 Main。步骤见 `client/assets/scripts/README.md`。  
+1. 推进 **B6**：本地 Mock 服或录包回放，让无真实服时可以往下玩。协议 stub 已在 `client/assets/scripts/net/protocol/`，创角和主线进关/结算不用再改传输层。  
+2. 预览：Creator 打开 `client`，Boot 场景 Canvas 挂 `Boot` 后预览，Mock 登录进 Main。步骤见 `client/assets/scripts/README.md`。Protobuf 替换说明见 `docs/protocol-stubs.md`。  
 3. 每完成一项，更新第 1 节与本清单。  
-4. 有空时补一次 Web Mobile 构建（非阻塞）。  
+4. 有空时补一次 Web Mobile 构建（非阻塞）。对照旧 `.proto` 的真实消息号留到阶段 D，不要在 B6 做。  
