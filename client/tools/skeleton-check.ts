@@ -1,5 +1,5 @@
 /**
- * B3–C12 自检（不启动 Creator）。
+ * B3–C13 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -137,6 +137,27 @@ import {
   dailyWinToast,
   findDailyTier,
 } from "../assets/scripts/module/daily/gold";
+import {
+  applyLogin7Claim,
+  findLogin7Rewards,
+  LOGIN7_DAYS,
+  LOGIN7_TABLE,
+  login7AdvanceButton,
+  login7AdvanceToast,
+  login7ClaimButton,
+  login7ClaimedToast,
+  login7ClaimToast,
+  login7FailToast,
+  login7HeadLine,
+  login7LockedToast,
+  login7MaxToast,
+  login7MissingToast,
+  login7OpenDayLine,
+  login7RewardText,
+  login7RowText,
+  login7TodayClaimed,
+  login7WalletLine,
+} from "../assets/scripts/module/login7/rewards";
 import {
   applySummon,
   diamondShortToast,
@@ -791,6 +812,11 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(tabLabel("日常副本", false) === "锁·日常副本", "daily locked label");
   assert(dailyEntry.blurb.indexOf("金币") >= 0 && dailyEntry.blurb.indexOf("Lv15") >= 0, "daily blurb");
   assert(rootTabFor("daily") === "plays", "daily stays on plays");
+  const login7Entry = findNavEntry("login7");
+  assert(login7Entry !== null && !login7Entry.gateId && !login7Entry.serverGateKey, "login7 has no gate");
+  assert(entryAccess(login7Entry, 1, 1, null).open && entryAccess(login7Entry, 1, 1, db).open, "login7 open on day 1");
+  assert(entryAccess(login7Entry, 1, 30, db).open && login7Entry.blurb.indexOf("登录天") >= 0, "login7 ignores open day");
+  assert(rootTabFor("login7") === "plays", "login7 stays on plays");
   const magicEntry = findNavEntry("magic");
   assert(
     magicEntry !== null && magicEntry.gateId === "magic_tower" && magicEntry.serverGateKey === "magic_tower_open_day",
@@ -2177,6 +2203,158 @@ async function checkDaily(): Promise<void> {
   net.close();
 }
 
+async function checkLogin7(): Promise<void> {
+  assert(LOGIN7_DAYS === 7 && LOGIN7_TABLE.length === 7, "seven login days");
+  const day1 = findLogin7Rewards(1);
+  const day4 = findLogin7Rewards(4);
+  const day7 = findLogin7Rewards(7);
+  assert(day1 && day1.length === 1 && day1[0].id === 1 && day1[0].count === 80, "day1 gold");
+  assert(findLogin7Rewards(2) && findLogin7Rewards(2)![0].id === 2 && findLogin7Rewards(2)![0].count === 15, "day2 diamond");
+  assert(findLogin7Rewards(3) && findLogin7Rewards(3)![0].id === IDLE_ITEM_ID && findLogin7Rewards(3)![0].count === 3, "day3 stones");
+  assert(day4 && login7RewardText(day4) === "金币 +120、小金币袋 ×1", "day4 mix");
+  assert(day7 && login7RewardText(day7) === "金币 +300、钻石 +50、小金币袋 ×2", "day7 mix");
+  assert(findLogin7Rewards(0) === null && findLogin7Rewards(8) === null, "missing days");
+  assert(login7HeadLine(1) === "角色登录第 1 天", "head line");
+  assert(login7OpenDayLine(1) === "开服第 1 天显示在这里，只供对照", "open day line");
+  assert(login7OpenDayLine(30) === "开服第 30 天显示在这里，只供对照", "open day 30 line");
+  assert(login7WalletLine(180, 35) === "持有金币 180 · 钻石 35", "wallet line");
+  assert(login7ClaimButton(1, false) === "领取第1天" && login7ClaimButton(1, true) === "今日已领取", "claim button");
+  assert(login7ClaimButton(0, false) === "读取中" && login7AdvanceButton() === "下一天（调试）", "wait and debug labels");
+  assert(login7ClaimToast(1, day1) === "领取成功：第1天，金币 +80", "day1 toast");
+  assert(login7ClaimToast(4, day4) === "领取成功：第4天，金币 +120、小金币袋 ×1", "day4 toast");
+  assert(login7LockedToast(2) === "第2天尚未到达" && login7ClaimedToast(1) === "第1天奖励已经领取", "lock and claimed copy");
+  assert(login7MissingToast() === "没有这一天" && login7MaxToast() === "已经是第7天", "missing and max copy");
+  assert(login7AdvanceToast(2) === "角色登录天来到第2天，奖励尚未自动领取", "advance toast");
+  assert(errorText(ErrorCode.LOGIN7_LOCKED) === "这一天尚未到达", "locked text");
+  assert(errorText(ErrorCode.LOGIN7_CLAIMED) === "这一天的奖励已经领取", "claimed text");
+  assert(errorText(ErrorCode.LOGIN7_NOT_FOUND) === "没有这一天", "missing text");
+  assert(errorText(ErrorCode.LOGIN7_MAX) === "已经是第7天", "max text");
+
+  const fresh = new MockGameSession();
+  const anchor = fresh.idleAnchorMs;
+  const view = fresh.login7View();
+  assert(view.ok && view.loginDay === 1 && view.openDay === 1 && view.days.length === 7, "fresh view");
+  assert(view.gold === MOCK_STARTER_GOLD && view.diamond === MOCK_STARTER_DIAMOND, "view wallet");
+  assert(view.days[0].state === "ready" && view.days[1].state === "locked" && view.days[6].state === "locked", "day1 ready");
+  assert(login7RowText(view.days[0], view.loginDay) === "第1天 · 金币 +80 · 今日可领", "today row");
+  assert(login7RowText(view.days[1], view.loginDay) === "第2天 · 钻石 +15 · 未到达", "future row");
+  assert(login7RowText(view.days[3], view.loginDay) === "第4天 · 金币 +120、小金币袋 ×1 · 未到达", "day4 row");
+  assert(login7TodayClaimed(view.days, 1) === false, "today open");
+
+  const early = fresh.login7Claim({ day: 2 });
+  assert(early.ok === false && early.code === ErrorCode.LOGIN7_LOCKED && login7FailToast(early) === "第2天尚未到达", "future locked");
+  assert(fresh.gold === MOCK_STARTER_GOLD && fresh.diamond === MOCK_STARTER_DIAMOND && fresh.loginDay === 1, "locked spends nothing");
+  const missing = fresh.login7Claim({ day: 8 });
+  assert(missing.ok === false && missing.code === ErrorCode.LOGIN7_NOT_FOUND && login7FailToast(missing) === "没有这一天", "missing day");
+  const blank = fresh.login7Claim({});
+  assert(blank.ok === false && blank.code === ErrorCode.LOGIN7_NOT_FOUND && fresh.gold === MOCK_STARTER_GOLD, "blank day");
+
+  const claimed = fresh.login7Claim({ day: 1 });
+  assert(claimed.ok && claimed.goldGain === 80 && claimed.diamondGain === 0 && claimed.gold === MOCK_STARTER_GOLD + 80, "claim day1");
+  assert(claimed.loginDay === 1 && fresh.openDay === 1 && fresh.stageId === 1, "claim leaves progress");
+  assert(fresh.heroes[0].level === 1 && fresh.heroes[0].weaponLevel === 1 && fresh.arenaUsed === 0, "claim leaves growth");
+  assert(fresh.towerFloor === 1 && fresh.dailyUsed === 0 && fresh.idleAnchorMs === anchor, "claim leaves modes");
+  assert(fresh.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG && fresh.itemCounts[IDLE_ITEM_ID] === undefined, "day1 adds no item");
+  const again = fresh.login7Claim({ day: 1 });
+  assert(again.ok === false && again.code === ErrorCode.LOGIN7_CLAIMED && login7FailToast(again) === "第1天奖励已经领取", "already claimed");
+  assert(fresh.gold === MOCK_STARTER_GOLD + 80 && fresh.login7View().days[0].state === "claimed", "second claim keeps wallet");
+  assert(login7RowText(fresh.login7View().days[0], 1) === "第1天 · 金币 +80 · 已领取", "claimed row");
+  assert(login7TodayClaimed(fresh.login7View().days, 1), "today claimed flag");
+
+  const stepped = fresh.login7Advance();
+  assert(stepped.ok && stepped.advanced && stepped.loginDay === 2 && stepped.openDay === 1, "advance to day 2");
+  assert(fresh.gold === MOCK_STARTER_GOLD + 80 && fresh.login7View().days[0].state === "claimed", "advance does not claim");
+  assert(fresh.login7View().days[1].state === "ready" && login7RowText(fresh.login7View().days[1], 2) === "第2天 · 钻石 +15 · 今日可领", "day2 today");
+  const diamonds = fresh.login7Claim({ day: 2 });
+  assert(diamonds.ok && diamonds.diamondGain === 15 && fresh.diamond === MOCK_STARTER_DIAMOND + 15, "day2 diamonds");
+  assert(fresh.gold === MOCK_STARTER_GOLD + 80 && fresh.openDay === 1, "diamonds leave gold and open day");
+
+  const far = new MockGameSession({ openDay: 30, arenaUsed: 2, dailyUsed: 1, towerFloor: 4, towerUsed: 3, clearedStage: 3 });
+  assert(far.loginDay === 1 && far.login7View().openDay === far.openDay, "open day does not set login day");
+  const farLock = far.login7Claim({ day: 2 });
+  assert(farLock.ok === false && farLock.code === ErrorCode.LOGIN7_LOCKED && far.gold === MOCK_STARTER_GOLD, "d30 still locks day 2");
+  const farAdv = far.login7Advance();
+  assert(farAdv.loginDay === 2 && farAdv.openDay === far.openDay && far.arenaUsed === 2 && far.dailyUsed === 1, "advance leaves modes");
+  assert(far.towerFloor === 4 && far.towerUsed === 3 && far.clearedStage === 3, "advance leaves tower and stage");
+
+  const runner = new MockGameSession();
+  let next = 1;
+  for (let i = 0; i < 5; i++) {
+    const entered = runner.stageEnter({ stageId: next });
+    const won = runner.stageResult({ stageId: next, battleId: entered.battleId, win: true });
+    assert(won.ok && won.level === next + 1, "win toward login " + next);
+    next = won.nextStageId;
+  }
+  assert(runner.openDay === 2 && runner.loginDay === 1 && runner.gold === MOCK_STARTER_GOLD + 50, "stages move open day only");
+  const stillLocked = runner.login7Claim({ day: 2 });
+  assert(stillLocked.ok === false && stillLocked.code === ErrorCode.LOGIN7_LOCKED && runner.gold === MOCK_STARTER_GOLD + 50, "stage does not unlock day 2");
+
+  const pack = new MockGameSession({ loginDay: 7, openDay: 4 });
+  assert(pack.login7Claim({ day: 3 }).ok && pack.itemCounts[IDLE_ITEM_ID] === 3, "day3 stones");
+  assert(pack.login7Claim({ day: 4 }).ok && pack.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG + 1 && pack.gold === MOCK_STARTER_GOLD + 120, "day4 bag");
+  assert(pack.login7Claim({ day: 5 }).ok && pack.diamond === MOCK_STARTER_DIAMOND + 30 && pack.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION + 1, "day5 potion");
+  assert(pack.login7Claim({ day: 6 }).ok && pack.itemCounts[IDLE_ITEM_ID] === 8 && pack.gold === MOCK_STARTER_GOLD + 320, "day6 stones stack");
+  const last = pack.login7Claim({ day: 7 });
+  assert(last.ok && last.goldGain === 300 && last.diamondGain === 50, "day7 payout");
+  assert(pack.gold === MOCK_STARTER_GOLD + 620 && pack.diamond === MOCK_STARTER_DIAMOND + 80, "day7 wallet");
+  assert(pack.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG + 3 && pack.openDay === 4 && pack.loginDay === 7, "day7 bag and days");
+  assert(pack.heroes[0].level === 1 && pack.stageId === 1, "rewards leave hero and stage");
+  const capped = pack.login7Advance();
+  assert(capped.ok === false && capped.code === ErrorCode.LOGIN7_MAX && login7FailToast(capped) === "已经是第7天", "cannot pass day 7");
+  assert(pack.loginDay === 7 && pack.openDay === 4 && pack.gold === MOCK_STARTER_GOLD + 620, "max keeps state");
+  const repeat = pack.login7Claim({ day: 7 });
+  assert(repeat.ok === false && repeat.code === ErrorCode.LOGIN7_CLAIMED && pack.gold === MOCK_STARTER_GOLD + 620, "day7 once");
+
+  const seeded = new MockGameSession({ loginDay: 4, loginClaimed: [1, 2, 9], openDay: 9 });
+  assert(seeded.loginDay === 4 && seeded.login7View().openDay === 9, "seed login day");
+  assert(seeded.login7View().days[0].state === "claimed" && seeded.login7View().days[1].state === "claimed", "seed claimed");
+  assert(seeded.login7View().days[2].state === "ready" && login7RowText(seeded.login7View().days[2], 4) === "第3天 · 强化石 ×3 · 可补领", "makeup row");
+  assert(seeded.login7View().days[3].state === "ready" && seeded.login7View().days[4].state === "locked", "today and future");
+  assert(seeded.login7Claim({ day: 5 }).code === ErrorCode.LOGIN7_LOCKED, "seeded future");
+  assert(seeded.login7Claim({ day: 1 }).code === ErrorCode.LOGIN7_CLAIMED && seeded.gold === MOCK_STARTER_GOLD, "seeded claimed wins");
+  const makeup = seeded.login7Claim({ day: 3 });
+  assert(makeup.ok && seeded.itemCounts[IDLE_ITEM_ID] === 3 && seeded.loginDay === 4, "makeup claim");
+  assert(new MockGameSession({ loginDay: 0 }).loginDay === 1, "clamp low login day");
+  assert(new MockGameSession({ loginDay: 99 }).loginDay === 7, "clamp high login day");
+  const junk = new MockGameSession({ loginDay: 2, loginClaimed: [0, 2] });
+  assert(junk.login7View().days[0].state === "ready" && junk.login7View().days[1].state === "claimed", "ignore day 0 claim");
+
+  const reset = new MockGameSession({ loginDay: 5, loginClaimed: [1, 5], gold: 400, items: [{ id: IDLE_ITEM_ID, count: 9 }] });
+  assert(reset.login7View().days[0].state === "claimed", "preset claimed");
+  const created = reset.roleCreate({ name: "新人" });
+  assert(created.ok && reset.loginDay === 1 && reset.gold === MOCK_STARTER_GOLD, "create resets login day");
+  assert(reset.login7View().days[0].state === "ready" && reset.login7View().openDay === 1, "create clears claims");
+  assert(reset.itemCounts[IDLE_ITEM_ID] === undefined && reset.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG, "create restores bag");
+
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const remoteView = await Proto.login7View({}, net);
+  assert(remoteView.ok && remoteView.loginDay === 1 && remoteView.days.length === 7 && remoteView.days[1].state === "locked", "proto view");
+  const remoteClaim = await Proto.login7Claim({ day: 1 }, net);
+  assert(remoteClaim.ok && remoteClaim.gold === MOCK_STARTER_GOLD + 80 && remoteClaim.rewards.length === 1, "proto claim");
+  const remoteAgain = await Proto.login7Claim({ day: 1 }, net);
+  assert(remoteAgain.ok === false && remoteAgain.code === ErrorCode.LOGIN7_CLAIMED && remoteAgain.gold === remoteClaim.gold, "proto claimed");
+  const remoteLocked = await Proto.login7Claim({ day: 3 }, net);
+  assert(remoteLocked.ok === false && remoteLocked.code === ErrorCode.LOGIN7_LOCKED, "proto locked");
+  const remoteAdv = await Proto.login7Advance({}, net);
+  assert(remoteAdv.ok && remoteAdv.loginDay === 2 && remoteAdv.openDay === 1 && remoteAdv.advanced, "proto advance");
+  const remoteDay2 = await Proto.login7Claim({ day: 2 }, net);
+  assert(remoteDay2.ok && remoteDay2.diamond === MOCK_STARTER_DIAMOND + 15 && remoteDay2.gold === remoteClaim.gold, "proto day2");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyLogin7Claim(remoteDay2);
+  assert(Session.gold === remoteDay2.gold && Session.diamond === remoteDay2.diamond, "apply login7");
+  applyLogin7Claim({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteDay2.gold && Session.diamond === remoteDay2.diamond, "failed login7 ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const ids = P0_CMDS.filter(
+    (row) => row.cmd === Cmd.login7View || row.cmd === Cmd.login7Claim || row.cmd === Cmd.login7Advance
+  ).map((row) => row.id);
+  assert(ids.length === 3 && ids[0] === 2201 && ids[1] === 2202 && ids[2] === 2203, "login7 cmd ids");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -2200,6 +2378,7 @@ async function main(): Promise<void> {
   await checkArena();
   await checkTower();
   await checkDaily();
+  await checkLogin7();
   console.log("skeleton-check ok");
 }
 

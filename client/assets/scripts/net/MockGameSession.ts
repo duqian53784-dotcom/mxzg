@@ -62,6 +62,12 @@ import {
   settleDailyGold,
 } from "../module/daily/gold";
 import {
+  findLogin7Rewards,
+  listLogin7Days,
+  LOGIN7_DAYS,
+  tallyLogin7,
+} from "../module/login7/rewards";
+import {
   isSummonCount,
   poolAt,
   shardItemId,
@@ -96,6 +102,9 @@ import {
   TowerViewResp,
   DailyChallengeResp,
   DailyViewResp,
+  Login7AdvanceResp,
+  Login7ClaimResp,
+  Login7ViewResp,
 } from "./protocol/types";
 
 /** 一场预览里的假服状态。同一 MockTransport 上多次请求共用这一份。 */
@@ -163,6 +172,13 @@ export interface MockSessionSeed {
    * 和 openDay 不一致时，下一次查看或挑战会把次数清零。
    */
   dailyDay?: number;
+  /**
+   * 角色登录天，1 到 7。不填为 1。
+   * 跟创角后的登录天数走，不跟 openDay。主线推进不会加这个数。
+   */
+  loginDay?: number;
+  /** 已经领取的登录天。只认 1 到 7。不填则都没领。 */
+  loginClaimed?: number[];
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -171,7 +187,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔和日常金币副本都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本和七日登录都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -229,6 +245,13 @@ export class MockGameSession {
   /** 次数所属开服天。和 openDay 不同时，下一次金币副本操作清零。 */
   dailyDay = 1;
   private dailyDaySeeded = false;
+  /**
+   * 角色登录天。新号第 1 天。
+   * 只由调试加天和创角改它，开服天和主线都不带动它。
+   */
+  loginDay = 1;
+  /** 下标 1 到 7。true 表示这一天已经领过。 */
+  private loginClaimed: boolean[] = [false, false, false, false, false, false, false, false];
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
@@ -281,7 +304,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔和金币副本次数重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数和七日登录重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -311,6 +334,7 @@ export class MockGameSession {
     this.towerDay = this.openDay;
     this.dailyUsed = 0;
     this.dailyDay = this.openDay;
+    this.resetLogin7();
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
 
@@ -728,6 +752,76 @@ export class MockGameSession {
   }
 
   /**
+   * 只读七日登录。按角色登录天列出七格，不改钱包，也不改开服天。
+   * 新号第 1 天可领。入口不设等级锁。
+   */
+  login7View(): Login7ViewResp {
+    return {
+      ok: true,
+      loginDay: this.loginDay,
+      openDay: this.openDay,
+      days: listLogin7Days(this.loginDay, (day) => this.loginClaimed[day] === true),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 领取某一登录天。已到达且未领才能领，包括今天之前没领的。
+   * 未来天、已经领过、没有这一天都拒绝，钱包和背包不动。
+   * 金币钻石进钱包，其它道具进背包。不改开服天、主线、英雄和各玩法次数。
+   */
+  login7Claim(data: unknown): Login7ClaimResp {
+    const day = Math.floor(numField(asRecord(data), "day", 0));
+    const rewards = findLogin7Rewards(day);
+    if (!rewards) return this.login7Fail(day, ErrorCode.LOGIN7_NOT_FOUND);
+    if (day >= 1 && day <= LOGIN7_DAYS && this.loginClaimed[day]) {
+      return this.login7Fail(day, ErrorCode.LOGIN7_CLAIMED);
+    }
+    if (day > this.loginDay) return this.login7Fail(day, ErrorCode.LOGIN7_LOCKED);
+    const grant = tallyLogin7(rewards);
+    this.gold += grant.gold;
+    this.diamond += grant.diamond;
+    for (let i = 0; i < grant.items.length; i++) {
+      this.addItem(grant.items[i].id, grant.items[i].count);
+    }
+    if (day >= 1 && day <= LOGIN7_DAYS) this.loginClaimed[day] = true;
+    return {
+      ok: true,
+      day,
+      rewards,
+      goldGain: grant.gold,
+      diamondGain: grant.diamond,
+      gold: this.gold,
+      diamond: this.diamond,
+      loginDay: this.loginDay,
+    };
+  }
+
+  /**
+   * 调试：角色登录天 +1，最多到第 7 天。
+   * 不改开服天，不自动领取，也不动钱包。
+   */
+  login7Advance(): Login7AdvanceResp {
+    if (this.loginDay >= LOGIN7_DAYS) {
+      return {
+        ok: false,
+        loginDay: this.loginDay,
+        advanced: false,
+        openDay: this.openDay,
+        code: ErrorCode.LOGIN7_MAX,
+      };
+    }
+    this.loginDay += 1;
+    return {
+      ok: true,
+      loginDay: this.loginDay,
+      advanced: true,
+      openDay: this.openDay,
+    };
+  }
+
+  /**
    * 单抽或十连，只扣钻石。
    * 新英雄追加到名册末尾（Lv1，星级按卡池）。已拥有则加碎片，等级和星级不动。
    * 钻石不够或次数不是 1/10 时整次拒绝，游标、名册、钱包都不变。
@@ -1093,6 +1187,20 @@ export class MockGameSession {
       this.dailyDay = Math.floor(seed.dailyDay);
       this.dailyDaySeeded = true;
     }
+    if (typeof seed.loginDay === "number" && isFinite(seed.loginDay)) {
+      let day = Math.floor(seed.loginDay);
+      if (day < 1) day = 1;
+      if (day > LOGIN7_DAYS) day = LOGIN7_DAYS;
+      this.loginDay = day;
+    }
+    if (Array.isArray(seed.loginClaimed)) {
+      for (let i = 0; i < seed.loginClaimed.length; i++) {
+        const raw = seed.loginClaimed[i];
+        if (typeof raw !== "number" || !isFinite(raw)) continue;
+        const day = Math.floor(raw);
+        if (day >= 1 && day <= LOGIN7_DAYS) this.loginClaimed[day] = true;
+      }
+    }
   }
 
   /** id 1 金币，id 2 钻石。其它 id 先忽略。 */
@@ -1275,6 +1383,25 @@ export class MockGameSession {
     if (this.dailyDay === this.openDay) return;
     this.dailyDay = this.openDay;
     this.dailyUsed = 0;
+  }
+
+  private resetLogin7(): void {
+    this.loginDay = 1;
+    for (let i = 0; i < this.loginClaimed.length; i++) this.loginClaimed[i] = false;
+  }
+
+  private login7Fail(day: number, code: number): Login7ClaimResp {
+    return {
+      ok: false,
+      day,
+      rewards: [],
+      goldGain: 0,
+      diamondGain: 0,
+      gold: this.gold,
+      diamond: this.diamond,
+      loginDay: this.loginDay,
+      code,
+    };
   }
 
   private dailyFail(tierId: number, name: string, code: number): DailyChallengeResp {
