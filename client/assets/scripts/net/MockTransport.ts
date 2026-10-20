@@ -1,3 +1,4 @@
+import { ErrorCode, logErrorCode } from "../core/errors";
 import { MockGameSession } from "./MockGameSession";
 import { encodeRequest } from "./protocol/codec";
 import { Cmd } from "./protocol/cmds";
@@ -41,7 +42,7 @@ export class MockTransport implements ITransport {
 
   send(msg: NetMessage): void {
     if (!this.opened) {
-      console.warn("[MockTransport] drop send " + msg.cmd);
+      logErrorCode("Mock", ErrorCode.NET_CLOSED, "drop " + msg.cmd);
       return;
     }
     setTimeout(() => this.reply(msg), this.latencyMs);
@@ -64,6 +65,11 @@ export class MockTransport implements ITransport {
 
   private reply(msg: NetMessage): void {
     if (!this.opened) return;
+    if (!msg.cmd) {
+      logErrorCode("Mock", ErrorCode.UNKNOWN_CMD, "empty");
+      this.emit(encodeRequest(msg.cmd, { ok: false, code: ErrorCode.UNKNOWN_CMD }));
+      return;
+    }
     const session = this.session;
     if (msg.cmd === Cmd.login) {
       this.emit(encodeRequest(Cmd.login, session.login(msg.data)));

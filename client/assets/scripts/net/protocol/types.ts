@@ -11,6 +11,8 @@ export interface LoginResp {
   account: string;
   token: string;
   serverId: number;
+  /** 失败时的客户端错误码，见 core/errors.ts。成功可以不带。 */
+  code?: number;
 }
 
 export interface HeartbeatReq {
@@ -35,6 +37,8 @@ export interface RoleEnterResp {
   openDay?: number;
   /** Mock 会话：下一关。真服可以不带。 */
   stageId?: number;
+  /** 失败时的客户端错误码。成功可以不带。 */
+  code?: number;
 }
 
 export interface RoleCreateReq {
@@ -47,6 +51,8 @@ export interface RoleCreateResp {
   roleId: number;
   name: string;
   level: number;
+  /** 失败时的客户端错误码。空名字是 ROLE_NAME_EMPTY。 */
+  code?: number;
 }
 
 export interface StageEnterReq {
@@ -57,6 +63,8 @@ export interface StageEnterResp {
   ok: boolean;
   stageId: number;
   battleId: string;
+  /** 失败时的客户端错误码。关卡 < 1 是 STAGE_ID_INVALID。 */
+  code?: number;
 }
 
 export interface StageReward {
@@ -79,4 +87,6 @@ export interface StageResultResp {
   /** Mock 会话结算后的开服天 / 等级。真服可以不带。 */
   openDay?: number;
   level?: number;
+  /** 失败时的客户端错误码。成功可以不带。 */
+  code?: number;
 }

@@ -32,12 +32,13 @@ export function setText(node: Node, text: string): void {
 export function createLabel(
   text: string,
   fontSize: number,
-  options?: { color?: Color; width?: number }
+  options?: { color?: Color; width?: number; height?: number; align?: "center" | "left" }
 ): Node {
   const width = options?.width ?? 680;
+  const height = options?.height ?? fontSize + 16;
   const node = uiNode("Label");
   const ui = node.addComponent(UITransform);
-  ui.setContentSize(width, fontSize + 16);
+  ui.setContentSize(width, height);
   const label = node.addComponent(Label);
   label.string = text;
   label.fontSize = fontSize;
@@ -45,8 +46,8 @@ export function createLabel(
   label.useSystemFont = true;
   label.fontFamily = "sans-serif";
   label.overflow = Overflow.CLAMP;
-  label.horizontalAlign = HorizontalTextAlignment.CENTER;
-  label.verticalAlign = VerticalTextAlignment.CENTER;
+  label.horizontalAlign = options?.align === "left" ? HorizontalTextAlignment.LEFT : HorizontalTextAlignment.CENTER;
+  label.verticalAlign = options?.height ? VerticalTextAlignment.TOP : VerticalTextAlignment.CENTER;
   label.color = options?.color ?? new Color(240, 240, 240, 255);
   return node;
 }

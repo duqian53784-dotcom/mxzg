@@ -26,14 +26,14 @@
 | server 进 Git | ⏸ 暂不 | 本机 **junction** → `F:\源码\mj\program\server` |
 | 旧仓 / 旧客户端 | 📦 归档参考 | 旧代码在 `F:\源码\mj\program`；GitHub 旧大体积内容勿再整仓硬推 |
 | 进度文档 | ✅ 本文 | `PROJECT_PLAN.md` |
-| P0 可玩闭环 | ❌ 未开始 | 玩法未开始；技术骨架 B1–B6 已完成。主城可点「主线」走假战斗 |
+| P0 可玩闭环 | ❌ 未开始 | 玩法未开始；技术骨架 B1–B7 已完成。主城可点「主线」走假战斗；失败有中文 Toast |
 | 连真实服 | ❌ 未开始 | 协议 / 网关 / 登录 |
 | 微信小游戏 | ❌ 未开始 | H5 稳定后再做 |
 | App 包 | ❌ 未开始 | H5 之后 |
 
-**当前焦点（唯一）：** B7 — 日志与错误码展示。
+**当前焦点（唯一）：** B8 — 多分辨率 / 安全区（H5）。
 
-**上次更新：** 2026-10-20（Asia/Shanghai）— B6 完成：进程内 MockGameSession（开服天 / 等级 / 主线进度）与录包回放；主城「主线」可点 stage.enter → stage.result。
+**上次更新：** 2026-10-20（Asia/Shanghai）— B7 完成：GameLog 环形缓冲与 `[mxzg]` 控制台镜像；错误码中文 Toast；主城「日志」可看最近记录。
 
 ---
 
@@ -221,7 +221,7 @@ client/assets/
 - [x] B4 网络层占位：连接状态机、心跳、断线重连、消息派发（可先 Mock）
 - [x] B5 协议：梳理旧 Protobuf 列表；P0 只用到的先生成/手写 stub（旧 .proto 不在本仓；手写 stub 见 `docs/protocol-stubs.md`）
 - [x] B6 本地 Mock 服或录包回放（无真实服前可玩）（进程内 MockGameSession + ReplayTransport，见 `docs/mock-replay.md`）
-- [ ] B7 日志与错误码展示
+- [x] B7 日志与错误码展示（GameLog + 错误码中文 Toast + 主城「日志」）
 - [ ] B8 多分辨率 / 安全区（H5）
 
 ### 阶段 C · P0 玩法垂直切片
@@ -335,12 +335,13 @@ client/assets/
 | 2026-10-20（Asia/Shanghai） | B1–B4：Boot 分阶段启动 + Mock 登录进 Main；UI 页面栈/弹窗队列/Toast；resources JSON 读表样例；NetClient 状态机与 MockTransport。焦点改为 B5 |
 | 2026-10-20（Asia/Shanghai） | B5：P0 手写协议 stub（`Proto.login` / `roleEnter` / `roleCreate` / `stageEnter` / `stageResult` / `heartbeat`），MockTransport 补创角与主线进关/结算。焦点改为 B6 |
 | 2026-10-20（Asia/Shanghai） | B6：MockGameSession 记住开服天 / 等级 / 主线进度；录包 `resources/mock/session-login-stage.json` + ReplayTransport。主城「主线」可假战斗结算。焦点改为 B7 |
+| 2026-10-20（Asia/Shanghai） | B7：GameLog（级别、环形缓冲、`[mxzg]` 镜像）；错误码表；失败 Toast；主城「日志」面板。焦点改为 B8 |
 
 ---
 
 ## 13. 下一步（写给下一回合的自己）
 
-1. 推进 **B7**：日志与错误码展示（主城能看见失败原因，而不是只打控制台）。  
-2. B6 已可在主城点「主线」走假战斗：`stage.enter` → `stage.result`，进度在 `MockGameSession`。说明见 `docs/mock-replay.md`。预览步骤见 `client/assets/scripts/README.md`。  
+1. 推进 **B8**：多分辨率 / 安全区（H5）。  
+2. B7 已可在主城点「日志」看最近记录。「空名创角」Toast「角色名不能为空」，「断开提示」Toast「网络已断开」。说明见 `client/assets/scripts/README.md`。  
 3. 每完成一项，更新第 1 节与本清单。  
-4. 有空时补一次 Web Mobile 构建（非阻塞）。对照旧 `.proto` 的真实消息号留到阶段 D，不要在 B7 做。  
+4. 有空时补一次 Web Mobile 构建（非阻塞）。对照旧 `.proto` 的真实消息号留到阶段 D，不要在 B8 做。  

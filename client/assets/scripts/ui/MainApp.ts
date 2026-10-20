@@ -6,8 +6,11 @@
 import { _decorator, BlockInputEvents, Color, Component, Node, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
 import { listOpenEntries } from "../config/gates";
+import { ErrorCode, errorText, messageOf } from "../core/errors";
+import { GameLog } from "../core/GameLog";
 import { Session } from "../core/Session";
 import { NetClient } from "../net/NetClient";
+import { NetState } from "../net/NetTypes";
 import { Proto } from "../net/protocol";
 import { UIShell } from "./UIShell";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
@@ -22,6 +25,9 @@ export class MainApp extends Component {
   private accountNode: Node | null = null;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
+  private logLabel: Node | null = null;
+  private offLog: (() => void) | null = null;
+  private netState: NetState = NetClient.shared.state;
 
   start() {
     if (this.built) return;
@@ -36,12 +42,12 @@ export class MainApp extends Component {
       try {
         await ConfigLoader.loadAll();
       } catch (err) {
-        console.error("[MainApp] config load failed", err);
+        GameLog.shared.error("MainApp", "config load failed " + messageOf(err));
       }
     }
     if (!this.isValid || !this.shell) return;
     this.shell.openPage("hub", this.buildHub());
-    console.log("[MainApp] hub ready account=" + (Session.account || "(none)"));
+    GameLog.shared.info("MainApp", "hub ready account=" + (Session.account || "(none)"));
   }
 
   private buildHub(): Node {
@@ -73,6 +79,11 @@ export class MainApp extends Component {
       NetClient.shared.simulateDrop();
       shell?.showToast("已模拟断线");
     });
+    const logBtn = createButton("日志", () => {
+      GameLog.shared.info("MainApp", "click log");
+      shell?.openPage("log", this.buildLog());
+    }, 120, 44);
+    place(logBtn, page, 270, 230);
 
     this.gateNode = place(
       createLabel(this.gateText(), 20, { color: new Color(170, 190, 170, 255), width: 700 }),
@@ -87,14 +98,21 @@ export class MainApp extends Component {
     });
     place(netNode, page, 0, -292);
     NetClient.shared.onState((state) => {
+      if (!this.isValid) return;
       if (netNode.isValid) setText(netNode, "网络 " + state);
+      // 放弃重连时会先经过 reconnecting，再进 connecting，最后 closed。
+      // 主城「断开提示」是从 connected 直接到 closed，Toast 由按钮自己发。
+      if (state === "closed" && (this.netState === "reconnecting" || this.netState === "connecting")) {
+        this.shell?.showToast(errorText(ErrorCode.NET_CLOSED), 2200);
+      }
+      this.netState = state;
     });
     return page;
   }
 
   private hubButton(page: Node, title: string, id: string, y: number, onClick: () => void): Node {
     const button = createButton(title, () => {
-      console.log("[MainApp] click " + id);
+      GameLog.shared.info("MainApp", "click " + id);
       onClick();
     }, 300, 52);
     place(button, page, 0, y);
@@ -107,7 +125,7 @@ export class MainApp extends Component {
     const shell = this.shell;
     const net = NetClient.shared;
     if (net.state !== "connected") {
-      shell?.showToast("网络未连接，请从 Boot 进入");
+      shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
       return;
     }
     this.stageBusy = true;
@@ -117,17 +135,17 @@ export class MainApp extends Component {
       const entered = await Proto.stageEnter({ stageId }, net);
       if (!this.isValid) return;
       if (!entered.ok) {
-        shell?.showToast("进关失败");
+        shell?.showToast(errorText(entered.code ?? ErrorCode.STAGE_ID_INVALID), 2200);
         return;
       }
-      console.log("[MainApp] stage enter", entered.stageId, entered.battleId);
+      GameLog.shared.info("MainApp", "stage enter " + entered.stageId + " " + entered.battleId);
       const result = await Proto.stageResult(
         { stageId: entered.stageId, battleId: entered.battleId, win: true },
         net
       );
       if (!this.isValid) return;
       if (!result.ok) {
-        shell?.showToast("结算失败");
+        shell?.showToast(errorText(result.code ?? ErrorCode.STAGE_ID_INVALID), 2200);
         return;
       }
       Session.stageId = result.nextStageId >= 1 ? result.nextStageId : stageId + 1;
@@ -139,20 +157,22 @@ export class MainApp extends Component {
         "第" + result.stageId + "关胜利，下一关 " + Session.stageId + "，" + rewardText,
         2200
       );
-      console.log(
-        "[MainApp] stage result",
-        result.stageId,
-        "next",
-        Session.stageId,
-        "lv",
-        Session.role?.level,
-        "day",
-        Session.openDay
+      GameLog.shared.info(
+        "MainApp",
+        "stage result " +
+          result.stageId +
+          " next " +
+          Session.stageId +
+          " lv " +
+          (Session.role?.level ?? "") +
+          " day " +
+          Session.openDay
       );
       this.refreshHub();
     } catch (err) {
-      console.error("[MainApp] stage failed", err);
-      if (this.isValid) shell?.showToast("主线失败，见控制台");
+      const text = messageOf(err);
+      GameLog.shared.error("MainApp", "stage " + text);
+      if (this.isValid) shell?.showToast(text, 2200);
     } finally {
       this.stageBusy = false;
       if (this.isValid) this.setMainButton(this.stageButtonText());
@@ -186,7 +206,7 @@ export class MainApp extends Component {
     place(createLabel("背包（占位）", 40, { color: new Color(255, 228, 170, 255) }), page, 0, 80);
     place(createLabel("道具列表留到 C7", 22), page, 0, 20);
     const back = createButton("返回", () => {
-      console.log("[MainApp] click bag-back");
+      GameLog.shared.info("MainApp", "click bag-back");
       this.shell?.closePage();
       this.shell?.showToast("已关闭背包");
     }, 220, 52);
@@ -207,7 +227,7 @@ export class MainApp extends Component {
     place(createLabel(body, 22, { width: 440 }), root, 0, 20);
     place(
       createButton("关闭", () => {
-        console.log("[MainApp] click popup-close");
+        GameLog.shared.info("MainApp", "click popup-close");
         this.shell?.closePopup();
       }, 200, 52),
       root,
@@ -215,6 +235,89 @@ export class MainApp extends Component {
       -70
     );
     return root;
+  }
+
+  private buildLog(): Node {
+    const page = uiNode("LogPage");
+    place(createLabel("日志", 40, { color: new Color(255, 228, 170, 255) }), page, 0, 250);
+    place(createLabel("最近 10 条，新的在上", 18, { color: new Color(170, 186, 206, 255) }), page, 0, 200);
+    place(createRect("log-bg", 700, 320, new Color(10, 18, 32, 230)), page, 0, 20);
+    this.logLabel = place(
+      createLabel(this.logText(), 16, {
+        color: new Color(214, 224, 236, 255),
+        width: 680,
+        height: 300,
+        align: "left",
+      }),
+      page,
+      0,
+      20
+    );
+    if (this.offLog) this.offLog();
+    this.offLog = GameLog.shared.subscribe(() => {
+      if (this.logLabel && this.logLabel.isValid) setText(this.logLabel, this.logText());
+    });
+    place(createButton("空名创角", () => void this.tryEmptyCreate(), 200, 48), page, -160, -190);
+    place(createButton("断开提示", () => this.toastClosed(), 200, 48), page, 160, -190);
+    place(
+      createButton("返回", () => {
+        GameLog.shared.info("MainApp", "click log-back");
+        this.closeLog();
+      }, 200, 48),
+      page,
+      0,
+      -260
+    );
+    return page;
+  }
+
+  private logText(): string {
+    const lines = GameLog.shared.recent(10);
+    if (lines.length === 0) return "（暂无日志）";
+    const newestFirst = lines.slice().reverse();
+    return newestFirst.map((line) => GameLog.shared.format(line)).join("\n");
+  }
+
+  private closeLog(): void {
+    if (this.offLog) {
+      this.offLog();
+      this.offLog = null;
+    }
+    this.logLabel = null;
+    this.shell?.closePage();
+  }
+
+  /** 触发 Mock 已有的空名字失败，Toast 应是「角色名不能为空」。 */
+  private async tryEmptyCreate(): Promise<void> {
+    const shell = this.shell;
+    const net = NetClient.shared;
+    GameLog.shared.info("MainApp", "click empty-create");
+    if (net.state !== "connected") {
+      shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    try {
+      const resp = await Proto.roleCreate({ name: "  " }, net);
+      if (!this.isValid) return;
+      if (!resp.ok) {
+        shell?.showToast(errorText(resp.code ?? ErrorCode.ROLE_NAME_EMPTY), 2200);
+        return;
+      }
+      shell?.showToast("创角成功");
+    } catch (err) {
+      const text = messageOf(err);
+      GameLog.shared.error("MainApp", "empty create " + text);
+      if (this.isValid) shell?.showToast(text, 2200);
+    }
+  }
+
+  /** 主动关掉连接并 Toast「网络已断开」。模拟断线仍会重连，不走这里。 */
+  private toastClosed(): void {
+    GameLog.shared.info("MainApp", "click force-close");
+    NetClient.shared.close();
+    const text = errorText(ErrorCode.NET_CLOSED);
+    GameLog.shared.error("MainApp", text);
+    this.shell?.showToast(text, 2200);
   }
 
   private gateText(): string {
