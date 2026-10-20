@@ -1,5 +1,5 @@
 /**
- * B3–C11 自检（不启动 Creator）。
+ * B3–C12 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -119,6 +119,24 @@ import {
   towerReportLine,
   towerWinToast,
 } from "../assets/scripts/module/tower/climb";
+import {
+  applyDailyChallenge,
+  DAILY_GOLD_LIMIT,
+  DAILY_GOLD_TIERS,
+  dailyAttemptsLine,
+  dailyChallengeButton,
+  dailyEmptyToast,
+  dailyFailToast,
+  dailyLoseToast,
+  dailyMissingToast,
+  dailyNoChanceToast,
+  dailyPowerLine,
+  dailyPreviewLine,
+  dailyReportLine,
+  dailyRowText,
+  dailyWinToast,
+  findDailyTier,
+} from "../assets/scripts/module/daily/gold";
 import {
   applySummon,
   diamondShortToast,
@@ -306,6 +324,9 @@ function checkGates(): void {
   const fantasy = rows.find((row) => row.id === "main_fantasy_tower");
   assert(fantasy && fantasy.level === 16 && fantasy.open_server_day === 0, "fantasy row");
   assert(!isEntryOpen(fantasy, 15, 30) && isEntryOpen(fantasy, 16, 1), "fantasy at lv16 not day");
+  const mission = rows.find((row) => row.id === "main_mission");
+  assert(mission && mission.level === 15 && mission.open_server_day === 0, "daily row");
+  assert(!isEntryOpen(mission, 14, 99) && isEntryOpen(mission, 15, 1), "daily at lv15 not day");
   const lv15 = listOpenEntries(rows, 15, 1).map((row) => row.id);
   assert(lv15.indexOf("main_mission") >= 0 && lv15.indexOf("main_fantasy_tower") < 0, "lv15 daily not tower");
   const lv16 = listOpenEntries(rows, 16, 1).map((row) => row.id);
@@ -761,6 +782,15 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(tabLabel("幻境之塔", false) === "锁·幻境之塔", "tower locked label");
   assert(towerEntry.blurb.indexOf("Lv16") >= 0, "tower blurb");
   assert(rootTabFor("tower") === "plays", "tower stays on plays");
+  const dailyEntry = findNavEntry("daily");
+  assert(dailyEntry !== null && dailyEntry.gateId === "main_mission", "daily gate");
+  const dailyLock = entryAccess(dailyEntry, 1, 1, db);
+  assert(!dailyLock.open && dailyLock.hint === "日常副本未开启，需要主线达到 Lv15", "daily hint");
+  assert(dailyLock.hint.indexOf("开服") < 0, "daily hint has no open day");
+  assert(!entryAccess(dailyEntry, 14, 30, db).open && entryAccess(dailyEntry, 15, 1, db).open, "daily opens at lv15");
+  assert(tabLabel("日常副本", false) === "锁·日常副本", "daily locked label");
+  assert(dailyEntry.blurb.indexOf("金币") >= 0 && dailyEntry.blurb.indexOf("Lv15") >= 0, "daily blurb");
+  assert(rootTabFor("daily") === "plays", "daily stays on plays");
   const magicEntry = findNavEntry("magic");
   assert(
     magicEntry !== null && magicEntry.gateId === "magic_tower" && magicEntry.serverGateKey === "magic_tower_open_day",
@@ -2007,6 +2037,146 @@ async function checkTower(): Promise<void> {
   net.close();
 }
 
+async function checkDaily(): Promise<void> {
+  const easy = findDailyTier(1);
+  const normal = findDailyTier(2);
+  const hard = findDailyTier(3);
+  assert(easy && normal && hard && DAILY_GOLD_TIERS.length === 3, "three gold tiers");
+  assert(easy.power === 120 && easy.gold === 120 && easy.itemCount === 0, "easy reward");
+  assert(normal.power === 160 && normal.gold === 200 && normal.itemCount === 1, "normal reward");
+  assert(hard.power === 240 && hard.gold === 320 && hard.itemCount === 2, "hard reward");
+  const fresh = new MockGameSession();
+  const anchor = fresh.idleAnchorMs;
+  const power = rosterPower(fresh.heroes);
+  assert(power === 165, "starter daily power");
+  assert(dailyAttemptsLine(0, DAILY_GOLD_LIMIT) === "今日剩余 2/2", "attempts line");
+  assert(dailyAttemptsLine(2, DAILY_GOLD_LIMIT) === "今日剩余 0/2", "spent attempts line");
+  assert(dailyPowerLine(power, 100) === "我方战力 165 · 持有金币 100", "daily power line");
+  assert(dailyPreviewLine(easy) === "奖励预览：简单 · 金币 +120", "easy preview");
+  assert(dailyPreviewLine(normal) === "奖励预览：普通 · 金币 +200 · 强化石 ×1", "normal preview");
+  assert(dailyPreviewLine(null) === "先选择难度，再看金币奖励", "empty preview");
+  assert(dailyRowText(easy, power) === "简单 · 建议战力 120 · 金币 +120 · 可胜", "easy row");
+  assert(dailyRowText(hard, power) === "困难 · 建议战力 240 · 金币 +320 · 强化石 ×2 · 较难", "hard row");
+  assert(dailyChallengeButton("简单", 0, DAILY_GOLD_LIMIT) === "挑战简单（剩余 2）", "fight label");
+  assert(dailyChallengeButton("简单", DAILY_GOLD_LIMIT, DAILY_GOLD_LIMIT) === "今日已用完", "spent label");
+  assert(dailyChallengeButton(null, 0, DAILY_GOLD_LIMIT) === "先选择难度", "empty label");
+  assert(dailyWinToast("简单", 120, "强化石", 0) === "金币副本结算：简单，金币 +120", "easy win toast");
+  assert(dailyWinToast("普通", 200, "强化石", 1) === "金币副本结算：普通，金币 +200，强化石 ×1", "normal win toast");
+  assert(dailyLoseToast("困难") === "金币副本挑战失败：困难，奖励未发放", "daily lose toast");
+  assert(dailyNoChanceToast() === "今日金币副本次数已用完" && dailyMissingToast() === "没有这个难度", "daily fail copy");
+  assert(dailyEmptyToast() === "请先选择难度", "daily empty toast");
+  assert(dailyReportLine(power, 120, "简单", true) === "战力 165 对 120，简单胜利", "daily report");
+  assert(errorText(ErrorCode.DAILY_NO_CHANCE) === "今日金币副本次数已用完", "daily no chance text");
+  assert(errorText(ErrorCode.DAILY_NOT_FOUND) === "没有这个难度", "daily missing text");
+
+  const view = fresh.dailyView();
+  assert(view.ok && view.kind === "gold" && view.tiers.length === 3 && view.playerPower === power, "daily view");
+  assert(view.used === 0 && view.limit === DAILY_GOLD_LIMIT && view.gold === MOCK_STARTER_GOLD && view.stoneOwned === 0, "daily wallet");
+  assert(view.tiers[0].name === "简单" && view.tiers[2].name === "困难", "tier order");
+
+  const winEasy = fresh.dailyChallenge({ tierId: 1 });
+  assert(winEasy.ok && winEasy.win && winEasy.name === "简单" && winEasy.goldGain === 120 && winEasy.itemGain === 0, "easy win");
+  assert(winEasy.gold === MOCK_STARTER_GOLD + 120 && winEasy.used === 1 && winEasy.stoneOwned === 0, "easy gold");
+  assert(fresh.stageId === 1 && fresh.role.level === 1 && fresh.towerFloor === 1 && fresh.towerUsed === 0, "daily leaves stage and tower");
+  assert(fresh.arenaScore === 1000 && fresh.arenaUsed === 0 && fresh.diamond === MOCK_STARTER_DIAMOND, "daily leaves arena and diamond");
+  assert(fresh.idleAnchorMs === anchor && fresh.heroes[0].level === 1 && fresh.heroes[0].weaponLevel === 1, "daily leaves growth");
+  const winNormal = fresh.dailyChallenge({ tierId: 2 });
+  assert(winNormal.ok && winNormal.win && winNormal.goldGain === 200 && winNormal.itemGain === 1 && winNormal.itemName === "强化石", "normal win");
+  assert(fresh.gold === MOCK_STARTER_GOLD + 320 && fresh.dailyUsed === 2 && fresh.dailyView().stoneOwned === 1, "two tries paid");
+  const blocked = fresh.dailyChallenge({ tierId: 1 });
+  assert(
+    blocked.ok === false && blocked.code === ErrorCode.DAILY_NO_CHANCE && dailyFailToast(blocked) === "今日金币副本次数已用完",
+    "daily cap"
+  );
+  assert(fresh.gold === MOCK_STARTER_GOLD + 320 && fresh.dailyUsed === 2 && fresh.dailyView().stoneOwned === 1, "cap spends nothing");
+
+  const hardOnly = new MockGameSession();
+  const lose = hardOnly.dailyChallenge({ tierId: 3 });
+  assert(lose.ok && lose.win === false && lose.goldGain === 0 && lose.itemGain === 0 && lose.used === 1, "hard lose");
+  assert(hardOnly.gold === MOCK_STARTER_GOLD && hardOnly.dailyView().stoneOwned === 0, "loss keeps wallet");
+  assert(dailyLoseToast(lose.name) === "金币副本挑战失败：困难，奖励未发放", "lose toast from resp");
+  const missing = hardOnly.dailyChallenge({ tierId: 9 });
+  assert(missing.ok === false && missing.code === ErrorCode.DAILY_NOT_FOUND && dailyFailToast(missing) === "没有这个难度", "missing tier");
+  assert(hardOnly.dailyUsed === 1 && hardOnly.gold === MOCK_STARTER_GOLD, "missing spends nothing");
+
+  const bag = fresh.bagList().items;
+  let stoneCount = 0;
+  for (let i = 0; i < bag.length; i++) {
+    if (bag[i].id === 101) stoneCount = bag[i].count;
+  }
+  assert(stoneCount === 1, "stone lands in bag");
+
+  fresh.roleCreate({ name: "新人" });
+  assert(fresh.dailyUsed === 0 && fresh.gold === MOCK_STARTER_GOLD, "create resets daily");
+  assert(fresh.dailyView().used === 0 && fresh.dailyView().stoneOwned === 0 && fresh.dailyView().gold === MOCK_STARTER_GOLD, "create clears stones and chances");
+
+  const shifted = new MockGameSession({ openDay: 4, dailyDay: 1, dailyUsed: 2 });
+  assert(shifted.dailyView().used === 0 && shifted.gold === MOCK_STARTER_GOLD, "stale day clears daily chances");
+
+  const zero = new MockGameSession({ dailyUsed: -3 });
+  assert(zero.dailyUsed === 0, "clamp empty daily used");
+  const huge = new MockGameSession({ dailyUsed: 40 });
+  assert(huge.dailyUsed === DAILY_GOLD_LIMIT, "clamp high daily used");
+
+  const mid = new MockGameSession({ dailyUsed: 1, dailyDay: 1 });
+  for (let stage = 1; stage <= 5; stage++) {
+    const entered = mid.stageEnter({ stageId: stage });
+    const wonStage = mid.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(wonStage.ok && wonStage.level === stage + 1, "win toward daily day " + stage);
+  }
+  assert(mid.role.level === 6 && mid.openDay === 2 && mid.dailyView().used === 0, "new day clears daily used only");
+
+  const unlock = new MockGameSession();
+  for (let stage = 1; stage <= 14; stage++) {
+    const entered = unlock.stageEnter({ stageId: stage });
+    const wonStage = unlock.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(wonStage.ok && wonStage.level === stage + 1, "win toward lv15 " + stage);
+  }
+  assert(unlock.role.level === 15 && unlock.openDay === 3 && unlock.gold === MOCK_STARTER_GOLD + 140, "fourteen wins unlock level");
+  assert(unlock.dailyView().used === 0 && unlock.dailyView().playerPower === power, "stages do not spend daily");
+  const early = new MockGameSession({ clearedStage: 13 });
+  assert(early.role.level === 14, "lv14 still locked by level");
+  const armed = new MockGameSession();
+  armed.heroes[0].weaponLevel = 2;
+  assert(armed.dailyView().playerPower === power + 8, "sword adds daily power");
+  const strong = new MockGameSession({
+    heroes: [
+      { id: 10001, name: "光耀骑士", level: 10, star: 5, weaponLevel: 10 },
+      { id: 10002, name: "林间游侠", level: 10, star: 5, weaponLevel: 10 },
+      { id: 10003, name: "星辉法师", level: 10, star: 5, weaponLevel: 10 },
+    ],
+  });
+  const hardWin = strong.dailyChallenge({ tierId: 3 });
+  assert(hardWin.ok && hardWin.win && hardWin.goldGain === 320 && hardWin.itemGain === 2, "hard win when strong");
+  assert(strong.towerFloor === 1 && strong.arenaUsed === 0 && strong.stageId === 1, "hard win leaves other modes");
+
+  const towerOnly = new MockGameSession();
+  const towerWin = towerOnly.towerChallenge();
+  assert(towerWin.ok && towerOnly.dailyUsed === 0, "tower leaves daily");
+
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const remoteView = await Proto.dailyView({}, net);
+  assert(remoteView.ok && remoteView.kind === "gold" && remoteView.playerPower === power && remoteView.used === 0, "proto daily view");
+  const remoteWin = await Proto.dailyChallenge({ tierId: 1 }, net);
+  assert(remoteWin.ok && remoteWin.win && remoteWin.gold === MOCK_STARTER_GOLD + 120 && remoteWin.used === 1, "proto easy");
+  const remoteNormal = await Proto.dailyChallenge({ tierId: 2 }, net);
+  assert(remoteNormal.ok && remoteNormal.win && remoteNormal.goldGain === 200 && remoteNormal.used === 2, "proto normal");
+  const remoteCap = await Proto.dailyChallenge({ tierId: 1 }, net);
+  assert(remoteCap.ok === false && remoteCap.code === ErrorCode.DAILY_NO_CHANCE && remoteCap.gold === remoteNormal.gold, "proto cap");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyDailyChallenge(remoteWin);
+  assert(Session.gold === remoteWin.gold && Session.diamond === remoteWin.diamond, "apply daily");
+  applyDailyChallenge({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteWin.gold && Session.diamond === remoteWin.diamond, "failed daily ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.dailyView || row.cmd === Cmd.dailyChallenge).map((row) => row.id);
+  assert(ids.length === 2 && ids[0] === 2101 && ids[1] === 2102, "daily cmd ids");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -2029,6 +2199,7 @@ async function main(): Promise<void> {
   await checkSmith();
   await checkArena();
   await checkTower();
+  await checkDaily();
   console.log("skeleton-check ok");
 }
 

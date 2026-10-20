@@ -33,7 +33,7 @@ export const PLAY_ENTRIES: NavEntry[] = [
   { id: "arena", title: "竞技场", gateId: "main_pvp", blurb: "积分、固定对手、一键挑战。主线 Lv8" },
   { id: "wish", title: "许愿池", gateId: "main_blessingpool", blurb: "许愿池占位" },
   { id: "cafe", title: "咖啡馆", gateId: "main_cafe", blurb: "咖啡馆占位" },
-  { id: "daily", title: "日常副本", gateId: "main_mission", blurb: "日常副本留到 C12" },
+  { id: "daily", title: "日常副本", gateId: "main_mission", blurb: "金币副本。看剩余次数和奖励预览，主线 Lv15 开启" },
   { id: "tower", title: "幻境之塔", gateId: "main_fantasy_tower", blurb: "当前层与挑战。胜利给金币和强化石，主线 Lv16 开启" },
   {
     id: "magic",

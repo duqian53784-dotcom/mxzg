@@ -53,6 +53,15 @@ import {
   towerCleared,
 } from "../module/tower/climb";
 import {
+  DAILY_GOLD_KIND,
+  DAILY_GOLD_LIMIT,
+  DAILY_ITEM_ID,
+  DAILY_ITEM_NAME,
+  findDailyTier,
+  listDailyTiers,
+  settleDailyGold,
+} from "../module/daily/gold";
+import {
   isSummonCount,
   poolAt,
   shardItemId,
@@ -85,6 +94,8 @@ import {
   SummonPullResp,
   TowerChallengeResp,
   TowerViewResp,
+  DailyChallengeResp,
+  DailyViewResp,
 } from "./protocol/types";
 
 /** 一场预览里的假服状态。同一 MockTransport 上多次请求共用这一份。 */
@@ -145,6 +156,13 @@ export interface MockSessionSeed {
    * 和 openDay 不一致时，下一次查看或挑战会把次数清零，层数不动。
    */
   towerDay?: number;
+  /** 今日已挑战金币副本的次数。不填为 0。超过每日上限时按上限计。 */
+  dailyUsed?: number;
+  /**
+   * 金币副本次数所属的开服天。不填则跟当前 openDay 对齐。
+   * 和 openDay 不一致时，下一次查看或挑战会把次数清零。
+   */
+  dailyDay?: number;
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -153,7 +171,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战和幻境之塔都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔和日常金币副本都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -206,6 +224,11 @@ export class MockGameSession {
   /** 次数所属开服天。和 openDay 不同时，下一次塔操作清零。 */
   towerDay = 1;
   private towerDaySeeded = false;
+  /** 当前 dailyDay 上已经用掉的金币副本次数。 */
+  dailyUsed = 0;
+  /** 次数所属开服天。和 openDay 不同时，下一次金币副本操作清零。 */
+  dailyDay = 1;
+  private dailyDaySeeded = false;
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
@@ -214,6 +237,7 @@ export class MockGameSession {
     this.applySeed(seed);
     if (!this.arenaDaySeeded) this.arenaDay = this.openDay;
     if (!this.towerDaySeeded) this.towerDay = this.openDay;
+    if (!this.dailyDaySeeded) this.dailyDay = this.openDay;
     this.ensureHeroes();
     this.ensureStarterGear();
     if (!this.itemsSeeded) this.grantStarterItems();
@@ -257,7 +281,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场和幻境之塔重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔和金币副本次数重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -285,6 +309,8 @@ export class MockGameSession {
     this.towerFloor = 1;
     this.towerUsed = 0;
     this.towerDay = this.openDay;
+    this.dailyUsed = 0;
+    this.dailyDay = this.openDay;
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
 
@@ -645,6 +671,63 @@ export class MockGameSession {
   }
 
   /**
+   * 只读金币副本。按当前开服天刷新今日次数，不改钱包。
+   * 入口等级锁在客户端，这里不重复判断主线等级。只返回金币难度。
+   */
+  dailyView(): DailyViewResp {
+    this.ensureHeroes();
+    this.refreshDailyDay();
+    return {
+      ok: true,
+      kind: DAILY_GOLD_KIND,
+      used: this.dailyUsed,
+      limit: DAILY_GOLD_LIMIT,
+      playerPower: rosterPower(this.heroes),
+      tiers: listDailyTiers(),
+      stoneOwned: this.itemCount(DAILY_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 挑战一档金币难度，一键结算。战力不低于建议值则胜。
+   * 胜利加该档金币；普通和困难再加强化石。失败不发奖励。胜负都占用 1 次今日次数。
+   * 没有这个难度或次数用完时拒绝，金币、道具和次数都不变。
+   * 不改英雄、武器、钻石、挂机起算、主线、竞技场和幻境之塔。
+   */
+  dailyChallenge(data: unknown): DailyChallengeResp {
+    this.ensureHeroes();
+    this.refreshDailyDay();
+    const tierId = Math.floor(numField(asRecord(data), "tierId", 0));
+    const tier = findDailyTier(tierId);
+    if (!tier) return this.dailyFail(tierId, "", ErrorCode.DAILY_NOT_FOUND);
+    if (this.dailyUsed >= DAILY_GOLD_LIMIT) return this.dailyFail(tierId, tier.name, ErrorCode.DAILY_NO_CHANCE);
+    const playerPower = rosterPower(this.heroes);
+    const settled = settleDailyGold(playerPower, tier);
+    if (settled.goldGain > 0) this.gold += settled.goldGain;
+    if (settled.itemGain > 0) this.addItem(DAILY_ITEM_ID, settled.itemGain);
+    this.dailyUsed += 1;
+    return {
+      ok: true,
+      tierId,
+      name: tier.name,
+      win: settled.win,
+      playerPower,
+      needPower: tier.power,
+      goldGain: settled.goldGain,
+      itemId: DAILY_ITEM_ID,
+      itemName: DAILY_ITEM_NAME,
+      itemGain: settled.itemGain,
+      stoneOwned: this.itemCount(DAILY_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+      used: this.dailyUsed,
+      limit: DAILY_GOLD_LIMIT,
+    };
+  }
+
+  /**
    * 单抽或十连，只扣钻石。
    * 新英雄追加到名册末尾（Lv1，星级按卡池）。已拥有则加碎片，等级和星级不动。
    * 钻石不够或次数不是 1/10 时整次拒绝，游标、名册、钱包都不变。
@@ -1000,6 +1083,16 @@ export class MockGameSession {
       this.towerDay = Math.floor(seed.towerDay);
       this.towerDaySeeded = true;
     }
+    if (typeof seed.dailyUsed === "number" && isFinite(seed.dailyUsed)) {
+      let used = Math.floor(seed.dailyUsed);
+      if (used < 0) used = 0;
+      if (used > DAILY_GOLD_LIMIT) used = DAILY_GOLD_LIMIT;
+      this.dailyUsed = used;
+    }
+    if (typeof seed.dailyDay === "number" && isFinite(seed.dailyDay) && seed.dailyDay >= 1) {
+      this.dailyDay = Math.floor(seed.dailyDay);
+      this.dailyDaySeeded = true;
+    }
   }
 
   /** id 1 金币，id 2 钻石。其它 id 先忽略。 */
@@ -1175,6 +1268,35 @@ export class MockGameSession {
     if (this.towerDay === this.openDay) return;
     this.towerDay = this.openDay;
     this.towerUsed = 0;
+  }
+
+  /** 开服天变了就把金币副本的今日次数清零。 */
+  private refreshDailyDay(): void {
+    if (this.dailyDay === this.openDay) return;
+    this.dailyDay = this.openDay;
+    this.dailyUsed = 0;
+  }
+
+  private dailyFail(tierId: number, name: string, code: number): DailyChallengeResp {
+    const tier = findDailyTier(tierId);
+    return {
+      ok: false,
+      tierId,
+      name,
+      win: false,
+      playerPower: rosterPower(this.heroes),
+      needPower: tier ? tier.power : 0,
+      goldGain: 0,
+      itemId: DAILY_ITEM_ID,
+      itemName: DAILY_ITEM_NAME,
+      itemGain: 0,
+      stoneOwned: this.itemCount(DAILY_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+      used: this.dailyUsed,
+      limit: DAILY_GOLD_LIMIT,
+      code,
+    };
   }
 
   private towerFail(code: number): TowerChallengeResp {
