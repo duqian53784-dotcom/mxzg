@@ -1,5 +1,5 @@
 /**
- * B3/B4 自检（不启动 Creator）。
+ * B3/B4/B5 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -10,6 +10,7 @@ import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types"
 import { MockTransport } from "../assets/scripts/net/MockTransport";
 import { NetClient } from "../assets/scripts/net/NetClient";
 import { NetState } from "../assets/scripts/net/NetTypes";
+import { Cmd, P0_CMDS, Proto } from "../assets/scripts/net/protocol";
 import { PageStack } from "../assets/scripts/ui/PageStack";
 import { PopupQueue } from "../assets/scripts/ui/PopupQueue";
 import { StackView } from "../assets/scripts/ui/StackView";
@@ -146,6 +147,30 @@ async function checkNet(): Promise<void> {
   const echoData = echo.data as { ok?: boolean };
   assert(echoData.ok === true, "echo payload");
   assert(seen.indexOf("login") >= 0 && seen.indexOf("role.enter") >= 0 && seen.indexOf("bag.list") >= 0, "dispatch");
+
+  const typedLogin = await Proto.login({ account: "mock", serverId: 3 }, net);
+  assert(typedLogin.ok && typedLogin.token === "mock-token" && typedLogin.serverId === 3, "proto login");
+  const typedRole = await Proto.roleEnter({ account: "mock" }, net);
+  assert(typedRole.ok && typedRole.hasRole && typedRole.name === "MockHero" && typedRole.level === 1, "proto enter");
+  const badCreate = await Proto.roleCreate({ name: "  " }, net);
+  assert(badCreate.ok === false, "empty create rejected");
+  const created = await Proto.roleCreate({ account: "mock", name: "新人" }, net);
+  assert(created.ok && created.name === "新人" && created.roleId === 1001 && created.level === 1, "proto create");
+  const afterCreate = await Proto.roleEnter({}, net);
+  assert(afterCreate.name === "新人", "enter sees created role");
+  const entered = await Proto.stageEnter({ stageId: 7 }, net);
+  assert(entered.ok && entered.stageId === 7 && entered.battleId.indexOf("mock-battle-7-") === 0, "stage enter");
+  const won = await Proto.stageResult({ stageId: 7, battleId: entered.battleId, win: true }, net);
+  assert(won.ok && won.win && won.nextStageId === 8 && won.rewards.length === 1 && won.rewards[0].count === 10, "stage win");
+  const lost = await Proto.stageResult({ stageId: 7, win: false }, net);
+  assert(lost.ok && lost.win === false && lost.nextStageId === 7 && lost.rewards.length === 0, "stage lose");
+  const badStage = await Proto.stageEnter({ stageId: 0 }, net);
+  assert(badStage.ok === false && badStage.battleId === "", "bad stage");
+  const beat = await Proto.heartbeat({ clientTime: 1 }, net);
+  assert(typeof beat.serverTime === "number" && beat.serverTime > 0, "proto heartbeat");
+  const ids = P0_CMDS.map((row) => row.cmd + ":" + row.id);
+  assert(ids.indexOf(Cmd.login + ":1001") >= 0 && ids.indexOf(Cmd.stageResult + ":1202") >= 0, "p0 cmd list");
+  assert(new Set(ids).size === P0_CMDS.length, "p0 cmds unique");
 
   net.simulateDrop();
   await waitFor(() => net.state === "connected" && states.indexOf("reconnecting") >= 0, 2000);

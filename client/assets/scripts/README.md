@@ -1,7 +1,7 @@
 ﻿# scripts
 
 - `core/` 启动、会话（Boot、Session）
-- `net/` 网络状态机与 MockTransport（不连真服）
+- `net/` 网络状态机、MockTransport、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
 - `module/` 业务系统（尚未开始）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳
@@ -27,4 +27,12 @@
 - 背包：打开第二页，返回关掉。公告：连续入队两张弹窗。模拟断线：看底部「网络」从 connected 到 reconnecting 再回到 connected。
 - 发布构建前，构建场景列表要包含 Boot 和 Main，启动场景为 Boot。
 
-热更、真 socket、Protobuf 都不在这一步。网络是 `mock://local`。
+热更和真 socket 都不在这一步。网络是 `mock://local`。
+
+## 协议 stub（B5）
+
+Boot 的登录不再手写 `request("login")`，改走 `Proto.login` / `Proto.roleEnter`。回包仍由 MockTransport 发出。
+
+P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`。名字和 B4 的 Mock cmd 一致；创角和主线结算是给 C1 / C3 预留的，主城按钮还没接。
+
+真 Protobuf 怎么换掉这些 interface，见 `docs/protocol-stubs.md`。

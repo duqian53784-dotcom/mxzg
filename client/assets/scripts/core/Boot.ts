@@ -3,7 +3,7 @@
  *
  * 阶段：version → hot-update 占位 → 读表 → 登录门（或跳过）→ Main。
  * 登录是本组件在 Canvas 上生成的面板，不另建 Login 场景。
- * 账号走 NetClient + MockTransport，不需要服务器。
+ * 账号走 Proto.login / Proto.roleEnter → NetClient → MockTransport，不需要服务器。
  *
  * Creator 里怎么挂（仓库不改 .scene，避免脚本 uuid 对不上）：
  * 1. 用 Creator 3.8.8 打开 client 工程
@@ -22,6 +22,7 @@ import { _decorator, Component, director, Node } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
 import { listOpenEntries } from "../config/gates";
 import { NetClient } from "../net/NetClient";
+import { Proto } from "../net/protocol";
 import { buildLoginPanel, LoginPanelView } from "../ui/LoginPanel";
 import { MainApp } from "../ui/MainApp";
 import { createLabel, place, setText } from "../ui/UiKit";
@@ -131,17 +132,16 @@ export class Boot extends Component {
     if (net.state !== "connected") {
       await net.connect("mock://local");
     }
-    const login = await net.request("login", { account });
-    const data = (login.data ?? {}) as { ok?: boolean; token?: string };
-    if (!data.ok) throw new Error("login rejected");
+    const login = await Proto.login({ account }, net);
+    if (!login.ok) throw new Error("login rejected");
     Session.account = account;
-    Session.token = data.token ?? "";
-    const roleMsg = await net.request("role.enter", { account });
-    const role = (roleMsg.data ?? {}) as { roleId?: number; name?: string; level?: number };
+    Session.token = login.token;
+    const role = await Proto.roleEnter({ account }, net);
+    if (!role.ok || !role.hasRole) throw new Error("role enter rejected");
     Session.role = {
-      roleId: role.roleId ?? 0,
-      name: role.name ?? "Mock",
-      level: role.level ?? 1,
+      roleId: role.roleId,
+      name: role.name,
+      level: role.level,
     };
     console.log("[Boot] mock login ok", Session.account, Session.role.name);
   }

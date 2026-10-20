@@ -1,8 +1,8 @@
 export type NetState = "idle" | "connecting" | "connected" | "reconnecting" | "closed";
 
-export interface NetMessage {
+export interface NetMessage<T = unknown> {
   cmd: string;
-  data?: unknown;
+  data?: T;
 }
 
 export type NetHandler = (msg: NetMessage) => void;
