@@ -17,6 +17,10 @@ import {
   HeroUpgradeResp,
   SummonPullReq,
   SummonPullResp,
+  BagListReq,
+  BagListResp,
+  BagUseReq,
+  BagUseResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -82,5 +86,13 @@ export const Proto = {
 
   summonPull(req: SummonPullReq, net: NetClient = NetClient.shared): Promise<SummonPullResp> {
     return call(net, Cmd.summonPull, req);
+  },
+
+  bagList(req: BagListReq, net: NetClient = NetClient.shared): Promise<BagListResp> {
+    return call(net, Cmd.bagList, req);
+  },
+
+  bagUse(req: BagUseReq, net: NetClient = NetClient.shared): Promise<BagUseResp> {
+    return call(net, Cmd.bagUse, req);
   },
 };

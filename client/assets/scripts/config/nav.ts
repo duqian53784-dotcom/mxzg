@@ -27,7 +27,7 @@ export const BOTTOM_TABS: NavEntry[] = [
 /** 不放底栏的系统。背包在这里，避免底栏塞不下。 */
 export const PLAY_ENTRIES: NavEntry[] = [
   { id: "idle", title: "挂机", blurb: "时长、收益预览、快速作战。主城按钮也能进" },
-  { id: "bag", title: "背包", gateId: "bag", blurb: "道具列表留到 C7" },
+  { id: "bag", title: "背包", gateId: "bag", blurb: "强化石、英雄碎片，以及可使用的金币袋和经验药水" },
   { id: "fetter", title: "羁绊", gateId: "main_fetter", blurb: "羁绊占位" },
   { id: "mail", title: "邮件", gateId: "mail", blurb: "邮件留到 C8" },
   { id: "arena", title: "竞技场", gateId: "main_pvp", blurb: "竞技场留到 C10" },

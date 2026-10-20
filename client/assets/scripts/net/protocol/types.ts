@@ -221,3 +221,64 @@ export interface SummonPullResp {
   /** 钻石不足 SUMMON_DIAMOND_SHORT，次数不对 SUMMON_COUNT_INVALID。成功可以不带。 */
   code?: number;
 }
+
+export type BagItemKind = "consumable" | "material" | "fragment";
+
+/** 背包一格。金币和钻石不在这里。 */
+export interface BagItem {
+  id: number;
+  name: string;
+  count: number;
+  kind: BagItemKind;
+  usable: boolean;
+  desc: string;
+}
+
+export interface BagListReq {
+  /** 占位。Mock 不看请求体，道具在会话里。 */
+  clientTime?: number;
+}
+
+export interface BagListResp {
+  ok: boolean;
+  items: BagItem[];
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface BagUseReq {
+  id: number;
+  /** 使用个数。缺省 1。小于 1 拒绝。 */
+  count?: number;
+}
+
+export interface BagUseResp {
+  ok: boolean;
+  id: number;
+  name: string;
+  kind?: BagItemKind;
+  /** 本次扣掉的个数。失败为 0。 */
+  spent: number;
+  /** 剩余个数。 */
+  owned: number;
+  gold: number;
+  diamond: number;
+  /** 小金币袋增加的金币。其它道具为 0 或不带。 */
+  goldGain?: number;
+  /** 经验药水作用的领队。其它道具不带。 */
+  heroId?: number;
+  heroName?: string;
+  heroLevel?: number;
+  expGain?: number;
+  leveled?: boolean;
+  /** 数量不足时，这次请求的个数。 */
+  need?: number;
+  /**
+   * 背包是空的 BAG_EMPTY，没有这个道具 BAG_NOT_FOUND，
+   * 数量不足 BAG_NOT_ENOUGH，不能直接使用 BAG_NOT_USABLE，
+   * 数量无效 BAG_COUNT_INVALID，领队已满级 BAG_HERO_MAX。
+   * 成功可以不带。
+   */
+  code?: number;
+}

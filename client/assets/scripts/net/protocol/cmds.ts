@@ -16,6 +16,8 @@ export const Cmd = {
   heroList: "hero.list",
   heroUpgrade: "hero.upgrade",
   summonPull: "summon.pull",
+  bagList: "bag.list",
+  bagUse: "bag.use",
 } as const;
 
 export const CmdId = {
@@ -30,6 +32,8 @@ export const CmdId = {
   heroList: 1401,
   heroUpgrade: 1402,
   summonPull: 1501,
+  bagList: 1601,
+  bagUse: 1602,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -52,4 +56,6 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.heroList, cmd: Cmd.heroList },
   { id: CmdId.heroUpgrade, cmd: Cmd.heroUpgrade },
   { id: CmdId.summonPull, cmd: Cmd.summonPull },
+  { id: CmdId.bagList, cmd: Cmd.bagList },
+  { id: CmdId.bagUse, cmd: Cmd.bagUse },
 ];
