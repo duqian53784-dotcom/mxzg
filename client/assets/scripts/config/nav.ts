@@ -42,6 +42,11 @@ export const PLAY_ENTRIES: NavEntry[] = [
     title: "商店",
     blurb: "用金币或钻石买强化石、小金币袋和经验药水。新号可进，主城按钮也能进",
   },
+  {
+    id: "gift",
+    title: "礼包",
+    blurb: "升级有礼、每日礼包、首充和累充。模拟充值，不走真实支付。主城按钮也能进",
+  },
   { id: "bag", title: "背包", gateId: "bag", blurb: "强化石、英雄碎片，以及可使用的金币袋和经验药水" },
   { id: "fetter", title: "羁绊", gateId: "main_fetter", blurb: "羁绊占位" },
   { id: "mail", title: "邮件", gateId: "mail", blurb: "系统欢迎、开服补给和公告。主城按钮也能进" },

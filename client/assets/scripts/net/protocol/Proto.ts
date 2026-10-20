@@ -71,6 +71,16 @@ import {
   CafeSendResp,
   CafeViewReq,
   CafeViewResp,
+  GiftBuyDailyReq,
+  GiftBuyDailyResp,
+  GiftClaimAccReq,
+  GiftClaimAccResp,
+  GiftClaimLevelReq,
+  GiftClaimLevelResp,
+  GiftRechargeReq,
+  GiftRechargeResp,
+  GiftViewReq,
+  GiftViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -251,5 +261,25 @@ export const Proto = {
 
   cafeClaim(req: CafeClaimReq, net: NetClient = NetClient.shared): Promise<CafeClaimResp> {
     return call(net, Cmd.cafeClaim, req);
+  },
+
+  giftView(req: GiftViewReq, net: NetClient = NetClient.shared): Promise<GiftViewResp> {
+    return call(net, Cmd.giftView, req);
+  },
+
+  giftClaimLevel(req: GiftClaimLevelReq, net: NetClient = NetClient.shared): Promise<GiftClaimLevelResp> {
+    return call(net, Cmd.giftClaimLevel, req);
+  },
+
+  giftBuyDaily(req: GiftBuyDailyReq, net: NetClient = NetClient.shared): Promise<GiftBuyDailyResp> {
+    return call(net, Cmd.giftBuyDaily, req);
+  },
+
+  giftRecharge(req: GiftRechargeReq, net: NetClient = NetClient.shared): Promise<GiftRechargeResp> {
+    return call(net, Cmd.giftRecharge, req);
+  },
+
+  giftClaimAcc(req: GiftClaimAccReq, net: NetClient = NetClient.shared): Promise<GiftClaimAccResp> {
+    return call(net, Cmd.giftClaimAcc, req);
   },
 };

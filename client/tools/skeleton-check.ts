@@ -269,6 +269,59 @@ import {
   cafeWalletLine,
   readCafeHeroIds,
 } from "../assets/scripts/module/cafe/serve";
+import {
+  applyGiftWallet,
+  findGiftAcc,
+  findGiftLevel,
+  GIFT_ACC_TIERS,
+  GIFT_DAILY_GOLD,
+  GIFT_DAILY_ITEM_COUNT,
+  GIFT_DAILY_ITEM_ID,
+  GIFT_DAILY_PRICE,
+  GIFT_FIRST_AMOUNT,
+  GIFT_FIRST_DIAMOND,
+  GIFT_FIRST_ITEM_COUNT,
+  GIFT_FIRST_ITEM_ID,
+  GIFT_LEVELS,
+  GIFT_RECHARGE_DIAMOND,
+  GIFT_RECHARGE_STEP,
+  giftAccButton,
+  giftAccCap,
+  giftAccClaimToast,
+  giftAccFailToast,
+  giftAccHint,
+  giftAccLine,
+  giftAccLockedToast,
+  giftAccState,
+  giftDailyBoughtToast,
+  giftDailyButton,
+  giftDailyBuyToast,
+  giftDailyFailToast,
+  giftDailyLine,
+  giftDailyShortToast,
+  giftFirstButton,
+  giftFirstDoneToast,
+  giftFirstLine,
+  giftFirstToast,
+  giftHeadLine,
+  giftLevelButton,
+  giftLevelClaimedToast,
+  giftLevelClaimToast,
+  giftLevelFailToast,
+  giftLevelLine,
+  giftLevelLockedToast,
+  giftLevelState,
+  giftMeterLine,
+  giftRechargeButton,
+  giftRechargeFailToast,
+  giftRechargeInvalidToast,
+  giftRechargeToast,
+  giftRewardText,
+  giftWalletLine,
+  listGiftAcc,
+  listGiftLevels,
+  parseGiftRecharge,
+} from "../assets/scripts/module/gift/packs";
 import { Goal7Task, ShopSku } from "../assets/scripts/net/protocol/types";
 import {
   applySummon,
@@ -958,6 +1011,19 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(entryAccess(shopEntry, 1, 1, null).open && entryAccess(shopEntry, 1, 1, db).open, "shop open on day 1");
   assert(entryAccess(shopEntry, 1, 30, db).open && shopEntry.blurb.indexOf("金币") >= 0, "shop ignores open day");
   assert(rootTabFor("shop") === "plays", "shop stays on plays");
+  const giftEntry = findNavEntry("gift");
+  assert(giftEntry !== null && !giftEntry.gateId && !giftEntry.serverGateKey, "gift has no gate");
+  assert(entryAccess(giftEntry, 1, 1, null).open && entryAccess(giftEntry, 1, 1, db).open, "gift open on day 1");
+  assert(entryAccess(giftEntry, 1, 30, db).open && giftEntry.blurb.indexOf("模拟充值") >= 0, "gift ignores open day");
+  assert(rootTabFor("gift") === "plays", "gift stays on plays");
+  const giftFromCity = new NavHistory();
+  giftFromCity.reset("city");
+  giftFromCity.push("gift");
+  assert(giftFromCity.current === "gift" && giftFromCity.rootTab() === "city", "gift opened from city");
+  giftFromCity.pop();
+  giftFromCity.push("plays");
+  giftFromCity.push("gift");
+  assert(giftFromCity.current === "gift" && giftFromCity.rootTab() === "plays" && giftFromCity.pop() === "gift", "gift opened from plays");
   const wishEntry = findNavEntry("wish");
   assert(wishEntry !== null && wishEntry.gateId === "main_blessingpool", "wish gate");
   const wishLock = entryAccess(wishEntry, 1, 1, db);
@@ -2576,6 +2642,7 @@ async function main(): Promise<void> {
   await checkShop();
   await checkWish();
   await checkCafe();
+  await checkGift();
   console.log("skeleton-check ok");
 }
 
@@ -3257,6 +3324,218 @@ async function checkCafe(): Promise<void> {
   assert(Session.gold === remoteClaim.gold && Session.diamond === remoteClaim.diamond, "apply cafe");
   applyCafeClaim({ ok: false, gold: 1, diamond: 1 });
   assert(Session.gold === remoteClaim.gold && Session.diamond === remoteClaim.diamond, "failed cafe ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  net.close();
+}
+
+async function checkGift(): Promise<void> {
+  assert(GIFT_LEVELS.length === 3 && GIFT_LEVELS[0].level === 5 && GIFT_LEVELS[2].level === 15, "three level gifts");
+  assert(findGiftLevel(5) !== null && findGiftLevel(7) === null && findGiftAcc(68) !== null && findGiftAcc(1) === null, "known tiers");
+  assert(giftAccCap() === 68 && GIFT_ACC_TIERS.length === 3, "acc cap");
+  assert(parseGiftRecharge("first") === "first" && parseGiftRecharge("acc") === "acc", "recharge words");
+  assert(parseGiftRecharge("First") === null && parseGiftRecharge("") === null && parseGiftRecharge(1) === null, "bad recharge");
+  assert(giftLevelState(4, 5, false) === "locked" && giftLevelState(5, 5, false) === "claimable" && giftLevelState(9, 5, true) === "claimed", "level states");
+  assert(giftAccState(5, 6, false) === "locked" && giftAccState(6, 6, false) === "claimable" && giftAccState(80, 68, true) === "claimed", "acc states");
+  const listed = listGiftLevels(5, (level) => level === 5);
+  assert(listed.length === 3 && listed[0].state === "claimed" && listed[1].state === "locked" && listed[2].state === "locked", "level list");
+  const accListed = listGiftAcc(30, (amount) => amount === 6);
+  assert(accListed[0].state === "claimed" && accListed[1].state === "claimable" && accListed[2].state === "locked", "acc list");
+  assert(giftHeadLine(1, 1) === "主线 Lv1 · 开服第 1 天", "head line");
+  assert(giftWalletLine(100, 20) === "持有金币 100 · 钻石 20", "wallet line");
+  assert(giftLevelLine(listed[1]).indexOf("Lv10") >= 0 && giftLevelLine(listed[1]).indexOf("未达到") >= 0, "level line");
+  assert(giftDailyLine(GIFT_DAILY_PRICE, false).indexOf("今日可购买") >= 0 && giftDailyLine(10, true).indexOf("今日已购买") >= 0, "daily line");
+  assert(giftFirstLine(false, 6) === "尚未首充 · 模拟充值计入累充 6" && giftFirstLine(true, 6).indexOf("首充已完成") >= 0, "first line");
+  assert(giftMeterLine(0, 68).indexOf("累充 0/68") >= 0 && giftMeterLine(68, 68).indexOf("■■■■■■■■■■") >= 0, "meter");
+  assert(giftMeterLine(6, 68).indexOf("■") >= 0 && giftAccLine(accListed[1]).indexOf("累充 30") >= 0 && giftAccLine(accListed[1]).indexOf("可领取") >= 0, "meter and acc line");
+  assert(giftAccHint(30, 30).indexOf("累充 +30") >= 0, "acc hint");
+  assert(giftLevelButton("locked") === "未达到" && giftLevelButton("claimable") === "领取" && giftLevelButton("claimed") === "已领取", "level buttons");
+  assert(giftDailyButton(false) === "购买" && giftDailyButton(true) === "今日已购买", "daily button");
+  assert(giftFirstButton(false) === "模拟充值" && giftFirstButton(true) === "已完成" && giftRechargeButton() === "模拟充值", "recharge buttons");
+  assert(giftAccButton("locked") === "未达到" && giftAccButton("claimable") === "领取" && giftAccButton("claimed") === "已领取", "acc buttons");
+  assert(giftRewardText(100, 0, "强化石", 3) === "金币 +100、强化石 ×3", "reward text");
+  assert(giftLevelClaimToast(5, 100, 0, "强化石", 3) === "领取成功：升级有礼 Lv5，金币 +100、强化石 ×3", "level toast");
+  assert(giftDailyBuyToast(10, 80, "强化石", 2) === "购买成功：每日礼包，消耗钻石 10，金币 +80、强化石 ×2", "daily toast");
+  assert(giftFirstToast(6, 60, "经验药水", 1) === "模拟充值成功：首充完成，累充 +6，钻石 +60、经验药水 ×1", "first toast");
+  assert(giftRechargeToast(30, 30) === "模拟充值成功：累充 +30，钻石 +30", "recharge toast");
+  assert(giftAccClaimToast(30, 0, 30, "强化石", 5) === "领取成功：累充 30，钻石 +30、强化石 ×5", "acc toast");
+  assert(giftLevelLockedToast(5) === "主线达到 Lv5 后才能领取" && giftLevelClaimedToast(5) === "Lv5 奖励已经领取", "level fail copy");
+  assert(giftDailyBoughtToast() === "今日礼包已购买" && giftDailyShortToast(10) === "钻石不足，每日礼包需要 10", "daily fail copy");
+  assert(giftFirstDoneToast() === "首充已完成" && giftRechargeInvalidToast() === "请选择充值方式", "recharge fail copy");
+  assert(giftAccLockedToast(30) === "累充未达到 30", "acc locked copy");
+  assert(errorText(ErrorCode.GIFT_LEVEL_CLAIMED) === "已经领取" && errorText(ErrorCode.GIFT_FIRST_DONE) === "首充已完成", "gift error text");
+  assert(errorText(ErrorCode.GIFT_DAILY_SHORT) === "钻石不足" && errorText(ErrorCode.GIFT_ACC_LOCKED) === "累充未达到", "gift short text");
+
+  const fresh = new MockGameSession();
+  const view = fresh.giftView();
+  assert(view.ok && view.level === 1 && view.openDay === 1 && view.dailyBought === false && view.firstChargeDone === false, "fresh view");
+  assert(view.totalRecharge === 0 && view.levels[0].state === "locked" && view.tiers[0].state === "locked", "fresh locked");
+  assert(view.gold === MOCK_STARTER_GOLD && view.diamond === MOCK_STARTER_DIAMOND, "view leaves wallet");
+  assert(fresh.clearedStage === 0 && fresh.cafeUsed === 0 && fresh.shopView().skus[0].bought === 0, "view leaves modes");
+
+  const early = fresh.giftClaimLevel({ level: 5 });
+  assert(early.ok === false && early.code === ErrorCode.GIFT_LEVEL_LOCKED && giftLevelFailToast(early) === "主线达到 Lv5 后才能领取", "lv5 locked");
+  assert(fresh.gold === MOCK_STARTER_GOLD && fresh.giftView().levels[0].state === "locked", "locked changes nothing");
+  const missingLevel = fresh.giftClaimLevel({ level: 7 });
+  assert(missingLevel.ok === false && missingLevel.code === ErrorCode.GIFT_LEVEL_NOT_FOUND && giftLevelFailToast(missingLevel) === "没有这一档升级奖励", "unknown level");
+  const blankLevel = fresh.giftClaimLevel({});
+  assert(blankLevel.ok === false && blankLevel.code === ErrorCode.GIFT_LEVEL_NOT_FOUND && fresh.gold === MOCK_STARTER_GOLD, "blank level");
+
+  const lv5 = new MockGameSession({ clearedStage: 4 });
+  assert(lv5.role.level === 5 && lv5.giftView().levels[0].state === "claimable" && lv5.giftView().levels[1].state === "locked", "lv5 opens first only");
+  const claimed5 = lv5.giftClaimLevel({ level: 5 });
+  assert(claimed5.ok && claimed5.goldGain === 100 && claimed5.itemGain === 3 && claimed5.gold === MOCK_STARTER_GOLD + 100, "claim lv5");
+  assert(lv5.itemCounts[GIFT_DAILY_ITEM_ID] === 3 && lv5.diamond === MOCK_STARTER_DIAMOND && lv5.totalRecharge === 0, "lv5 stones not recharge");
+  assert(giftLevelClaimToast(claimed5.level, claimed5.goldGain, claimed5.diamondGain, claimed5.itemName, claimed5.itemGain).indexOf("升级有礼 Lv5") >= 0, "lv5 toast from session");
+  const again5 = lv5.giftClaimLevel({ level: 5 });
+  assert(again5.ok === false && again5.code === ErrorCode.GIFT_LEVEL_CLAIMED && giftLevelFailToast(again5) === "Lv5 奖励已经领取", "lv5 claimed");
+  assert(lv5.gold === MOCK_STARTER_GOLD + 100 && lv5.itemCounts[IDLE_ITEM_ID] === 3, "claimed keeps reward");
+  const still10 = lv5.giftClaimLevel({ level: 10 });
+  assert(still10.ok === false && still10.code === ErrorCode.GIFT_LEVEL_LOCKED && lv5.diamond === MOCK_STARTER_DIAMOND, "lv10 still locked");
+
+  const lv15 = new MockGameSession({ clearedStage: 14 });
+  assert(lv15.role.level === 15 && lv15.giftView().levels[2].state === "claimable", "lv15 opens all");
+  assert(lv15.giftClaimLevel({ level: 10 }).ok && lv15.diamond === MOCK_STARTER_DIAMOND + 20, "claim lv10 diamonds");
+  assert(lv15.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION + 1, "lv10 potion");
+  const bag15 = lv15.giftClaimLevel({ level: 15 });
+  assert(bag15.ok && bag15.gold === MOCK_STARTER_GOLD + 200 && lv15.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG + 1, "claim lv15 bag");
+  assert(lv15.giftClaimLevel({ level: 15 }).code === ErrorCode.GIFT_LEVEL_CLAIMED && lv15.firstChargeDone === false, "lv15 once");
+
+  const daily = new MockGameSession();
+  const bought = daily.giftBuyDaily();
+  assert(bought.ok && bought.price === GIFT_DAILY_PRICE && bought.goldGain === GIFT_DAILY_GOLD && bought.itemGain === GIFT_DAILY_ITEM_COUNT, "buy daily");
+  assert(bought.diamond === MOCK_STARTER_DIAMOND - GIFT_DAILY_PRICE && bought.gold === MOCK_STARTER_GOLD + GIFT_DAILY_GOLD, "daily spend");
+  assert(daily.itemCounts[GIFT_DAILY_ITEM_ID] === GIFT_DAILY_ITEM_COUNT && daily.totalRecharge === 0 && daily.giftView().dailyBought === true, "daily not recharge");
+  const soldDaily = daily.giftBuyDaily();
+  assert(soldDaily.ok === false && soldDaily.code === ErrorCode.GIFT_DAILY_BOUGHT && giftDailyFailToast(soldDaily) === "今日礼包已购买", "daily bought");
+  assert(daily.diamond === MOCK_STARTER_DIAMOND - GIFT_DAILY_PRICE && daily.gold === MOCK_STARTER_GOLD + GIFT_DAILY_GOLD, "bought keeps wallet");
+  const broke = new MockGameSession({ diamond: GIFT_DAILY_PRICE - 1 });
+  const short = broke.giftBuyDaily();
+  assert(short.ok === false && short.code === ErrorCode.GIFT_DAILY_SHORT && giftDailyFailToast(short) === "钻石不足，每日礼包需要 10", "daily short");
+  assert(broke.diamond === GIFT_DAILY_PRICE - 1 && broke.gold === MOCK_STARTER_GOLD && broke.giftView().dailyBought === false, "short changes nothing");
+
+  const nextDay = new MockGameSession({ openDay: 2, giftDailyDay: 1, giftDailyBought: true, items: [{ id: IDLE_ITEM_ID, count: 4 }] });
+  assert(nextDay.giftView().dailyBought === false && nextDay.giftView().openDay === 2, "open day restocks daily");
+  const restocked = nextDay.giftBuyDaily();
+  assert(restocked.ok && nextDay.itemCounts[IDLE_ITEM_ID] === 4 + GIFT_DAILY_ITEM_COUNT, "buy after restock keeps old stones");
+  const pushed = new MockGameSession();
+  assert(pushed.giftBuyDaily().ok, "buy before push");
+  const rush = pushed.stagePush({});
+  assert(rush.ok && pushed.openDay === 15 && pushed.itemCounts[IDLE_ITEM_ID] === GIFT_DAILY_ITEM_COUNT, "push keeps daily stones");
+  assert(pushed.giftView().dailyBought === false && pushed.giftClaimLevel({ level: 5 }).ok, "push restocks daily and opens lv5");
+
+  const first = new MockGameSession();
+  const badKind = first.giftRecharge({});
+  assert(badKind.ok === false && badKind.code === ErrorCode.GIFT_RECHARGE_INVALID && giftRechargeFailToast(badKind) === "请选择充值方式", "bad kind");
+  assert(first.totalRecharge === 0 && first.diamond === MOCK_STARTER_DIAMOND && first.firstChargeDone === false, "bad kind changes nothing");
+  const charged = first.giftRecharge({ kind: "first" });
+  assert(charged.ok && charged.firstGranted === true && charged.added === GIFT_FIRST_AMOUNT && charged.diamondGain === GIFT_FIRST_DIAMOND, "first charge");
+  assert(charged.totalRecharge === GIFT_FIRST_AMOUNT && charged.diamond === MOCK_STARTER_DIAMOND + GIFT_FIRST_DIAMOND, "first wallet");
+  assert(first.itemCounts[GIFT_FIRST_ITEM_ID] === STARTER_EXP_POTION + GIFT_FIRST_ITEM_COUNT && first.firstChargeDone === true, "first potion");
+  assert(giftFirstToast(charged.added, charged.diamondGain, charged.itemName, charged.itemGain).indexOf("首充完成") >= 0, "first toast from session");
+  const done = first.giftRecharge({ kind: "first" });
+  assert(done.ok === false && done.code === ErrorCode.GIFT_FIRST_DONE && giftRechargeFailToast(done) === "首充已完成", "first once");
+  assert(first.totalRecharge === GIFT_FIRST_AMOUNT && first.diamond === MOCK_STARTER_DIAMOND + GIFT_FIRST_DIAMOND, "second first changes nothing");
+  const earlyAcc = first.giftClaimAcc({ amount: 30 });
+  assert(earlyAcc.ok === false && earlyAcc.code === ErrorCode.GIFT_ACC_LOCKED && giftAccFailToast(earlyAcc) === "累充未达到 30", "acc 30 locked at 6");
+  const tier6 = first.giftClaimAcc({ amount: 6 });
+  assert(tier6.ok && tier6.goldGain === 150 && first.gold === MOCK_STARTER_GOLD + 150 && first.totalRecharge === GIFT_FIRST_AMOUNT, "claim acc 6");
+  const tier6Again = first.giftClaimAcc({ amount: 6 });
+  assert(tier6Again.ok === false && tier6Again.code === ErrorCode.GIFT_ACC_CLAIMED && giftAccFailToast(tier6Again).indexOf("已经领取") >= 0, "acc 6 claimed");
+  assert(first.gold === MOCK_STARTER_GOLD + 150, "claimed acc keeps gold");
+
+  const meter = new MockGameSession();
+  const step = meter.giftRecharge({ kind: "acc" });
+  assert(step.ok && step.firstGranted === false && step.added === GIFT_RECHARGE_STEP && meter.firstChargeDone === false, "acc recharge skips first pack");
+  assert(step.totalRecharge === GIFT_RECHARGE_STEP && step.diamond === MOCK_STARTER_DIAMOND + GIFT_RECHARGE_DIAMOND, "acc step wallet");
+  assert(meter.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION, "acc step adds no potion");
+  assert(meter.giftClaimAcc({ amount: 6 }).ok && meter.giftClaimAcc({ amount: 30 }).ok, "30 unlocks two tiers");
+  assert(meter.giftClaimAcc({ amount: 68 }).code === ErrorCode.GIFT_ACC_LOCKED, "68 still locked at 30");
+  assert(meter.giftRecharge({ kind: "acc" }).ok && meter.totalRecharge === GIFT_RECHARGE_STEP * 2, "second step");
+  assert(meter.giftClaimAcc({ amount: 68 }).code === ErrorCode.GIFT_ACC_LOCKED && meter.totalRecharge === 60, "60 still short of 68");
+  assert(meter.giftRecharge({ kind: "first" }).ok && meter.totalRecharge === 66 && meter.firstChargeDone === true, "first still counts after steps");
+  assert(meter.giftClaimAcc({ amount: 68 }).code === ErrorCode.GIFT_ACC_LOCKED, "66 still short");
+  assert(meter.giftRecharge({ kind: "acc" }).ok && meter.totalRecharge === 96, "third step clears 68");
+  const top = meter.giftClaimAcc({ amount: 68 });
+  assert(top.ok && top.itemGain === 2 && meter.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG + 2, "claim 68 bags");
+  assert(giftAccClaimToast(top.amount, top.goldGain, top.diamondGain, top.itemName, top.itemGain).indexOf("累充 68") >= 0, "68 toast");
+  const unknownAcc = meter.giftClaimAcc({ amount: 99 });
+  assert(unknownAcc.ok === false && unknownAcc.code === ErrorCode.GIFT_ACC_NOT_FOUND && giftAccFailToast(unknownAcc) === "没有这一档累充", "unknown acc");
+  assert(meter.giftClaimAcc({}).code === ErrorCode.GIFT_ACC_NOT_FOUND && meter.cafeUsed === 0 && meter.wishUsed === 0, "blank acc leaves modes");
+
+  const seeded = new MockGameSession({
+    clearedStage: 9,
+    giftLevelClaimed: [5, 4],
+    firstChargeDone: true,
+    totalRecharge: 68,
+    giftAccClaimed: [6, 99],
+    giftDailyBought: true,
+    giftDailyDay: 3,
+    openDay: 3,
+  });
+  assert(seeded.role.level === 10 && seeded.giftView().levels[0].state === "claimed" && seeded.giftView().levels[1].state === "claimable", "seed ignores unknown level");
+  assert(seeded.giftClaimLevel({ level: 5 }).code === ErrorCode.GIFT_LEVEL_CLAIMED, "seeded level claimed");
+  assert(seeded.giftRecharge({ kind: "first" }).code === ErrorCode.GIFT_FIRST_DONE && seeded.totalRecharge === 68, "seeded first done");
+  assert(seeded.giftView().tiers[0].state === "claimed" && seeded.giftView().tiers[2].state === "claimable" && seeded.giftView().dailyBought === true, "seeded acc and daily");
+  const negative = new MockGameSession({ totalRecharge: -8, giftDailyBought: true });
+  assert(negative.totalRecharge === 0 && negative.giftView().dailyBought === true, "negative recharge clamps and same day keeps daily");
+
+  const reset = new MockGameSession({
+    clearedStage: 14,
+    giftLevelClaimed: [15],
+    giftDailyBought: true,
+    firstChargeDone: true,
+    totalRecharge: 96,
+    giftAccClaimed: [68],
+    diamond: 1,
+  });
+  assert(reset.roleCreate({ name: "新人" }).ok, "create");
+  assert(reset.role.level === 1 && reset.gold === MOCK_STARTER_GOLD && reset.diamond === MOCK_STARTER_DIAMOND, "create wallet");
+  assert(reset.firstChargeDone === false && reset.totalRecharge === 0 && reset.giftView().dailyBought === false, "create clears gift");
+  assert(reset.giftView().levels[0].state === "locked" && reset.giftView().tiers[0].state === "locked", "create locks tiers");
+  assert(reset.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG && reset.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION, "create restores starter items");
+
+  const transport = new MockTransport({ latencyMs: 5 });
+  const net = quietNet(transport);
+  await net.connect("mock://local");
+  const remoteView = await Proto.giftView({}, net);
+  assert(remoteView.ok && remoteView.level === 1 && remoteView.levels.length === 3 && remoteView.dailyBought === false, "proto view");
+  const remoteLocked = await Proto.giftClaimLevel({ level: 5 }, net);
+  assert(remoteLocked.ok === false && remoteLocked.code === ErrorCode.GIFT_LEVEL_LOCKED, "proto level locked");
+  await Proto.stagePush({ target: 15 }, net);
+  const remoteLevel = await Proto.giftClaimLevel({ level: 15 }, net);
+  assert(remoteLevel.ok && remoteLevel.goldGain === 200, "proto claim lv15");
+  const remoteDaily = await Proto.giftBuyDaily({}, net);
+  assert(remoteDaily.ok && remoteDaily.diamond === remoteView.diamond - GIFT_DAILY_PRICE, "proto daily uses starter diamond");
+  const remoteDailyAgain = await Proto.giftBuyDaily({}, net);
+  assert(remoteDailyAgain.ok === false && remoteDailyAgain.code === ErrorCode.GIFT_DAILY_BOUGHT, "proto daily once");
+  const remoteFirst = await Proto.giftRecharge({ kind: "first" }, net);
+  assert(remoteFirst.ok && remoteFirst.firstChargeDone === true && remoteFirst.totalRecharge === GIFT_FIRST_AMOUNT, "proto first");
+  const remoteFirstAgain = await Proto.giftRecharge({ kind: "first" }, net);
+  assert(remoteFirstAgain.ok === false && remoteFirstAgain.code === ErrorCode.GIFT_FIRST_DONE && remoteFirstAgain.totalRecharge === GIFT_FIRST_AMOUNT, "proto first once");
+  const remoteStep = await Proto.giftRecharge({ kind: "acc" }, net);
+  assert(remoteStep.ok && remoteStep.totalRecharge === GIFT_FIRST_AMOUNT + GIFT_RECHARGE_STEP, "proto acc step");
+  const remoteAcc = await Proto.giftClaimAcc({ amount: 6 }, net);
+  assert(remoteAcc.ok && remoteAcc.goldGain === 150, "proto claim acc");
+  const remoteAccAgain = await Proto.giftClaimAcc({ amount: 6 }, net);
+  assert(remoteAccAgain.ok === false && remoteAccAgain.code === ErrorCode.GIFT_ACC_CLAIMED, "proto acc once");
+  const remoteBag = await Proto.bagList({}, net);
+  assert(bagItem(remoteBag.items, ITEM_GOLD_BAG) !== null && bagItem(remoteBag.items, ITEM_EXP_POTION) !== null, "proto bag sees gift items");
+  const ids = P0_CMDS.filter(
+    (row) =>
+      row.cmd === Cmd.giftView ||
+      row.cmd === Cmd.giftClaimLevel ||
+      row.cmd === Cmd.giftBuyDaily ||
+      row.cmd === Cmd.giftRecharge ||
+      row.cmd === Cmd.giftClaimAcc
+  ).map((row) => row.id);
+  assert(ids.length === 5 && ids[0] === 2701 && ids[1] === 2702 && ids[2] === 2703 && ids[3] === 2704 && ids[4] === 2705, "gift cmd ids");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyGiftWallet(remoteFirst);
+  assert(Session.gold === remoteFirst.gold && Session.diamond === remoteFirst.diamond, "apply gift");
+  applyGiftWallet({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteFirst.gold && Session.diamond === remoteFirst.diamond, "failed gift ignored");
   Session.gold = prevGold;
   Session.diamond = prevDiamond;
   net.close();

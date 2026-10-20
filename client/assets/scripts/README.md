@@ -3,7 +3,7 @@
 - `core/` 启动、会话（Boot、Session）
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
-- `module/` 业务系统（`mainline/` 主线战报和推关调试，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场，`tower/` 幻境之塔，`daily/` 日常金币副本，`login7/` 七日登录，`goal7/` 七日目标，`shop/` 基础商店，`wish/` 低级许愿池，`cafe/` 咖啡馆招待）
+- `module/` 业务系统（`mainline/` 主线战报和推关调试，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场，`tower/` 幻境之塔，`daily/` 日常金币副本，`login7/` 七日登录，`goal7/` 七日目标，`shop/` 基础商店，`wish/` 低级许愿池，`cafe/` 咖啡馆招待，`gift/` 礼包骨架）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
 
 场景在 `assets/scenes/`。Boot / Main / Battle 已建好。Boot 的 Canvas 上已经挂了 Boot。其余界面由代码生成，不用再挂组件。
@@ -15,7 +15,7 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 1. Creator 3.8.8 打开 `client`。
 2. 启动场景保持 Boot，点预览。
 3. 屏幕上是 Mock 登录面板：账号、密码（可留空）、三个服务器（本地Mock / 提审 / 正式占位）。账号默认 `mock`（或上次记下的账号）。点一个服务器，再点 **进入游戏**。
-4. 应进入 Main。顶栏左侧是角色名、等级、所选服务器和开服天，右侧是金币、钻石，例如 `MockHero Lv1`、`本地Mock · 开服D1`、`金币 100`、`钻石 20`。底栏是主城 / 英雄 / 召唤 / 铁匠铺 / 玩法。画面中间是「主线 · 第N关」，下面是「挂机」「背包」「邮件」，再下面有日志、公告、模拟断线，以及并排的「七日登录」「七日目标」和「商店」。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会自己补上。
+4. 应进入 Main。顶栏左侧是角色名、等级、所选服务器和开服天，右侧是金币、钻石，例如 `MockHero Lv1`、`本地Mock · 开服D1`、`金币 100`、`钻石 20`。底栏是主城 / 英雄 / 召唤 / 铁匠铺 / 玩法。画面中间是「主线 · 第N关」，下面是「挂机」「背包」「邮件」，再下面有日志、公告、模拟断线，以及并排的「七日登录」「七日目标」「商店」和「礼包」。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会自己补上。
 5. 控制台标记：`[Boot] stage=version` → `hot-update` → `config` → `login` → `enter-main`，以及 `[Net] connect mock://local`、`[Config] loaded`。这些行现在带 `[mxzg]` 前缀，例如 `[mxzg][info][Boot] stage=version`。
 
 可选：
@@ -33,7 +33,7 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 
 Boot 的登录不再手写 `request("login")`，改走 `Proto.login` / `Proto.roleEnter`。回包仍由 MockTransport 发出。
 
-P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`stage.push`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`、`bag.list`、`bag.use`、`mail.list`、`mail.read`、`mail.claim`、`mail.claimAll`、`mail.delete`、`smith.view`、`smith.strengthen`、`arena.view`、`arena.challenge`、`tower.view`、`tower.challenge`、`daily.view`、`daily.challenge`、`login7.view`、`login7.claim`、`login7.advance`、`goal7.view`、`goal7.claim`、`shop.view`、`shop.buy`、`wish.view`、`wish.draw`、`cafe.view`、`cafe.send`、`cafe.claim`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。`stage.push` 只给 Mock 预览，把已通关连推到第 70 关。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。背包会列出道具并使用。邮件会列出、领取和删除。铁匠铺会看武器并强化。竞技场会看积分并挑战。幻境之塔会看当前层并挑战。日常副本会看金币难度并挑战。七日登录会列出七天并领取。`login7.advance` 只给 Mock 预览把角色登录天 +1。七日目标会列出任务并领取。商店会列出限购商品并购买。许愿池会看今日次数并许愿一次。咖啡馆会派出英雄招待并领取。创角从登录面板进，见下面 C1。
+P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`stage.push`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`、`bag.list`、`bag.use`、`mail.list`、`mail.read`、`mail.claim`、`mail.claimAll`、`mail.delete`、`smith.view`、`smith.strengthen`、`arena.view`、`arena.challenge`、`tower.view`、`tower.challenge`、`daily.view`、`daily.challenge`、`login7.view`、`login7.claim`、`login7.advance`、`goal7.view`、`goal7.claim`、`shop.view`、`shop.buy`、`wish.view`、`wish.draw`、`cafe.view`、`cafe.send`、`cafe.claim`、`gift.view`、`gift.claimLevel`、`gift.buyDaily`、`gift.recharge`、`gift.claimAcc`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。`stage.push` 只给 Mock 预览，把已通关连推到第 70 关。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。背包会列出道具并使用。邮件会列出、领取和删除。铁匠铺会看武器并强化。竞技场会看积分并挑战。幻境之塔会看当前层并挑战。日常副本会看金币难度并挑战。七日登录会列出七天并领取。`login7.advance` 只给 Mock 预览把角色登录天 +1。七日目标会列出任务并领取。商店会列出限购商品并购买。许愿池会看今日次数并许愿一次。咖啡馆会派出英雄招待并领取。礼包会列出升级有礼、每日礼包、首充和累充，并用「模拟充值」改累充。创角从登录面板进，见下面 C1。
 
 同一局 Mock 会记住开服天、等级、主线进度和英雄等级。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
 
@@ -433,5 +433,46 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 5. **派出 2 人。** 点林间游侠和星辉法师，再点 **派出招待（2人）**。Toast「已派出招待：林间游侠、星辉法师」。领取后 Toast「招待完成：金币 +100，咖啡豆 ×2」。咖啡豆累加，顶栏再加 100 金币。
 6. **今日 3 次。** 第三次派出并领取之后，再点派出，Toast「今日招待次数已用完」。次数跟着 Mock 的开服天走：再打主线把开服天加 1（每 5 关一次）后，剩余回到 3。还没领取的招待不会被清掉，仍然可以领。创角把次数和未领取的招待清掉，咖啡豆也不再留下。
 7. 招待不改英雄等级、武器、主线进度、召唤、商店已购、许愿次数、竞技场、幻境之塔和金币副本次数。
+
+不需要起 server，也不用改场景。
+
+## 礼包（升级有礼 / 每日礼包 / 首充 / 累充）
+
+不改 `.scene`，不用新挂组件。礼包在主城页面栈里用代码生成。商店、咖啡馆、许愿池、七日登录和七日目标都还在。样例 `opencondition` 没有礼包这一行，所以新号就能进，不看主线等级，也不看开服天。这是骨架，不接真实支付。
+
+**入口。** 两条路进同一页：
+
+1. 主城点 **礼包**（和「七日登录」「七日目标」「商店」并排，在日志那一排下面）。
+2. 底栏 **玩法**，列表里「商店」下面一项就是 **礼包**（不带锁）。
+
+网络没连上时 Toast「网络未连接」，不进页面。
+
+页面标题是「礼包」。上面四个页签：**升级有礼**、**每日礼包**、**首充**、**累充**。顶上写当前主线等级和开服天，以及持有的金币和钻石。
+
+**升级有礼。** 看主线等级（1 + 已通关），每档只领一次。
+
+| 门槛 | 奖励 |
+|------|------|
+| Lv5 | 金币 +100、强化石 ×3 |
+| Lv10 | 钻石 +20、经验药水 ×1 |
+| Lv15 | 金币 +200、小金币袋 ×1 |
+
+新号是 Lv1。点 Lv5 的 **未达到**，Toast「主线达到 Lv5 后才能领取」。下面两条都能到 Lv5：主线打赢 4 关，或挂机快速作战 4 次。第 3 胜只到 Lv4，仍然不能领。到了之后按钮变成 **领取**。点一下 Toast「领取成功：升级有礼 Lv5，金币 +100、强化石 ×3」。顶栏金币增加 100。再点 Toast「Lv5 奖励已经领取」。Lv10、Lv15 同样，没到等级或已经领过都会 Toast。
+
+**每日礼包。** 一天一次，花钻石 10，得到金币 +80、强化石 ×2。新号钻石 20，可以直接买。Toast「购买成功：每日礼包，消耗钻石 10，金币 +80、强化石 ×2」。再点 Toast「今日礼包已购买」，钻石不再扣。钻石少于 10 时 Toast「钻石不足，每日礼包需要 10」，可以先把钻石花在召唤上。开服天变化后可以再买（主线每 5 关 +1 天，或「推关到70（调试）」）。已经进背包的不收回。这一笔不计入累充。
+
+**首充。** 点 **模拟充值**。不会拉起支付。Toast「模拟充值成功：首充完成，累充 +6，钻石 +60、经验药水 ×1」。顶栏钻石增加 60。再点 Toast「首充已完成」，累充不再加。这一笔把累充记成 6。
+
+**累充。** 进度写成「累充 6/68」和一排方块。档位是 6、30、68。
+
+| 门槛 | 奖励 |
+|------|------|
+| 6 | 金币 +150 |
+| 30 | 钻石 +30、强化石 ×5 |
+| 68 | 小金币袋 ×2 |
+
+首充之后可以领 6。点 30 的 **未达到**，Toast「累充未达到 30」。点本页的 **模拟充值**，累充 +30，并另得钻石 +30，不重复发首充礼包。到 30 后可以领 30。再模拟两次到 60 仍不够 68，Toast「累充未达到 68」。再模拟一次到 96 后可以领 68。已经领过 Toast「累充 6 奖励已经领取」。
+
+创角把升级领取、每日已购、首充和累充清掉，钱包回到金币 100、钻石 20。礼包不改英雄等级、武器、主线进度、召唤次数、商店已购、许愿、咖啡馆、竞技场、幻境之塔和金币副本次数。
 
 不需要起 server，也不用改场景。

@@ -104,6 +104,25 @@ import {
 } from "../module/cafe/serve";
 import { CAFE_BEAN_NAME } from "../module/bag/items";
 import {
+  findGiftAcc,
+  findGiftLevel,
+  GIFT_DAILY_GOLD,
+  GIFT_DAILY_ITEM_COUNT,
+  GIFT_DAILY_ITEM_ID,
+  GIFT_DAILY_ITEM_NAME,
+  GIFT_DAILY_PRICE,
+  GIFT_FIRST_AMOUNT,
+  GIFT_FIRST_DIAMOND,
+  GIFT_FIRST_ITEM_COUNT,
+  GIFT_FIRST_ITEM_ID,
+  GIFT_FIRST_ITEM_NAME,
+  GIFT_RECHARGE_DIAMOND,
+  GIFT_RECHARGE_STEP,
+  listGiftAcc,
+  listGiftLevels,
+  parseGiftRecharge,
+} from "../module/gift/packs";
+import {
   isSummonCount,
   poolAt,
   shardItemId,
@@ -153,6 +172,13 @@ import {
   CafeHero,
   CafeSendResp,
   CafeViewResp,
+  GiftBuyDailyResp,
+  GiftClaimAccResp,
+  GiftClaimLevelResp,
+  GiftLevelState,
+  GiftAccState,
+  GiftRechargeResp,
+  GiftViewResp,
 } from "./protocol/types";
 
 /** 一场预览里的假服状态。同一 MockTransport 上多次请求共用这一份。 */
@@ -265,6 +291,21 @@ export interface MockSessionSeed {
    * 不填表示没有派出。创角清掉。
    */
   cafeHeroIds?: number[];
+  /** 已经领取的升级有礼门槛，例如 5、10、15。不认识的数字会丢掉。 */
+  giftLevelClaimed?: number[];
+  /**
+   * 今日每日礼包是否已买。不填为 false。
+   * 和 giftDailyDay 不是当前开服天时，下一次查看或购买会清掉，背包里已经买到的不收回。
+   */
+  giftDailyBought?: boolean;
+  /** 每日礼包所属的开服天。不填则跟当前 openDay 对齐。 */
+  giftDailyDay?: number;
+  /** 首充是否已经用「模拟充值」完成。不填为 false。创角清掉。 */
+  firstChargeDone?: boolean;
+  /** 模拟累充金额。首充和累充页的模拟充值都加在这里。不填为 0。每日礼包不加。 */
+  totalRecharge?: number;
+  /** 已经领取的累充门槛，例如 6、30、68。不认识的数字会丢掉。 */
+  giftAccClaimed?: number[];
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -273,7 +314,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录、七日目标、基础商店、低级许愿池和咖啡馆招待都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录、七日目标、基础商店、低级许愿池、咖啡馆招待和礼包骨架都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -361,6 +402,19 @@ export class MockGameSession {
   private cafeDaySeeded = false;
   /** 还没领取的英雄 id。空表示没有派出。 */
   private cafeServing: number[] = [];
+  /** 升级有礼门槛 → 已领取。 */
+  private giftLevels: { [level: number]: boolean } = {};
+  /** 当前 giftDailyDay 上每日礼包是否已买。 */
+  private giftDailyBought = false;
+  /** 每日礼包所属开服天。和 openDay 不同时，下一次礼包操作清掉已购。 */
+  giftDailyDay = 1;
+  private giftDailyDaySeeded = false;
+  /** 首充模拟充值是否已经完成。 */
+  firstChargeDone = false;
+  /** 模拟累充累计。单位是「元」，不是钻石。 */
+  totalRecharge = 0;
+  /** 累充门槛 → 已领取。 */
+  private giftAccClaimed: { [amount: number]: boolean } = {};
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
@@ -373,6 +427,7 @@ export class MockGameSession {
     if (!this.shopDaySeeded) this.shopDay = this.openDay;
     if (!this.wishDaySeeded) this.wishDay = this.openDay;
     if (!this.cafeDaySeeded) this.cafeDay = this.openDay;
+    if (!this.giftDailyDaySeeded) this.giftDailyDay = this.openDay;
     this.ensureHeroes();
     this.ensureStarterGear();
     if (!this.itemsSeeded) this.grantStarterItems();
@@ -416,7 +471,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数、七日登录、七日目标、商店已购、许愿次数和咖啡馆招待重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数、七日登录、七日目标、商店已购、许愿次数、咖啡馆招待和礼包领取重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -451,6 +506,7 @@ export class MockGameSession {
     this.resetShop();
     this.resetWish();
     this.resetCafe();
+    this.resetGift();
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
 
@@ -1105,6 +1161,148 @@ export class MockGameSession {
   }
 
   /**
+   * 只读礼包。按当前开服天刷新每日礼包，不改钱包、背包、首充和累充。
+   * 入口不设等级锁。升级有礼看主线等级。
+   */
+  giftView(): GiftViewResp {
+    this.refreshGiftDay();
+    return this.giftSnapshot();
+  }
+
+  /**
+   * 领取一档升级有礼。主线等级达到门槛且还没领过才能领。
+   * 没有这一档、等级不够、已经领过都拒绝，钱包和背包不动。
+   * 不改主线、英雄、每日礼包、首充和累充。
+   */
+  giftClaimLevel(data: unknown): GiftClaimLevelResp {
+    this.refreshGiftDay();
+    const level = Math.floor(numField(asRecord(data), "level", 0));
+    const bundle = findGiftLevel(level);
+    if (!bundle) return this.giftLevelFail(level, "", ErrorCode.GIFT_LEVEL_NOT_FOUND);
+    const claimed = this.giftLevels[level] === true;
+    if (claimed) return this.giftLevelFail(level, "claimed", ErrorCode.GIFT_LEVEL_CLAIMED);
+    if (this.role.level < level) return this.giftLevelFail(level, "locked", ErrorCode.GIFT_LEVEL_LOCKED);
+    this.grantGiftBundle(bundle);
+    this.giftLevels[level] = true;
+    return {
+      ok: true,
+      level,
+      state: "claimed",
+      goldGain: bundle.gold,
+      diamondGain: bundle.diamond,
+      itemId: bundle.itemCount > 0 ? bundle.itemId : 0,
+      itemName: bundle.itemName,
+      itemGain: bundle.itemCount,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 买今日礼包。花钻石，金币和道具进账，一天一次。
+   * 今天买过或钻石不够时拒绝，钱包、背包和已购标记都不变。
+   * 不计入累充，也不改首充。开服天变化后可以再买。
+   */
+  giftBuyDaily(): GiftBuyDailyResp {
+    this.refreshGiftDay();
+    if (this.giftDailyBought) return this.giftDailyFail(ErrorCode.GIFT_DAILY_BOUGHT);
+    if (this.diamond < GIFT_DAILY_PRICE) return this.giftDailyFail(ErrorCode.GIFT_DAILY_SHORT);
+    this.diamond -= GIFT_DAILY_PRICE;
+    this.gold += GIFT_DAILY_GOLD;
+    if (GIFT_DAILY_ITEM_COUNT > 0) this.addItem(GIFT_DAILY_ITEM_ID, GIFT_DAILY_ITEM_COUNT);
+    this.giftDailyBought = true;
+    return {
+      ok: true,
+      price: GIFT_DAILY_PRICE,
+      bought: true,
+      goldGain: GIFT_DAILY_GOLD,
+      itemId: GIFT_DAILY_ITEM_ID,
+      itemName: GIFT_DAILY_ITEM_NAME,
+      itemGain: GIFT_DAILY_ITEM_COUNT,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 模拟充值。kind 为 first 时只完成一次首充：发钻石和道具，累充加上首充金额，并记下 firstChargeDone。
+   * kind 为 acc 时每次都加上一笔累充，并另发钻石，不重复发首充礼包。
+   * 首充已经完成、或方式不对时拒绝，累充、钱包和背包不动。
+   * 不改主线、每日礼包和各玩法次数。不是真实支付。
+   */
+  giftRecharge(data: unknown): GiftRechargeResp {
+    this.refreshGiftDay();
+    const kind = parseGiftRecharge(strField(asRecord(data), "kind"));
+    if (!kind) return this.giftRechargeFail("", ErrorCode.GIFT_RECHARGE_INVALID);
+    if (kind === "first") {
+      if (this.firstChargeDone) return this.giftRechargeFail(kind, ErrorCode.GIFT_FIRST_DONE);
+      this.firstChargeDone = true;
+      this.totalRecharge += GIFT_FIRST_AMOUNT;
+      this.diamond += GIFT_FIRST_DIAMOND;
+      if (GIFT_FIRST_ITEM_COUNT > 0) this.addItem(GIFT_FIRST_ITEM_ID, GIFT_FIRST_ITEM_COUNT);
+      return {
+        ok: true,
+        kind,
+        added: GIFT_FIRST_AMOUNT,
+        firstChargeDone: true,
+        firstGranted: true,
+        diamondGain: GIFT_FIRST_DIAMOND,
+        itemId: GIFT_FIRST_ITEM_ID,
+        itemName: GIFT_FIRST_ITEM_NAME,
+        itemGain: GIFT_FIRST_ITEM_COUNT,
+        totalRecharge: this.totalRecharge,
+        gold: this.gold,
+        diamond: this.diamond,
+      };
+    }
+    this.totalRecharge += GIFT_RECHARGE_STEP;
+    this.diamond += GIFT_RECHARGE_DIAMOND;
+    return {
+      ok: true,
+      kind,
+      added: GIFT_RECHARGE_STEP,
+      firstChargeDone: this.firstChargeDone,
+      firstGranted: false,
+      diamondGain: GIFT_RECHARGE_DIAMOND,
+      itemId: 0,
+      itemName: "",
+      itemGain: 0,
+      totalRecharge: this.totalRecharge,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 领取一档累充。累计金额达到门槛且还没领过才能领。
+   * 没有这一档、金额不够、已经领过都拒绝，钱包、背包和累充金额不动。
+   */
+  giftClaimAcc(data: unknown): GiftClaimAccResp {
+    this.refreshGiftDay();
+    const amount = Math.floor(numField(asRecord(data), "amount", 0));
+    const bundle = findGiftAcc(amount);
+    if (!bundle) return this.giftAccFail(amount, "", ErrorCode.GIFT_ACC_NOT_FOUND);
+    const claimed = this.giftAccClaimed[amount] === true;
+    if (claimed) return this.giftAccFail(amount, "claimed", ErrorCode.GIFT_ACC_CLAIMED);
+    if (this.totalRecharge < amount) return this.giftAccFail(amount, "locked", ErrorCode.GIFT_ACC_LOCKED);
+    this.grantGiftBundle(bundle);
+    this.giftAccClaimed[amount] = true;
+    return {
+      ok: true,
+      amount,
+      state: "claimed",
+      goldGain: bundle.gold,
+      diamondGain: bundle.diamond,
+      itemId: bundle.itemCount > 0 ? bundle.itemId : 0,
+      itemName: bundle.itemName,
+      itemGain: bundle.itemCount,
+      totalRecharge: this.totalRecharge,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
    * 只读七日登录。按角色登录天列出七格，不改钱包，也不改开服天。
    * 新号第 1 天可领。入口不设等级锁。
    */
@@ -1663,6 +1861,32 @@ export class MockGameSession {
       }
       this.cafeServing = ids;
     }
+    if (Array.isArray(seed.giftLevelClaimed)) {
+      for (let i = 0; i < seed.giftLevelClaimed.length; i++) {
+        const raw = seed.giftLevelClaimed[i];
+        if (typeof raw !== "number" || !isFinite(raw)) continue;
+        const level = Math.floor(raw);
+        if (findGiftLevel(level)) this.giftLevels[level] = true;
+      }
+    }
+    if (seed.giftDailyBought === true) this.giftDailyBought = true;
+    if (typeof seed.giftDailyDay === "number" && isFinite(seed.giftDailyDay) && seed.giftDailyDay >= 1) {
+      this.giftDailyDay = Math.floor(seed.giftDailyDay);
+      this.giftDailyDaySeeded = true;
+    }
+    if (seed.firstChargeDone === true) this.firstChargeDone = true;
+    if (typeof seed.totalRecharge === "number" && isFinite(seed.totalRecharge)) {
+      const total = Math.floor(seed.totalRecharge);
+      this.totalRecharge = total > 0 ? total : 0;
+    }
+    if (Array.isArray(seed.giftAccClaimed)) {
+      for (let i = 0; i < seed.giftAccClaimed.length; i++) {
+        const raw = seed.giftAccClaimed[i];
+        if (typeof raw !== "number" || !isFinite(raw)) continue;
+        const amount = Math.floor(raw);
+        if (findGiftAcc(amount)) this.giftAccClaimed[amount] = true;
+      }
+    }
     if (Array.isArray(seed.goalClaimed)) {
       for (let i = 0; i < seed.goalClaimed.length; i++) {
         const raw = seed.goalClaimed[i];
@@ -1892,6 +2116,121 @@ export class MockGameSession {
     this.cafeUsed = 0;
     this.cafeDay = this.openDay;
     this.cafeServing = [];
+  }
+
+  /** 开服天变了就把每日礼包已购清掉。升级有礼、首充和累充留下。 */
+  private refreshGiftDay(): void {
+    if (this.giftDailyDay === this.openDay) return;
+    this.giftDailyDay = this.openDay;
+    this.giftDailyBought = false;
+  }
+
+  private resetGift(): void {
+    this.giftLevels = {};
+    this.giftDailyBought = false;
+    this.giftDailyDay = this.openDay;
+    this.firstChargeDone = false;
+    this.totalRecharge = 0;
+    this.giftAccClaimed = {};
+  }
+
+  private grantGiftBundle(bundle: { gold: number; diamond: number; itemId: number; itemCount: number }): void {
+    if (bundle.gold > 0) this.gold += bundle.gold;
+    if (bundle.diamond > 0) this.diamond += bundle.diamond;
+    if (bundle.itemId > 0 && bundle.itemCount > 0) this.addItem(bundle.itemId, bundle.itemCount);
+  }
+
+  private giftSnapshot(): GiftViewResp {
+    return {
+      ok: true,
+      level: this.role.level,
+      openDay: this.openDay,
+      gold: this.gold,
+      diamond: this.diamond,
+      levels: listGiftLevels(this.role.level, (level) => this.giftLevels[level] === true),
+      dailyPrice: GIFT_DAILY_PRICE,
+      dailyBought: this.giftDailyBought,
+      dailyGold: GIFT_DAILY_GOLD,
+      dailyItemId: GIFT_DAILY_ITEM_ID,
+      dailyItemName: GIFT_DAILY_ITEM_NAME,
+      dailyItemCount: GIFT_DAILY_ITEM_COUNT,
+      firstChargeDone: this.firstChargeDone,
+      firstAmount: GIFT_FIRST_AMOUNT,
+      firstDiamond: GIFT_FIRST_DIAMOND,
+      firstItemId: GIFT_FIRST_ITEM_ID,
+      firstItemName: GIFT_FIRST_ITEM_NAME,
+      firstItemCount: GIFT_FIRST_ITEM_COUNT,
+      totalRecharge: this.totalRecharge,
+      rechargeStep: GIFT_RECHARGE_STEP,
+      rechargeDiamond: GIFT_RECHARGE_DIAMOND,
+      tiers: listGiftAcc(this.totalRecharge, (amount) => this.giftAccClaimed[amount] === true),
+    };
+  }
+
+  private giftLevelFail(level: number, state: GiftLevelState | "", code: number): GiftClaimLevelResp {
+    return {
+      ok: false,
+      level,
+      state,
+      goldGain: 0,
+      diamondGain: 0,
+      itemId: 0,
+      itemName: "",
+      itemGain: 0,
+      gold: this.gold,
+      diamond: this.diamond,
+      code,
+    };
+  }
+
+  private giftDailyFail(code: number): GiftBuyDailyResp {
+    return {
+      ok: false,
+      price: GIFT_DAILY_PRICE,
+      bought: this.giftDailyBought,
+      goldGain: 0,
+      itemId: 0,
+      itemName: "",
+      itemGain: 0,
+      gold: this.gold,
+      diamond: this.diamond,
+      code,
+    };
+  }
+
+  private giftRechargeFail(kind: "" | "first" | "acc", code: number): GiftRechargeResp {
+    return {
+      ok: false,
+      kind,
+      added: 0,
+      firstChargeDone: this.firstChargeDone,
+      firstGranted: false,
+      diamondGain: 0,
+      itemId: 0,
+      itemName: "",
+      itemGain: 0,
+      totalRecharge: this.totalRecharge,
+      gold: this.gold,
+      diamond: this.diamond,
+      code,
+    };
+  }
+
+  private giftAccFail(amount: number, state: GiftAccState | "", code: number): GiftClaimAccResp {
+    return {
+      ok: false,
+      amount,
+      state,
+      goldGain: 0,
+      diamondGain: 0,
+      itemId: 0,
+      itemName: "",
+      itemGain: 0,
+      totalRecharge: this.totalRecharge,
+      gold: this.gold,
+      diamond: this.diamond,
+      code,
+    };
   }
 
   private prepareCafe(): void {

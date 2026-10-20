@@ -44,6 +44,11 @@ export const Cmd = {
   cafeView: "cafe.view",
   cafeSend: "cafe.send",
   cafeClaim: "cafe.claim",
+  giftView: "gift.view",
+  giftClaimLevel: "gift.claimLevel",
+  giftBuyDaily: "gift.buyDaily",
+  giftRecharge: "gift.recharge",
+  giftClaimAcc: "gift.claimAcc",
 } as const;
 
 export const CmdId = {
@@ -86,6 +91,11 @@ export const CmdId = {
   cafeView: 2601,
   cafeSend: 2602,
   cafeClaim: 2603,
+  giftView: 2701,
+  giftClaimLevel: 2702,
+  giftBuyDaily: 2703,
+  giftRecharge: 2704,
+  giftClaimAcc: 2705,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -136,4 +146,9 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.cafeView, cmd: Cmd.cafeView },
   { id: CmdId.cafeSend, cmd: Cmd.cafeSend },
   { id: CmdId.cafeClaim, cmd: Cmd.cafeClaim },
+  { id: CmdId.giftView, cmd: Cmd.giftView },
+  { id: CmdId.giftClaimLevel, cmd: Cmd.giftClaimLevel },
+  { id: CmdId.giftBuyDaily, cmd: Cmd.giftBuyDaily },
+  { id: CmdId.giftRecharge, cmd: Cmd.giftRecharge },
+  { id: CmdId.giftClaimAcc, cmd: Cmd.giftClaimAcc },
 ];
