@@ -39,6 +39,7 @@ import { buildTowerPage, TowerPage } from "./TowerPage";
 import { buildDailyGoldPage, DailyGoldPage } from "./DailyGoldPage";
 import { buildLogin7Page, Login7Page } from "./Login7Page";
 import { buildGoal7Page, Goal7Page } from "./Goal7Page";
+import { buildShopPage, ShopPage } from "./ShopPage";
 import { goal7BadJumpToast } from "../module/goal7/tasks";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
@@ -59,6 +60,7 @@ const BAG_FILL = new Color(36, 128, 96, 255);
 const MAIL_FILL = new Color(110, 78, 168, 255);
 const LOGIN7_FILL = new Color(156, 52, 78, 255);
 const GOAL7_FILL = new Color(184, 122, 36, 255);
+const SHOP_FILL = new Color(42, 108, 132, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -79,6 +81,7 @@ export class MainApp extends Component {
   private daily: DailyGoldPage | null = null;
   private login7: Login7Page | null = null;
   private goal7: Goal7Page | null = null;
+  private shop: ShopPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -120,6 +123,8 @@ export class MainApp extends Component {
     this.login7 = null;
     this.goal7?.dispose();
     this.goal7 = null;
+    this.shop?.dispose();
+    this.shop = null;
     this.shell?.dispose();
   }
 
@@ -207,6 +212,7 @@ export class MainApp extends Component {
     if (id === "daily") return this.mountDaily();
     if (id === "login7") return this.mountLogin7();
     if (id === "goal7") return this.mountGoal7();
+    if (id === "shop") return this.mountShop();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -225,8 +231,9 @@ export class MainApp extends Component {
     place(createButton("挂机", () => this.openIdle(), 420, 64, IDLE_FILL), page, 0, 200);
     place(createButton("背包", () => this.openBag(), 420, 64, BAG_FILL), page, 0, 120);
     place(createButton("邮件", () => this.openMail(), 420, 64, MAIL_FILL), page, 0, 40);
-    place(createButton("七日登录", () => this.openLogin7(), 200, 64, LOGIN7_FILL, 22), page, -110, -120);
-    place(createButton("七日目标", () => this.openGoal7(), 200, 64, GOAL7_FILL, 22), page, 110, -120);
+    place(createButton("七日登录", () => this.openLogin7(), 180, 56, LOGIN7_FILL, 20), page, -200, -120);
+    place(createButton("七日目标", () => this.openGoal7(), 180, 56, GOAL7_FILL, 20), page, 0, -120);
+    place(createButton("商店", () => this.openShop(), 180, 56, SHOP_FILL, 20), page, 200, -120);
     place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, -40);
     place(
       createButton("公告", () => {
@@ -279,8 +286,8 @@ export class MainApp extends Component {
     const page = this.pageRoot("PlaysPage");
     place(createLabel("玩法", 40, { color: TITLE_COLOR }), page, 0, 460);
     place(createLabel("未开启的仍列在这里", 18, { color: MUTED }), page, 0, 410);
-    const top = 320;
-    const step = 46;
+    const top = 330;
+    const step = 40;
     for (let i = 0; i < PLAY_ENTRIES.length; i++) {
       const entry = PLAY_ENTRIES[i];
       const access = entryAccess(entry, this.level(), this.day(), ConfigDb.current);
@@ -288,13 +295,13 @@ export class MainApp extends Component {
         tabLabel(entry.title, access.open),
         () => this.openChild(entry.id),
         520,
-        44,
+        40,
         access.open ? OPEN_FILL : LOCKED_FILL,
-        22
+        20
       );
       place(button, page, 0, top - i * step);
     }
-    place(createButton("返回", () => this.back(), 220, 48), page, 0, -250);
+    place(createButton("返回", () => this.back(), 220, 48), page, 0, -270);
     return page;
   }
 
@@ -461,6 +468,36 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.goal7 = page;
+    return page.node;
+  }
+
+  /**
+   * 主城和玩法都能进。样例 opencondition 没有商店，新号即可进。
+   * 没连上时不压页面。
+   */
+  private openShop(): void {
+    GameLog.shared.info("MainApp", "click shop");
+    if (!this.allow("shop")) return;
+    if (!this.ensureNet()) return;
+    this.panels?.openChild("shop");
+    this.refreshChrome();
+  }
+
+  private mountShop(): Node {
+    this.shop?.dispose();
+    const page = buildShopPage({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.shopView({}, NetClient.shared),
+      buy: (id) => Proto.shopBuy({ id }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.shop = page;
     return page.node;
   }
 
@@ -806,6 +843,10 @@ export class MainApp extends Component {
     if (id === "goal7") {
       this.goal7?.dispose();
       this.goal7 = null;
+    }
+    if (id === "shop") {
+      this.shop?.dispose();
+      this.shop = null;
     }
   }
 

@@ -57,6 +57,10 @@ import {
   Goal7ClaimResp,
   Goal7ViewReq,
   Goal7ViewResp,
+  ShopBuyReq,
+  ShopBuyResp,
+  ShopViewReq,
+  ShopViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -209,5 +213,13 @@ export const Proto = {
 
   goal7Claim(req: Goal7ClaimReq, net: NetClient = NetClient.shared): Promise<Goal7ClaimResp> {
     return call(net, Cmd.goal7Claim, req);
+  },
+
+  shopView(req: ShopViewReq, net: NetClient = NetClient.shared): Promise<ShopViewResp> {
+    return call(net, Cmd.shopView, req);
+  },
+
+  shopBuy(req: ShopBuyReq, net: NetClient = NetClient.shared): Promise<ShopBuyResp> {
+    return call(net, Cmd.shopBuy, req);
   },
 };

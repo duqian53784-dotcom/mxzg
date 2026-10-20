@@ -3,7 +3,7 @@
 - `core/` 启动、会话（Boot、Session）
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
-- `module/` 业务系统（`mainline/` 主线战报和推关调试，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场，`tower/` 幻境之塔，`daily/` 日常金币副本，`login7/` 七日登录，`goal7/` 七日目标）
+- `module/` 业务系统（`mainline/` 主线战报和推关调试，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场，`tower/` 幻境之塔，`daily/` 日常金币副本，`login7/` 七日登录，`goal7/` 七日目标，`shop/` 基础商店）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
 
 场景在 `assets/scenes/`。Boot / Main / Battle 已建好。Boot 的 Canvas 上已经挂了 Boot。其余界面由代码生成，不用再挂组件。
@@ -15,7 +15,7 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 1. Creator 3.8.8 打开 `client`。
 2. 启动场景保持 Boot，点预览。
 3. 屏幕上是 Mock 登录面板：账号、密码（可留空）、三个服务器（本地Mock / 提审 / 正式占位）。账号默认 `mock`（或上次记下的账号）。点一个服务器，再点 **进入游戏**。
-4. 应进入 Main。顶栏左侧是角色名、等级、所选服务器和开服天，右侧是金币、钻石，例如 `MockHero Lv1`、`本地Mock · 开服D1`、`金币 100`、`钻石 20`。底栏是主城 / 英雄 / 召唤 / 铁匠铺 / 玩法。画面中间是「主线 · 第N关」，下面是「挂机」「背包」「邮件」，再下面有日志、公告、模拟断线，以及并排的「七日登录」和「七日目标」。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会自己补上。
+4. 应进入 Main。顶栏左侧是角色名、等级、所选服务器和开服天，右侧是金币、钻石，例如 `MockHero Lv1`、`本地Mock · 开服D1`、`金币 100`、`钻石 20`。底栏是主城 / 英雄 / 召唤 / 铁匠铺 / 玩法。画面中间是「主线 · 第N关」，下面是「挂机」「背包」「邮件」，再下面有日志、公告、模拟断线，以及并排的「七日登录」「七日目标」和「商店」。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会自己补上。
 5. 控制台标记：`[Boot] stage=version` → `hot-update` → `config` → `login` → `enter-main`，以及 `[Net] connect mock://local`、`[Config] loaded`。这些行现在带 `[mxzg]` 前缀，例如 `[mxzg][info][Boot] stage=version`。
 
 可选：
@@ -33,7 +33,7 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 
 Boot 的登录不再手写 `request("login")`，改走 `Proto.login` / `Proto.roleEnter`。回包仍由 MockTransport 发出。
 
-P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`stage.push`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`、`bag.list`、`bag.use`、`mail.list`、`mail.read`、`mail.claim`、`mail.claimAll`、`mail.delete`、`smith.view`、`smith.strengthen`、`arena.view`、`arena.challenge`、`tower.view`、`tower.challenge`、`daily.view`、`daily.challenge`、`login7.view`、`login7.claim`、`login7.advance`、`goal7.view`、`goal7.claim`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。`stage.push` 只给 Mock 预览，把已通关连推到第 70 关。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。背包会列出道具并使用。邮件会列出、领取和删除。铁匠铺会看武器并强化。竞技场会看积分并挑战。幻境之塔会看当前层并挑战。日常副本会看金币难度并挑战。七日登录会列出七天并领取。`login7.advance` 只给 Mock 预览把角色登录天 +1。七日目标会列出任务并领取。创角从登录面板进，见下面 C1。
+P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`stage.push`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`、`bag.list`、`bag.use`、`mail.list`、`mail.read`、`mail.claim`、`mail.claimAll`、`mail.delete`、`smith.view`、`smith.strengthen`、`arena.view`、`arena.challenge`、`tower.view`、`tower.challenge`、`daily.view`、`daily.challenge`、`login7.view`、`login7.claim`、`login7.advance`、`goal7.view`、`goal7.claim`、`shop.view`、`shop.buy`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。`stage.push` 只给 Mock 预览，把已通关连推到第 70 关。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。背包会列出道具并使用。邮件会列出、领取和删除。铁匠铺会看武器并强化。竞技场会看积分并挑战。幻境之塔会看当前层并挑战。日常副本会看金币难度并挑战。七日登录会列出七天并领取。`login7.advance` 只给 Mock 预览把角色登录天 +1。七日目标会列出任务并领取。商店会列出限购商品并购买。创角从登录面板进，见下面 C1。
 
 同一局 Mock 会记住开服天、等级、主线进度和英雄等级。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
 
@@ -358,5 +358,34 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 5. **开服天。** 推到 70 之后是 D15，不是 D30。玩法里的幻魔塔仍然上锁。竞技场、幻境之塔、金币副本如果今天已经打过，下次再进会按新的开服天把次数清零，层数、积分和主线进度不动。角色登录天不变，七日登录不会因此跳到后面几天。
 
 从中间进度点这个按钮，只补还没打的关，例如已通关 65 关时金币 +50，开服天不会被往回调。
+
+不需要起 server，也不用改场景。
+
+## 基础商店
+
+不改 `.scene`，不用新挂组件。商店在主城页面栈里用代码生成。七日目标、七日登录、背包、邮件和其它入口都还在。
+
+**入口。** 样例 `opencondition` 没有商店这一行，所以新号就能进，不看主线等级，也不看开服天。两条路进同一页：
+
+1. 主城点 **商店**（和「七日登录」「七日目标」并排，在日志那一排下面）。
+2. 底栏 **玩法**，列表里「七日目标」下面一项就是 **商店**（不带锁）。
+
+网络没连上时 Toast「网络未连接」，不进页面。
+
+页面标题是「基础商店」。上面写当前开服天，以及持有的金币和钻石。三样商品各有一行说明和 **购买**。召唤没有单独的消耗品，仍在召唤页直接花钻石。
+
+| 商品 | 一次获得 | 价格 | 每日限购 |
+|------|----------|------|----------|
+| 强化石 | ×5 | 金币 40 | 3 |
+| 小金币袋 | ×1 | 钻石 8 | 2 |
+| 经验药水 | ×1 | 金币 50 | 2 |
+
+新号金币 100、钻石 20，背包里已有小金币袋 ×2、经验药水 ×2，没有强化石。
+
+1. **买强化石。** 点第一行的 **购买**。Toast「购买成功：强化石 ×5，消耗金币 40」。顶栏金币从 100 变成 60。这一行变成「今日 1/3 · 背包 ×5」。回主城再进背包，能看到强化石 ×5。强化石仍然不能直接使用。
+2. **金币不够。** 再买一次强化石（金币 40，剩下 20），然后点经验药水的 **购买**。Toast「金币不足，购买需要 50」。金币仍是 20，经验药水数量不变，已购次数也不加。
+3. **买小金币袋。** 点小金币袋的 **购买**。Toast「购买成功：小金币袋 ×1，消耗钻石 8」。顶栏钻石从 20 变成 12。背包里的小金币袋变成 ×3。再买一次，钻石变成 4。第三次点 **已售罄**，Toast「小金币袋今日已售罄」，钻石和背包不变。
+4. **开服天刷新限购。** 主线每打赢 5 关，开服天 +1。也可以用「推关到70（调试）」把开服天推到 D15。再进商店，今日已购回到 0，已经买进背包的道具还在。同一天反复打开不会把次数清掉。
+5. 创角把已购次数清掉，钱包回到金币 100、钻石 20，背包回到小金币袋 ×2 和经验药水 ×2。购买不改英雄等级、主线、召唤次数和各玩法次数。
 
 不需要起 server，也不用改场景。
