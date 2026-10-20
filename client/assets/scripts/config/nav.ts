@@ -106,10 +106,10 @@ export function tabLabel(title: string, open: boolean): string {
   return open ? title : "锁·" + title;
 }
 
-/** 子页面高亮它所属的底栏。日志仍算主城。 */
+/** 子页面高亮它所属的底栏。日志和主线仍算主城。 */
 export function rootTabFor(pageId: string): string {
   if (BOTTOM_IDS[pageId]) return pageId;
-  if (pageId === "log") return CITY_TAB;
+  if (pageId === "log" || pageId === "mainline") return CITY_TAB;
   return "plays";
 }
 
