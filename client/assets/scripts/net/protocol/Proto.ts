@@ -43,6 +43,10 @@ import {
   TowerChallengeResp,
   TowerViewReq,
   TowerViewResp,
+  DailyChallengeReq,
+  DailyChallengeResp,
+  DailyViewReq,
+  DailyViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -160,5 +164,13 @@ export const Proto = {
 
   towerChallenge(req: TowerChallengeReq, net: NetClient = NetClient.shared): Promise<TowerChallengeResp> {
     return call(net, Cmd.towerChallenge, req);
+  },
+
+  dailyView(req: DailyViewReq, net: NetClient = NetClient.shared): Promise<DailyViewResp> {
+    return call(net, Cmd.dailyView, req);
+  },
+
+  dailyChallenge(req: DailyChallengeReq, net: NetClient = NetClient.shared): Promise<DailyChallengeResp> {
+    return call(net, Cmd.dailyChallenge, req);
   },
 };

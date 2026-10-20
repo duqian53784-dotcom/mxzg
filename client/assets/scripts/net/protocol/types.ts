@@ -579,3 +579,71 @@ export interface TowerChallengeResp {
    */
   code?: number;
 }
+
+/** 金币副本的一档难度。奖励固定，打开就能预览。 */
+export interface DailyTier {
+  id: number;
+  name: string;
+  /** 建议战力。我方不低于它则胜。 */
+  power: number;
+  /** 胜利发放的金币。 */
+  gold: number;
+  /** 额外道具。简单可以是 0。Mock 用强化石 id 101。 */
+  itemId: number;
+  itemName: string;
+  itemCount: number;
+}
+
+export interface DailyViewReq {
+  /** 占位。Mock 不看请求体。打开时按当前开服天刷新今日次数。 */
+  clientTime?: number;
+}
+
+export interface DailyViewResp {
+  ok: boolean;
+  /** 目前只有 gold。经验副本和英雄副本以后再加。 */
+  kind: string;
+  /** 今日已挑战次数。 */
+  used: number;
+  /** 今日上限。Mock 金币副本为 2。 */
+  limit: number;
+  /** 名册攻击之和，含武器。 */
+  playerPower: number;
+  tiers: DailyTier[];
+  /** 背包里的强化石。 */
+  stoneOwned: number;
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface DailyChallengeReq {
+  tierId: number;
+}
+
+export interface DailyChallengeResp {
+  ok: boolean;
+  tierId: number;
+  name: string;
+  win: boolean;
+  playerPower: number;
+  /** 这一档的建议战力。 */
+  needPower: number;
+  /** 胜利才有金币。失败为 0。 */
+  goldGain: number;
+  itemId: number;
+  itemName: string;
+  /** 胜利才发。简单为 0。失败为 0。 */
+  itemGain: number;
+  stoneOwned: number;
+  gold: number;
+  diamond: number;
+  used: number;
+  limit: number;
+  /**
+   * 没有这个难度 DAILY_NOT_FOUND，今日次数用完 DAILY_NO_CHANCE。
+   * 成功可以不带。这两种失败不改金币、道具和已用次数。
+   * 战力不够也是成功回包，win 为 false，不发奖励，仍占 1 次。
+   */
+  code?: number;
+}

@@ -36,6 +36,7 @@ import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
 import { buildTowerPage, TowerPage } from "./TowerPage";
+import { buildDailyGoldPage, DailyGoldPage } from "./DailyGoldPage";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -70,6 +71,7 @@ export class MainApp extends Component {
   private smith: SmithPage | null = null;
   private arena: ArenaPage | null = null;
   private tower: TowerPage | null = null;
+  private daily: DailyGoldPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -105,6 +107,8 @@ export class MainApp extends Component {
     this.arena = null;
     this.tower?.dispose();
     this.tower = null;
+    this.daily?.dispose();
+    this.daily = null;
     this.shell?.dispose();
   }
 
@@ -154,7 +158,7 @@ export class MainApp extends Component {
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
     if (!this.allow(id)) return;
-    if ((id === "arena" || id === "tower") && !this.ensureNet()) return;
+    if ((id === "arena" || id === "tower" || id === "daily") && !this.ensureNet()) return;
     this.panels?.openChild(id);
     this.refreshChrome();
   }
@@ -188,6 +192,7 @@ export class MainApp extends Component {
     if (id === "smith") return this.mountSmith();
     if (id === "arena") return this.mountArena();
     if (id === "tower") return this.mountTower();
+    if (id === "daily") return this.mountDaily();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -379,6 +384,25 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.arena = page;
+    return page.node;
+  }
+
+  /** 玩法「日常副本」。未到主线 Lv15 时 allow 已经 Toast，不会进到这里。本页只做金币。 */
+  private mountDaily(): Node {
+    this.daily?.dispose();
+    const page = buildDailyGoldPage({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.dailyView({}, NetClient.shared),
+      challenge: (tierId) => Proto.dailyChallenge({ tierId }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.daily = page;
     return page.node;
   }
 
@@ -670,6 +694,10 @@ export class MainApp extends Component {
     if (id === "tower") {
       this.tower?.dispose();
       this.tower = null;
+    }
+    if (id === "daily") {
+      this.daily?.dispose();
+      this.daily = null;
     }
   }
 

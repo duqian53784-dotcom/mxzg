@@ -29,6 +29,8 @@ export const Cmd = {
   arenaChallenge: "arena.challenge",
   towerView: "tower.view",
   towerChallenge: "tower.challenge",
+  dailyView: "daily.view",
+  dailyChallenge: "daily.challenge",
 } as const;
 
 export const CmdId = {
@@ -56,6 +58,8 @@ export const CmdId = {
   arenaChallenge: 1902,
   towerView: 2001,
   towerChallenge: 2002,
+  dailyView: 2101,
+  dailyChallenge: 2102,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -91,4 +95,6 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.arenaChallenge, cmd: Cmd.arenaChallenge },
   { id: CmdId.towerView, cmd: Cmd.towerView },
   { id: CmdId.towerChallenge, cmd: Cmd.towerChallenge },
+  { id: CmdId.dailyView, cmd: Cmd.dailyView },
+  { id: CmdId.dailyChallenge, cmd: Cmd.dailyChallenge },
 ];
