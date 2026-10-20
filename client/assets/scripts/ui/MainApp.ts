@@ -34,6 +34,7 @@ import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage } from "./
 import { buildSummonPage, SummonPage } from "./SummonPage";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
+import { ArenaPage, buildArenaPage } from "./ArenaPage";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -66,6 +67,7 @@ export class MainApp extends Component {
   private bag: BagPage | null = null;
   private mail: MailPage | null = null;
   private smith: SmithPage | null = null;
+  private arena: ArenaPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -97,6 +99,8 @@ export class MainApp extends Component {
     this.mail = null;
     this.smith?.dispose();
     this.smith = null;
+    this.arena?.dispose();
+    this.arena = null;
     this.shell?.dispose();
   }
 
@@ -146,6 +150,7 @@ export class MainApp extends Component {
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
     if (!this.allow(id)) return;
+    if (id === "arena" && !this.ensureNet()) return;
     this.panels?.openChild(id);
     this.refreshChrome();
   }
@@ -177,6 +182,7 @@ export class MainApp extends Component {
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
+    if (id === "arena") return this.mountArena();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -350,6 +356,24 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.heroDetail = page;
+    return page.node;
+  }
+
+  /** 玩法「竞技场」。未到主线 Lv8 时 allow 已经 Toast，不会进到这里。 */
+  private mountArena(): Node {
+    this.arena?.dispose();
+    const page = buildArenaPage({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.arenaView({}, NetClient.shared),
+      challenge: (opponentId) => Proto.arenaChallenge({ opponentId }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+      },
+      close: () => this.back(),
+    });
+    this.arena = page;
     return page.node;
   }
 
@@ -614,6 +638,10 @@ export class MainApp extends Component {
     if (id === "smith") {
       this.smith?.dispose();
       this.smith = null;
+    }
+    if (id === "arena") {
+      this.arena?.dispose();
+      this.arena = null;
     }
   }
 

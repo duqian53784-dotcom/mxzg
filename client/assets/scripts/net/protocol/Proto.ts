@@ -35,6 +35,10 @@ import {
   SmithStrengthenResp,
   SmithViewReq,
   SmithViewResp,
+  ArenaChallengeReq,
+  ArenaChallengeResp,
+  ArenaViewReq,
+  ArenaViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -136,5 +140,13 @@ export const Proto = {
 
   smithStrengthen(req: SmithStrengthenReq, net: NetClient = NetClient.shared): Promise<SmithStrengthenResp> {
     return call(net, Cmd.smithStrengthen, req);
+  },
+
+  arenaView(req: ArenaViewReq, net: NetClient = NetClient.shared): Promise<ArenaViewResp> {
+    return call(net, Cmd.arenaView, req);
+  },
+
+  arenaChallenge(req: ArenaChallengeReq, net: NetClient = NetClient.shared): Promise<ArenaChallengeResp> {
+    return call(net, Cmd.arenaChallenge, req);
   },
 };

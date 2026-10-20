@@ -30,7 +30,7 @@ export const PLAY_ENTRIES: NavEntry[] = [
   { id: "bag", title: "背包", gateId: "bag", blurb: "强化石、英雄碎片，以及可使用的金币袋和经验药水" },
   { id: "fetter", title: "羁绊", gateId: "main_fetter", blurb: "羁绊占位" },
   { id: "mail", title: "邮件", gateId: "mail", blurb: "系统欢迎、开服补给和公告。主城按钮也能进" },
-  { id: "arena", title: "竞技场", gateId: "main_pvp", blurb: "竞技场留到 C10" },
+  { id: "arena", title: "竞技场", gateId: "main_pvp", blurb: "积分、固定对手、一键挑战。主线 Lv8" },
   { id: "wish", title: "许愿池", gateId: "main_blessingpool", blurb: "许愿池占位" },
   { id: "cafe", title: "咖啡馆", gateId: "main_cafe", blurb: "咖啡馆占位" },
   { id: "daily", title: "日常副本", gateId: "main_mission", blurb: "日常副本留到 C12" },
