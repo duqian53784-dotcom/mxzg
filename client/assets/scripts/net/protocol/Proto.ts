@@ -11,6 +11,10 @@ import {
   RoleCreateResp,
   RoleEnterReq,
   RoleEnterResp,
+  IdleClaimReq,
+  IdleClaimResp,
+  IdleQueryReq,
+  IdleQueryResp,
   StageEnterReq,
   StageEnterResp,
   StageResultReq,
@@ -52,5 +56,13 @@ export const Proto = {
 
   stageResult(req: StageResultReq, net: NetClient = NetClient.shared): Promise<StageResultResp> {
     return call(net, Cmd.stageResult, req);
+  },
+
+  idleQuery(req: IdleQueryReq, net: NetClient = NetClient.shared): Promise<IdleQueryResp> {
+    return call(net, Cmd.idleQuery, req);
+  },
+
+  idleClaim(req: IdleClaimReq, net: NetClient = NetClient.shared): Promise<IdleClaimResp> {
+    return call(net, Cmd.idleClaim, req);
   },
 };

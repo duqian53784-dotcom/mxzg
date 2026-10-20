@@ -22,9 +22,10 @@
 
 - `login` 记下账号和 `serverId`，token 固定 `mock-token`。不重置角色和主线。
 - 默认角色属于账号 `mock`。还没登录，或登录账号就是所属账号时，`role.enter` 回当前角色，并带 `openDay`、`stageId`、`gold`、`diamond`。登录别的账号时 `hasRole` 为 false，金币钻石回 0，不改掉已有角色。`role.create` 成功后角色改归当前登录账号。Boot 在有角色时把结果写进 `Session`（含所选服务器名和钱包）。
-- `role.create` 名字去空白后为空则拒绝，不改状态。成功则改名，`roleId` 仍是 1001，主线、等级、开服天回到新号，钱包回到金币 100、钻石 20。
+- `role.create` 名字去空白后为空则拒绝，不改状态。成功则改名，`roleId` 仍是 1001，主线、等级、开服天回到新号，钱包回到金币 100、钻石 20，挂机时长和强化石清掉。
 - `stage.enter` 的 `stageId < 1` 失败。成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。Mock 仍允许跳关，方便自检。主线界面只放行下一关（C3）。
-- `stage.result` 胜利且关卡高于已通关：`clearedStage` 推进，`level = 1 + clearedStage`，`openDay` 至少为 `1 + floor(clearedStage / 5)`（只升不降）。`nextStageId = clearedStage + 1`。奖励占位 `{ id: 1, count: 10 }`，id 1 加金币、id 2 加钻石。失败停在本关，奖励空，进度和钱包不变。回包带结算后的 `gold` / `diamond`。
+- `stage.result` 胜利且关卡高于已通关：`clearedStage` 推进，`level = 1 + clearedStage`，`openDay` 至少为 `1 + floor(clearedStage / 5)`（只升不降）。`nextStageId = clearedStage + 1`。奖励占位 `{ id: 1, count: 10 }`，id 1 加金币、id 2 加钻石。失败停在本关，奖励空，进度和钱包不变。回包带结算后的 `gold` / `diamond`。不改挂机起算时刻。
+- `idle.query` / `idle.claim`：时长从会话创建、上次领取或创角起算，上限 8 小时。收益按当前已通关关数乘整段时长。领取把金币和强化石（id 101）写入会话。不够 1 个单位时拒绝。创角清空强化石并重新起算。断线重连沿用同一会话，时长还在。
 - 心跳和其它 cmd 不改进度。其它 cmd 仍 echo。
 
 `openDay` / `stageId` / `level` / `gold` / `diamond` 是 Mock 多带的字段。真服可以不带，调用方用缺省值。
@@ -62,6 +63,10 @@ Boot 进 Main 之后，点 **主线 · 第 N 关** 打开关卡列表，挑战�
 
 只预览 Main、没有从 Boot 连上 Mock 时，按钮提示网络未连接。
 
+## 主城「挂机」
+
+点 **挂机** 打开收益页：时长、当前可领、挂满 8 小时的预览。领取走 `Proto.idleClaim`，顶栏金币跟着变。**快速作战** 对当前关发 `stage.enter` 再 `stage.result`（`win: true`），不播战报。默认录包没有这两条挂机消息；预览仍走 MockTransport。
+
 ## 自检
 
 仓库根目录：
@@ -70,14 +75,13 @@ Boot 进 Main 之后，点 **主线 · 第 N 关** 打开关卡列表，挑战�
 npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
 ```
 
-覆盖：五连胜后的等级、开服天和金币、失败不回退、创角重置钱包、重连后进度还在、底栏解锁提示、面板返回栈、录包按序播放。
+覆盖：五连胜后的等级、开服天和金币、失败不回退、创角重置钱包、重连后进度还在、底栏解锁提示、面板返回栈、录包按序播放、挂机时长上限与领取、快速结算不重置挂机计时。
 
 ## 倩：Creator 里点一次
 
-1. Creator 3.8.8 打开 `client`。
-2. Boot 场景的 Canvas 挂好 `Boot`（若之前已挂过，确认脚本还在）。
-3. 启动场景保持 Boot，预览。
-4. 选一个服务器，点「进入游戏」（账号保持 `mock`），进入主城。顶栏应有 `MockHero`、Lv1、所选服务器，以及金币 100、钻石 20。按钮应是「主线 · 第1关」。底栏「铁匠铺」带「锁」。
-5. 点它，再点第 1 关「挑战」。看战报（或点「跳过」）。结算为胜利，Toast「第1关胜利，金币 +10」。点「返回主城」后按钮变成「第2关」，顶栏变为 Lv2、金币 110。
-6. 再胜几关。第 4 胜后铁匠铺不再带「锁」。满 5 胜后开服天变为 D2，金币 150。战斗里点「撤退」应 Toast 失败，关卡号和金币不变。
-7. 控制台有 `[Mainline] stage enter` 和 `[Mainline] stage result`。不需要起 server，也不用改场景。
+1. Creator 3.8.8 打开 `client`。Canvas 上已经有 Boot，不用再挂。
+2. 启动场景保持 Boot，预览。
+3. 选一个服务器，点「进入游戏」（账号保持 `mock`），进入主城。顶栏应有 `MockHero`、Lv1、所选服务器，以及金币 100、钻石 20。按钮应是「主线 · 第1关」，下面有「挂机」。底栏「铁匠铺」带「锁」。
+4. 点主线，再点第 1 关「挑战」。看战报（或点「跳过」）。结算为胜利，Toast「第1关胜利，金币 +10」。点「返回主城」后按钮变成「第2关」，顶栏变为 Lv2、金币 110。
+5. 再胜几关。第 4 胜后铁匠铺不再带「锁」。满 5 胜后开服天变为 D2，金币 150。战斗里点「撤退」应 Toast 失败，关卡号和金币不变。
+6. 点「挂机」看时长和收益。领取、快速作战见 `client/assets/scripts/README.md` 的 C4。不需要起 server，也不用改场景。

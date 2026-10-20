@@ -29,6 +29,7 @@ import { NetClient } from "../net/NetClient";
 import { NetState } from "../net/NetTypes";
 import { Proto } from "../net/protocol";
 import { CityChrome, mountCityChrome, TabState } from "./CityChrome";
+import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
@@ -42,6 +43,7 @@ const MUTED = new Color(190, 205, 225, 255);
 const GATE_COLOR = new Color(170, 190, 170, 255);
 const LOCKED_FILL = new Color(78, 84, 98, 255);
 const OPEN_FILL = new Color(46, 110, 190, 255);
+const IDLE_FILL = new Color(168, 116, 42, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -50,6 +52,7 @@ export class MainApp extends Component {
   private chrome: CityChrome | null = null;
   private built = false;
   private mainline: MainlinePage | null = null;
+  private idle: IdlePage | null = null;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
   private logLabel: Node | null = null;
@@ -64,6 +67,10 @@ export class MainApp extends Component {
 
   onDestroy() {
     this.detachLog();
+    this.mainline?.dispose();
+    this.mainline = null;
+    this.idle?.dispose();
+    this.idle = null;
     this.shell?.dispose();
   }
 
@@ -136,6 +143,7 @@ export class MainApp extends Component {
 
   private buildPage(id: string): Node {
     if (id === "mainline") return this.mountMainline();
+    if (id === "idle") return this.mountIdle();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -150,9 +158,10 @@ export class MainApp extends Component {
       createButton(this.stageButtonText(), () => this.openMainline(), 420, 76),
       page,
       0,
-      250
+      280
     );
-    place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, 150);
+    place(createButton("挂机", () => this.openIdle(), 420, 64, IDLE_FILL), page, 0, 185);
+    place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, 95);
     place(
       createButton("公告", () => {
         GameLog.shared.info("MainApp", "click notice");
@@ -162,7 +171,7 @@ export class MainApp extends Component {
       }, 140, 48),
       page,
       0,
-      150
+      95
     );
     place(
       createButton("模拟断线", () => {
@@ -172,7 +181,7 @@ export class MainApp extends Component {
       }, 160, 48),
       page,
       190,
-      150
+      95
     );
     place(createLabel("主城场景占位", 26, { color: MUTED }), page, 0, -20);
     place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -70);
@@ -275,6 +284,36 @@ export class MainApp extends Component {
     this.openChild("mainline");
   }
 
+  /** 挂机随时可进。时长和领取在 IdlePage 里，不改场景。 */
+  private openIdle(): void {
+    GameLog.shared.info("MainApp", "click idle");
+    const net = NetClient.shared;
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.openChild("idle");
+  }
+
+  private mountIdle(): Node {
+    this.idle?.dispose();
+    const page = buildIdlePage({
+      stageId: () => (Session.stageId >= 1 ? Session.stageId : 1),
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      query: () => Proto.idleQuery({}, NetClient.shared),
+      claim: () => Proto.idleClaim({}, NetClient.shared),
+      enter: (stageId) => Proto.stageEnter({ stageId }, NetClient.shared),
+      settle: (req) => Proto.stageResult(req, NetClient.shared),
+      onProgress: () => {
+        if (this.isValid) this.refreshHub();
+      },
+      close: () => this.back(),
+    });
+    this.idle = page;
+    return page.node;
+  }
+
   private mountMainline(): Node {
     this.mainline?.dispose();
     const page = buildMainlinePage({
@@ -374,6 +413,10 @@ export class MainApp extends Component {
     if (id === "mainline") {
       this.mainline?.dispose();
       this.mainline = null;
+    }
+    if (id === "idle") {
+      this.idle?.dispose();
+      this.idle = null;
     }
   }
 

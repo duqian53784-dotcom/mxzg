@@ -1,5 +1,8 @@
 import { ErrorCode } from "../core/errors";
+import { buildIdleView, elapsedSince, IDLE_ITEM_ID, IDLE_ITEM_NAME } from "../module/idle/rewards";
 import {
+  IdleClaimResp,
+  IdleQueryResp,
   LoginResp,
   RoleCreateResp,
   RoleEnterResp,
@@ -31,6 +34,10 @@ export interface MockSessionSeed {
   /** 不填则用新号起步：金币 100、钻石 20。 */
   gold?: number;
   diamond?: number;
+  /** 挂机起算时刻（毫秒）。不填则从构造这一刻起算。 */
+  idleAnchorMs?: number;
+  /** 已持有的挂机道具。id 101 是强化石。 */
+  items?: { id: number; count: number }[];
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -39,7 +46,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角和主线连打都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打和挂机领取都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -61,8 +68,18 @@ export class MockGameSession {
   diamond = MOCK_STARTER_DIAMOND;
   battleSeq = 0;
   battleId = "";
+  /**
+   * 挂机起算。领取、创角会拨到当前时刻。
+   * 断线重连不新建会话，所以不会把已累计的时间清掉。
+   */
+  idleAnchorMs = 0;
+  /** 道具 id → 数量。顶栏不显示，挂机页用来写「已有强化石」。 */
+  itemCounts: { [id: number]: number } = {};
+  private clock: () => number = () => Date.now();
 
-  constructor(seed?: MockSessionSeed) {
+  constructor(seed?: MockSessionSeed, clock?: () => number) {
+    if (typeof clock === "function") this.clock = clock;
+    this.idleAnchorMs = this.clock();
     this.applySeed(seed);
   }
 
@@ -117,6 +134,8 @@ export class MockGameSession {
     this.gold = MOCK_STARTER_GOLD;
     this.diamond = MOCK_STARTER_DIAMOND;
     this.battleId = "";
+    this.itemCounts = {};
+    this.idleAnchorMs = this.clock();
     this.syncDerived(true);
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
@@ -175,6 +194,65 @@ export class MockGameSession {
     };
   }
 
+  /** 只读预览。不改钱包，也不拨动起算时刻。 */
+  idleQuery(): IdleQueryResp {
+    const view = buildIdleView(elapsedSince(this.clock(), this.idleAnchorMs), this.clearedStage);
+    return {
+      ok: true,
+      elapsedMs: view.elapsedMs,
+      capMs: view.capMs,
+      capped: view.capped,
+      clearedStage: this.clearedStage,
+      stageId: this.stageId,
+      goldPerMin: view.goldPerMin,
+      itemEveryMs: view.itemEveryMs,
+      itemId: IDLE_ITEM_ID,
+      itemName: IDLE_ITEM_NAME,
+      pendingGold: view.pendingGold,
+      pendingItem: view.pendingItem,
+      capGold: view.capGold,
+      capItem: view.capItem,
+      ownedItem: this.itemCount(IDLE_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 把当前可领的金币和强化石计入钱包，然后重新起算。
+   * 不满 1 个单位时拒绝，钱包和起算时刻都不动。
+   * 主线胜利不调用这里，快速作战也不会把挂机时间清掉。
+   */
+  idleClaim(): IdleClaimResp {
+    const view = buildIdleView(elapsedSince(this.clock(), this.idleAnchorMs), this.clearedStage);
+    const owned = this.itemCount(IDLE_ITEM_ID);
+    if (view.pendingGold <= 0 && view.pendingItem <= 0) {
+      return {
+        ok: false,
+        code: ErrorCode.IDLE_EMPTY,
+        rewards: [],
+        elapsedMs: view.elapsedMs,
+        gold: this.gold,
+        diamond: this.diamond,
+        ownedItem: owned,
+      };
+    }
+    const rewards: { id: number; count: number; name: string }[] = [];
+    if (view.pendingGold > 0) rewards.push({ id: 1, count: view.pendingGold, name: "金币" });
+    if (view.pendingItem > 0) rewards.push({ id: IDLE_ITEM_ID, count: view.pendingItem, name: IDLE_ITEM_NAME });
+    this.addRewards(rewards);
+    if (view.pendingItem > 0) this.addItem(IDLE_ITEM_ID, view.pendingItem);
+    this.idleAnchorMs = this.clock();
+    return {
+      ok: true,
+      rewards,
+      elapsedMs: 0,
+      gold: this.gold,
+      diamond: this.diamond,
+      ownedItem: this.itemCount(IDLE_ITEM_ID),
+    };
+  }
+
   private applySeed(seed?: MockSessionSeed): void {
     if (!seed) return;
     if (typeof seed.account === "string") {
@@ -205,6 +283,17 @@ export class MockGameSession {
     if (typeof seed.diamond === "number" && isFinite(seed.diamond)) {
       this.diamond = Math.max(0, Math.floor(seed.diamond));
     }
+    if (typeof seed.idleAnchorMs === "number" && isFinite(seed.idleAnchorMs)) {
+      this.idleAnchorMs = Math.floor(seed.idleAnchorMs);
+    }
+    if (Array.isArray(seed.items)) {
+      for (let i = 0; i < seed.items.length; i++) {
+        const row = seed.items[i];
+        if (!row || typeof row.id !== "number" || !isFinite(row.id)) continue;
+        if (typeof row.count !== "number" || !isFinite(row.count) || row.count <= 0) continue;
+        this.itemCounts[Math.floor(row.id)] = Math.floor(row.count);
+      }
+    }
   }
 
   /** id 1 金币，id 2 钻石。其它 id 先忽略。 */
@@ -216,6 +305,16 @@ export class MockGameSession {
       if (reward.id === 1) this.gold += count;
       else if (reward.id === 2) this.diamond += count;
     }
+  }
+
+  private addItem(id: number, count: number): void {
+    if (count <= 0) return;
+    this.itemCounts[id] = this.itemCount(id) + count;
+  }
+
+  private itemCount(id: number): number {
+    const value = this.itemCounts[id];
+    return typeof value === "number" && isFinite(value) ? value : 0;
   }
 
   /** 还没 login 时沿用默认角色，Boot 的 skipLogin 和旧自检都能进。 */
