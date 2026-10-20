@@ -95,3 +95,50 @@ export interface StageResultResp {
   /** 失败时的客户端错误码。成功可以不带。 */
   code?: number;
 }
+
+export interface IdleReward {
+  id: number;
+  count: number;
+  name: string;
+}
+
+export interface IdleQueryReq {
+  /** 占位。Mock 不看请求体，时长在会话里。 */
+  clientTime?: number;
+}
+
+export interface IdleQueryResp {
+  ok: boolean;
+  elapsedMs: number;
+  capMs: number;
+  capped: boolean;
+  clearedStage: number;
+  stageId: number;
+  goldPerMin: number;
+  itemEveryMs: number;
+  itemId: number;
+  itemName: string;
+  pendingGold: number;
+  pendingItem: number;
+  capGold: number;
+  capItem: number;
+  ownedItem: number;
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface IdleClaimReq {
+  clientTime?: number;
+}
+
+export interface IdleClaimResp {
+  ok: boolean;
+  rewards: IdleReward[];
+  elapsedMs: number;
+  gold: number;
+  diamond: number;
+  ownedItem: number;
+  /** 不满 1 个单位时为 IDLE_EMPTY，钱包不动。 */
+  code?: number;
+}

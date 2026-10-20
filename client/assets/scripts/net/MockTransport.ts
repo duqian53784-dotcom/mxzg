@@ -15,7 +15,7 @@ export interface MockTransportOptions {
 /**
  * 不连服务器的假传输。默认预览走这条，不用另起进程。
  * 业务状态在 MockGameSession：开服天、角色等级、主线进度，同一局里多次请求都改它。
- * 内置回包：login、heartbeat、role.enter、role.create、stage.enter、stage.result。
+ * 内置回包：login、heartbeat、role.enter、role.create、stage.enter、stage.result、idle.query、idle.claim。
  * 其它 cmd 原样 echo。引擎 websocket 模块当前是关的，这里故意不用 WebSocket。
  * 默认已有角色 MockHero，且属于账号 mock。Boot 只调 role.enter 也能进主城。
  * 登录别的账号时 role.enter 的 hasRole 为 false，直到 role.create。
@@ -95,6 +95,14 @@ export class MockTransport implements ITransport {
     }
     if (msg.cmd === Cmd.stageResult) {
       this.emit(encodeRequest(Cmd.stageResult, session.stageResult(msg.data)));
+      return;
+    }
+    if (msg.cmd === Cmd.idleQuery) {
+      this.emit(encodeRequest(Cmd.idleQuery, session.idleQuery()));
+      return;
+    }
+    if (msg.cmd === Cmd.idleClaim) {
+      this.emit(encodeRequest(Cmd.idleClaim, session.idleClaim()));
       return;
     }
     this.emit(encodeRequest(msg.cmd, { ok: true, echo: msg.data ?? null }));

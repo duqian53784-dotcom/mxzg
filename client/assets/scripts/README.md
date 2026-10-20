@@ -3,27 +3,26 @@
 - `core/` 启动、会话（Boot、Session）
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
-- `module/` 业务系统（`mainline/` 主线战报与进度）
+- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
 
-场景在 `assets/scenes/`。Boot / Main / Battle 已建好。本目录脚本不会写进 `.scene`，需要在 Creator 里挂一次组件。
+场景在 `assets/scenes/`。Boot / Main / Battle 已建好。Boot 的 Canvas 上已经挂了 Boot。其余界面由代码生成，不用再挂组件。
 
 ## 倩：预览 Boot → Main
 
+Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览即可，不用改场景，也不用再挂组件。
+
 1. Creator 3.8.8 打开 `client`。
-2. 打开 `assets/scenes/Boot.scene`。
-3. 层级里选中 **Canvas**（不要挂到 Camera）。
-4. 属性检查器 → **添加组件** → 自定义脚本 → **Boot**（`scripts/core/Boot.ts`）。
-5. **保存场景**。启动场景保持 Boot，点预览。
-6. 屏幕上是 Mock 登录面板：账号、密码（可留空）、三个服务器（本地Mock / 提审 / 正式占位）。账号默认 `mock`（或上次记下的账号）。点一个服务器，再点 **进入游戏**。
-7. 应进入 Main。顶栏左侧是角色名、等级、所选服务器和开服天，右侧是金币、钻石，例如 `MockHero Lv1`、`本地Mock · 开服D1`、`金币 100`、`钻石 20`。底栏是主城 / 英雄 / 召唤 / 铁匠铺 / 玩法。画面中间是「主线 · 第N关」，旁边有日志、公告、模拟断线。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会补挂。
-8. 控制台标记：`[Boot] stage=version` → `hot-update` → `config` → `login` → `enter-main`，以及 `[Net] connect mock://local`、`[Config] loaded`。这些行现在带 `[mxzg]` 前缀，例如 `[mxzg][info][Boot] stage=version`。
+2. 启动场景保持 Boot，点预览。
+3. 屏幕上是 Mock 登录面板：账号、密码（可留空）、三个服务器（本地Mock / 提审 / 正式占位）。账号默认 `mock`（或上次记下的账号）。点一个服务器，再点 **进入游戏**。
+4. 应进入 Main。顶栏左侧是角色名、等级、所选服务器和开服天，右侧是金币、钻石，例如 `MockHero Lv1`、`本地Mock · 开服D1`、`金币 100`、`钻石 20`。底栏是主城 / 英雄 / 召唤 / 铁匠铺 / 玩法。画面中间是「主线 · 第N关」，下面是「挂机」，旁边有日志、公告、模拟断线。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会自己补上。
+5. 控制台标记：`[Boot] stage=version` → `hot-update` → `config` → `login` → `enter-main`，以及 `[Net] connect mock://local`、`[Config] loaded`。这些行现在带 `[mxzg]` 前缀，例如 `[mxzg][info][Boot] stage=version`。
 
 可选：
 
 - Boot 上勾选 `skipLogin`：不显示面板，仍用检查器里的账号进 Main。该账号在 Mock 里没有角色时，用账号名自动创角，不会停在创角面板。
 - `account` 默认 `mock`，可在检查器里改。面板会优先填上次登录的账号。
-- 只预览 Main：给 Main 场景的 Canvas 挂 **MainApp**。没有 Boot 时账号是空的，读表仍会自己加载。
+- 从 Boot 进 Main 即可。没有 Boot 时账号是空的，主线和挂机会提示网络未连接。
 - 背包在底栏「玩法」里。打开后点返回关掉。公告：连续入队两张弹窗。模拟断线：看主城「网络」从 connected 到 reconnecting 再回到 connected。主线进度在断线后还在。
 - 主线：点「主线 · 第N关」打开关卡列表，挑战后看战报再结算。详见下面 C3。
 - 发布构建前，构建场景列表要包含 Boot 和 Main，启动场景为 Boot。
@@ -34,7 +33,7 @@
 
 Boot 的登录不再手写 `request("login")`，改走 `Proto.login` / `Proto.roleEnter`。回包仍由 MockTransport 发出。
 
-P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`。名字和 B4 的 Mock cmd 一致。主城「主线」会打进关和结算。创角从登录面板进，见下面 C1。
+P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。创角从登录面板进，见下面 C1。
 
 同一局 Mock 会记住开服天、等级和主线进度。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
 
@@ -43,7 +42,7 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 ## 日志与错误码（B7）
 
 - `core/GameLog.ts`：`debug` / `info` / `warn` / `error`。环形缓冲默认 80 条。`mirrorConsole` 为 true 时打到控制台，前缀 `[mxzg]`。
-- `core/errors.ts`：错误码 → 中文。已覆盖空角色名、关卡无效、网络未连接 / 断开 / 超时、未知指令、回放结束或不匹配。
+- `core/errors.ts`：错误码 → 中文。已覆盖空角色名、关卡无效、挂机时间太短、网络未连接 / 断开 / 超时、未知指令、回放结束或不匹配。
 - 登录、进关、结算失败会 Toast 这句中文，不再只写「见控制台」。
 - 主城「日志」打开最近 10 条，新的在上（代码生成，不改场景）。里面三个按钮用来验收：
   1. **空名创角**：Toast「角色名不能为空」。当前角色不变。
@@ -84,7 +83,7 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 |------|------|--------|
 | 英雄 / 召唤 | 主线 Lv1 | 占位（C5 / C6） |
 | 铁匠铺 | 主线 Lv5 | 占位（C9）。Lv1 时应带锁 |
-| 玩法 | 随时 | 背包、羁绊、邮件、竞技场、许愿池、咖啡馆、日常副本、幻境之塔、幻魔塔 |
+| 玩法 | 随时 | 挂机、背包、羁绊、邮件、竞技场、许愿池、咖啡馆、日常副本、幻境之塔、幻魔塔 |
 | 幻魔塔 | 开服第 30 天（`opencondition` 和 `magic_tower_open_day`） | 占位。D1 点它应 Toast「开服第30天」 |
 
 金币、钻石来自 Mock 会话：新号 100 / 20，主线胜利每次 +10 金币。顶栏在结算后刷新。
@@ -104,3 +103,17 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 5. 自然推进时下一关号等于等级，战报判胜，所以可以一直推到第 70 关（七日目标要的进度）。满 4 胜后等级到 5，铁匠铺解锁；满 5 胜后开服天到 D2，金币 150。
 
 断线重连后进度还在。协议号没有改。
+
+## 挂机（C4）
+
+不改 `.scene`，不用新挂组件。挂机页在主城页面栈里用代码生成。
+
+主城点 **挂机**（网络没连上时 Toast「网络未连接」，不进页面）。玩法列表第一项也是挂机，不带锁。
+
+1. **时长**。从这次预览的 Mock 会话开始，或从上次领取、创角起算。断线重连不清零。上限 **8 小时**，超出的时间丢掉。画面是 `已挂机 时:分:秒 / 08:00:00`，大约每秒跳一次。
+2. **收益预览**。金币和强化石按**当前已通关关数**乘整段时长。未通关：每分钟 6 金币，每 30 秒 1 个强化石。每多通关 1 关，每分钟金币 +4，强化石间隔缩短 1 秒（最短 10 秒）。刚进来可能是 0。下面还有一行「挂满 8 小时约可领」，通关后这行会变大。
+3. **领取**。大约 10 秒后金币至少 +1。点领取，Toast「领取成功：金币 +N」，顶栏金币增加。强化石大约 30 秒 1 个，领到后页面写「已有强化石」。背包界面留到 C7，石头先记在 Mock 会话里。马上再点领取：Toast「挂机时间太短，暂无收益」，金币不变。
+4. **快速作战**。按钮是「快速作战 · 第N关」。点一下直接结算当前关，**不播**主线战报。Toast「快速作战：第N关胜利，金币 +10，下一关 N+1」。顶栏等级、金币和主城按钮上的关卡号跟着变。可以连续点。挂机计时不会被这次结算清掉；通关后，同一段时长按新的已通关关数重算。
+5. 创角会把挂机时长和强化石清掉，钱包回到金币 100、钻石 20。
+
+不需要起 server，也不用改场景。

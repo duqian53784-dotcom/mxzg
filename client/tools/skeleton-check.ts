@@ -1,5 +1,5 @@
 /**
- * B3–C3 自检（不启动 Creator）。
+ * B3–C4 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -28,6 +28,19 @@ import { findServer, MOCK_SERVERS } from "../assets/scripts/core/servers";
 import { ErrorCode, errorText, failureCode, GameError, messageOf } from "../assets/scripts/core/errors";
 import { parseMockFixture } from "../assets/scripts/net/MockFixture";
 import { MOCK_STARTER_DIAMOND, MOCK_STARTER_GOLD, MockGameSession } from "../assets/scripts/net/MockGameSession";
+import {
+  applyIdleClaim,
+  buildIdleView,
+  capPreviewLine,
+  claimToast,
+  formatDuration,
+  formatItemEvery,
+  IDLE_CAP_MS,
+  IDLE_ITEM_ID,
+  quickBatchToast,
+  quickStageIds,
+  quickToast,
+} from "../assets/scripts/module/idle/rewards";
 import {
   applyStageProgress,
   challengeBlock,
@@ -605,6 +618,17 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(tabLabel("铁匠铺", false) === "锁·铁匠铺" && tabLabel("铁匠铺", true) === "铁匠铺", "locked label");
   assert(rootTabFor("arena") === "plays" && rootTabFor("log") === "city" && rootTabFor("smith") === "smith", "root tab");
   assert(rootTabFor("mainline") === "city", "mainline stays on city tab");
+  const idleEntry = findNavEntry("idle");
+  assert(idleEntry !== null && entryAccess(idleEntry, 1, 1, null).open, "idle always open");
+  assert(rootTabFor("idle") === "city", "idle home is city");
+  const idleNav = new NavHistory();
+  idleNav.reset("city");
+  idleNav.push("idle");
+  assert(idleNav.rootTab() === "city", "idle opened from city");
+  idleNav.reset("city");
+  idleNav.push("plays");
+  idleNav.push("idle");
+  assert(idleNav.current === "idle" && idleNav.rootTab() === "plays", "idle opened from plays");
 
   const history = new NavHistory();
   history.reset("city");
@@ -755,6 +779,109 @@ function checkMainline(): void {
   Session.diamond = prevDiamond;
 }
 
+function checkIdleMath(): void {
+  const fresh = buildIdleView(0, 0);
+  assert(fresh.pendingGold === 0 && fresh.pendingItem === 0 && fresh.capped === false, "zero idle");
+  assert(fresh.goldPerMin === 6 && fresh.itemEveryMs === 30000 && fresh.capMs === IDLE_CAP_MS, "base rates");
+  const tenSec = buildIdleView(10000, 0);
+  assert(tenSec.pendingGold === 1 && tenSec.pendingItem === 0, "10s is 1 gold");
+  const halfMin = buildIdleView(30000, 0);
+  assert(halfMin.pendingGold === 3 && halfMin.pendingItem === 1, "30s gold and stone");
+  const progressed = buildIdleView(60000, 5);
+  assert(progressed.goldPerMin === 26 && progressed.pendingGold === 26, "five clears raise gold");
+  assert(progressed.itemEveryMs === 25000 && progressed.pendingItem === 2, "five clears raise stones");
+  const over = buildIdleView(IDLE_CAP_MS + 60000, 0);
+  assert(over.capped && over.elapsedMs === IDLE_CAP_MS, "cap clamps elapsed");
+  assert(over.pendingGold === 8 * 60 * 6 && over.pendingItem === Math.floor(IDLE_CAP_MS / 30000), "cap rewards");
+  assert(over.pendingGold === over.capGold && over.pendingItem === buildIdleView(IDLE_CAP_MS, 0).pendingItem, "capped matches full window");
+  const bad = buildIdleView(Number.NaN, -3);
+  assert(bad.pendingGold === 0 && bad.goldPerMin === 6 && bad.capped === false, "bad input");
+  assert(formatDuration(0) === "00:00:00" && formatDuration(IDLE_CAP_MS) === "08:00:00", "duration format");
+  assert(formatDuration(3661000) === "01:01:01", "duration hms");
+  assert(formatItemEvery(30000) === "每 30 秒 1 个", "item every seconds");
+  assert(formatItemEvery(120000) === "每 2 分钟 1 个", "item every minutes");
+  assert(claimToast(0, 0) === "暂无收益", "empty claim toast");
+  assert(claimToast(3, 1) === "领取成功：金币 +3，强化石 +1", "claim toast");
+  assert(quickStageIds(4, 1).join(",") === "4", "one quick stage");
+  assert(quickStageIds(4, 3).join(",") === "4,5,6", "three quick stages");
+  assert(quickToast(1, 2, [{ id: 1, count: 10 }]) === "快速作战：第1关胜利，金币 +10，下一关 2", "quick toast");
+  assert(quickBatchToast(1, 3, 4, 30) === "快速作战：第1关至第3关胜利，金币 +30，下一关 4", "batch toast");
+  assert(capPreviewLine(2880, 960).indexOf("金币 2880") >= 0 && capPreviewLine(2880, 960).indexOf("强化石 960") >= 0, "cap line");
+  assert(errorText(ErrorCode.IDLE_EMPTY) === "挂机时间太短，暂无收益", "empty idle text");
+}
+
+async function checkIdleSession(): Promise<void> {
+  let now = 1700000000000;
+  const session = new MockGameSession(undefined, () => now);
+  const anchor = session.idleAnchorMs;
+  const empty = session.idleQuery();
+  assert(empty.ok && empty.pendingGold === 0 && empty.pendingItem === 0 && empty.ownedItem === 0, "fresh query");
+  assert(empty.capGold === 8 * 60 * 6 && empty.gold === MOCK_STARTER_GOLD && empty.diamond === MOCK_STARTER_DIAMOND, "cap preview");
+  const rejected = session.idleClaim();
+  assert(rejected.ok === false && rejected.code === ErrorCode.IDLE_EMPTY && session.gold === MOCK_STARTER_GOLD, "empty claim");
+  assert(session.idleAnchorMs === anchor && session.diamond === MOCK_STARTER_DIAMOND, "empty claim keeps clock and diamond");
+
+  now += 30000;
+  const ready = session.idleQuery();
+  assert(ready.pendingGold === 3 && ready.pendingItem === 1 && ready.capped === false, "30s preview");
+  const claimed = session.idleClaim();
+  assert(claimed.ok && claimed.gold === MOCK_STARTER_GOLD + 3 && claimed.diamond === MOCK_STARTER_DIAMOND, "claim gold");
+  assert(claimed.ownedItem === 1 && claimed.rewards.length === 2 && session.idleAnchorMs === now, "claim stone and reset");
+  assert(claimed.rewards[0].name === "金币" && claimed.rewards[1].id === IDLE_ITEM_ID, "claim reward names");
+  const again = session.idleClaim();
+  assert(again.ok === false && session.gold === MOCK_STARTER_GOLD + 3 && session.itemCounts[IDLE_ITEM_ID] === 1, "second claim empty");
+
+  now += 30000;
+  const beforeQuick = session.idleAnchorMs;
+  const entered = session.stageEnter({ stageId: session.stageId });
+  const won = session.stageResult({ stageId: entered.stageId, battleId: entered.battleId, win: true });
+  assert(won.ok && won.win && won.nextStageId === 2 && session.clearedStage === 1, "quick settle advances");
+  assert(session.idleAnchorMs === beforeQuick && session.gold === MOCK_STARTER_GOLD + 13, "stage win keeps idle clock");
+  const after = session.idleQuery();
+  assert(after.goldPerMin === 10 && after.pendingGold === 5 && after.clearedStage === 1, "progress reprices the same window");
+  assert(after.pendingItem === 1 && after.capGold === 8 * 60 * 10 && after.ownedItem === 1, "higher cap after one clear");
+
+  now += IDLE_CAP_MS + 120000;
+  const capped = session.idleQuery();
+  assert(capped.capped && capped.elapsedMs === IDLE_CAP_MS && capped.pendingGold === capped.capGold, "over cap");
+  const walletBeforeCap = session.gold;
+  const capClaim = session.idleClaim();
+  assert(capClaim.ok && session.idleAnchorMs === now && session.gold === walletBeforeCap + capped.pendingGold, "cap claim");
+  assert(session.diamond === MOCK_STARTER_DIAMOND, "idle never adds diamond");
+
+  session.roleCreate({ name: "新人" });
+  assert(session.gold === MOCK_STARTER_GOLD && session.clearedStage === 0 && session.itemCounts[IDLE_ITEM_ID] === undefined, "create clears stones");
+  assert(session.idleAnchorMs === now && session.idleQuery().pendingGold === 0, "create restarts idle");
+
+  const seeded = new MockGameSession(
+    { clearedStage: 2, idleAnchorMs: now - 60000, items: [{ id: IDLE_ITEM_ID, count: 4 }, { id: 9, count: 0 }] },
+    () => now
+  );
+  const seededView = seeded.idleQuery();
+  assert(seededView.ownedItem === 4 && seededView.pendingGold === 14 && seededView.pendingItem === 2, "seeded idle");
+  assert(seeded.role.level === 3 && seeded.stageId === 3, "seed still derives stage");
+
+  const net = quietNet(new MockTransport({ latencyMs: 5, session: seeded }));
+  await net.connect("mock://local");
+  const remote = await Proto.idleQuery({}, net);
+  assert(remote.ok && remote.pendingGold === 14 && remote.ownedItem === 4 && remote.itemName === "强化石", "proto query");
+  const remoteClaim = await Proto.idleClaim({}, net);
+  assert(remoteClaim.ok && remoteClaim.gold === MOCK_STARTER_GOLD + 14 && remoteClaim.ownedItem === 6, "proto claim");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyIdleClaim(remoteClaim);
+  assert(Session.gold === remoteClaim.gold && Session.diamond === remoteClaim.diamond, "apply claim");
+  applyIdleClaim({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteClaim.gold && Session.diamond === remoteClaim.diamond, "failed claim ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const afterClaim = await Proto.idleQuery({}, net);
+  assert(afterClaim.pendingGold === 0 && afterClaim.ownedItem === 6, "proto query after claim");
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.idleQuery || row.cmd === Cmd.idleClaim).map((row) => row.id);
+  assert(ids.length === 2 && ids[0] === 1301 && ids[1] === 1302, "idle cmd ids");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -764,10 +891,12 @@ async function main(): Promise<void> {
   checkLog();
   checkLoginPrefs();
   checkMainline();
+  checkIdleMath();
   await checkNet();
   await checkSession();
   await checkNoRole();
   await checkReplay();
+  await checkIdleSession();
   console.log("skeleton-check ok");
 }
 

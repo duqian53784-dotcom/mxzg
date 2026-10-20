@@ -26,6 +26,7 @@ export const BOTTOM_TABS: NavEntry[] = [
 
 /** 不放底栏的系统。背包在这里，避免底栏塞不下。 */
 export const PLAY_ENTRIES: NavEntry[] = [
+  { id: "idle", title: "挂机", blurb: "时长、收益预览、快速作战。主城按钮也能进" },
   { id: "bag", title: "背包", gateId: "bag", blurb: "道具列表留到 C7" },
   { id: "fetter", title: "羁绊", gateId: "main_fetter", blurb: "羁绊占位" },
   { id: "mail", title: "邮件", gateId: "mail", blurb: "邮件留到 C8" },
@@ -106,10 +107,10 @@ export function tabLabel(title: string, open: boolean): string {
   return open ? title : "锁·" + title;
 }
 
-/** 子页面高亮它所属的底栏。日志和主线仍算主城。 */
+/** 子页面高亮它所属的底栏。日志、主线和挂机从主城进时仍算主城。 */
 export function rootTabFor(pageId: string): string {
   if (BOTTOM_IDS[pageId]) return pageId;
-  if (pageId === "log" || pageId === "mainline") return CITY_TAB;
+  if (pageId === "log" || pageId === "mainline" || pageId === "idle") return CITY_TAB;
   return "plays";
 }
 
@@ -150,6 +151,9 @@ export class NavHistory {
   }
 
   rootTab(): string {
+    for (let i = this.stack.length - 1; i >= 0; i--) {
+      if (BOTTOM_IDS[this.stack[i]]) return this.stack[i];
+    }
     const current = this.current;
     if (!current) return CITY_TAB;
     return rootTabFor(current);
