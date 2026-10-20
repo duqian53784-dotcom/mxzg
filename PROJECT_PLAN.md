@@ -31,9 +31,9 @@
 | 微信小游戏 | ❌ 未开始 | H5 稳定后再做 |
 | App 包 | ❌ 未开始 | H5 之后 |
 
-**当前焦点（唯一）：** 搭 P0 工程骨架（目录、构建 Web Mobile、网络占位、主界面 / 主线战斗壳）。
+**当前焦点（唯一）：** A9 — 倩在 Creator 里建 Boot/Main/Battle 场景，启动场景设 Boot，Web Mobile 构建通过。
 
-**上次更新：** 2026-10-20（Asia/Shanghai）— 规划首版写入并推送；day60 文档已入 `docs/`。
+**上次更新：** 2026-10-20（Asia/Shanghai）— A10 目录与脚本占位已建；等 A9 Creator 场景与 Web Mobile 构建。
 
 ---
 
@@ -186,7 +186,7 @@ flowchart TD
 - [x] A7 写入本规划 `PROJECT_PLAN.md`
 - [x] A8 将「前60天-按开服自然日」拷贝到 `docs/day60-open-server.md`
 - [ ] A9 Creator 构建目标确认：Web Mobile 能空场景预览/构建
-- [ ] A10 约定 `client` 内目录规范并建空目录（见 A10 明细）
+- [x] A10 约定 `client` 内目录规范并建空目录（见 A10 明细）
 
 **A10 建议目录（建好后勾选子项）**
 
@@ -206,12 +206,12 @@ client/assets/
     Battle.scene
 ```
 
-- [ ] A10.1 `scripts/core`
-- [ ] A10.2 `scripts/net`
-- [ ] A10.3 `scripts/config`
-- [ ] A10.4 `scripts/module`
-- [ ] A10.5 `scripts/ui`
-- [ ] A10.6 `scenes/Boot|Main|Battle` 占位
+- [x] A10.1 `scripts/core`（含 Boot.ts 占位）
+- [x] A10.2 `scripts/net`（含 NetClient.ts 占位）
+- [x] A10.3 `scripts/config`
+- [x] A10.4 `scripts/module`
+- [x] A10.5 `scripts/ui`（含 MainApp.ts 占位）
+- [ ] A10.6 `scenes/Boot|Main|Battle` 占位（需在 Creator 内创建，见 assets/scenes/README.md）
 
 ### 阶段 B · P0 技术骨架
 
@@ -330,6 +330,7 @@ client/assets/
 | 日期 | 变更 |
 |------|------|
 | 2026-10-20 | 首版：目标、目录、P0–P3、阶段 A–F、维护约定；记录仓库已推送 |
+| 2026-10-20 | A10：创建 scripts/scenes 目录与 Boot/NetClient/MainApp 占位；焦点改为 A9 |
 
 ---
 
