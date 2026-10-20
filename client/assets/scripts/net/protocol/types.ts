@@ -717,3 +717,70 @@ export interface Login7AdvanceResp {
   /** 已经是第 7 天时 LOGIN7_MAX。不改开服天，也不自动领取。 */
   code?: number;
 }
+
+/** 七日目标的一格奖励。id 1 金币、id 2 钻石，其余进背包。 */
+export interface Goal7Reward {
+  id: number;
+  name: string;
+  count: number;
+}
+
+/** 前往哪一页。页面栈再压一层，返回仍回到七日目标。 */
+export type Goal7Jump = "mainline" | "summon" | "hero" | "idle";
+
+/** locked 未开启，in-progress 进行中，claimable 可领取，claimed 已领取。 */
+export type Goal7State = "locked" | "in-progress" | "claimable" | "claimed";
+
+export interface Goal7Task {
+  id: string;
+  /** 分组用的天，1 到 7。不按登录天上锁。 */
+  day: number;
+  title: string;
+  state: Goal7State;
+  /** 当前进度，可以大于目标。界面上显示时封顶到目标。 */
+  current: number;
+  target: number;
+  jump: Goal7Jump;
+  rewards: Goal7Reward[];
+}
+
+export interface Goal7ViewReq {
+  /** 占位。Mock 不看请求体。 */
+  clientTime?: number;
+}
+
+export interface Goal7ViewResp {
+  ok: boolean;
+  /** 已通关关卡数。第 70 关任务用它判断开没开。 */
+  clearedStage: number;
+  tasks: Goal7Task[];
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface Goal7ClaimReq {
+  /** 任务 id，例如 stage-1、stage-70。 */
+  id: string;
+}
+
+export interface Goal7ClaimResp {
+  ok: boolean;
+  id: string;
+  title: string;
+  /** 失败时的状态，方便 Toast 写出进度。成功为 claimed。 */
+  state: Goal7State;
+  current: number;
+  target: number;
+  rewards: Goal7Reward[];
+  goldGain: number;
+  diamondGain: number;
+  gold: number;
+  diamond: number;
+  /**
+   * 没有这个目标 GOAL7_NOT_FOUND，尚未开启 GOAL7_LOCKED，
+   * 还没完成 GOAL7_INCOMPLETE，已经领过 GOAL7_CLAIMED。
+   * 成功可以不带。失败不改钱包、背包和已领记录。
+   */
+  code?: number;
+}

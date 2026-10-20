@@ -53,6 +53,10 @@ import {
   Login7ClaimResp,
   Login7ViewReq,
   Login7ViewResp,
+  Goal7ClaimReq,
+  Goal7ClaimResp,
+  Goal7ViewReq,
+  Goal7ViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -190,5 +194,13 @@ export const Proto = {
 
   login7Advance(req: Login7AdvanceReq, net: NetClient = NetClient.shared): Promise<Login7AdvanceResp> {
     return call(net, Cmd.login7Advance, req);
+  },
+
+  goal7View(req: Goal7ViewReq, net: NetClient = NetClient.shared): Promise<Goal7ViewResp> {
+    return call(net, Cmd.goal7View, req);
+  },
+
+  goal7Claim(req: Goal7ClaimReq, net: NetClient = NetClient.shared): Promise<Goal7ClaimResp> {
+    return call(net, Cmd.goal7Claim, req);
   },
 };

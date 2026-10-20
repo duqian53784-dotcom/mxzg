@@ -34,6 +34,8 @@ export const Cmd = {
   login7View: "login7.view",
   login7Claim: "login7.claim",
   login7Advance: "login7.advance",
+  goal7View: "goal7.view",
+  goal7Claim: "goal7.claim",
 } as const;
 
 export const CmdId = {
@@ -66,6 +68,8 @@ export const CmdId = {
   login7View: 2201,
   login7Claim: 2202,
   login7Advance: 2203,
+  goal7View: 2301,
+  goal7Claim: 2302,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -106,4 +110,6 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.login7View, cmd: Cmd.login7View },
   { id: CmdId.login7Claim, cmd: Cmd.login7Claim },
   { id: CmdId.login7Advance, cmd: Cmd.login7Advance },
+  { id: CmdId.goal7View, cmd: Cmd.goal7View },
+  { id: CmdId.goal7Claim, cmd: Cmd.goal7Claim },
 ];

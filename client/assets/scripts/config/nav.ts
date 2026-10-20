@@ -32,6 +32,11 @@ export const PLAY_ENTRIES: NavEntry[] = [
     title: "七日登录",
     blurb: "按角色登录天领七日奖励。新号第1天可进，主城按钮也能进",
   },
+  {
+    id: "goal7",
+    title: "七日目标",
+    blurb: "任务进度、前往和领奖。第7日通关第70关仍锁着，主城按钮也能进",
+  },
   { id: "bag", title: "背包", gateId: "bag", blurb: "强化石、英雄碎片，以及可使用的金币袋和经验药水" },
   { id: "fetter", title: "羁绊", gateId: "main_fetter", blurb: "羁绊占位" },
   { id: "mail", title: "邮件", gateId: "mail", blurb: "系统欢迎、开服补给和公告。主城按钮也能进" },
