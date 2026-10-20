@@ -18,7 +18,7 @@ export const CITY_TAB = "city";
 
 export const BOTTOM_TABS: NavEntry[] = [
   { id: "city", title: "主城", blurb: "主城" },
-  { id: "hero", title: "英雄", gateId: "main_hero", blurb: "英雄列表留到 C5" },
+  { id: "hero", title: "英雄", gateId: "main_hero", blurb: "英雄列表、详情与升级" },
   { id: "summon", title: "召唤", gateId: "main_summon", blurb: "召唤留到 C6" },
   { id: "smith", title: "铁匠铺", gateId: "main_smith_shop", blurb: "铁匠铺留到 C9" },
   { id: "plays", title: "玩法", blurb: "按主线等级或开服天开启" },
@@ -107,10 +107,11 @@ export function tabLabel(title: string, open: boolean): string {
   return open ? title : "锁·" + title;
 }
 
-/** 子页面高亮它所属的底栏。日志、主线和挂机从主城进时仍算主城。 */
+/** 子页面高亮它所属的底栏。日志、主线和挂机从主城进时仍算主城。英雄详情仍算英雄。 */
 export function rootTabFor(pageId: string): string {
   if (BOTTOM_IDS[pageId]) return pageId;
   if (pageId === "log" || pageId === "mainline" || pageId === "idle") return CITY_TAB;
+  if (pageId === "hero-detail") return "hero";
   return "plays";
 }
 

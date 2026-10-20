@@ -29,6 +29,7 @@ import { NetClient } from "../net/NetClient";
 import { NetState } from "../net/NetTypes";
 import { Proto } from "../net/protocol";
 import { CityChrome, mountCityChrome, TabState } from "./CityChrome";
+import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage } from "./HeroPage";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -53,6 +54,9 @@ export class MainApp extends Component {
   private built = false;
   private mainline: MainlinePage | null = null;
   private idle: IdlePage | null = null;
+  private heroList: HeroListPage | null = null;
+  private heroDetail: HeroDetailPage | null = null;
+  private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
   private logLabel: Node | null = null;
@@ -71,6 +75,10 @@ export class MainApp extends Component {
     this.mainline = null;
     this.idle?.dispose();
     this.idle = null;
+    this.heroList?.dispose();
+    this.heroList = null;
+    this.heroDetail?.dispose();
+    this.heroDetail = null;
     this.shell?.dispose();
   }
 
@@ -112,6 +120,7 @@ export class MainApp extends Component {
   private onTab(id: string): void {
     GameLog.shared.info("MainApp", "tab " + id);
     if (!this.allow(id)) return;
+    if (id === "hero" && !this.ensureNet()) return;
     this.panels?.openRoot(id);
     this.refreshChrome();
   }
@@ -144,6 +153,8 @@ export class MainApp extends Component {
   private buildPage(id: string): Node {
     if (id === "mainline") return this.mountMainline();
     if (id === "idle") return this.mountIdle();
+    if (id === "hero") return this.mountHeroList();
+    if (id === "hero-detail") return this.mountHeroDetail();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -284,6 +295,48 @@ export class MainApp extends Component {
     this.openChild("mainline");
   }
 
+  /** 底栏「英雄」没连上时不进列表。详情在 HeroPage 里，返回走页面栈。 */
+  private ensureNet(): boolean {
+    if (NetClient.shared.state === "connected") return true;
+    this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+    return false;
+  }
+
+  private mountHeroList(): Node {
+    this.heroList?.dispose();
+    const page = buildHeroList({
+      showToast: (text) => this.shell?.showToast(text, 2200),
+      alive: () => this.isValid,
+      list: () => Proto.heroList({}, NetClient.shared),
+      openHero: (heroId) => {
+        this.selectedHeroId = heroId;
+        this.openChild("hero-detail");
+      },
+      close: () => this.back(),
+    });
+    this.heroList = page;
+    return page.node;
+  }
+
+  private mountHeroDetail(): Node {
+    this.heroDetail?.dispose();
+    const page = buildHeroDetail({
+      heroId: () => this.selectedHeroId,
+      showToast: (text) => this.shell?.showToast(text, 2200),
+      alive: () => this.isValid,
+      list: () => Proto.heroList({}, NetClient.shared),
+      upgrade: (heroId) => Proto.heroUpgrade({ heroId }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.heroList?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.heroDetail = page;
+    return page.node;
+  }
+
   /** 挂机随时可进。时长和领取在 IdlePage 里，不改场景。 */
   private openIdle(): void {
     GameLog.shared.info("MainApp", "click idle");
@@ -417,6 +470,15 @@ export class MainApp extends Component {
     if (id === "idle") {
       this.idle?.dispose();
       this.idle = null;
+    }
+    if (id === "hero-detail") {
+      this.heroDetail?.dispose();
+      this.heroDetail = null;
+      this.heroList?.reload();
+    }
+    if (id === "hero") {
+      this.heroList?.dispose();
+      this.heroList = null;
     }
   }
 

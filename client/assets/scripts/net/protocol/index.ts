@@ -5,6 +5,11 @@ export { Proto } from "./Proto";
 export type {
   HeartbeatReq,
   HeartbeatResp,
+  HeroCard,
+  HeroListReq,
+  HeroListResp,
+  HeroUpgradeReq,
+  HeroUpgradeResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,

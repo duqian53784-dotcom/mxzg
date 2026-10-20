@@ -13,6 +13,8 @@ export const Cmd = {
   stageResult: "stage.result",
   idleQuery: "idle.query",
   idleClaim: "idle.claim",
+  heroList: "hero.list",
+  heroUpgrade: "hero.upgrade",
 } as const;
 
 export const CmdId = {
@@ -24,6 +26,8 @@ export const CmdId = {
   stageResult: 1202,
   idleQuery: 1301,
   idleClaim: 1302,
+  heroList: 1401,
+  heroUpgrade: 1402,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -43,4 +47,6 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.stageResult, cmd: Cmd.stageResult },
   { id: CmdId.idleQuery, cmd: Cmd.idleQuery },
   { id: CmdId.idleClaim, cmd: Cmd.idleClaim },
+  { id: CmdId.heroList, cmd: Cmd.heroList },
+  { id: CmdId.heroUpgrade, cmd: Cmd.heroUpgrade },
 ];

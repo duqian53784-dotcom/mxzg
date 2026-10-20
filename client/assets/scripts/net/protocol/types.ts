@@ -142,3 +142,48 @@ export interface IdleClaimResp {
   /** 不满 1 个单位时为 IDLE_EMPTY，钱包不动。 */
   code?: number;
 }
+
+export interface HeroListReq {
+  /** 占位。Mock 不看请求体，名册在会话里。 */
+  clientTime?: number;
+}
+
+/** 英雄卡。攻击、生命、防御是占位，由等级和星级算出。 */
+export interface HeroCard {
+  id: number;
+  name: string;
+  level: number;
+  star: number;
+  atk: number;
+  hp: number;
+  def: number;
+  /** 下一级消耗的金币。已满级为 0。 */
+  upgradeCost: number;
+  maxLevel: number;
+}
+
+export interface HeroListResp {
+  ok: boolean;
+  heroes: HeroCard[];
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface HeroUpgradeReq {
+  heroId: number;
+}
+
+export interface HeroUpgradeResp {
+  ok: boolean;
+  heroId: number;
+  hero: HeroCard | null;
+  /** 本次扣掉的金币。失败为 0。 */
+  cost: number;
+  gold: number;
+  diamond: number;
+  /** 金币不足时，升级实际需要的数量。 */
+  needGold?: number;
+  /** 没有英雄、金币不足、已满级。成功可以不带。 */
+  code?: number;
+}

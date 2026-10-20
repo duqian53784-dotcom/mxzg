@@ -3,7 +3,7 @@
 - `core/` 启动、会话（Boot、Session）
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
-- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益）
+- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益，`hero/` 英雄升级）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
 
 场景在 `assets/scenes/`。Boot / Main / Battle 已建好。Boot 的 Canvas 上已经挂了 Boot。其余界面由代码生成，不用再挂组件。
@@ -33,9 +33,9 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 
 Boot 的登录不再手写 `request("login")`，改走 `Proto.login` / `Proto.roleEnter`。回包仍由 MockTransport 发出。
 
-P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。创角从登录面板进，见下面 C1。
+P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。英雄页会读名册并升级。创角从登录面板进，见下面 C1。
 
-同一局 Mock 会记住开服天、等级和主线进度。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
+同一局 Mock 会记住开服天、等级、主线进度和英雄等级。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
 
 真 Protobuf 怎么换掉这些 interface，见 `docs/protocol-stubs.md`。
 
@@ -81,7 +81,8 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 
 | 入口 | 条件 | 点进去 |
 |------|------|--------|
-| 英雄 / 召唤 | 主线 Lv1 | 占位（C5 / C6） |
+| 英雄 | 主线 Lv1 | 列表、详情、升级（C5） |
+| 召唤 | 主线 Lv1 | 占位（C6） |
 | 铁匠铺 | 主线 Lv5 | 占位（C9）。Lv1 时应带锁 |
 | 玩法 | 随时 | 挂机、背包、羁绊、邮件、竞技场、许愿池、咖啡馆、日常副本、幻境之塔、幻魔塔 |
 | 幻魔塔 | 开服第 30 天（`opencondition` 和 `magic_tower_open_day`） | 占位。D1 点它应 Toast「开服第30天」 |
@@ -115,5 +116,20 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 3. **领取**。大约 10 秒后金币至少 +1。点领取，Toast「领取成功：金币 +N」，顶栏金币增加。强化石大约 30 秒 1 个，领到后页面写「已有强化石」。背包界面留到 C7，石头先记在 Mock 会话里。马上再点领取：Toast「挂机时间太短，暂无收益」，金币不变。
 4. **快速作战**。按钮是「快速作战 · 第N关」。点一下直接结算当前关，**不播**主线战报。Toast「快速作战：第N关胜利，金币 +10，下一关 N+1」。顶栏等级、金币和主城按钮上的关卡号跟着变。可以连续点。挂机计时不会被这次结算清掉；通关后，同一段时长按新的已通关关数重算。
 5. 创角会把挂机时长和强化石清掉，钱包回到金币 100、钻石 20。
+
+不需要起 server，也不用改场景。
+
+## 英雄（C5）
+
+不改 `.scene`，不用新挂组件。英雄列表和详情在主城页面栈里用代码生成。挂机按钮还在主城，玩法列表里的挂机也还在。
+
+底栏点 **英雄**（主线 Lv1 就开。网络没连上时 Toast「网络未连接」，不进列表）：
+
+1. **列表**。默认三名：光耀骑士（3星）、林间游侠（2星）、星辉法师（1星），都是 Lv1。空名册也会种下这三名。点一行进入详情。
+2. **详情**。名字、`LvN · N星`、攻击 / 生命 / 防御（占位，升级后变高）。星级只展示，本页不升星。
+3. **升级**。按钮写着消耗，例如「升级（金币 30）」。Lv1→2 花 30，之后每级再多 20（Lv2→3 为 50）。点下去 Toast「光耀骑士升至 Lv2，消耗金币 30」。顶栏金币从 100 变成 70。详情上的等级、属性和「持有金币」一起变。点 **返回** 回到列表，这一行已是 Lv2。再返回回到主城，底栏回到「主城」。
+4. **金币不足**。起步 100 金可以升两次（30 + 50），第三次需要 70。Toast「金币不足，升级需要 70」，等级和顶栏金币都不变。
+5. **已满级**。最高 Lv10。再点 Toast「已达最高等级」，金币不扣。
+6. 从详情或列表点底栏其它入口，会先回到主城再打开那一项。创角会把英雄等级和钱包重置（金币 100、钻石 20）。
 
 不需要起 server，也不用改场景。

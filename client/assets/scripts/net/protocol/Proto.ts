@@ -11,6 +11,10 @@ import {
   RoleCreateResp,
   RoleEnterReq,
   RoleEnterResp,
+  HeroListReq,
+  HeroListResp,
+  HeroUpgradeReq,
+  HeroUpgradeResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -64,5 +68,13 @@ export const Proto = {
 
   idleClaim(req: IdleClaimReq, net: NetClient = NetClient.shared): Promise<IdleClaimResp> {
     return call(net, Cmd.idleClaim, req);
+  },
+
+  heroList(req: HeroListReq, net: NetClient = NetClient.shared): Promise<HeroListResp> {
+    return call(net, Cmd.heroList, req);
+  },
+
+  heroUpgrade(req: HeroUpgradeReq, net: NetClient = NetClient.shared): Promise<HeroUpgradeResp> {
+    return call(net, Cmd.heroUpgrade, req);
   },
 };
