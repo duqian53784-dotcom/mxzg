@@ -52,8 +52,8 @@ export class UIShell {
     return name;
   }
 
-  showToast(text: string): void {
-    this.toast.show(text);
+  showToast(text: string, durationMs?: number): void {
+    this.toast.show(text, durationMs);
   }
 
   private makeLayer(canvas: Node, name: string): Node {

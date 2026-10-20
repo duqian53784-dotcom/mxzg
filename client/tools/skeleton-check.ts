@@ -1,5 +1,5 @@
 /**
- * B3/B4/B5 自检（不启动 Creator）。
+ * B3–B6 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -7,9 +7,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isEntryOpen, isServerGateOpen, listOpenEntries } from "../assets/scripts/config/gates";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
+import { parseMockFixture } from "../assets/scripts/net/MockFixture";
+import { MockGameSession } from "../assets/scripts/net/MockGameSession";
 import { MockTransport } from "../assets/scripts/net/MockTransport";
 import { NetClient } from "../assets/scripts/net/NetClient";
 import { NetState } from "../assets/scripts/net/NetTypes";
+import { ReplayTransport } from "../assets/scripts/net/ReplayTransport";
 import { Cmd, P0_CMDS, Proto } from "../assets/scripts/net/protocol";
 import { PageStack } from "../assets/scripts/ui/PageStack";
 import { PopupQueue } from "../assets/scripts/ui/PopupQueue";
@@ -79,6 +82,22 @@ function checkPopups(): void {
   assert(first.disposed() && queue.currentName === "notice-next" && second.visible(), "second showing");
   queue.closeCurrent();
   assert(queue.currentName === null && queue.pending === 0, "queue empty");
+}
+
+function fixtureFile(): string {
+  const candidates = [
+    join(process.cwd(), "client", "assets", "resources", "mock", "session-login-stage.json"),
+    join(process.cwd(), "assets", "resources", "mock", "session-login-stage.json"),
+  ];
+  for (const file of candidates) {
+    try {
+      readFileSync(file, "utf8");
+      return file;
+    } catch (_err) {
+      // try the next candidate
+    }
+  }
+  throw new Error("mock fixture not found from " + process.cwd());
 }
 
 function configDir(): string {
@@ -181,11 +200,106 @@ async function checkNet(): Promise<void> {
   assert(states.indexOf("connecting") >= 0 && states.indexOf("closed") >= 0, "state machine");
 }
 
+function quietNet(transport: MockTransport | ReplayTransport): NetClient {
+  return new NetClient(transport, {
+    heartbeatMs: 60000,
+    reconnectDelayMs: 20,
+    maxReconnect: 3,
+    requestTimeoutMs: 1000,
+  });
+}
+
+async function checkSession(): Promise<void> {
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const role = await Proto.roleEnter({}, net);
+  assert(role.name === "MockHero" && role.level === 1 && role.stageId === 1 && role.openDay === 1, "fresh session");
+
+  let next = 1;
+  for (let i = 0; i < 5; i++) {
+    const entered = await Proto.stageEnter({ stageId: next }, net);
+    assert(entered.ok && entered.battleId.indexOf("mock-battle-" + next + "-") === 0, "loop enter " + next);
+    const won = await Proto.stageResult({ stageId: next, battleId: entered.battleId, win: true }, net);
+    assert(won.ok && won.win && won.nextStageId === next + 1 && won.level === next + 1, "loop win " + next);
+    next = won.nextStageId;
+  }
+  const after = await Proto.roleEnter({}, net);
+  assert(after.level === 6 && after.stageId === 6 && after.openDay === 2 && after.name === "MockHero", "after 5 clears");
+  const lost = await Proto.stageResult({ stageId: 6, win: false }, net);
+  assert(lost.ok && lost.nextStageId === 6 && lost.level === 6 && lost.openDay === 2 && lost.rewards.length === 0, "loss keeps progress");
+  const still = await Proto.roleEnter({}, net);
+  assert(still.stageId === 6 && still.level === 6 && still.openDay === 2, "enter after loss");
+
+  const created = await Proto.roleCreate({ name: "新人" }, net);
+  assert(created.ok && created.name === "新人" && created.level === 1, "create resets level");
+  const reset = await Proto.roleEnter({}, net);
+  assert(reset.name === "新人" && reset.level === 1 && reset.stageId === 1 && reset.openDay === 1, "create resets progress");
+  net.close();
+
+  const seeded = new MockGameSession({ clearedStage: 3, openDay: 9, role: { name: "老号" } });
+  assert(seeded.role.level === 4 && seeded.stageId === 4 && seeded.openDay === 9, "seed derived");
+  const kept = quietNet(new MockTransport({ latencyMs: 5, session: seeded }));
+  const states: NetState[] = [];
+  kept.onState((state) => states.push(state));
+  await kept.connect("mock://local");
+  const old = await Proto.roleEnter({}, kept);
+  assert(old.name === "老号" && old.level === 4 && old.openDay === 9 && old.stageId === 4, "seeded enter");
+  kept.simulateDrop();
+  await waitFor(() => kept.state === "connected" && states.indexOf("reconnecting") >= 0, 2000);
+  const again = await Proto.roleEnter({}, kept);
+  assert(again.name === "老号" && again.stageId === 4 && again.openDay === 9, "session survives reconnect");
+  kept.close();
+}
+
+async function checkReplay(): Promise<void> {
+  const fixture = parseMockFixture(JSON.parse(readFileSync(fixtureFile(), "utf8")));
+  const cmds = fixture.steps.map((step) => step.cmd);
+  assert(cmds.indexOf("login") >= 0 && cmds.indexOf("role.enter") >= 0, "fixture login");
+  assert(cmds.indexOf("stage.enter") >= 0 && cmds.indexOf("stage.result") >= 0, "fixture stage");
+  let threw = false;
+  try {
+    parseMockFixture({ name: "empty", steps: [] });
+  } catch (_err) {
+    threw = true;
+  }
+  assert(threw, "empty fixture rejected");
+
+  const replay = new ReplayTransport(fixture, { latencyMs: 5 });
+  const net = quietNet(replay);
+  await net.connect("replay://fixture");
+  const beat = await Proto.heartbeat({ clientTime: 1 }, net);
+  assert(typeof beat.serverTime === "number" && beat.serverTime > 0 && replay.played() === 0, "heartbeat skips replay");
+  const early = await Proto.roleEnter({}, net);
+  assert(early.ok === false && replay.played() === 0, "out of order does not advance");
+
+  const login = await Proto.login({ account: "other", serverId: 9 }, net);
+  assert(login.ok && login.account === "mock" && login.token === "mock-token" && login.serverId === 1, "replay login");
+  const role = await Proto.roleEnter({}, net);
+  assert(role.ok && role.hasRole && role.name === "MockHero" && role.level === 1 && role.stageId === 1, "replay enter");
+  const created = await Proto.roleCreate({ name: "别人" }, net);
+  assert(created.ok && created.name === "新人" && created.level === 1, "replay create ignores request");
+  const renamed = await Proto.roleEnter({}, net);
+  assert(renamed.name === "新人" && renamed.stageId === 1 && renamed.openDay === 1, "replay enter after create");
+  const entered = await Proto.stageEnter({ stageId: 99 }, net);
+  assert(entered.ok && entered.stageId === 1 && entered.battleId === "mock-battle-1-1", "replay stage enter");
+  const won = await Proto.stageResult({ stageId: 1, battleId: entered.battleId, win: true }, net);
+  assert(
+    won.ok && won.win && won.nextStageId === 2 && won.level === 2 && won.rewards.length === 1 && won.rewards[0].count === 10,
+    "replay stage result"
+  );
+  assert(replay.played() === fixture.steps.length, "replay consumed");
+  const extra = await Proto.stageEnter({ stageId: 2 }, net);
+  assert(extra.ok === false, "replay ended");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
   checkGates();
   await checkNet();
+  await checkSession();
+  await checkReplay();
   console.log("skeleton-check ok");
 }
 

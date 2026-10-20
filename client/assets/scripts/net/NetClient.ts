@@ -6,6 +6,11 @@ import { ITransport, NetHandler, NetMessage, NetState } from "./NetTypes";
 
 export type { ITransport, NetHandler, NetMessage, NetState } from "./NetTypes";
 export { MockTransport } from "./MockTransport";
+export { MockGameSession } from "./MockGameSession";
+export type { MockRoleState, MockSessionSeed } from "./MockGameSession";
+export { parseMockFixture } from "./MockFixture";
+export type { MockEnvelope, MockFixture } from "./MockFixture";
+export { ReplayTransport } from "./ReplayTransport";
 
 export interface NetClientOptions {
   heartbeatMs?: number;
