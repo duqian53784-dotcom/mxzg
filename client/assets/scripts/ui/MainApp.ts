@@ -2,6 +2,7 @@
  * 主城壳（B2）。Canvas 下用代码生成标题和按钮，不需要美术。
  * 从 Boot 进来时，若场景上没挂本组件，Boot 会 addComponent。
  * 单独预览 Main：把 MainApp 挂到 Main 场景的 Canvas 上。
+ * UIShell.mount 会按安全区摆 Page / Toast，窗口变化时再算一次。
  */
 import { _decorator, BlockInputEvents, Color, Component, Node, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
@@ -33,6 +34,14 @@ export class MainApp extends Component {
     if (this.built) return;
     this.built = true;
     void this.build();
+  }
+
+  onDestroy() {
+    if (this.offLog) {
+      this.offLog();
+      this.offLog = null;
+    }
+    this.shell?.dispose();
   }
 
   private async build(): Promise<void> {

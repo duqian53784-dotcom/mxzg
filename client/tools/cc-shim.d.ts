@@ -24,6 +24,7 @@ declare module "cc" {
     isValid: boolean;
     constructor(name?: string);
     setPosition(x: number, y: number, z?: number): void;
+    setScale(x: number, y?: number, z?: number): void;
     setSiblingIndex(index: number): void;
     getChildByName(name: string): Node | null;
     addComponent(type: unknown): any;
@@ -83,6 +84,23 @@ declare module "cc" {
   export const director: {
     loadScene(name: string, cb?: (err: Error | null, scene?: Node) => void): boolean;
     getScene(): { getChildByName(name: string): Node | null } | null;
+  };
+
+  export const view: {
+    getVisibleSize(): { width: number; height: number };
+    getDesignResolutionSize(): { width: number; height: number };
+    on(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
+    off(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
+  };
+
+  export const screen: {
+    windowSize: { width: number; height: number };
+    on(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
+    off(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
+  };
+
+  export const sys: {
+    getSafeAreaRect(): { x: number; y: number; width: number; height: number };
   };
 
   export const resources: {

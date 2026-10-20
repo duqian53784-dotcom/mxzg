@@ -1,6 +1,7 @@
 import { Layers, Node, UITransform } from "cc";
 import { PageStack } from "./PageStack";
 import { PopupQueue } from "./PopupQueue";
+import { bindSafeArea, SafeAreaBinding } from "./SafeArea";
 import { StackView } from "./StackView";
 import { Toast } from "./Toast";
 import { uiNode } from "./UiKit";
@@ -8,6 +9,7 @@ import { uiNode } from "./UiKit";
 /**
  * 挂在同一个 Canvas 上的三层：Page / Popup / Toast。
  * 场景里不用摆节点，MainApp 调 mount 即可。
+ * Page / Toast 会按安全区平移并在必要时缩小；弹窗层只平移，遮罩仍盖住画面。
  */
 export class UIShell {
   readonly pages = new PageStack();
@@ -17,11 +19,21 @@ export class UIShell {
   readonly toastLayer: Node;
   readonly toast: Toast;
 
+  private safeBinding: SafeAreaBinding | null = null;
+
   private constructor(canvas: Node) {
     this.pageLayer = this.makeLayer(canvas, "LayerPage");
     this.popupLayer = this.makeLayer(canvas, "LayerPopup");
     this.toastLayer = this.makeLayer(canvas, "LayerToast");
     this.toast = new Toast(this.toastLayer);
+    this.safeBinding = bindSafeArea({
+      canvas,
+      targets: [
+        { node: this.pageLayer },
+        { node: this.popupLayer, scale: false },
+        { node: this.toastLayer },
+      ],
+    });
   }
 
   static mount(canvas: Node): UIShell {
@@ -54,6 +66,12 @@ export class UIShell {
 
   showToast(text: string, durationMs?: number): void {
     this.toast.show(text, durationMs);
+  }
+
+  dispose(): void {
+    if (!this.safeBinding) return;
+    this.safeBinding.dispose();
+    this.safeBinding = null;
   }
 
   private makeLayer(canvas: Node, name: string): Node {

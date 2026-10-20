@@ -1,5 +1,5 @@
 /**
- * B3–B7 自检（不启动 Creator）。
+ * B3–B8 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -18,6 +18,14 @@ import { ReplayTransport } from "../assets/scripts/net/ReplayTransport";
 import { Cmd, P0_CMDS, Proto } from "../assets/scripts/net/protocol";
 import { PageStack } from "../assets/scripts/ui/PageStack";
 import { PopupQueue } from "../assets/scripts/ui/PopupQueue";
+import {
+  applySafeFrame,
+  formatAdapt,
+  layoutSafeFrame,
+  metricsFrom,
+  parseInsetOverride,
+  SafeFrame,
+} from "../assets/scripts/ui/safeAreaLayout";
 import { StackView } from "../assets/scripts/ui/StackView";
 
 function assert(cond: unknown, message: string): void {
@@ -313,6 +321,109 @@ async function checkReplay(): Promise<void> {
   net.close();
 }
 
+function near(actual: number, expected: number, message: string): void {
+  assert(Math.abs(actual - expected) < 0.001, message + " " + actual + " vs " + expected);
+}
+
+function checkSafeArea(): void {
+  const full = metricsFrom(720, 1280, 720, 1280, { x: 0, y: 0, width: 720, height: 1280 }, null);
+  const identity = layoutSafeFrame(full);
+  near(identity.offsetX, 0, "identity x");
+  near(identity.offsetY, 0, "identity y");
+  near(identity.scale, 1, "identity scale");
+  assert(formatAdapt(full, identity).indexOf("scale 1.00") >= 0, "format identity");
+
+  const notched = metricsFrom(720, 1280, 720, 1280, { x: 0, y: 0, width: 720, height: 1200 }, null);
+  const notchFrame = layoutSafeFrame(notched);
+  near(notchFrame.insets.top, 80, "notch top");
+  near(notchFrame.insets.bottom, 0, "notch bottom");
+  near(notchFrame.offsetY, -40, "notch shifts down");
+  near(notchFrame.scale, 1200 / 1280, "notch scale");
+
+  const short = layoutSafeFrame(metricsFrom(720, 600, 720, 1280, null, null));
+  near(short.scale, 600 / 1280, "short window scales down");
+  near(short.offsetX, 0, "short window centered");
+
+  const wide = layoutSafeFrame(metricsFrom(1400, 1280, 720, 1280, { x: 0, y: 0, width: 1400, height: 1280 }, null));
+  near(wide.scale, 1, "wider than design does not scale up");
+
+  const side = layoutSafeFrame(
+    metricsFrom(720, 1280, 720, 1280, { x: 40, y: 0, width: 670, height: 1280 }, null)
+  );
+  near(side.insets.left, 40, "left inset");
+  near(side.insets.right, 10, "right inset");
+  near(side.offsetX, 15, "side shift");
+
+  const forced = metricsFrom(720, 1280, 720, 1280, { x: 0, y: 0, width: 720, height: 1280 }, {
+    top: 88,
+    right: 0,
+    bottom: 34,
+    left: 0,
+  });
+  const forcedFrame = layoutSafeFrame(forced);
+  near(forcedFrame.insets.top, 88, "preview top");
+  near(forcedFrame.insets.bottom, 34, "preview bottom");
+  near(forcedFrame.offsetY, (34 - 88) / 2, "preview shift");
+  assert(formatAdapt(forced, forcedFrame).indexOf("T88") >= 0, "format notch");
+  assert(formatAdapt(forced, forcedFrame).indexOf("B34") >= 0, "format home");
+
+  const overflow = layoutSafeFrame(
+    metricsFrom(720, 1280, 720, 1280, null, { top: 2000, right: 0, bottom: 2000, left: 0 })
+  );
+  near(overflow.safeHeight, 0, "insets clamp to visible");
+  near(overflow.scale, 0, "no safe height");
+  near(overflow.offsetY, 0, "equal insets stay centered");
+
+  const fallback = metricsFrom(0, 0, 0, 0, null, null);
+  near(fallback.visibleWidth, 720, "fallback width");
+  near(fallback.visibleHeight, 1280, "fallback height");
+  near(layoutSafeFrame(fallback).scale, 1, "fallback scale");
+
+  assert(parseInsetOverride("88,0,34,0")?.top === 88, "parse override");
+  assert(parseInsetOverride(" 10 , 0 , 0 , 4 ")?.left === 4, "parse spaces");
+  assert(parseInsetOverride("1,2") === null, "parse short");
+  assert(parseInsetOverride("-1,0,0,0") === null, "parse negative");
+  assert(parseInsetOverride("") === null, "parse empty");
+  assert(parseInsetOverride(null) === null, "parse null");
+
+  const node = fakeTransform();
+  applySafeFrame(node, notchFrame, true);
+  near(node.pos.y, notchFrame.offsetY, "apply offset");
+  near(node.scale.x, notchFrame.scale, "apply scale");
+  applySafeFrame(node, notchFrame, false);
+  near(node.scale.x, 1, "popup layer stays unscaled");
+  near(node.pos.y, notchFrame.offsetY, "popup still shifts");
+  assert(frameHasInsets(notchFrame), "frame keeps insets");
+}
+
+function frameHasInsets(frame: SafeFrame): boolean {
+  return frame.insets.top > 0 || frame.insets.bottom > 0 || frame.insets.left > 0 || frame.insets.right > 0;
+}
+
+function fakeTransform(): {
+  pos: { x: number; y: number; z: number };
+  scale: { x: number; y: number; z: number };
+  setPosition(x: number, y: number, z?: number): void;
+  setScale(x: number, y: number, z?: number): void;
+} {
+  const pos = { x: 0, y: 0, z: 0 };
+  const scale = { x: 1, y: 1, z: 1 };
+  return {
+    pos,
+    scale,
+    setPosition(x: number, y: number, z?: number) {
+      pos.x = x;
+      pos.y = y;
+      pos.z = z ?? 0;
+    },
+    setScale(x: number, y: number, z?: number) {
+      scale.x = x;
+      scale.y = y;
+      scale.z = z ?? 1;
+    },
+  };
+}
+
 function checkLog(): void {
   const log = new GameLog(4);
   log.mirrorConsole = false;
@@ -340,6 +451,7 @@ async function main(): Promise<void> {
   checkPages();
   checkPopups();
   checkGates();
+  checkSafeArea();
   checkLog();
   await checkNet();
   await checkSession();

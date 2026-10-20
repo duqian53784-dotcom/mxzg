@@ -17,6 +17,7 @@
  * 8. 勾选 skipLogin 可跳过面板，仍用 Mock 账号进 Main
  *
  * 只预览 Main 时：给 Main 的 Canvas 手动挂 MainApp。
+ * 安全区：启动和窗口变化时，登录面板挂在 SafeFrame 上，按可见区域缩进。不改场景。
  */
 import { _decorator, Component, director, Node, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
@@ -25,6 +26,7 @@ import { NetClient } from "../net/NetClient";
 import { Proto } from "../net/protocol";
 import { buildLoginPanel, LoginPanelView } from "../ui/LoginPanel";
 import { MainApp } from "../ui/MainApp";
+import { bindSafeArea, SafeAreaBinding } from "../ui/SafeArea";
 import { Toast } from "../ui/Toast";
 import { createLabel, place, setText, uiNode } from "../ui/UiKit";
 import { ErrorCode, GameError, messageOf } from "./errors";
@@ -47,6 +49,8 @@ export class Boot extends Component {
   private started = false;
   private entering = false;
   private canvas: Node | null = null;
+  private safeFrame: Node | null = null;
+  private safeBinding: SafeAreaBinding | null = null;
   private bootToast: Toast | null = null;
 
   start() {
@@ -55,11 +59,19 @@ export class Boot extends Component {
     void this.runBoot();
   }
 
+  onDestroy() {
+    if (this.safeBinding) {
+      this.safeBinding.dispose();
+      this.safeBinding = null;
+    }
+  }
+
   private async runBoot(): Promise<void> {
     const canvas = this.resolveCanvas();
     this.canvas = canvas;
+    const frame = this.mountSafeFrame(canvas);
     const status = createLabel("启动中…", 28);
-    place(status, canvas, 0, 40);
+    place(status, frame, 0, 40);
 
     this.runVersionCheck();
     setText(status, "检查版本…");
@@ -87,7 +99,7 @@ export class Boot extends Component {
 
     status.destroy();
     if (!this.isValid) return;
-    this.showLogin(canvas);
+    this.showLogin(frame);
   }
 
   private runVersionCheck(): void {
@@ -159,16 +171,35 @@ export class Boot extends Component {
   }
 
   private showBootToast(text: string): void {
-    const canvas = this.canvas;
-    if (!canvas || !this.isValid) return;
+    const parent = this.toastParent();
+    if (!parent || !this.isValid) return;
     if (!this.bootToast) {
       const layer = uiNode("BootToast");
       const ui = layer.addComponent(UITransform);
       ui.setContentSize(2000, 2000);
-      layer.parent = canvas;
+      layer.parent = parent;
       this.bootToast = new Toast(layer);
     }
     this.bootToast.show(text, 2200);
+  }
+
+  private mountSafeFrame(canvas: Node): Node {
+    const frame = uiNode("SafeFrame");
+    const ui = frame.addComponent(UITransform);
+    ui.setContentSize(2000, 2000);
+    frame.parent = canvas;
+    this.safeFrame = frame;
+    this.safeBinding = bindSafeArea({
+      canvas,
+      targets: [{ node: frame }],
+    });
+    return frame;
+  }
+
+  private toastParent(): Node | null {
+    if (this.safeFrame && this.safeFrame.isValid) return this.safeFrame;
+    if (this.canvas && this.canvas.isValid) return this.canvas;
+    return null;
   }
 
   private enterMain(): void {
