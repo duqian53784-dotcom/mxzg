@@ -37,6 +37,9 @@ export interface RoleEnterResp {
   openDay?: number;
   /** Mock 会话：下一关。真服可以不带。 */
   stageId?: number;
+  /** Mock 钱包。id 1 金币、id 2 钻石。没有角色时为 0。真服可以不带。 */
+  gold?: number;
+  diamond?: number;
   /** 失败时的客户端错误码。成功可以不带。 */
   code?: number;
 }
@@ -84,9 +87,11 @@ export interface StageResultResp {
   win: boolean;
   nextStageId: number;
   rewards: StageReward[];
-  /** Mock 会话结算后的开服天 / 等级。真服可以不带。 */
+  /** Mock 会话结算后的开服天 / 等级 / 钱包。真服可以不带。 */
   openDay?: number;
   level?: number;
+  gold?: number;
+  diamond?: number;
   /** 失败时的客户端错误码。成功可以不带。 */
   code?: number;
 }

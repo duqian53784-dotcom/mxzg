@@ -21,7 +21,9 @@
         "name": "MockHero",
         "level": 1,
         "openDay": 1,
-        "stageId": 1
+        "stageId": 1,
+        "gold": 100,
+        "diamond": 20
       }
     },
     {
@@ -37,7 +39,9 @@
         "name": "新人",
         "level": 1,
         "openDay": 1,
-        "stageId": 1
+        "stageId": 1,
+        "gold": 100,
+        "diamond": 20
       }
     },
     {
@@ -53,7 +57,9 @@
         "nextStageId": 2,
         "rewards": [{ "id": 1, "count": 10 }],
         "openDay": 1,
-        "level": 2
+        "level": 2,
+        "gold": 110,
+        "diamond": 20
       }
     }
   ]

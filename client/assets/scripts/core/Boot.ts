@@ -289,13 +289,7 @@ export class Boot extends Component {
   }
 
   private applyEntered(role: RoleEnterResp): void {
-    Session.role = {
-      roleId: role.roleId,
-      name: role.name,
-      level: role.level,
-    };
-    Session.openDay = typeof role.openDay === "number" && role.openDay >= 1 ? role.openDay : 1;
-    Session.stageId = typeof role.stageId === "number" && role.stageId >= 1 ? role.stageId : 1;
+    Session.applyEnter(role);
   }
 
   private logEntered(prefix: string): void {

@@ -1,29 +1,54 @@
 ﻿/**
- * 主城壳（B2）。Canvas 下用代码生成标题和按钮，不需要美术。
+ * 主城壳（C2）。Canvas 下用代码生成顶栏、底栏和面板，不需要美术。
  * 从 Boot 进来时，若场景上没挂本组件，Boot 会 addComponent。
  * 单独预览 Main：把 MainApp 挂到 Main 场景的 Canvas 上。
- * UIShell.mount 会按安全区摆 Page / Toast，窗口变化时再算一次。
+ * 顶栏和底栏在 UIShell 的 chrome 层，不进页面栈。系统面板走 PanelNav。
  */
 import { _decorator, BlockInputEvents, Color, Component, Node, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
 import { listOpenEntries } from "../config/gates";
+import {
+  BOTTOM_TABS,
+  CITY_TAB,
+  entryAccess,
+  findNavEntry,
+  NavEntry,
+  PLAY_ENTRIES,
+  tabLabel,
+} from "../config/nav";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
-import { formatHubIdentity, Session } from "../core/Session";
+import {
+  formatDiamondLine,
+  formatGoldLine,
+  formatNameLine,
+  formatSubLine,
+  Session,
+} from "../core/Session";
 import { NetClient } from "../net/NetClient";
 import { NetState } from "../net/NetTypes";
 import { Proto } from "../net/protocol";
+import { CityChrome, mountCityChrome, TabState } from "./CityChrome";
+import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 const { ccclass } = _decorator;
 
+const PAGE_BG = new Color(8, 16, 32, 255);
+const TITLE_COLOR = new Color(255, 228, 170, 255);
+const MUTED = new Color(190, 205, 225, 255);
+const GATE_COLOR = new Color(170, 190, 170, 255);
+const LOCKED_FILL = new Color(78, 84, 98, 255);
+const OPEN_FILL = new Color(46, 110, 190, 255);
+
 @ccclass("MainApp")
 export class MainApp extends Component {
   private shell: UIShell | null = null;
+  private panels: PanelNav<Node> | null = null;
+  private chrome: CityChrome | null = null;
   private built = false;
   private stageBusy = false;
-  private accountNode: Node | null = null;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
   private logLabel: Node | null = null;
@@ -37,10 +62,7 @@ export class MainApp extends Component {
   }
 
   onDestroy() {
-    if (this.offLog) {
-      this.offLog();
-      this.offLog = null;
-    }
+    this.detachLog();
     this.shell?.dispose();
   }
 
@@ -55,65 +77,118 @@ export class MainApp extends Component {
       }
     }
     if (!this.isValid || !this.shell) return;
-    this.shell.openPage("hub", this.buildHub());
+    const shell = this.shell;
+    this.chrome = mountCityChrome(shell.chromeLayer, (id) => this.onTab(id));
+    this.panels = new PanelNav<Node>(
+      shell,
+      (id) => this.buildPage(id),
+      (id) => this.noteClose(id)
+    );
+    this.panels.start(this.buildCity());
+    this.refreshChrome();
     GameLog.shared.info(
       "MainApp",
-      "hub ready account=" +
+      "city ready account=" +
         (Session.account || "(none)") +
         " role=" +
         (Session.role?.name || "(none)") +
         " server=" +
-        (Session.serverName || "(none)")
+        (Session.serverName || "(none)") +
+        " gold=" +
+        Session.gold +
+        " diamond=" +
+        Session.diamond
     );
   }
 
-  private buildHub(): Node {
-    const shell = this.shell;
-    const page = uiNode("HubPage");
-    place(createLabel("主城", 48, { color: new Color(255, 228, 170, 255) }), page, 0, 230);
-    this.accountNode = place(
-      createLabel(this.accountText(), 22, { color: new Color(190, 205, 225, 255) }),
+  private onTab(id: string): void {
+    GameLog.shared.info("MainApp", "tab " + id);
+    if (!this.allow(id)) return;
+    this.panels?.openRoot(id);
+    this.refreshChrome();
+  }
+
+  private openChild(id: string): void {
+    GameLog.shared.info("MainApp", "open " + id);
+    if (!this.allow(id)) return;
+    this.panels?.openChild(id);
+    this.refreshChrome();
+  }
+
+  private back(): void {
+    const closed = this.panels?.back() === true;
+    if (!closed) return;
+    GameLog.shared.info("MainApp", "back to " + (this.panels?.current || ""));
+    this.refreshChrome();
+  }
+
+  /** 未开启只 Toast，不压页面。没有登记的页面（日志）直接放行。 */
+  private allow(id: string): boolean {
+    const entry = findNavEntry(id);
+    if (!entry) return true;
+    const access = entryAccess(entry, this.level(), this.day(), ConfigDb.current);
+    if (access.open) return true;
+    GameLog.shared.info("MainApp", "locked " + id);
+    this.shell?.showToast(access.hint, 2200);
+    return false;
+  }
+
+  private buildPage(id: string): Node {
+    if (id === "plays") return this.buildPlays();
+    if (id === "log") return this.buildLog();
+    const entry = findNavEntry(id);
+    if (entry && entry.id === "bag") return this.buildBag(entry);
+    return this.buildPlaceholder(entry, id);
+  }
+
+  private buildCity(): Node {
+    const page = this.pageRoot("CityPage");
+    place(createLabel("主城", 48, { color: TITLE_COLOR }), page, 0, 400);
+    this.mainButton = place(
+      createButton(this.stageButtonText(), () => {
+        GameLog.shared.info("MainApp", "click main_battle");
+        void this.playMainStage();
+      }, 420, 76),
       page,
       0,
-      180
+      250
     );
-
-    this.mainButton = this.hubButton(page, this.stageButtonText(), "main_battle", 120, () => {
-      void this.playMainStage();
-    });
-    this.hubButton(page, "召唤", "main_summon", 56, () => shell?.showToast("召唤（占位）"));
-    this.hubButton(page, "英雄", "main_hero", -8, () => shell?.showToast("英雄（占位）"));
-    this.hubButton(page, "背包", "bag", -72, () => {
-      shell?.openPage("bag", this.buildBag());
-      shell?.showToast("打开背包");
-    });
-    this.hubButton(page, "公告", "notice", -136, () => {
-      shell?.enqueuePopup("notice", this.buildPopup("公告", "弹窗队列 1/2"));
-      shell?.enqueuePopup("notice-next", this.buildPopup("后续", "关闭上一张后出现"));
-      shell?.showToast("公告已入队");
-    });
-    this.hubButton(page, "模拟断线", "net-drop", -200, () => {
-      NetClient.shared.simulateDrop();
-      shell?.showToast("已模拟断线");
-    });
-    const logBtn = createButton("日志", () => {
-      GameLog.shared.info("MainApp", "click log");
-      shell?.openPage("log", this.buildLog());
-    }, 120, 44);
-    place(logBtn, page, 270, 230);
+    place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, 150);
+    place(
+      createButton("公告", () => {
+        GameLog.shared.info("MainApp", "click notice");
+        this.shell?.enqueuePopup("notice", this.buildPopup("公告", "弹窗队列 1/2"));
+        this.shell?.enqueuePopup("notice-next", this.buildPopup("后续", "关闭上一张后出现"));
+        this.shell?.showToast("公告已入队");
+      }, 140, 48),
+      page,
+      0,
+      150
+    );
+    place(
+      createButton("模拟断线", () => {
+        GameLog.shared.info("MainApp", "click net-drop");
+        NetClient.shared.simulateDrop();
+        this.shell?.showToast("已模拟断线");
+      }, 160, 48),
+      page,
+      190,
+      150
+    );
+    place(createLabel("主城场景占位", 26, { color: MUTED }), page, 0, -20);
+    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -70);
 
     this.gateNode = place(
-      createLabel(this.gateText(), 20, { color: new Color(170, 190, 170, 255), width: 700 }),
+      createLabel(this.gateText(), 20, { color: GATE_COLOR, width: 680, height: 72 }),
       page,
       0,
-      -258
+      -300
     );
-
     const netNode = createLabel("网络 " + NetClient.shared.state, 20, {
       color: new Color(160, 180, 210, 255),
-      width: 700,
+      width: 680,
     });
-    place(netNode, page, 0, -292);
+    place(netNode, page, 0, -390);
     NetClient.shared.onState((state) => {
       if (!this.isValid) return;
       if (netNode.isValid) setText(netNode, "网络 " + state);
@@ -127,16 +202,70 @@ export class MainApp extends Component {
     return page;
   }
 
-  private hubButton(page: Node, title: string, id: string, y: number, onClick: () => void): Node {
-    const button = createButton(title, () => {
-      GameLog.shared.info("MainApp", "click " + id);
-      onClick();
-    }, 300, 52);
-    place(button, page, 0, y);
-    return button;
+  private buildPlays(): Node {
+    const page = this.pageRoot("PlaysPage");
+    place(createLabel("玩法", 40, { color: TITLE_COLOR }), page, 0, 460);
+    place(createLabel("未开启的仍列在这里", 18, { color: MUTED }), page, 0, 410);
+    const top = 340;
+    const step = 52;
+    for (let i = 0; i < PLAY_ENTRIES.length; i++) {
+      const entry = PLAY_ENTRIES[i];
+      const access = entryAccess(entry, this.level(), this.day(), ConfigDb.current);
+      const button = createButton(
+        tabLabel(entry.title, access.open),
+        () => this.openChild(entry.id),
+        520,
+        44,
+        access.open ? OPEN_FILL : LOCKED_FILL,
+        22
+      );
+      place(button, page, 0, top - i * step);
+    }
+    place(createButton("返回", () => this.back(), 220, 48), page, 0, -220);
+    return page;
   }
 
-  /** 无战斗场景：进关后立刻按胜利结算，进度记在 Mock 会话里。 */
+  private buildPlaceholder(entry: NavEntry | null, id: string): Node {
+    const title = entry ? entry.title : id;
+    const blurb = entry ? entry.blurb : "占位";
+    const page = this.pageRoot("Panel-" + id);
+    place(createLabel(title, 40, { color: TITLE_COLOR }), page, 0, 80);
+    place(createLabel(blurb, 22, { color: MUTED, width: 560 }), page, 0, 16);
+    place(createButton("返回", () => this.back(), 220, 52), page, 0, -70);
+    return page;
+  }
+
+  private buildBag(entry: NavEntry): Node {
+    const page = this.pageRoot("BagPage");
+    place(createLabel("背包（占位）", 40, { color: TITLE_COLOR }), page, 0, 80);
+    place(createLabel(entry.blurb, 22, { color: MUTED }), page, 0, 20);
+    place(createButton("返回", () => this.back(), 220, 52), page, 0, -60);
+    return page;
+  }
+
+  private refreshChrome(): void {
+    const chrome = this.chrome;
+    if (!chrome) return;
+    chrome.setIdentity(formatNameLine(), formatSubLine());
+    chrome.setCurrencies(formatGoldLine(), formatDiamondLine());
+    const root = this.panels?.rootTab || CITY_TAB;
+    const tabs: TabState[] = [];
+    for (let i = 0; i < BOTTOM_TABS.length; i++) {
+      const tab = BOTTOM_TABS[i];
+      const access = entryAccess(tab, this.level(), this.day(), ConfigDb.current);
+      const state = !access.open ? "locked" : tab.id === root ? "selected" : "open";
+      tabs.push({ id: tab.id, text: tabLabel(tab.title, access.open), state });
+    }
+    chrome.setTabs(tabs);
+  }
+
+  private refreshHub(): void {
+    if (this.gateNode && this.gateNode.isValid) setText(this.gateNode, this.gateText());
+    this.setMainButton(this.stageButtonText());
+    this.refreshChrome();
+  }
+
+  /** 无战斗场景：进关后立刻按胜利结算，进度和钱包记在 Mock 会话里。 */
   private async playMainStage(): Promise<void> {
     if (this.stageBusy) return;
     const shell = this.shell;
@@ -168,6 +297,11 @@ export class MainApp extends Component {
       Session.stageId = result.nextStageId >= 1 ? result.nextStageId : stageId + 1;
       if (Session.role && typeof result.level === "number") Session.role.level = result.level;
       if (typeof result.openDay === "number" && result.openDay >= 1) Session.openDay = result.openDay;
+      if (typeof result.gold === "number" || typeof result.diamond === "number") {
+        Session.applyCurrencies(result.gold, result.diamond);
+      } else {
+        this.applyRewardFallback(result.rewards);
+      }
       const reward = result.rewards.length > 0 ? result.rewards[0] : null;
       const rewardText = reward ? "奖励 " + reward.count : "无奖励";
       shell?.showToast(
@@ -183,7 +317,9 @@ export class MainApp extends Component {
           " lv " +
           (Session.role?.level ?? "") +
           " day " +
-          Session.openDay
+          Session.openDay +
+          " gold " +
+          Session.gold
       );
       this.refreshHub();
     } catch (err) {
@@ -196,14 +332,17 @@ export class MainApp extends Component {
     }
   }
 
-  private refreshHub(): void {
-    if (this.accountNode && this.accountNode.isValid) setText(this.accountNode, this.accountText());
-    if (this.gateNode && this.gateNode.isValid) setText(this.gateNode, this.gateText());
-    this.setMainButton(this.stageButtonText());
-  }
-
-  private accountText(): string {
-    return formatHubIdentity();
+  /** 回包没带钱包时，按奖励 id 在本地加上，避免顶栏不动。 */
+  private applyRewardFallback(rewards: { id: number; count: number }[]): void {
+    let gold = Session.gold;
+    let diamond = Session.diamond;
+    for (let i = 0; i < rewards.length; i++) {
+      const count = rewards[i].count;
+      if (typeof count !== "number" || !isFinite(count) || count <= 0) continue;
+      if (rewards[i].id === 1) gold += Math.floor(count);
+      else if (rewards[i].id === 2) diamond += Math.floor(count);
+    }
+    Session.applyCurrencies(gold, diamond);
   }
 
   private stageButtonText(): string {
@@ -216,19 +355,6 @@ export class MainApp extends Component {
     if (label) setText(label, text);
   }
 
-  private buildBag(): Node {
-    const page = uiNode("BagPage");
-    place(createLabel("背包（占位）", 40, { color: new Color(255, 228, 170, 255) }), page, 0, 80);
-    place(createLabel("道具列表留到 C7", 22), page, 0, 20);
-    const back = createButton("返回", () => {
-      GameLog.shared.info("MainApp", "click bag-back");
-      this.shell?.closePage();
-      this.shell?.showToast("已关闭背包");
-    }, 220, 52);
-    place(back, page, 0, -60);
-    return page;
-  }
-
   private buildPopup(title: string, body: string): Node {
     const root = uiNode("Popup");
     const ui = root.addComponent(UITransform);
@@ -238,7 +364,7 @@ export class MainApp extends Component {
     const dim = createRect("dim", 2000, 2000, new Color(0, 0, 0, 140));
     dim.parent = root;
     place(createRect("card", 480, 280, new Color(22, 36, 64, 255)), root, 0, 10);
-    place(createLabel(title, 32, { color: new Color(255, 228, 170, 255), width: 440 }), root, 0, 80);
+    place(createLabel(title, 32, { color: TITLE_COLOR, width: 440 }), root, 0, 80);
     place(createLabel(body, 22, { width: 440 }), root, 0, 20);
     place(
       createButton("关闭", () => {
@@ -253,37 +379,38 @@ export class MainApp extends Component {
   }
 
   private buildLog(): Node {
-    const page = uiNode("LogPage");
-    place(createLabel("日志", 40, { color: new Color(255, 228, 170, 255) }), page, 0, 250);
-    place(createLabel("最近 10 条，新的在上", 18, { color: new Color(170, 186, 206, 255) }), page, 0, 200);
-    place(createRect("log-bg", 700, 320, new Color(10, 18, 32, 230)), page, 0, 20);
+    const page = this.pageRoot("LogPage");
+    place(createLabel("日志", 40, { color: TITLE_COLOR }), page, 0, 430);
+    place(createLabel("最近 10 条，新的在上", 18, { color: MUTED }), page, 0, 380);
+    place(createRect("log-bg", 660, 280, new Color(10, 18, 32, 230)), page, 0, 200);
     this.logLabel = place(
       createLabel(this.logText(), 16, {
         color: new Color(214, 224, 236, 255),
-        width: 680,
-        height: 300,
+        width: 640,
+        height: 260,
         align: "left",
       }),
       page,
       0,
-      20
+      200
     );
-    if (this.offLog) this.offLog();
+    this.detachLog();
     this.offLog = GameLog.shared.subscribe(() => {
       if (this.logLabel && this.logLabel.isValid) setText(this.logLabel, this.logText());
     });
-    place(createButton("空名创角", () => void this.tryEmptyCreate(), 200, 48), page, -160, -190);
-    place(createButton("断开提示", () => this.toastClosed(), 200, 48), page, 160, -190);
-    place(
-      createButton("返回", () => {
-        GameLog.shared.info("MainApp", "click log-back");
-        this.closeLog();
-      }, 200, 48),
-      page,
-      0,
-      -260
-    );
+    place(createButton("空名创角", () => void this.tryEmptyCreate(), 180, 48), page, -220, -20);
+    place(createButton("断开提示", () => this.toastClosed(), 180, 48), page, 0, -20);
+    place(createButton("开服D30", () => this.previewOpenDay(), 180, 48), page, 220, -20);
+    place(createButton("返回", () => this.back(), 220, 48), page, 0, -100);
     return page;
+  }
+
+  /** 只改本界面的开服天，方便看幻魔塔解锁。下一关结算会按 Mock 进度覆盖。 */
+  private previewOpenDay(): void {
+    Session.openDay = 30;
+    GameLog.shared.info("MainApp", "preview open day 30");
+    this.refreshHub();
+    this.shell?.showToast("开服天已设为 30。下一关结算会按 Mock 进度覆盖", 2200);
   }
 
   private logText(): string {
@@ -293,13 +420,16 @@ export class MainApp extends Component {
     return newestFirst.map((line) => GameLog.shared.format(line)).join("\n");
   }
 
-  private closeLog(): void {
+  private noteClose(id: string): void {
+    if (id === "log") this.detachLog();
+  }
+
+  private detachLog(): void {
     if (this.offLog) {
       this.offLog();
       this.offLog = null;
     }
     this.logLabel = null;
-    this.shell?.closePage();
   }
 
   /** 触发 Mock 已有的空名字失败，Toast 应是「角色名不能为空」。 */
@@ -337,12 +467,26 @@ export class MainApp extends Component {
 
   private gateText(): string {
     const db = ConfigDb.current;
-    const level = Session.role?.level ?? 1;
-    const day = Session.openDay >= 1 ? Session.openDay : 1;
+    const level = this.level();
+    const day = this.day();
     if (!db) return "配置未加载";
     const open = listOpenEntries(db.opencondition, level, day);
     if (open.length === 0) return "Lv" + level + " / 开服D" + day + " 无入口";
     return "Lv" + level + " / 开服D" + day + " 已开：" + open.map((row) => row.name).join("、");
+  }
+
+  private level(): number {
+    return Session.role?.level ?? 1;
+  }
+
+  private day(): number {
+    return Session.openDay >= 1 ? Session.openDay : 1;
+  }
+
+  private pageRoot(name: string): Node {
+    const page = uiNode(name);
+    place(createRect("bg", 720, 1280, PAGE_BG), page, 0, 0);
+    return page;
   }
 
   private resolveCanvas(): Node {
