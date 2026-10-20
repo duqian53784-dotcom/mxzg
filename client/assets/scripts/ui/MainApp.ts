@@ -30,6 +30,7 @@ import { NetState } from "../net/NetTypes";
 import { Proto } from "../net/protocol";
 import { CityChrome, mountCityChrome, TabState } from "./CityChrome";
 import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage } from "./HeroPage";
+import { buildSummonPage, SummonPage } from "./SummonPage";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -56,6 +57,7 @@ export class MainApp extends Component {
   private idle: IdlePage | null = null;
   private heroList: HeroListPage | null = null;
   private heroDetail: HeroDetailPage | null = null;
+  private summon: SummonPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -79,6 +81,8 @@ export class MainApp extends Component {
     this.heroList = null;
     this.heroDetail?.dispose();
     this.heroDetail = null;
+    this.summon?.dispose();
+    this.summon = null;
     this.shell?.dispose();
   }
 
@@ -120,7 +124,7 @@ export class MainApp extends Component {
   private onTab(id: string): void {
     GameLog.shared.info("MainApp", "tab " + id);
     if (!this.allow(id)) return;
-    if (id === "hero" && !this.ensureNet()) return;
+    if ((id === "hero" || id === "summon") && !this.ensureNet()) return;
     this.panels?.openRoot(id);
     this.refreshChrome();
   }
@@ -155,6 +159,7 @@ export class MainApp extends Component {
     if (id === "idle") return this.mountIdle();
     if (id === "hero") return this.mountHeroList();
     if (id === "hero-detail") return this.mountHeroDetail();
+    if (id === "summon") return this.mountSummon();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -295,7 +300,7 @@ export class MainApp extends Component {
     this.openChild("mainline");
   }
 
-  /** 底栏「英雄」没连上时不进列表。详情在 HeroPage 里，返回走页面栈。 */
+  /** 底栏「英雄」「召唤」没连上时不进页面。详情和召唤结果走页面栈。 */
   private ensureNet(): boolean {
     if (NetClient.shared.state === "connected") return true;
     this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -334,6 +339,23 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.heroDetail = page;
+    return page.node;
+  }
+
+  private mountSummon(): Node {
+    this.summon?.dispose();
+    const page = buildSummonPage({
+      diamond: () => Session.diamond,
+      showToast: (text) => this.shell?.showToast(text, 2200),
+      alive: () => this.isValid,
+      pull: (count) => Proto.summonPull({ count }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+      },
+      close: () => this.back(),
+    });
+    this.summon = page;
     return page.node;
   }
 
@@ -479,6 +501,10 @@ export class MainApp extends Component {
     if (id === "hero") {
       this.heroList?.dispose();
       this.heroList = null;
+    }
+    if (id === "summon") {
+      this.summon?.dispose();
+      this.summon = null;
     }
   }
 

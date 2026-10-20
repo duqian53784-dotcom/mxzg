@@ -15,6 +15,8 @@ import {
   HeroListResp,
   HeroUpgradeReq,
   HeroUpgradeResp,
+  SummonPullReq,
+  SummonPullResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -76,5 +78,9 @@ export const Proto = {
 
   heroUpgrade(req: HeroUpgradeReq, net: NetClient = NetClient.shared): Promise<HeroUpgradeResp> {
     return call(net, Cmd.heroUpgrade, req);
+  },
+
+  summonPull(req: SummonPullReq, net: NetClient = NetClient.shared): Promise<SummonPullResp> {
+    return call(net, Cmd.summonPull, req);
   },
 };

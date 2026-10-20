@@ -29,6 +29,7 @@ B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `h
 | 1302 | `idle.claim` | `IdleClaimReq` | `IdleClaimResp` | 领取挂机（C4）。太短则 `IDLE_EMPTY` |
 | 1401 | `hero.list` | `HeroListReq` | `HeroListResp` | 英雄名册（C5）。空名册先种下起步三名。不改钱包 |
 | 1402 | `hero.upgrade` | `HeroUpgradeReq` | `HeroUpgradeResp` | 英雄升级（C5）。扣金币。不足 `HERO_GOLD_SHORT`，满级 `HERO_LEVEL_MAX`，没有这名英雄 `HERO_NOT_FOUND` |
+| 1501 | `summon.pull` | `SummonPullReq` | `SummonPullResp` | 召唤（C6）。`count` 为 1 或 10。扣钻石。不足 `SUMMON_DIAMOND_SHORT`，次数不对 `SUMMON_COUNT_INVALID` |
 
 代码在 `client/assets/scripts/net/protocol/`：`cmds.ts`（名字和 ID）、`types.ts`（字段）、`codec.ts`（现在是明文对象）、`Proto.ts`（`Proto.login` 等）。
 
@@ -39,7 +40,7 @@ const role = await Proto.roleEnter({ account: login.account });
 
 不传第二个参数时用 `NetClient.shared`。自检要传入自己 new 的 `NetClient`。
 
-Mock 约定（给 C1 / C5 直接用，不用再改传输层）：
+Mock 约定（给 C1 / C6 直接用，不用再改传输层）：
 
 - 每个 MockTransport 带一份 `MockGameSession`。一开始就有角色 `1001 / MockHero / Lv1`，属于账号 `mock`，下一关 1、开服第 1 天。还没 `login`，或登录的就是 `mock` 时，只 `role.enter` 也能进主城。登录别的账号则 `hasRole` 为 false，直到 `role.create`。同一局里进度会留下来。细节和录包见 `docs/mock-replay.md`。
 - `role.enter` 额外带 `openDay`、`stageId`、`gold`、`diamond`（真服可以不带）。Boot 写进 `Session`。没有角色时金币钻石回 0。
@@ -50,8 +51,9 @@ Mock 约定（给 C1 / C5 直接用，不用再改传输层）：
 - `idle.claim` 把可领的金币和强化石计入钱包，然后重新起算。一个都不够时 `ok: false`，`code` 为 `IDLE_EMPTY`（「挂机时间太短，暂无收益」），钱包和起算时刻不动。创角会把时长和强化石清掉。
 - `hero.list` 只读。名册为空时种下光耀骑士（id 10001，3星）、林间游侠（10002，2星）、星辉法师（10003，1星），都是 Lv1。回包带每名英雄的等级、星级、占位属性（攻击 / 生命 / 防御）、下一级金币消耗，以及当前钱包。
 - `hero.upgrade` 把指定英雄升 1 级并扣除金币。Lv1→2 花 30，之后每级再多 20，最高 Lv10。星级不变。成功回包带新等级、新属性、本次花费和扣完后的钱包。金币不够时 `HERO_GOLD_SHORT`（「金币不足，无法升级」），并带 `needGold`；已满级 `HERO_LEVEL_MAX`；id 不存在 `HERO_NOT_FOUND`。这三种失败都不改等级和钱包，也不动挂机计时和主线进度。
+- `summon.pull` 的 `count` 只能是 1（10 钻石）或 10（90 钻石）。不够时 `SUMMON_DIAMOND_SHORT`（「钻石不足，无法召唤」），并带 `needDiamond`；其它次数 `SUMMON_COUNT_INVALID`。失败不改钻石、名册和召唤游标。成功按固定卡池顺序抽出：不在名册里的英雄追加到末尾（Lv1，星级按卡池），已拥有的不改等级星级，改为该英雄碎片 +10。碎片道具 id = `40000 + heroId`。回包带本次掉落、新英雄人数、碎片次数和扣完后的钱包。不改金币、挂机计时和主线。创角把游标和碎片清掉。
 
-1301 / 1302 / 1401 / 1402 仍是客户端占位号，不是旧服消息号。
+1301 / 1302 / 1401 / 1402 / 1501 仍是客户端占位号，不是旧服消息号。
 
 ## 以后换成真 Protobuf
 

@@ -2,6 +2,13 @@ import { ErrorCode } from "../core/errors";
 import { HeroRosterEntry, HeroSeed, normalizeRoster, starterRoster, toHeroCard, upgradeCost, HERO_MAX_LEVEL } from "../module/hero/growth";
 import { buildIdleView, elapsedSince, IDLE_ITEM_ID, IDLE_ITEM_NAME } from "../module/idle/rewards";
 import {
+  isSummonCount,
+  poolAt,
+  shardItemId,
+  SUMMON_SHARD_GAIN,
+  summonCost,
+} from "../module/summon/pull";
+import {
   HeroListResp,
   HeroUpgradeResp,
   IdleClaimResp,
@@ -11,6 +18,8 @@ import {
   RoleEnterResp,
   StageEnterResp,
   StageResultResp,
+  SummonDrop,
+  SummonPullResp,
 } from "./protocol/types";
 
 /** 一场预览里的假服状态。同一 MockTransport 上多次请求共用这一份。 */
@@ -43,6 +52,8 @@ export interface MockSessionSeed {
   items?: { id: number; count: number }[];
   /** 英雄名册。不填或空数组则种下三名起步英雄。 */
   heroes?: HeroSeed[];
+  /** 召唤顺序下标。不填从 0 开始。创角会回到 0。 */
+  summonCursor?: number;
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -51,7 +62,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取和英雄升级都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级和召唤都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -82,6 +93,8 @@ export class MockGameSession {
   itemCounts: { [id: number]: number } = {};
   /** 已拥有的英雄。空名册会在构造、创角和读列表时种下起步三名。 */
   heroes: HeroRosterEntry[] = [];
+  /** 下一抽出 SUMMON_POOL 的下标。单抽走 1 格，十连走 10 格。不足时不动。 */
+  summonCursor = 0;
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
@@ -128,7 +141,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包和英雄重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、英雄和召唤游标重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -144,6 +157,7 @@ export class MockGameSession {
     this.battleId = "";
     this.itemCounts = {};
     this.heroes = starterRoster();
+    this.summonCursor = 0;
     this.idleAnchorMs = this.clock();
     this.syncDerived(true);
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
@@ -327,6 +341,89 @@ export class MockGameSession {
     };
   }
 
+  /**
+   * 单抽或十连，只扣钻石。
+   * 新英雄追加到名册末尾（Lv1，星级按卡池）。已拥有则加碎片，等级和星级不动。
+   * 钻石不够或次数不是 1/10 时整次拒绝，游标、名册、钱包都不变。
+   * 不改金币、挂机起算和主线进度。
+   */
+  summon(data: unknown): SummonPullResp {
+    this.ensureHeroes();
+    const count = Math.floor(numField(asRecord(data), "count", 0));
+    if (!isSummonCount(count)) {
+      return {
+        ok: false,
+        code: ErrorCode.SUMMON_COUNT_INVALID,
+        count,
+        cost: 0,
+        drops: [],
+        newCount: 0,
+        shardCount: 0,
+        gold: this.gold,
+        diamond: this.diamond,
+      };
+    }
+    const cost = summonCost(count);
+    if (this.diamond < cost) {
+      return {
+        ok: false,
+        code: ErrorCode.SUMMON_DIAMOND_SHORT,
+        count,
+        cost: 0,
+        drops: [],
+        newCount: 0,
+        shardCount: 0,
+        gold: this.gold,
+        diamond: this.diamond,
+        needDiamond: cost,
+      };
+    }
+    this.diamond -= cost;
+    const drops: SummonDrop[] = [];
+    let newCount = 0;
+    let shardCount = 0;
+    for (let i = 0; i < count; i++) {
+      const candidate = poolAt(this.summonCursor);
+      this.summonCursor += 1;
+      const shardId = shardItemId(candidate.id);
+      if (this.findHero(candidate.id)) {
+        this.addItem(shardId, SUMMON_SHARD_GAIN);
+        shardCount += 1;
+        drops.push({
+          heroId: candidate.id,
+          name: candidate.name,
+          star: candidate.star,
+          kind: "shard",
+          shardId,
+          shardGain: SUMMON_SHARD_GAIN,
+          shardOwned: this.itemCount(shardId),
+        });
+      } else {
+        this.heroes.push({ id: candidate.id, name: candidate.name, level: 1, star: candidate.star });
+        newCount += 1;
+        drops.push({
+          heroId: candidate.id,
+          name: candidate.name,
+          star: candidate.star,
+          kind: "new",
+          shardId,
+          shardGain: 0,
+          shardOwned: this.itemCount(shardId),
+        });
+      }
+    }
+    return {
+      ok: true,
+      count,
+      cost,
+      drops,
+      newCount,
+      shardCount,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
   private applySeed(seed?: MockSessionSeed): void {
     if (!seed) return;
     if (typeof seed.account === "string") {
@@ -369,6 +466,9 @@ export class MockGameSession {
       }
     }
     if (Array.isArray(seed.heroes)) this.heroes = normalizeRoster(seed.heroes);
+    if (typeof seed.summonCursor === "number" && isFinite(seed.summonCursor) && seed.summonCursor >= 0) {
+      this.summonCursor = Math.floor(seed.summonCursor);
+    }
   }
 
   /** id 1 金币，id 2 钻石。其它 id 先忽略。 */

@@ -1,5 +1,5 @@
 /**
- * B3–C5 自检（不启动 Creator）。
+ * B3–C6 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -26,6 +26,18 @@ import {
   upgradeCost,
   upgradeToast,
 } from "../assets/scripts/module/hero/growth";
+import {
+  applySummon,
+  diamondShortToast,
+  shardItemId,
+  SUMMON_SHARD_BASE,
+  SUMMON_SHARD_GAIN,
+  SUMMON_SINGLE_COST,
+  SUMMON_TEN_COST,
+  summonCost,
+  summonResultText,
+  summonToast,
+} from "../assets/scripts/module/summon/pull";
 import { GameLog } from "../assets/scripts/core/GameLog";
 import { loadLoginPrefs, LoginPrefs, PrefStore, resolveAccount, saveLoginPrefs } from "../assets/scripts/core/LoginPrefs";
 import {
@@ -633,6 +645,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
+  assert(rootTabFor("summon") === "summon", "summon is its own tab");
   const heroNav = new NavHistory();
   heroNav.reset("city");
   heroNav.push("hero");
@@ -996,6 +1009,88 @@ async function checkHero(): Promise<void> {
   poorNet.close();
 }
 
+async function checkSummon(): Promise<void> {
+  assert(summonCost(1) === SUMMON_SINGLE_COST && summonCost(10) === SUMMON_TEN_COST && summonCost(2) === 0, "summon cost");
+  assert(shardItemId(10001) === SUMMON_SHARD_BASE + 10001, "shard item id");
+  assert(summonToast({ count: 1, drops: [{ heroId: 10004, name: "霜刃刺客", star: 2, kind: "new", shardId: 50004, shardGain: 0, shardOwned: 0 }], newCount: 1, shardCount: 0 }) === "召唤成功，获得霜刃刺客", "new toast");
+  assert(
+    summonToast({
+      count: 1,
+      drops: [{ heroId: 10001, name: "光耀骑士", star: 3, kind: "shard", shardId: 50001, shardGain: 10, shardOwned: 10 }],
+      newCount: 0,
+      shardCount: 1,
+    }) === "召唤成功，光耀骑士已拥有，转化为碎片 ×10",
+    "shard toast"
+  );
+  assert(summonToast({ count: 10, drops: [], newCount: 5, shardCount: 5 }) === "十连完成，新英雄 5，碎片 5", "ten toast");
+  assert(diamondShortToast(1, 10) === "钻石不足，召唤需要 10" && diamondShortToast(10, 90) === "钻石不足，十连需要 90", "diamond short toast");
+  assert(errorText(ErrorCode.SUMMON_DIAMOND_SHORT) === "钻石不足，无法召唤", "diamond short text");
+  assert(errorText(ErrorCode.SUMMON_COUNT_INVALID) === "召唤次数无效", "bad count text");
+  assert(summonResultText([]) === "还没有召唤。新英雄会进入英雄列表", "empty result");
+
+  const fresh = new MockGameSession();
+  const anchor = fresh.idleAnchorMs;
+  const gold = fresh.gold;
+  const first = fresh.summon({ count: 1 });
+  assert(first.ok && first.cost === SUMMON_SINGLE_COST && first.diamond === MOCK_STARTER_DIAMOND - SUMMON_SINGLE_COST, "single spends diamond");
+  assert(first.newCount === 1 && first.shardCount === 0 && first.drops.length === 1 && first.drops[0].kind === "new", "first drop is new");
+  assert(first.drops[0].heroId === 10004 && first.drops[0].name === "霜刃刺客" && first.drops[0].star === 2, "first hero frost");
+  assert(fresh.heroes.length === 4 && fresh.heroes[3].id === 10004 && fresh.heroes[3].level === 1 && fresh.heroes[0].level === 1, "roster appends new hero");
+  assert(fresh.gold === gold && fresh.idleAnchorMs === anchor && fresh.stageId === 1 && fresh.summonCursor === 1, "summon leaves gold idle and stage");
+  const second = fresh.summon({ count: 1 });
+  assert(second.ok && second.drops[0].kind === "shard" && second.drops[0].heroId === 10001 && second.drops[0].shardGain === SUMMON_SHARD_GAIN, "second is dupe shard");
+  assert(second.drops[0].shardOwned === SUMMON_SHARD_GAIN && fresh.itemCounts[shardItemId(10001)] === SUMMON_SHARD_GAIN, "shard stored");
+  assert(fresh.heroes.length === 4 && fresh.heroes[0].star === 3 && fresh.heroes[0].level === 1 && fresh.diamond === 0 && fresh.summonCursor === 2, "dupe does not change roster");
+  const broke = fresh.summon({ count: 1 });
+  assert(broke.ok === false && broke.code === ErrorCode.SUMMON_DIAMOND_SHORT && broke.needDiamond === SUMMON_SINGLE_COST && broke.drops.length === 0, "third single short");
+  assert(fresh.diamond === 0 && fresh.summonCursor === 2 && fresh.heroes.length === 4 && fresh.gold === gold, "short keeps cursor and wallet");
+  const tenShort = fresh.summon({ count: 10 });
+  assert(tenShort.ok === false && tenShort.code === ErrorCode.SUMMON_DIAMOND_SHORT && tenShort.needDiamond === SUMMON_TEN_COST && fresh.summonCursor === 2, "ten short on empty wallet");
+  const bad = new MockGameSession();
+  const invalid = bad.summon({ count: 2 });
+  assert(invalid.ok === false && invalid.code === ErrorCode.SUMMON_COUNT_INVALID && bad.diamond === MOCK_STARTER_DIAMOND && bad.summonCursor === 0 && bad.heroes.length === 3, "bad count");
+
+  const rich = new MockGameSession({ diamond: SUMMON_TEN_COST });
+  const ten = rich.summon({ count: 10 });
+  assert(ten.ok && ten.cost === SUMMON_TEN_COST && ten.newCount === 5 && ten.shardCount === 5 && ten.drops.length === 10, "ten pull mix");
+  assert(rich.diamond === 0 && rich.gold === MOCK_STARTER_GOLD && rich.heroes.length === 8 && rich.summonCursor === 10, "ten spends only diamond");
+  assert(ten.drops[0].kind === "new" && ten.drops[1].kind === "shard" && ten.drops[8].kind === "shard" && ten.drops[8].heroId === 10004, "pool wraps onto the new hero");
+  assert(rich.itemCounts[shardItemId(10001)] === SUMMON_SHARD_GAIN * 2 && ten.drops[9].shardOwned === SUMMON_SHARD_GAIN * 2, "same dupe stacks shards");
+  const upgraded = rich.heroUpgrade({ heroId: 10004 });
+  assert(upgraded.ok && upgraded.hero && upgraded.hero.level === 2 && rich.heroes[0].level === 1 && rich.summonCursor === 10 && rich.diamond === 0, "new hero can upgrade");
+  rich.roleCreate({ name: "新人" });
+  assert(rich.heroes.length === 3 && rich.heroes[0].name === "光耀骑士" && rich.summonCursor === 0 && rich.diamond === MOCK_STARTER_DIAMOND, "create resets summon");
+  assert(rich.itemCounts[shardItemId(10001)] === undefined && rich.gold === MOCK_STARTER_GOLD, "create clears shards");
+
+  const shifted = new MockGameSession({ summonCursor: 1, heroes: [{ id: 10004, name: "霜刃刺客", level: 1, star: 2 }] });
+  const shiftedPull = shifted.summon({ count: 1 });
+  assert(shiftedPull.ok && shiftedPull.drops[0].kind === "new" && shiftedPull.drops[0].heroId === 10001 && shifted.heroes.length === 2, "cursor seed skips first card");
+
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const remote = await Proto.summonPull({ count: 1 }, net);
+  assert(remote.ok && remote.drops[0].name === "霜刃刺客" && remote.diamond === MOCK_STARTER_DIAMOND - SUMMON_SINGLE_COST, "proto single");
+  const listed = await Proto.heroList({}, net);
+  assert(listed.heroes.length === 4 && listed.heroes[3].id === 10004 && listed.heroes[3].level === 1 && listed.diamond === remote.diamond, "list includes summoned hero");
+  const again = await Proto.summonPull({ count: 1 }, net);
+  assert(again.ok && again.drops[0].kind === "shard" && again.diamond === 0, "proto second shard");
+  const short = await Proto.summonPull({ count: 10 }, net);
+  assert(short.ok === false && short.code === ErrorCode.SUMMON_DIAMOND_SHORT && short.needDiamond === SUMMON_TEN_COST, "proto ten short");
+  const still = await Proto.heroList({}, net);
+  assert(still.heroes.length === 4 && still.heroes[0].level === 1 && still.diamond === 0, "failed ten leaves roster");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applySummon(remote);
+  assert(Session.gold === remote.gold && Session.diamond === remote.diamond, "apply summon");
+  applySummon({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remote.gold && Session.diamond === remote.diamond, "failed summon ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.summonPull).map((row) => row.id);
+  assert(ids.length === 1 && ids[0] === 1501, "summon cmd id");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -1012,6 +1107,7 @@ async function main(): Promise<void> {
   await checkReplay();
   await checkIdleSession();
   await checkHero();
+  await checkSummon();
   console.log("skeleton-check ok");
 }
 

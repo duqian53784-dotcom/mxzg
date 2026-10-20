@@ -3,7 +3,7 @@
 - `core/` 启动、会话（Boot、Session）
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
-- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益，`hero/` 英雄升级）
+- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
 
 场景在 `assets/scenes/`。Boot / Main / Battle 已建好。Boot 的 Canvas 上已经挂了 Boot。其余界面由代码生成，不用再挂组件。
@@ -33,7 +33,7 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 
 Boot 的登录不再手写 `request("login")`，改走 `Proto.login` / `Proto.roleEnter`。回包仍由 MockTransport 发出。
 
-P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。英雄页会读名册并升级。创角从登录面板进，见下面 C1。
+P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。创角从登录面板进，见下面 C1。
 
 同一局 Mock 会记住开服天、等级、主线进度和英雄等级。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
 
@@ -82,7 +82,7 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 | 入口 | 条件 | 点进去 |
 |------|------|--------|
 | 英雄 | 主线 Lv1 | 列表、详情、升级（C5） |
-| 召唤 | 主线 Lv1 | 占位（C6） |
+| 召唤 | 主线 Lv1 | 单抽、十连、新英雄或碎片（C6） |
 | 铁匠铺 | 主线 Lv5 | 占位（C9）。Lv1 时应带锁 |
 | 玩法 | 随时 | 挂机、背包、羁绊、邮件、竞技场、许愿池、咖啡馆、日常副本、幻境之塔、幻魔塔 |
 | 幻魔塔 | 开服第 30 天（`opencondition` 和 `magic_tower_open_day`） | 占位。D1 点它应 Toast「开服第30天」 |
@@ -131,5 +131,19 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 4. **金币不足**。起步 100 金可以升两次（30 + 50），第三次需要 70。Toast「金币不足，升级需要 70」，等级和顶栏金币都不变。
 5. **已满级**。最高 Lv10。再点 Toast「已达最高等级」，金币不扣。
 6. 从详情或列表点底栏其它入口，会先回到主城再打开那一项。创角会把英雄等级和钱包重置（金币 100、钻石 20）。
+
+不需要起 server，也不用改场景。
+
+## 召唤（C6）
+
+不改 `.scene`，不用新挂组件。召唤页在主城页面栈里用代码生成。英雄列表、升级和挂机入口都还在。
+
+底栏点 **召唤**（主线 Lv1 就开。网络没连上时 Toast「网络未连接」，不进页面）：
+
+1. **花费**。单抽 10 钻石，十连 90 钻石。新号钻石 20，可以单抽两次，十连会不够。页面写着「持有钻石」。
+2. **单抽成功**。第一次 Toast「召唤成功，获得霜刃刺客」。钻石从 20 变成 10，顶栏跟着变。结果区写「新英雄 · 霜刃刺客 · 2星」。到底栏 **英雄**，列表末尾多这一名，Lv1。点进去可以按 C5 用金币升级，星级仍是 2。
+3. **重复转碎片**。再回召唤，第二次抽出光耀骑士（起步名册里已有）。Toast「召唤成功，光耀骑士已拥有，转化为碎片 ×10」。钻石变为 0。英雄列表还是 4 人，光耀骑士等级不变。碎片记在 Mock 会话里，背包界面留到 C7。
+4. **钻石不足**。第三次单抽，或任意时候点十连（新号只有 20，十连要 90）。Toast「钻石不足，召唤需要 10」或「钻石不足，十连需要 90」。钻石、名册、游标都不变。
+5. **十连**。钻石够 90 时一次抽 10 张，Toast「十连完成，新英雄 N，碎片 M」。不够则整次不做。顺序固定，抽完从头循环。创角会把钻石、名册和召唤进度重置。
 
 不需要起 server，也不用改场景。

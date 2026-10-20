@@ -19,7 +19,7 @@ export const CITY_TAB = "city";
 export const BOTTOM_TABS: NavEntry[] = [
   { id: "city", title: "主城", blurb: "主城" },
   { id: "hero", title: "英雄", gateId: "main_hero", blurb: "英雄列表、详情与升级" },
-  { id: "summon", title: "召唤", gateId: "main_summon", blurb: "召唤留到 C6" },
+  { id: "summon", title: "召唤", gateId: "main_summon", blurb: "单抽与十连。新英雄进名册，重复转碎片" },
   { id: "smith", title: "铁匠铺", gateId: "main_smith_shop", blurb: "铁匠铺留到 C9" },
   { id: "plays", title: "玩法", blurb: "按主线等级或开服天开启" },
 ];
