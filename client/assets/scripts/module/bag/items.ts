@@ -9,7 +9,7 @@ import { BagItem, BagItemKind, BagUseResp } from "../../net/protocol/types";
  * 强化石来自挂机，英雄碎片来自召唤重复。
  * 小金币袋和经验药水是可直接使用的消耗品。
  * 许愿符只在低级许愿池消耗，背包里不能直接使用。
- * 咖啡豆只由咖啡馆招待产出，背包里不能直接使用。
+ * 咖啡豆只由咖啡馆招待产出，在限时兑换消耗，背包里不能直接使用。
  * 领队是名册第一名（起步为光耀骑士）。经验满 100 升 1 级。
  */
 
@@ -62,7 +62,7 @@ const CATALOG: readonly CatalogRow[] = [
     name: CAFE_BEAN_NAME,
     kind: "material",
     usable: false,
-    desc: "咖啡馆招待获得，不能直接使用",
+    desc: "咖啡馆招待获得。可在限时兑换消耗，不能直接使用",
   },
   {
     id: IDLE_ITEM_ID,

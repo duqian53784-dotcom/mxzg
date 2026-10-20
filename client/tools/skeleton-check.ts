@@ -1,5 +1,5 @@
 /**
- * B3–C15、基础商店、低级许愿池与咖啡馆招待自检（不启动 Creator）。
+ * B3–C15、基础商店、许愿池、咖啡馆、礼包与限时活动自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -322,6 +322,61 @@ import {
   listGiftLevels,
   parseGiftRecharge,
 } from "../assets/scripts/module/gift/packs";
+import {
+  applyLimitedWallet,
+  findLimitedOffer,
+  findLimitedPack,
+  LIMITED_BEAN_COST,
+  LIMITED_BEAN_ITEM_ID,
+  LIMITED_BEAN_LIMIT,
+  LIMITED_EX_BEAN_ID,
+  LIMITED_EX_GOLD_ID,
+  LIMITED_GOLD_COST,
+  LIMITED_GOLD_LIMIT,
+  LIMITED_GOLD_REWARD,
+  LIMITED_OFFERS,
+  LIMITED_PACK_DAYS,
+  LIMITED_PACK_DIAMOND_ID,
+  LIMITED_PACK_GOLD,
+  LIMITED_PACK_MOCK_DIAMOND,
+  LIMITED_PACK_MOCK_ID,
+  LIMITED_PACK_PRICE,
+  LIMITED_PACK_STONE,
+  LIMITED_PACKS,
+  LIMITED_STONE_DIAMOND,
+  LIMITED_STONE_GOLD,
+  LIMITED_STONE_LIMIT,
+  limitedCountdown,
+  limitedDaysLeft,
+  limitedExchangeFailToast,
+  limitedExchangeToast,
+  limitedGoldShortToast,
+  limitedHeadLine,
+  limitedItemShortToast,
+  limitedMissingToast,
+  limitedOfferButton,
+  limitedOfferLine,
+  limitedPackBoughtToast,
+  limitedPackButton,
+  limitedPackEndedToast,
+  limitedPackFailToast,
+  limitedPackLine,
+  limitedPackMissingToast,
+  limitedPackShortToast,
+  limitedPackToast,
+  limitedSoldOutToast,
+  limitedStoneButton,
+  limitedStoneFailToast,
+  limitedStoneFree,
+  limitedStoneLine,
+  limitedStoneNoChanceToast,
+  limitedStoneRateLine,
+  limitedStoneShortToast,
+  limitedStoneToast,
+  limitedWalletLine,
+  listLimitedOffers,
+  listLimitedPacks,
+} from "../assets/scripts/module/limited/event";
 import { Goal7Task, ShopSku } from "../assets/scripts/net/protocol/types";
 import {
   applySummon,
@@ -1024,6 +1079,19 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   giftFromCity.push("plays");
   giftFromCity.push("gift");
   assert(giftFromCity.current === "gift" && giftFromCity.rootTab() === "plays" && giftFromCity.pop() === "gift", "gift opened from plays");
+  const limitedEntry = findNavEntry("limited");
+  assert(limitedEntry !== null && !limitedEntry.gateId && !limitedEntry.serverGateKey, "limited has no gate");
+  assert(entryAccess(limitedEntry, 1, 1, null).open && entryAccess(limitedEntry, 1, 1, db).open, "limited open on day 1");
+  assert(entryAccess(limitedEntry, 1, 30, db).open && limitedEntry.blurb.indexOf("点石成金") >= 0, "limited ignores open day");
+  assert(rootTabFor("limited") === "plays", "limited stays on plays");
+  const limitedFromCity = new NavHistory();
+  limitedFromCity.reset("city");
+  limitedFromCity.push("limited");
+  assert(limitedFromCity.current === "limited" && limitedFromCity.rootTab() === "city", "limited opened from city");
+  limitedFromCity.pop();
+  limitedFromCity.push("plays");
+  limitedFromCity.push("limited");
+  assert(limitedFromCity.current === "limited" && limitedFromCity.rootTab() === "plays" && limitedFromCity.pop() === "limited", "limited opened from plays");
   const wishEntry = findNavEntry("wish");
   assert(wishEntry !== null && wishEntry.gateId === "main_blessingpool", "wish gate");
   const wishLock = entryAccess(wishEntry, 1, 1, db);
@@ -2643,6 +2711,7 @@ async function main(): Promise<void> {
   await checkWish();
   await checkCafe();
   await checkGift();
+  await checkLimited();
   console.log("skeleton-check ok");
 }
 
@@ -3536,6 +3605,198 @@ async function checkGift(): Promise<void> {
   assert(Session.gold === remoteFirst.gold && Session.diamond === remoteFirst.diamond, "apply gift");
   applyGiftWallet({ ok: false, gold: 1, diamond: 1 });
   assert(Session.gold === remoteFirst.gold && Session.diamond === remoteFirst.diamond, "failed gift ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  net.close();
+}
+
+async function checkLimited(): Promise<void> {
+  assert(LIMITED_OFFERS.length === 2 && LIMITED_PACKS.length === 2 && LIMITED_PACK_DAYS === 7, "two offers and two packs");
+  assert(findLimitedOffer(LIMITED_EX_BEAN_ID) !== null && findLimitedOffer(9) === null, "known offer");
+  assert(findLimitedPack(LIMITED_PACK_MOCK_ID) !== null && findLimitedPack(9) === null, "known pack");
+  assert(limitedDaysLeft(1, 7) === 7 && limitedDaysLeft(7, 7) === 1 && limitedDaysLeft(8, 7) === 0, "days left");
+  assert(limitedCountdown(1) === "开服第 1 天 · 剩余 7 天" && limitedCountdown(7) === "开服第 7 天 · 剩余 1 天", "countdown open");
+  assert(limitedCountdown(8) === "开服第 8 天 · 本轮已结束", "countdown ended");
+  assert(limitedStoneFree(0) && !limitedStoneFree(1), "first stone is free");
+  const listed = listLimitedOffers((id) => (id === LIMITED_EX_BEAN_ID ? 1 : 0), () => 2);
+  assert(listed[0].bought === 1 && listed[0].owned === 2 && listed[1].pay === "gold", "offer list");
+  assert(limitedOfferLine(listed[0]).indexOf("咖啡豆 ×2") >= 0 && limitedOfferLine(listed[0]).indexOf("今日 1/2") >= 0, "bean line");
+  assert(limitedOfferLine(listed[1]).indexOf("金币 50") >= 0 && limitedOfferButton(listed[1]) === "兑换", "gold line");
+  const sold = listLimitedOffers(() => LIMITED_BEAN_LIMIT, () => 0)[0];
+  assert(limitedOfferButton(sold) === "已兑完", "sold button");
+  const packs = listLimitedPacks(1, (id) => id === LIMITED_PACK_DIAMOND_ID);
+  assert(packs[0].bought && !packs[0].ended && packs[1].pay === "mock" && !packs[1].bought, "pack list");
+  assert(limitedPackLine(packs[1]).indexOf("模拟购买") >= 0 && limitedPackLine(packs[1]).indexOf("可购买") >= 0, "mock pack line");
+  assert(limitedPackButton(packs[0]) === "已经购买" && limitedPackButton(packs[1]) === "模拟购买", "pack buttons");
+  const endedPacks = listLimitedPacks(8, () => false);
+  assert(endedPacks[0].ended && limitedPackButton(endedPacks[0]) === "已结束", "ended pack");
+  assert(limitedHeadLine(1).indexOf("开服第 1 天") >= 0 && limitedWalletLine(100, 20, 2) === "持有金币 100 · 钻石 20 · 咖啡豆 ×2", "head and wallet");
+  assert(limitedStoneLine(0, 3, 100, 0).indexOf("今日剩余 3/3") >= 0 && limitedStoneLine(0, 3, 100, 0).indexOf("免费") >= 0, "free stone line");
+  assert(limitedStoneLine(1, 3, 100, 5).indexOf("今日剩余 2/3") >= 0 && limitedStoneLine(3, 3, 100, 5).indexOf("已用完") >= 0, "paid stone line");
+  assert(limitedStoneRateLine().indexOf("钻石 5 换金币 100") >= 0, "rate line");
+  assert(limitedStoneButton(0, 3) === "免费点石" && limitedStoneButton(1, 3) === "钻石点石（5）" && limitedStoneButton(3, 3) === "今日已用完", "stone buttons");
+  assert(limitedExchangeToast("咖啡豆", 2, "item", "经验药水", 1) === "兑换成功：消耗咖啡豆 ×2，获得经验药水 ×1", "bean toast");
+  assert(limitedExchangeToast("金币", 50, "gold", "强化石", 4) === "兑换成功：消耗金币 50，获得强化石 ×4", "gold toast");
+  assert(limitedSoldOutToast("经验药水") === "经验药水今日已兑完" && limitedMissingToast() === "没有这个兑换", "sold copy");
+  assert(limitedGoldShortToast(50) === "金币不足，兑换需要 50" && limitedItemShortToast("咖啡豆", 2) === "咖啡豆不足，兑换需要 2", "short copy");
+  assert(limitedStoneToast(true, 0, 100, 1, 3) === "点石成功：免费获得金币 100，今日剩余 2/3", "free stone toast");
+  assert(limitedStoneToast(false, 5, 100, 2, 3) === "点石成功：消耗钻石 5，获得金币 100，今日剩余 1/3", "paid stone toast");
+  assert(limitedStoneNoChanceToast() === "今日点石次数已用完" && limitedStoneShortToast(5) === "钻石不足，点石需要 5", "stone fail copy");
+  assert(limitedPackToast("开服礼包", "diamond", 15, 180, 0, "强化石", 3) === "购买成功：开服礼包，消耗钻石 15，金币 +180、强化石 ×3", "diamond pack toast");
+  assert(limitedPackToast("限时补给", "mock", 0, 0, 30, "经验药水", 1) === "模拟购买成功：限时补给，钻石 +30、经验药水 ×1", "mock pack toast");
+  assert(limitedPackBoughtToast("开服礼包") === "开服礼包已经购买" && limitedPackEndedToast() === "限时礼包已结束", "pack fail copy");
+  assert(limitedPackShortToast("开服礼包", 15) === "钻石不足，开服礼包需要 15" && limitedPackMissingToast() === "没有这个礼包", "pack short copy");
+  assert(errorText(ErrorCode.LIMITED_EX_SOLD_OUT) === "今日已兑完" && errorText(ErrorCode.LIMITED_PACK_ENDED) === "限时礼包已结束", "limited error text");
+
+  const fresh = new MockGameSession();
+  const view = fresh.limitedView();
+  assert(view.ok && view.openDay === 1 && view.offers.length === 2 && view.offers[0].bought === 0 && view.beanOwned === 0, "fresh view");
+  assert(view.stoneUsed === 0 && view.stoneFree === true && view.stoneCost === 0 && view.packs.length === 2 && view.packs[0].bought === false, "fresh stone and packs");
+  assert(view.countdown === "开服第 1 天 · 剩余 7 天" && view.gold === MOCK_STARTER_GOLD && view.diamond === MOCK_STARTER_DIAMOND, "view leaves wallet");
+  assert(fresh.giftView().dailyBought === false && fresh.shopView().skus[0].bought === 0 && fresh.cafeUsed === 0, "view leaves other modes");
+
+  const noBean = fresh.limitedExchange({ id: LIMITED_EX_BEAN_ID });
+  assert(noBean.ok === false && noBean.code === ErrorCode.LIMITED_EX_ITEM_SHORT && limitedExchangeFailToast(noBean) === "咖啡豆不足，兑换需要 2", "bean short");
+  assert(fresh.gold === MOCK_STARTER_GOLD && fresh.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION && fresh.limitedView().offers[0].bought === 0, "bean short changes nothing");
+  const missing = fresh.limitedExchange({ id: 99 });
+  assert(missing.ok === false && missing.code === ErrorCode.LIMITED_EX_NOT_FOUND && limitedExchangeFailToast(missing) === "没有这个兑换", "missing offer");
+  const blank = fresh.limitedExchange({});
+  assert(blank.ok === false && blank.code === ErrorCode.LIMITED_EX_NOT_FOUND && fresh.gold === MOCK_STARTER_GOLD, "blank offer");
+
+  const beans = new MockGameSession({ items: [{ id: ITEM_CAFE_BEAN, count: LIMITED_BEAN_COST * LIMITED_BEAN_LIMIT }] });
+  const beanOnce = beans.limitedExchange({ id: LIMITED_EX_BEAN_ID });
+  assert(beanOnce.ok && beanOnce.rewardCount === 1 && beanOnce.owned === LIMITED_BEAN_COST && beanOnce.bought === 1, "bean exchange");
+  assert(beans.itemCounts[ITEM_EXP_POTION] === 1 && beans.gold === MOCK_STARTER_GOLD && beans.diamond === MOCK_STARTER_DIAMOND, "bean grants potion");
+  assert(limitedExchangeToast(beanOnce.costName, beanOnce.costCount, beanOnce.pay, beanOnce.rewardName, beanOnce.rewardCount).indexOf("咖啡豆") >= 0, "bean toast from session");
+  const beanTwice = beans.limitedExchange({ id: LIMITED_EX_BEAN_ID });
+  assert(beanTwice.ok && beans.itemCounts[LIMITED_BEAN_ITEM_ID] === undefined && beans.itemCounts[ITEM_EXP_POTION] === 2, "second bean exchange");
+  const beanSold = beans.limitedExchange({ id: LIMITED_EX_BEAN_ID });
+  assert(beanSold.ok === false && beanSold.code === ErrorCode.LIMITED_EX_SOLD_OUT && limitedExchangeFailToast(beanSold) === "经验药水今日已兑完", "bean sold out");
+  assert(beans.itemCounts[ITEM_EXP_POTION] === 2 && beans.limitedStoneUsed === 0, "sold out keeps potion and stone");
+
+  const gold = new MockGameSession();
+  const goldOnce = gold.limitedExchange({ id: LIMITED_EX_GOLD_ID });
+  assert(goldOnce.ok && goldOnce.pay === "gold" && goldOnce.rewardCount === LIMITED_GOLD_REWARD && gold.gold === MOCK_STARTER_GOLD - LIMITED_GOLD_COST, "gold exchange");
+  assert(gold.itemCounts[IDLE_ITEM_ID] === LIMITED_GOLD_REWARD && gold.diamond === MOCK_STARTER_DIAMOND && gold.limitedView().offers[1].bought === 1, "gold grants stones");
+  gold.limitedExchange({ id: LIMITED_EX_GOLD_ID });
+  const goldShort = gold.limitedExchange({ id: LIMITED_EX_GOLD_ID });
+  assert(gold.gold === MOCK_STARTER_GOLD - LIMITED_GOLD_COST * 2 && goldShort.ok === false && goldShort.code === ErrorCode.LIMITED_EX_GOLD_SHORT, "third gold short");
+  assert(limitedExchangeFailToast(goldShort) === "金币不足，兑换需要 50" && gold.itemCounts[IDLE_ITEM_ID] === LIMITED_GOLD_REWARD * 2, "gold short keeps stones");
+
+  const broke = new MockGameSession({ gold: LIMITED_GOLD_COST - 1 });
+  const brokeBuy = broke.limitedExchange({ id: LIMITED_EX_GOLD_ID });
+  assert(brokeBuy.ok === false && brokeBuy.code === ErrorCode.LIMITED_EX_GOLD_SHORT && broke.gold === LIMITED_GOLD_COST - 1 && broke.limitedView().offers[1].bought === 0, "broke changes nothing");
+
+  const seeded = new MockGameSession({
+    openDay: 2,
+    limitedExDay: 1,
+    limitedExBought: [{ id: LIMITED_EX_GOLD_ID, count: LIMITED_GOLD_LIMIT }],
+    items: [{ id: IDLE_ITEM_ID, count: 4 }],
+  });
+  const restocked = seeded.limitedView();
+  assert(restocked.offers[1].bought === 0 && restocked.offers[1].owned === 0 && seeded.itemCounts[IDLE_ITEM_ID] === 4, "next day restocks exchange");
+  assert(seeded.limitedExchange({ id: LIMITED_EX_GOLD_ID }).ok && seeded.itemCounts[IDLE_ITEM_ID] === 4 + LIMITED_GOLD_REWARD, "buy after restock");
+
+  const stone = new MockGameSession();
+  const free = stone.limitedAlchemy();
+  assert(free.ok && free.free === true && free.cost === 0 && free.goldGain === LIMITED_STONE_GOLD && free.used === 1, "free stone");
+  assert(stone.gold === MOCK_STARTER_GOLD + LIMITED_STONE_GOLD && stone.diamond === MOCK_STARTER_DIAMOND && stone.limitedView().stoneFree === false, "free keeps diamonds");
+  assert(limitedStoneToast(free.free, free.cost, free.goldGain, free.used, free.limit).indexOf("免费获得金币 100") >= 0, "free toast from session");
+  const paid = stone.limitedAlchemy();
+  assert(paid.ok && paid.free === false && paid.cost === LIMITED_STONE_DIAMOND && stone.diamond === MOCK_STARTER_DIAMOND - LIMITED_STONE_DIAMOND, "paid stone");
+  assert(stone.gold === MOCK_STARTER_GOLD + LIMITED_STONE_GOLD * 2 && stone.limitedView().stoneUsed === 2, "paid adds gold");
+  stone.limitedAlchemy();
+  assert(stone.limitedStoneUsed === 3 && stone.diamond === MOCK_STARTER_DIAMOND - LIMITED_STONE_DIAMOND * 2, "third stone");
+  const spent = stone.limitedAlchemy();
+  assert(spent.ok === false && spent.code === ErrorCode.LIMITED_STONE_NO_CHANCE && limitedStoneFailToast(spent) === "今日点石次数已用完", "stone spent");
+  assert(stone.gold === MOCK_STARTER_GOLD + LIMITED_STONE_GOLD * 3 && stone.diamond === MOCK_STARTER_DIAMOND - LIMITED_STONE_DIAMOND * 2, "spent changes nothing");
+
+  const poor = new MockGameSession({ diamond: LIMITED_STONE_DIAMOND - 1, limitedStoneUsed: 1 });
+  const poorStone = poor.limitedAlchemy();
+  assert(poorStone.ok === false && poorStone.code === ErrorCode.LIMITED_STONE_SHORT && limitedStoneFailToast(poorStone) === "钻石不足，点石需要 5", "stone diamond short");
+  assert(poor.diamond === LIMITED_STONE_DIAMOND - 1 && poor.limitedStoneUsed === 1 && poor.gold === MOCK_STARTER_GOLD, "short stone changes nothing");
+
+  const stoneDay = new MockGameSession({ openDay: 3, limitedStoneDay: 1, limitedStoneUsed: 3 });
+  assert(stoneDay.limitedView().stoneUsed === 0 && stoneDay.limitedView().stoneFree === true, "next day resets stone");
+
+  const pack = new MockGameSession();
+  const bought = pack.limitedBuy({ id: LIMITED_PACK_DIAMOND_ID });
+  assert(bought.ok && bought.price === LIMITED_PACK_PRICE && bought.goldGain === LIMITED_PACK_GOLD && bought.itemGain === LIMITED_PACK_STONE, "buy diamond pack");
+  assert(pack.diamond === MOCK_STARTER_DIAMOND - LIMITED_PACK_PRICE && pack.gold === MOCK_STARTER_GOLD + LIMITED_PACK_GOLD, "pack spend");
+  assert(pack.itemCounts[IDLE_ITEM_ID] === LIMITED_PACK_STONE && pack.limitedView().packs[0].bought === true && pack.totalRecharge === 0, "pack not recharge");
+  const again = pack.limitedBuy({ id: LIMITED_PACK_DIAMOND_ID });
+  assert(again.ok === false && again.code === ErrorCode.LIMITED_PACK_BOUGHT && limitedPackFailToast(again) === "开服礼包已经购买", "pack bought");
+  assert(pack.diamond === MOCK_STARTER_DIAMOND - LIMITED_PACK_PRICE && pack.gold === MOCK_STARTER_GOLD + LIMITED_PACK_GOLD, "bought keeps wallet");
+  const mock = pack.limitedBuy({ id: LIMITED_PACK_MOCK_ID });
+  assert(mock.ok && mock.pay === "mock" && mock.diamondGain === LIMITED_PACK_MOCK_DIAMOND && mock.itemGain === 1, "mock pack");
+  assert(pack.diamond === MOCK_STARTER_DIAMOND - LIMITED_PACK_PRICE + LIMITED_PACK_MOCK_DIAMOND && pack.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION + 1, "mock grants");
+  assert(limitedPackToast(mock.name, mock.pay, mock.price, mock.goldGain, mock.diamondGain, mock.itemName, mock.itemGain).indexOf("模拟购买成功") >= 0, "mock toast from session");
+  const mockAgain = pack.limitedBuy({ id: LIMITED_PACK_MOCK_ID });
+  assert(mockAgain.ok === false && mockAgain.code === ErrorCode.LIMITED_PACK_BOUGHT && pack.limitedStoneUsed === 0, "mock once leaves stone");
+
+  const late = new MockGameSession({ openDay: 8, diamond: LIMITED_PACK_PRICE });
+  const ended = late.limitedBuy({ id: LIMITED_PACK_DIAMOND_ID });
+  assert(ended.ok === false && ended.code === ErrorCode.LIMITED_PACK_ENDED && limitedPackFailToast(ended) === "限时礼包已结束", "pack ended");
+  assert(late.diamond === LIMITED_PACK_PRICE && late.gold === MOCK_STARTER_GOLD && late.limitedView().packs[0].ended === true, "ended changes nothing");
+  const lateBought = new MockGameSession({ openDay: 8, limitedPackBought: [LIMITED_PACK_DIAMOND_ID] });
+  const stillBought = lateBought.limitedBuy({ id: LIMITED_PACK_DIAMOND_ID });
+  assert(stillBought.ok === false && stillBought.code === ErrorCode.LIMITED_PACK_BOUGHT, "bought wins over ended");
+  const shortPack = new MockGameSession({ diamond: LIMITED_PACK_PRICE - 1 });
+  const shortBuy = shortPack.limitedBuy({ id: LIMITED_PACK_DIAMOND_ID });
+  assert(shortBuy.ok === false && shortBuy.code === ErrorCode.LIMITED_PACK_SHORT && limitedPackFailToast(shortBuy) === "钻石不足，开服礼包需要 15", "pack diamond short");
+  assert(shortPack.diamond === LIMITED_PACK_PRICE - 1 && shortPack.limitedView().packs[0].bought === false, "short pack changes nothing");
+  const missingPack = shortPack.limitedBuy({ id: 99 });
+  assert(missingPack.ok === false && missingPack.code === ErrorCode.LIMITED_PACK_NOT_FOUND && limitedPackFailToast(missingPack) === "没有这个礼包", "missing pack");
+  const blankPack = shortPack.limitedBuy({});
+  assert(blankPack.ok === false && blankPack.code === ErrorCode.LIMITED_PACK_NOT_FOUND, "blank pack");
+
+  const reset = new MockGameSession({
+    limitedExBought: [{ id: LIMITED_EX_GOLD_ID, count: 1 }],
+    limitedStoneUsed: 2,
+    limitedPackBought: [LIMITED_PACK_MOCK_ID],
+    gold: 1,
+    diamond: 1,
+  });
+  assert(reset.roleCreate({ name: "新人" }).ok, "create");
+  assert(reset.gold === MOCK_STARTER_GOLD && reset.diamond === MOCK_STARTER_DIAMOND, "create wallet");
+  assert(reset.limitedView().offers[1].bought === 0 && reset.limitedView().stoneUsed === 0 && reset.limitedView().packs[1].bought === false, "create clears limited");
+  assert(reset.giftView().firstChargeDone === false && reset.shopView().skus[0].bought === 0, "create leaves gift and shop reset");
+
+  const transport = new MockTransport({ latencyMs: 5 });
+  const net = quietNet(transport);
+  await net.connect("mock://local");
+  const remoteView = await Proto.limitedView({}, net);
+  assert(remoteView.ok && remoteView.offers.length === 2 && remoteView.stoneFree === true && remoteView.packs[0].bought === false, "proto view");
+  const remoteBean = await Proto.limitedExchange({ id: LIMITED_EX_BEAN_ID }, net);
+  assert(remoteBean.ok === false && remoteBean.code === ErrorCode.LIMITED_EX_ITEM_SHORT, "proto bean short");
+  const remoteGold = await Proto.limitedExchange({ id: LIMITED_EX_GOLD_ID }, net);
+  assert(remoteGold.ok && remoteGold.gold === MOCK_STARTER_GOLD - LIMITED_GOLD_COST, "proto gold exchange");
+  const remoteFree = await Proto.limitedAlchemy({}, net);
+  assert(remoteFree.ok && remoteFree.free === true && remoteFree.gold === remoteGold.gold + LIMITED_STONE_GOLD, "proto free stone");
+  const remotePaid = await Proto.limitedAlchemy({}, net);
+  assert(remotePaid.ok && remotePaid.free === false && remotePaid.diamond === MOCK_STARTER_DIAMOND - LIMITED_STONE_DIAMOND, "proto paid stone");
+  const remotePack = await Proto.limitedBuy({ id: LIMITED_PACK_DIAMOND_ID }, net);
+  assert(remotePack.ok && remotePack.goldGain === LIMITED_PACK_GOLD, "proto diamond pack");
+  const remotePackAgain = await Proto.limitedBuy({ id: LIMITED_PACK_DIAMOND_ID }, net);
+  assert(remotePackAgain.ok === false && remotePackAgain.code === ErrorCode.LIMITED_PACK_BOUGHT, "proto pack once");
+  const remoteMock = await Proto.limitedBuy({ id: LIMITED_PACK_MOCK_ID }, net);
+  assert(remoteMock.ok && remoteMock.diamondGain === LIMITED_PACK_MOCK_DIAMOND, "proto mock pack");
+  const remoteBag = await Proto.bagList({}, net);
+  assert(bagItem(remoteBag.items, IDLE_ITEM_ID) !== null && bagItem(remoteBag.items, ITEM_EXP_POTION) !== null, "proto bag sees limited items");
+  const ids = P0_CMDS.filter(
+    (row) =>
+      row.cmd === Cmd.limitedView ||
+      row.cmd === Cmd.limitedExchange ||
+      row.cmd === Cmd.limitedAlchemy ||
+      row.cmd === Cmd.limitedBuy
+  ).map((row) => row.id);
+  assert(ids.length === 4 && ids[0] === 2801 && ids[1] === 2802 && ids[2] === 2803 && ids[3] === 2804, "limited cmd ids");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyLimitedWallet(remoteMock);
+  assert(Session.gold === remoteMock.gold && Session.diamond === remoteMock.diamond, "apply limited");
+  applyLimitedWallet({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteMock.gold && Session.diamond === remoteMock.diamond, "failed limited ignored");
   Session.gold = prevGold;
   Session.diamond = prevDiamond;
   net.close();

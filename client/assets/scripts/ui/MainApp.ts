@@ -43,6 +43,7 @@ import { buildShopPage, ShopPage } from "./ShopPage";
 import { buildWishPage, WishPage } from "./WishPage";
 import { buildCafePage, CafePage } from "./CafePage";
 import { buildGiftPage, GiftPage } from "./GiftPage";
+import { buildLimitedPage, LimitedPage } from "./LimitedPage";
 import { goal7BadJumpToast } from "../module/goal7/tasks";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
@@ -65,6 +66,7 @@ const LOGIN7_FILL = new Color(156, 52, 78, 255);
 const GOAL7_FILL = new Color(184, 122, 36, 255);
 const SHOP_FILL = new Color(42, 108, 132, 255);
 const GIFT_FILL = new Color(140, 52, 108, 255);
+const LIMITED_FILL = new Color(168, 72, 48, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -89,6 +91,7 @@ export class MainApp extends Component {
   private wish: WishPage | null = null;
   private cafe: CafePage | null = null;
   private gift: GiftPage | null = null;
+  private limited: LimitedPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -138,6 +141,8 @@ export class MainApp extends Component {
     this.cafe = null;
     this.gift?.dispose();
     this.gift = null;
+    this.limited?.dispose();
+    this.limited = null;
     this.shell?.dispose();
   }
 
@@ -187,7 +192,7 @@ export class MainApp extends Component {
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
     if (!this.allow(id)) return;
-    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish" || id === "cafe" || id === "gift") && !this.ensureNet()) {
+    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish" || id === "cafe" || id === "gift" || id === "limited") && !this.ensureNet()) {
       return;
     }
     this.panels?.openChild(id);
@@ -231,6 +236,7 @@ export class MainApp extends Component {
     if (id === "wish") return this.mountWish();
     if (id === "cafe") return this.mountCafe();
     if (id === "gift") return this.mountGift();
+    if (id === "limited") return this.mountLimited();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -253,6 +259,7 @@ export class MainApp extends Component {
     place(createButton("七日目标", () => this.openGoal7(), 156, 52, GOAL7_FILL, 18), page, -83, -120);
     place(createButton("商店", () => this.openShop(), 156, 52, SHOP_FILL, 18), page, 83, -120);
     place(createButton("礼包", () => this.openGift(), 156, 52, GIFT_FILL, 18), page, 249, -120);
+    place(createButton("限时活动", () => this.openLimited(), 420, 48, LIMITED_FILL, 22), page, 0, -188);
     place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, -40);
     place(
       createButton("公告", () => {
@@ -275,19 +282,19 @@ export class MainApp extends Component {
       190,
       -40
     );
-    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -190);
+    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -248);
 
     this.gateNode = place(
       createLabel(this.gateText(), 20, { color: GATE_COLOR, width: 680, height: 72 }),
       page,
       0,
-      -300
+      -330
     );
     const netNode = createLabel("网络 " + NetClient.shared.state, 20, {
       color: new Color(160, 180, 210, 255),
       width: 680,
     });
-    place(netNode, page, 0, -390);
+    place(netNode, page, 0, -420);
     NetClient.shared.onState((state) => {
       if (!this.isValid) return;
       if (netNode.isValid) setText(netNode, "网络 " + state);
@@ -320,7 +327,7 @@ export class MainApp extends Component {
       );
       place(button, page, 0, top - i * step);
     }
-    place(createButton("返回", () => this.back(), 220, 48), page, 0, -270);
+    place(createButton("返回", () => this.back(), 220, 48), page, 0, -340);
     return page;
   }
 
@@ -589,6 +596,38 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.gift = page;
+    return page.node;
+  }
+
+  /**
+   * 主城和玩法都能进。不看主线等级和开服天。
+   * 没连上时不压页面。页内再分限时兑换、点石成金和限时礼包。
+   */
+  private openLimited(): void {
+    GameLog.shared.info("MainApp", "click limited");
+    if (!this.allow("limited")) return;
+    if (!this.ensureNet()) return;
+    this.panels?.openChild("limited");
+    this.refreshChrome();
+  }
+
+  private mountLimited(): Node {
+    this.limited?.dispose();
+    const page = buildLimitedPage({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.limitedView({}, NetClient.shared),
+      exchange: (id) => Proto.limitedExchange({ id }, NetClient.shared),
+      alchemy: () => Proto.limitedAlchemy({}, NetClient.shared),
+      buy: (id) => Proto.limitedBuy({ id }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.limited = page;
     return page.node;
   }
 
@@ -950,6 +989,10 @@ export class MainApp extends Component {
     if (id === "gift") {
       this.gift?.dispose();
       this.gift = null;
+    }
+    if (id === "limited") {
+      this.limited?.dispose();
+      this.limited = null;
     }
   }
 

@@ -1176,3 +1176,141 @@ export interface GiftClaimAccResp {
    */
   code?: number;
 }
+
+/** item 花背包材料，gold 花金币。 */
+export type LimitedPay = "item" | "gold";
+
+/** diamond 花钻石。mock 是模拟购买，不扣钻石。 */
+export type LimitedPackPay = "diamond" | "mock";
+
+export interface LimitedOfferRow {
+  id: number;
+  pay: LimitedPay;
+  costItemId: number;
+  costName: string;
+  costCount: number;
+  rewardItemId: number;
+  rewardName: string;
+  rewardCount: number;
+  bought: number;
+  limit: number;
+  /** 材料兑换时是该材料持有量。金币兑换为 0。 */
+  owned: number;
+}
+
+export interface LimitedPackRow {
+  id: number;
+  name: string;
+  pay: LimitedPackPay;
+  price: number;
+  gold: number;
+  diamond: number;
+  itemId: number;
+  itemName: string;
+  itemCount: number;
+  bought: boolean;
+  ended: boolean;
+  countdown: string;
+}
+
+export interface LimitedViewReq {
+  /** 占位。Mock 不看请求体。打开时按当前开服天刷新兑换和点石次数。 */
+  clientTime?: number;
+}
+
+export interface LimitedViewResp {
+  ok: boolean;
+  openDay: number;
+  gold: number;
+  diamond: number;
+  /** 背包里的咖啡豆。兑换材料用它，点石不消耗。 */
+  beanOwned: number;
+  offers: LimitedOfferRow[];
+  stoneUsed: number;
+  stoneLimit: number;
+  /** 下一次点石是否免费。今日还没用过时为 true。 */
+  stoneFree: boolean;
+  /** 下一次点石要扣的钻石。免费时为 0。 */
+  stoneCost: number;
+  stoneGold: number;
+  packs: LimitedPackRow[];
+  countdown: string;
+  code?: number;
+}
+
+export interface LimitedExchangeReq {
+  /** 兑换项 id，不是道具 id。 */
+  id: number;
+}
+
+export interface LimitedExchangeResp {
+  ok: boolean;
+  id: number;
+  pay: LimitedPay | "";
+  costName: string;
+  costCount: number;
+  rewardName: string;
+  rewardItemId: number;
+  rewardCount: number;
+  bought: number;
+  limit: number;
+  /** 花费材料的剩余数量。金币兑换时为 0。 */
+  owned: number;
+  gold: number;
+  diamond: number;
+  /**
+   * 没有这项 LIMITED_EX_NOT_FOUND，今日兑完 LIMITED_EX_SOLD_OUT，
+   * 金币不够 LIMITED_EX_GOLD_SHORT，材料不够 LIMITED_EX_ITEM_SHORT。
+   * 成功可以不带。失败不改钱包、背包和今日已兑次数。
+   */
+  code?: number;
+}
+
+export interface LimitedAlchemyReq {
+  /** 占位。Mock 不看请求体。今日第一次免费，之后扣钻石。 */
+  clientTime?: number;
+}
+
+export interface LimitedAlchemyResp {
+  ok: boolean;
+  /** 这一次是否免费。失败时表示下一次是否还免费。 */
+  free: boolean;
+  cost: number;
+  goldGain: number;
+  used: number;
+  limit: number;
+  gold: number;
+  diamond: number;
+  /**
+   * 次数用完 LIMITED_STONE_NO_CHANCE，钻石不够 LIMITED_STONE_SHORT。
+   * 成功可以不带。失败不改钱包和今日次数。
+   */
+  code?: number;
+}
+
+export interface LimitedBuyReq {
+  /** 礼包 id。 */
+  id: number;
+}
+
+export interface LimitedBuyResp {
+  ok: boolean;
+  id: number;
+  name: string;
+  pay: LimitedPackPay | "";
+  price: number;
+  goldGain: number;
+  diamondGain: number;
+  itemId: number;
+  itemName: string;
+  itemGain: number;
+  bought: boolean;
+  gold: number;
+  diamond: number;
+  /**
+   * 没有这个礼包 LIMITED_PACK_NOT_FOUND，买过 LIMITED_PACK_BOUGHT，
+   * 本轮结束 LIMITED_PACK_ENDED，钻石不够 LIMITED_PACK_SHORT。
+   * 成功可以不带。失败不改钱包、背包和已购记录。
+   */
+  code?: number;
+}
