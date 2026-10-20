@@ -1,0 +1,28 @@
+﻿# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+
+# Secrets
+.env
+.env.*
+*.jks
+*.keystore
+*.pem
+
+# Local junctions / deferred trees (real content still at original paths)
+/config/
+/server/
+CONFIG_LINK.txt
+SERVER_LINK.txt
+
+# Cocos Creator
+client/library/
+client/temp/
+client/local/
+client/build/
+client/profiles/
+client/native/
+client/node_modules/
