@@ -891,7 +891,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   const shopFromCity = new NavHistory();
   shopFromCity.reset("city");
   shopFromCity.push("shop");
-  assert(shopFromCity.current === "shop" && shopFromCity.rootTab() === "plays", "shop opened from city");
+  assert(shopFromCity.current === "shop" && shopFromCity.rootTab() === "city", "shop opened from city");
   shopFromCity.pop();
   shopFromCity.push("plays");
   shopFromCity.push("shop");
@@ -2803,8 +2803,8 @@ async function checkShop(): Promise<void> {
   assert(stones.gold === MOCK_STARTER_GOLD - SHOP_STONE_PRICE && stones.diamond === MOCK_STARTER_DIAMOND, "stone spend");
   assert(stones.owned === SHOP_STONE_COUNT && stones.bought === 1 && fresh.itemCounts[IDLE_ITEM_ID] === SHOP_STONE_COUNT, "stones land in bag");
   assert(shopBuyToast(stones.name, stones.count, stones.currency, stones.price) === "购买成功：强化石 ×5，消耗金币 40", "stone toast from session");
-  const bag = fresh.bagList();
-  const stoneRow = bagItem(bag.items, IDLE_ITEM_ID);
+  const listedBag = fresh.bagList();
+  const stoneRow = bagItem(listedBag.items, IDLE_ITEM_ID);
   assert(stoneRow !== null && stoneRow.name === "强化石" && stoneRow.count === SHOP_STONE_COUNT, "bag lists stones");
   assert(fresh.shopView().skus[0].bought === 1 && fresh.shopView().gold === stones.gold, "same day keeps stock");
 
@@ -2832,7 +2832,7 @@ async function checkShop(): Promise<void> {
   assert(bags.diamond === MOCK_STARTER_DIAMOND - SHOP_BAG_PRICE * SHOP_BAG_LIMIT && bags.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG + SHOP_BAG_LIMIT, "sold out keeps wallet");
   const summoner = new MockGameSession();
   assert(summoner.shopBuy({ id: SHOP_GOLD_BAG_ID }).ok, "one bag before summon");
-  const summoned = summoner.summonPull({ count: 1 });
+  const summoned = summoner.summon({ count: 1 });
   assert(summoned.ok && summoner.diamond === MOCK_STARTER_DIAMOND - SHOP_BAG_PRICE - SUMMON_SINGLE_COST, "summon still spends diamonds");
   const afterSummon = summoner.shopBuy({ id: SHOP_GOLD_BAG_ID });
   assert(afterSummon.ok === false && afterSummon.code === ErrorCode.SHOP_DIAMOND_SHORT && summoner.summonCursor === 1, "second bag waits for diamonds");
