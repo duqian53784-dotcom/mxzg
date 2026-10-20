@@ -1,4 +1,6 @@
-﻿import { MockTransport } from "./MockTransport";
+﻿import { GameLog } from "../core/GameLog";
+import { ErrorCode, GameError, logErrorCode, messageOf } from "../core/errors";
+import { MockTransport } from "./MockTransport";
 import { encodeRequest } from "./protocol/codec";
 import { Cmd } from "./protocol/cmds";
 import { HeartbeatReq } from "./protocol/types";
@@ -58,10 +60,11 @@ export class NetClient {
     this.clearReconnect();
     this.stopHeartbeat();
     this.setState("connecting");
-    console.log("[Net] connect " + url);
+    GameLog.shared.info("Net", "connect " + url);
     try {
       await this.transport.connect(url);
     } catch (err) {
+      logErrorCode("Net", ErrorCode.NET_CLOSED, "connect " + messageOf(err));
       if (this.reconnectAttempt <= 0) {
         this.wantConnected = false;
         this.setState("closed");
@@ -84,7 +87,7 @@ export class NetClient {
 
   send(cmd: string, data?: unknown): void {
     if (this.state !== "connected") {
-      console.warn("[Net] drop send " + cmd + " state=" + this.state);
+      logErrorCode("Net", ErrorCode.NET_NOT_CONNECTED, "drop " + cmd + " state=" + this.state);
       return;
     }
     this.transport.send(encodeRequest(cmd, data));
@@ -112,14 +115,16 @@ export class NetClient {
 
   request<T = unknown>(cmd: string, data?: unknown, timeoutMs?: number): Promise<NetMessage<T>> {
     if (this.state !== "connected") {
-      return Promise.reject(new Error("[Net] request before connected: " + cmd));
+      logErrorCode("Net", ErrorCode.NET_NOT_CONNECTED, cmd);
+      return Promise.reject(new GameError(ErrorCode.NET_NOT_CONNECTED, cmd));
     }
     const wait = timeoutMs ?? this.requestTimeoutMs;
     return new Promise((resolve, reject) => {
       let off = () => {};
       const timer = setTimeout(() => {
         off();
-        reject(new Error("[Net] timeout " + cmd));
+        logErrorCode("Net", ErrorCode.NET_TIMEOUT, cmd);
+        reject(new GameError(ErrorCode.NET_TIMEOUT, cmd));
       }, wait);
       this.dontBlock(timer);
       off = this.subscribe(cmd, (msg) => {
@@ -134,16 +139,16 @@ export class NetClient {
   /** 已连接时模拟掉线，走重连占位。预览里主城「模拟断线」会调到这里。 */
   simulateDrop(): void {
     if (this.state !== "connected") return;
-    console.log("[Net] simulate drop");
+    GameLog.shared.info("Net", "simulate drop");
     this.transport.close();
   }
 
   private dispatch(msg: NetMessage): void {
     if (msg.cmd === Cmd.heartbeat) {
       this.heartbeatAcks += 1;
-      if (this.heartbeatAcks === 1) console.log("[Net] heartbeat ack");
+      if (this.heartbeatAcks === 1) GameLog.shared.info("Net", "heartbeat ack");
     } else {
-      console.log("[Net] recv " + msg.cmd);
+      GameLog.shared.info("Net", "recv " + (msg.cmd || "(empty)"));
     }
     this.emitLocal(msg.cmd, msg);
     if (msg.cmd !== "*") this.emitLocal("*", msg);
@@ -162,7 +167,7 @@ export class NetClient {
       return;
     }
     if (this.reconnectAttempt >= this.maxReconnect) {
-      console.log("[Net] reconnect gave up");
+      logErrorCode("Net", ErrorCode.NET_CLOSED, "reconnect gave up");
       this.wantConnected = false;
       this.setState("closed");
       return;
@@ -170,12 +175,11 @@ export class NetClient {
     this.reconnectAttempt += 1;
     this.setState("reconnecting");
     const delay = this.reconnectDelayMs * this.reconnectAttempt;
-    console.log("[Net] reconnect in " + delay + "ms attempt " + this.reconnectAttempt);
+    GameLog.shared.info("Net", "reconnect in " + delay + "ms attempt " + this.reconnectAttempt);
     this.clearReconnect();
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      void this.connect(this.url).catch((err) => {
-        console.error("[Net] reconnect failed", err);
+      void this.connect(this.url).catch(() => {
         this.onTransportClosed();
       });
     }, delay);
@@ -210,7 +214,7 @@ export class NetClient {
     if (this.state === next) return;
     const prev = this.state;
     this.state = next;
-    console.log("[Net] " + prev + " -> " + next);
+    GameLog.shared.info("Net", prev + " -> " + next);
     for (const handler of [...this.stateHandlers]) handler(next);
   }
 

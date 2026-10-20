@@ -1,5 +1,5 @@
 /**
- * B3–B6 自检（不启动 Creator）。
+ * B3–B7 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isEntryOpen, isServerGateOpen, listOpenEntries } from "../assets/scripts/config/gates";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
+import { GameLog } from "../assets/scripts/core/GameLog";
+import { ErrorCode, errorText, failureCode, GameError, messageOf } from "../assets/scripts/core/errors";
 import { parseMockFixture } from "../assets/scripts/net/MockFixture";
 import { MockGameSession } from "../assets/scripts/net/MockGameSession";
 import { MockTransport } from "../assets/scripts/net/MockTransport";
@@ -172,7 +174,8 @@ async function checkNet(): Promise<void> {
   const typedRole = await Proto.roleEnter({ account: "mock" }, net);
   assert(typedRole.ok && typedRole.hasRole && typedRole.name === "MockHero" && typedRole.level === 1, "proto enter");
   const badCreate = await Proto.roleCreate({ name: "  " }, net);
-  assert(badCreate.ok === false, "empty create rejected");
+  assert(badCreate.ok === false && badCreate.code === ErrorCode.ROLE_NAME_EMPTY, "empty create rejected");
+  assert(errorText(badCreate.code) === "角色名不能为空", "empty create text");
   const created = await Proto.roleCreate({ account: "mock", name: "新人" }, net);
   assert(created.ok && created.name === "新人" && created.roleId === 1001 && created.level === 1, "proto create");
   const afterCreate = await Proto.roleEnter({}, net);
@@ -184,7 +187,11 @@ async function checkNet(): Promise<void> {
   const lost = await Proto.stageResult({ stageId: 7, win: false }, net);
   assert(lost.ok && lost.win === false && lost.nextStageId === 7 && lost.rewards.length === 0, "stage lose");
   const badStage = await Proto.stageEnter({ stageId: 0 }, net);
-  assert(badStage.ok === false && badStage.battleId === "", "bad stage");
+  assert(badStage.ok === false && badStage.battleId === "" && badStage.code === ErrorCode.STAGE_ID_INVALID, "bad stage");
+  const blank = await net.request("", {});
+  const blankData = blank.data as { ok?: boolean; code?: number };
+  assert(blankData.ok === false && blankData.code === ErrorCode.UNKNOWN_CMD, "blank cmd");
+  assert(errorText(blankData.code) === "未知指令", "unknown cmd text");
   const beat = await Proto.heartbeat({ clientTime: 1 }, net);
   assert(typeof beat.serverTime === "number" && beat.serverTime > 0, "proto heartbeat");
   const ids = P0_CMDS.map((row) => row.cmd + ":" + row.id);
@@ -198,6 +205,15 @@ async function checkNet(): Promise<void> {
   net.close();
   assert(net.state === "closed", "closed");
   assert(states.indexOf("connecting") >= 0 && states.indexOf("closed") >= 0, "state machine");
+  let rejected = false;
+  try {
+    await net.request("login", { account: "mock" });
+  } catch (err) {
+    rejected = true;
+    assert(err instanceof GameError && err.code === ErrorCode.NET_NOT_CONNECTED, "request when closed");
+    assert(messageOf(err) === "网络未连接", "closed request text");
+  }
+  assert(rejected, "request when closed threw");
 }
 
 function quietNet(transport: MockTransport | ReplayTransport): NetClient {
@@ -270,7 +286,8 @@ async function checkReplay(): Promise<void> {
   const beat = await Proto.heartbeat({ clientTime: 1 }, net);
   assert(typeof beat.serverTime === "number" && beat.serverTime > 0 && replay.played() === 0, "heartbeat skips replay");
   const early = await Proto.roleEnter({}, net);
-  assert(early.ok === false && replay.played() === 0, "out of order does not advance");
+  assert(early.ok === false && early.code === ErrorCode.REPLAY_MISMATCH && replay.played() === 0, "out of order does not advance");
+  assert(errorText(early.code) === "回放指令不匹配", "replay mismatch text");
 
   const login = await Proto.login({ account: "other", serverId: 9 }, net);
   assert(login.ok && login.account === "mock" && login.token === "mock-token" && login.serverId === 1, "replay login");
@@ -289,14 +306,41 @@ async function checkReplay(): Promise<void> {
   );
   assert(replay.played() === fixture.steps.length, "replay consumed");
   const extra = await Proto.stageEnter({ stageId: 2 }, net);
-  assert(extra.ok === false, "replay ended");
+  assert(extra.ok === false && extra.code === ErrorCode.REPLAY_ENDED, "replay ended");
+  assert(errorText(ErrorCode.NET_CLOSED) === "网络已断开", "closed text");
+  assert(failureCode({ ok: false }) === ErrorCode.UNKNOWN_CMD, "missing code is unknown cmd");
+  assert(failureCode({ ok: true }) === null, "ok is not a failure");
   net.close();
+}
+
+function checkLog(): void {
+  const log = new GameLog(4);
+  log.mirrorConsole = false;
+  log.debug("T", "d");
+  log.info("T", "i");
+  log.warn("T", "w");
+  log.error("T", "e");
+  log.info("T", "x");
+  const lines = log.recent();
+  assert(lines.length === 4, "ring cap");
+  assert(lines[0].message === "i" && lines[3].message === "x", "ring drops oldest");
+  assert(lines[2].level === "error" && lines[2].tag === "T", "level kept");
+  const text = log.format(lines[3]);
+  assert(text.indexOf("[mxzg]") >= 0 && text.indexOf("[T]") >= 0 && text.indexOf("x") >= 0, "format tag");
+  assert(log.recent(2).length === 2 && log.recent(2)[1].message === "x", "recent limit");
+  log.minLevel = "warn";
+  log.info("T", "hidden");
+  assert(log.recent().length === 4 && log.recent()[3].message === "x", "min level filters");
+  log.mirrorConsole = true;
+  log.warn("T", "mirrored");
+  assert(log.recent()[log.recent().length - 1].message === "mirrored", "mirror still buffers");
 }
 
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
   checkGates();
+  checkLog();
   await checkNet();
   await checkSession();
   await checkReplay();

@@ -16,8 +16,8 @@
 4. 属性检查器 → **添加组件** → 自定义脚本 → **Boot**（`scripts/core/Boot.ts`）。
 5. **保存场景**。启动场景保持 Boot，点预览。
 6. 屏幕上是 Mock 登录面板。点 **进入游戏**。
-7. 应进入 Main，并看到主城标题和按钮（主线 · 第N关 / 召唤 / 英雄 / 背包 / 公告 / 模拟断线）。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会补挂。
-8. 控制台标记：`[Boot] stage=version` → `hot-update` → `config` → `login` → `enter-main`，以及 `[Net] connect mock://local`、`[Config] loaded`。
+7. 应进入 Main，并看到主城标题和按钮（主线 · 第N关 / 召唤 / 英雄 / 背包 / 公告 / 模拟断线），右上角还有「日志」。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会补挂。
+8. 控制台标记：`[Boot] stage=version` → `hot-update` → `config` → `login` → `enter-main`，以及 `[Net] connect mock://local`、`[Config] loaded`。这些行现在带 `[mxzg]` 前缀，例如 `[mxzg][info][Boot] stage=version`。
 
 可选：
 
@@ -39,3 +39,12 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 同一局 Mock 会记住开服天、等级和主线进度。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
 
 真 Protobuf 怎么换掉这些 interface，见 `docs/protocol-stubs.md`。
+
+## 日志与错误码（B7）
+
+- `core/GameLog.ts`：`debug` / `info` / `warn` / `error`。环形缓冲默认 80 条。`mirrorConsole` 为 true 时打到控制台，前缀 `[mxzg]`。
+- `core/errors.ts`：错误码 → 中文。已覆盖空角色名、关卡无效、网络未连接 / 断开 / 超时、未知指令、回放结束或不匹配。
+- 登录、进关、结算失败会 Toast 这句中文，不再只写「见控制台」。
+- 主城「日志」打开最近 10 条，新的在上（代码生成，不改场景）。里面两个按钮用来验收：
+  1. **空名创角**：Toast「角色名不能为空」。当前角色不变。
+  2. **断开提示**：Toast「网络已断开」，并关掉 Mock 连接。要继续主线请重新预览。「模拟断线」仍会重连，不会停在断开。

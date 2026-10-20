@@ -1,3 +1,4 @@
+import { ErrorCode, logErrorCode } from "../core/errors";
 import { parseMockFixture, MockFixture } from "./MockFixture";
 import { encodeRequest } from "./protocol/codec";
 import { Cmd } from "./protocol/cmds";
@@ -42,7 +43,7 @@ export class ReplayTransport implements ITransport {
 
   send(msg: NetMessage): void {
     if (!this.opened) {
-      console.warn("[ReplayTransport] drop send " + msg.cmd);
+      logErrorCode("Replay", ErrorCode.NET_CLOSED, "drop " + msg.cmd);
       return;
     }
     setTimeout(() => this.reply(msg), this.latencyMs);
@@ -72,11 +73,11 @@ export class ReplayTransport implements ITransport {
     }
     const step = this.fixture.steps[this.cursor];
     if (!step) {
-      this.emit(encodeRequest(msg.cmd, { ok: false, error: "replay ended" }));
+      this.emit(encodeRequest(msg.cmd, { ok: false, code: ErrorCode.REPLAY_ENDED, error: "replay ended" }));
       return;
     }
     if (step.cmd !== msg.cmd) {
-      this.emit(encodeRequest(msg.cmd, { ok: false, error: "replay expected " + step.cmd }));
+      this.emit(encodeRequest(msg.cmd, { ok: false, code: ErrorCode.REPLAY_MISMATCH, error: "replay expected " + step.cmd }));
       return;
     }
     this.cursor += 1;

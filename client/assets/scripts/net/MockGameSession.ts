@@ -1,3 +1,4 @@
+import { ErrorCode } from "../core/errors";
 import {
   LoginResp,
   RoleCreateResp,
@@ -75,7 +76,7 @@ export class MockGameSession {
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
-      return { ok: false, roleId: 0, name: "", level: 0 };
+      return { ok: false, code: ErrorCode.ROLE_NAME_EMPTY, roleId: 0, name: "", level: 0 };
     }
     this.role = { roleId: this.role.roleId || 1001, name, level: 1 };
     this.clearedStage = 0;
@@ -88,7 +89,7 @@ export class MockGameSession {
   stageEnter(data: unknown): StageEnterResp {
     const stageId = numField(asRecord(data), "stageId", 0);
     if (stageId < 1) {
-      return { ok: false, stageId: 0, battleId: "" };
+      return { ok: false, code: ErrorCode.STAGE_ID_INVALID, stageId: 0, battleId: "" };
     }
     this.battleSeq += 1;
     this.battleId = "mock-battle-" + stageId + "-" + this.battleSeq;
@@ -106,6 +107,7 @@ export class MockGameSession {
     if (stageId < 1) {
       return {
         ok: false,
+        code: ErrorCode.STAGE_ID_INVALID,
         stageId: 0,
         win: false,
         nextStageId: 0,

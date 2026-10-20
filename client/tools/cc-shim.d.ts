@@ -76,8 +76,8 @@ declare module "cc" {
   }
 
   export const Layers: { Enum: { UI_2D: number } };
-  export const HorizontalTextAlignment: { CENTER: number };
-  export const VerticalTextAlignment: { CENTER: number };
+  export const HorizontalTextAlignment: { CENTER: number; LEFT: number };
+  export const VerticalTextAlignment: { CENTER: number; TOP: number };
   export const Overflow: { NONE: number; CLAMP: number };
 
   export const director: {

@@ -1,3 +1,4 @@
+import { failureCode, logErrorCode } from "../../core/errors";
 import { NetClient } from "../NetClient";
 import { decodeResponse } from "./codec";
 import { Cmd } from "./cmds";
@@ -18,7 +19,10 @@ import {
 
 async function call<T>(net: NetClient, cmd: string, data?: unknown): Promise<T> {
   const msg = await net.request(cmd, data);
-  return decodeResponse<T>(msg);
+  const body = decodeResponse<T>(msg);
+  const code = failureCode(body);
+  if (code !== null) logErrorCode("Proto", code, cmd);
+  return body;
 }
 
 /**
