@@ -46,7 +46,7 @@ export const PLAY_ENTRIES: NavEntry[] = [
   { id: "fetter", title: "羁绊", gateId: "main_fetter", blurb: "羁绊占位" },
   { id: "mail", title: "邮件", gateId: "mail", blurb: "系统欢迎、开服补给和公告。主城按钮也能进" },
   { id: "arena", title: "竞技场", gateId: "main_pvp", blurb: "积分、固定对手、一键挑战。主线 Lv8" },
-  { id: "wish", title: "许愿池", gateId: "main_blessingpool", blurb: "许愿池占位" },
+  { id: "wish", title: "许愿池", gateId: "main_blessingpool", blurb: "低级许愿。花金币、许愿符或钻石抽一次，主线 Lv10" },
   { id: "cafe", title: "咖啡馆", gateId: "main_cafe", blurb: "咖啡馆占位" },
   { id: "daily", title: "日常副本", gateId: "main_mission", blurb: "金币副本。看剩余次数和奖励预览，主线 Lv15 开启" },
   { id: "tower", title: "幻境之塔", gateId: "main_fantasy_tower", blurb: "当前层与挑战。胜利给金币和强化石，主线 Lv16 开启" },

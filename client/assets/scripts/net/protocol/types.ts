@@ -860,3 +860,73 @@ export interface ShopBuyResp {
    */
   code?: number;
 }
+
+/** 许愿计价。gold 扣顶栏金币，item 扣背包许愿符，diamond 扣顶栏钻石。 */
+export type WishPay = "gold" | "item" | "diamond";
+
+/** 奖池一格。gold / diamond 进顶栏，stone / potion 进背包。 */
+export type WishKind = "gold" | "stone" | "potion" | "diamond";
+
+export interface WishDrop {
+  kind: WishKind;
+  name: string;
+  count: number;
+  /** 进背包的道具 id。金币和钻石为 0。 */
+  itemId: number;
+}
+
+export interface WishViewReq {
+  /** 占位。Mock 不看请求体。打开时按当前开服天刷新今日次数。 */
+  clientTime?: number;
+}
+
+export interface WishViewResp {
+  ok: boolean;
+  used: number;
+  limit: number;
+  /** 当前开服天。次数跟着它走，不是墙钟倒计时。 */
+  openDay: number;
+  /** 下一次会落到奖池的哪一格。成功许愿后才前进。 */
+  cursor: number;
+  goldCost: number;
+  diamondCost: number;
+  itemCost: number;
+  /** 背包里的许愿符。 */
+  tokenOwned: number;
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface WishDrawReq {
+  pay: WishPay;
+}
+
+export interface WishDrawResp {
+  ok: boolean;
+  pay: WishPay | "";
+  /** 本次消耗。失败时是这一方式需要的数量，方式无效时为 0。 */
+  cost: number;
+  kind: WishKind | "";
+  name: string;
+  count: number;
+  /** 奖励里的金币，不是扣费后的净值。失败为 0。 */
+  goldGain: number;
+  /** 奖励里的钻石。失败为 0。 */
+  diamondGain: number;
+  itemId: number;
+  itemGain: number;
+  /** 许愿后背包里的许愿符。失败时是许愿前的数量。 */
+  tokenOwned: number;
+  gold: number;
+  diamond: number;
+  used: number;
+  limit: number;
+  cursor: number;
+  /**
+   * 方式不对 WISH_PAY_INVALID，今日次数用完 WISH_NO_CHANCE，
+   * 金币不足 WISH_GOLD_SHORT，钻石不足 WISH_DIAMOND_SHORT，许愿符不足 WISH_ITEM_SHORT。
+   * 成功可以不带。失败不改钱包、背包、次数和奖池游标。
+   */
+  code?: number;
+}

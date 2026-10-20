@@ -1,5 +1,5 @@
 /**
- * B3–C15 与基础商店自检（不启动 Creator）。
+ * B3–C15、基础商店与低级许愿池自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -26,10 +26,13 @@ import {
   GOLD_BAG_GAIN,
   ITEM_EXP_POTION,
   ITEM_GOLD_BAG,
+  ITEM_WISH_TOKEN,
+  STARTER_WISH_TOKEN,
   notEnoughToast,
   notUsableTip,
   STARTER_EXP_POTION,
   STARTER_GOLD_BAG,
+  WISH_TOKEN_NAME,
 } from "../assets/scripts/module/bag/items";
 import {
   applyMailClaim,
@@ -212,6 +215,28 @@ import {
   shopSoldOutToast,
   shopWalletLine,
 } from "../assets/scripts/module/shop/catalog";
+import {
+  applyWishDraw,
+  dropAt,
+  parseWishPay,
+  WISH_DAILY_LIMIT,
+  WISH_DIAMOND_COST,
+  WISH_DROPS,
+  WISH_GOLD_COST,
+  WISH_ITEM_COST,
+  wishAttemptsLine,
+  wishDiamondShortToast,
+  wishFailToast,
+  wishGoldShortToast,
+  wishItemShortToast,
+  wishNextLine,
+  wishNoChanceToast,
+  wishPayButton,
+  wishPayToast,
+  wishPoolLine,
+  wishSuccessToast,
+  wishWalletLine,
+} from "../assets/scripts/module/wish/pool";
 import { Goal7Task, ShopSku } from "../assets/scripts/net/protocol/types";
 import {
   applySummon,
@@ -409,6 +434,16 @@ function checkGates(): void {
   const mission = rows.find((row) => row.id === "main_mission");
   assert(mission && mission.level === 15 && mission.open_server_day === 0, "daily row");
   assert(!isEntryOpen(mission, 14, 99) && isEntryOpen(mission, 15, 1), "daily at lv15 not day");
+  const blessing = rows.find((row) => row.id === "main_blessingpool");
+  assert(blessing && blessing.level === 10 && blessing.open_server_day === 0, "wish row");
+  assert(!isEntryOpen(blessing, 9, 99) && isEntryOpen(blessing, 10, 1), "wish at lv10 not day");
+  const cafeRow = rows.find((row) => row.id === "main_cafe");
+  assert(cafeRow && cafeRow.level === 12, "cafe still lv12");
+  assert(!isEntryOpen(cafeRow, 10, 1) && !isEntryOpen(cafeRow, 11, 30) && isEntryOpen(cafeRow, 12, 1), "cafe stays shut at lv10");
+  const lv9 = listOpenEntries(rows, 9, 1).map((row) => row.id);
+  const lv10 = listOpenEntries(rows, 10, 1).map((row) => row.id);
+  assert(lv9.indexOf("main_blessingpool") < 0 && lv10.indexOf("main_blessingpool") >= 0, "lv10 list");
+  assert(lv10.indexOf("main_cafe") < 0 && lv10.indexOf("main_pvp") >= 0, "lv10 opens wish not cafe");
   const lv15 = listOpenEntries(rows, 15, 1).map((row) => row.id);
   assert(lv15.indexOf("main_mission") >= 0 && lv15.indexOf("main_fantasy_tower") < 0, "lv15 daily not tower");
   const lv16 = listOpenEntries(rows, 16, 1).map((row) => row.id);
@@ -888,6 +923,17 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(entryAccess(shopEntry, 1, 1, null).open && entryAccess(shopEntry, 1, 1, db).open, "shop open on day 1");
   assert(entryAccess(shopEntry, 1, 30, db).open && shopEntry.blurb.indexOf("金币") >= 0, "shop ignores open day");
   assert(rootTabFor("shop") === "plays", "shop stays on plays");
+  const wishEntry = findNavEntry("wish");
+  assert(wishEntry !== null && wishEntry.gateId === "main_blessingpool", "wish gate");
+  const wishLock = entryAccess(wishEntry, 1, 1, db);
+  assert(!wishLock.open && wishLock.hint === "许愿池未开启，需要主线达到 Lv10", "wish hint");
+  assert(wishLock.hint.indexOf("开服") < 0, "wish hint has no open day");
+  assert(!entryAccess(wishEntry, 9, 30, db).open && entryAccess(wishEntry, 10, 1, db).open, "wish opens at lv10");
+  assert(tabLabel("许愿池", false) === "锁·许愿池", "wish locked label");
+  assert(wishEntry.blurb.indexOf("Lv10") >= 0 && wishEntry.blurb.indexOf("许愿符") >= 0, "wish blurb");
+  assert(rootTabFor("wish") === "plays", "wish stays on plays");
+  const cafeEntry = findNavEntry("cafe");
+  assert(cafeEntry !== null && cafeEntry.gateId === "main_cafe" && !entryAccess(cafeEntry, 10, 1, db).open, "cafe still locked at lv10");
   const shopFromCity = new NavHistory();
   shopFromCity.reset("city");
   shopFromCity.push("shop");
@@ -1434,9 +1480,10 @@ async function checkBag(): Promise<void> {
   const fresh = new MockGameSession();
   const anchor = fresh.idleAnchorMs;
   const listed = fresh.bagList();
-  assert(listed.ok && listed.items.length === 2 && listed.gold === MOCK_STARTER_GOLD, "starter bag");
+  assert(listed.ok && listed.items.length === 3 && listed.gold === MOCK_STARTER_GOLD, "starter bag");
   assert(listed.items[0].id === ITEM_GOLD_BAG && listed.items[0].count === STARTER_GOLD_BAG && listed.items[0].usable, "gold bags first");
   assert(listed.items[1].id === ITEM_EXP_POTION && listed.items[1].count === STARTER_EXP_POTION && listed.items[1].name === "经验药水", "potions second");
+  assert(listed.items[2].id === ITEM_WISH_TOKEN && listed.items[2].count === STARTER_WISH_TOKEN && listed.items[2].usable === false, "wish tokens third");
   const goldUse = fresh.bagUse({ id: ITEM_GOLD_BAG, count: 1 });
   assert(goldUse.ok && goldUse.goldGain === GOLD_BAG_GAIN && goldUse.spent === 1 && goldUse.owned === 1, "use one gold bag");
   assert(fresh.gold === MOCK_STARTER_GOLD + GOLD_BAG_GAIN && fresh.diamond === MOCK_STARTER_DIAMOND, "gold bag adds gold only");
@@ -1459,7 +1506,12 @@ async function checkBag(): Promise<void> {
   assert(fresh.heroes[0].level === 4, "second potion levels again");
   fresh.roleCreate({ name: "新人" });
   assert(fresh.role.name === "新人" && fresh.gold === MOCK_STARTER_GOLD && fresh.heroes[0].level === 1, "create resets wallet and hero");
-  assert(fresh.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG && fresh.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION, "create restores consumables");
+  assert(
+    fresh.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG &&
+      fresh.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION &&
+      fresh.itemCounts[ITEM_WISH_TOKEN] === STARTER_WISH_TOKEN,
+    "create restores consumables"
+  );
   assert(fresh.itemCounts[IDLE_ITEM_ID] === undefined, "create still clears stones");
 
   const seeded = new MockGameSession({
@@ -1517,7 +1569,7 @@ async function checkBag(): Promise<void> {
   const net = quietNet(new MockTransport({ latencyMs: 5 }));
   await net.connect("mock://local");
   const remote = await Proto.bagList({}, net);
-  assert(remote.ok && remote.items.length === 2 && remote.items[0].name === "小金币袋", "proto list");
+  assert(remote.ok && remote.items.length === 3 && remote.items[0].name === "小金币袋" && remote.items[2].name === WISH_TOKEN_NAME, "proto list");
   const remoteUse = await Proto.bagUse({ id: ITEM_GOLD_BAG, count: 1 }, net);
   assert(remoteUse.ok && remoteUse.gold === MOCK_STARTER_GOLD + GOLD_BAG_GAIN && remoteUse.owned === 1, "proto use");
   const again = await Proto.bagList({}, net);
@@ -2480,6 +2532,7 @@ async function main(): Promise<void> {
   await checkGoal7();
   await checkStagePush();
   await checkShop();
+  await checkWish();
   console.log("skeleton-check ok");
 }
 
@@ -2899,6 +2952,142 @@ async function checkShop(): Promise<void> {
   assert(Session.gold === remoteBuy.gold && Session.diamond === remoteBuy.diamond, "apply shop");
   applyShopBuy({ ok: false, gold: 1, diamond: 1 });
   assert(Session.gold === remoteBuy.gold && Session.diamond === remoteBuy.diamond, "failed shop ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  net.close();
+}
+
+async function checkWish(): Promise<void> {
+  assert(WISH_DROPS.length === 10 && WISH_DROPS[9].kind === "diamond" && WISH_DROPS[9].count === 8, "tenth drop is diamond");
+  assert(dropAt(0).kind === "gold" && dropAt(0).count === 40 && dropAt(10).kind === "gold", "cursor wraps");
+  assert(parseWishPay("gold") === "gold" && parseWishPay("item") === "item" && parseWishPay("diamond") === "diamond", "pay words");
+  assert(parseWishPay("Gold") === null && parseWishPay("") === null && parseWishPay(1) === null, "bad pay");
+  assert(wishAttemptsLine(0, WISH_DAILY_LIMIT) === "今日剩余 5/5" && wishAttemptsLine(5, 5) === "今日剩余 0/5", "attempts line");
+  assert(wishWalletLine(100, 20, 2) === "持有金币 100 · 钻石 20 · 许愿符 ×2", "wallet line");
+  assert(wishNextLine(0) === "下一次：金币 40" && wishNextLine(1) === "下一次：强化石 ×2", "next line");
+  assert(wishPoolLine().indexOf("第 10 次是钻石") >= 0, "pool line");
+  assert(wishPayButton("gold", 0, 5) === "金币许愿（30）" && wishPayButton("item", 0, 5) === "许愿符许愿（×1）", "pay buttons");
+  assert(wishPayButton("diamond", 5, 5) === "今日已用完", "spent button");
+  assert(wishSuccessToast("gold", "金币", 40, "gold", 30) === "许愿成功：获得金币 40，消耗金币 30", "gold toast");
+  assert(wishSuccessToast("stone", "强化石", 2, "item", 1) === "许愿成功：获得强化石 ×2，消耗许愿符 ×1", "item toast");
+  assert(wishSuccessToast("diamond", "钻石", 8, "diamond", 5) === "许愿成功：获得钻石 8，消耗钻石 5", "diamond toast");
+  assert(wishGoldShortToast(30) === "金币不足，许愿需要 30", "gold short copy");
+  assert(wishItemShortToast(1) === "许愿符不足，许愿需要 1", "item short copy");
+  assert(wishDiamondShortToast(5) === "钻石不足，许愿需要 5" && wishNoChanceToast() === "今日许愿次数已用完", "other short copy");
+  assert(wishPayToast() === "请选择许愿方式", "pay copy");
+  assert(errorText(ErrorCode.WISH_NO_CHANCE) === "今日许愿次数已用完" && errorText(ErrorCode.WISH_ITEM_SHORT) === "许愿符不足", "wish error text");
+
+  const fresh = new MockGameSession();
+  const view = fresh.wishView();
+  assert(view.ok && view.used === 0 && view.limit === WISH_DAILY_LIMIT && view.cursor === 0, "fresh view");
+  assert(view.gold === MOCK_STARTER_GOLD && view.diamond === MOCK_STARTER_DIAMOND && view.tokenOwned === STARTER_WISH_TOKEN, "fresh wallet");
+  assert(view.goldCost === WISH_GOLD_COST && view.itemCost === WISH_ITEM_COST && view.diamondCost === WISH_DIAMOND_COST, "costs on view");
+  assert(fresh.clearedStage === 0 && fresh.arenaUsed === 0 && fresh.dailyUsed === 0 && fresh.shopView().skus[0].bought === 0, "view leaves modes");
+
+  const first = fresh.wishDraw({ pay: "gold" });
+  assert(first.ok && first.kind === "gold" && first.count === 40 && first.cost === WISH_GOLD_COST && first.goldGain === 40, "first gold wish");
+  assert(first.gold === MOCK_STARTER_GOLD - WISH_GOLD_COST + 40 && first.diamond === MOCK_STARTER_DIAMOND, "gold nets the reward");
+  assert(first.tokenOwned === STARTER_WISH_TOKEN && first.used === 1 && first.cursor === 1, "gold wish keeps tokens");
+  assert(wishSuccessToast(first.kind, first.name, first.count, first.pay, first.cost) === "许愿成功：获得金币 40，消耗金币 30", "toast from session");
+  assert(fresh.heroes[0].level === 1 && fresh.arenaUsed === 0 && fresh.wishView().cursor === 1, "wish leaves hero and arena");
+
+  const byItem = fresh.wishDraw({ pay: "item" });
+  assert(byItem.ok && byItem.kind === "stone" && byItem.itemGain === 2 && byItem.itemId === IDLE_ITEM_ID, "item wish grants stones");
+  assert(byItem.tokenOwned === STARTER_WISH_TOKEN - 1 && byItem.gold === first.gold && byItem.cost === WISH_ITEM_COST, "token spent, gold stays");
+  assert(fresh.itemCounts[IDLE_ITEM_ID] === 2 && fresh.itemCounts[ITEM_WISH_TOKEN] === 1, "stones land, one token left");
+  const bag = fresh.bagList();
+  const stoneRow = bagItem(bag.items, IDLE_ITEM_ID);
+  const tokenRow = bagItem(bag.items, ITEM_WISH_TOKEN);
+  assert(stoneRow !== null && stoneRow.count === 2 && tokenRow !== null && tokenRow.count === 1, "bag lists stones and token");
+  const tokenUse = fresh.bagUse({ id: ITEM_WISH_TOKEN });
+  assert(tokenUse.ok === false && tokenUse.code === ErrorCode.BAG_NOT_USABLE && bagFailToast(tokenUse) === "许愿符不能直接使用", "token not usable");
+  assert(fresh.itemCounts[ITEM_WISH_TOKEN] === 1, "failed use keeps token");
+
+  const byDiamond = new MockGameSession({ wishCursor: 9 });
+  const gems = byDiamond.wishDraw({ pay: "diamond" });
+  assert(gems.ok && gems.kind === "diamond" && gems.diamondGain === 8 && gems.cursor === 10, "tenth slot is diamond");
+  assert(gems.diamond === MOCK_STARTER_DIAMOND - WISH_DIAMOND_COST + 8 && gems.gold === MOCK_STARTER_GOLD, "diamond nets the reward");
+  assert(byDiamond.wishView().cursor === 10 && dropAt(byDiamond.wishCursor).kind === "gold", "next lap starts at gold");
+
+  const broke = new MockGameSession({ gold: WISH_GOLD_COST - 1, diamond: WISH_DIAMOND_COST - 1, items: [{ id: ITEM_GOLD_BAG, count: 1 }] });
+  const noGold = broke.wishDraw({ pay: "gold" });
+  assert(noGold.ok === false && noGold.code === ErrorCode.WISH_GOLD_SHORT && wishFailToast(noGold) === "金币不足，许愿需要 30", "gold short");
+  assert(broke.gold === WISH_GOLD_COST - 1 && broke.wishView().used === 0 && broke.wishView().cursor === 0, "gold short changes nothing");
+  const noItem = broke.wishDraw({ pay: "item" });
+  assert(noItem.ok === false && noItem.code === ErrorCode.WISH_ITEM_SHORT && wishFailToast(noItem) === "许愿符不足，许愿需要 1", "item short");
+  assert(broke.itemCounts[ITEM_WISH_TOKEN] === undefined && broke.itemCounts[ITEM_GOLD_BAG] === 1, "item short keeps bag");
+  const noDiamond = broke.wishDraw({ pay: "diamond" });
+  assert(noDiamond.ok === false && noDiamond.code === ErrorCode.WISH_DIAMOND_SHORT && wishFailToast(noDiamond) === "钻石不足，许愿需要 5", "diamond short");
+  assert(broke.diamond === WISH_DIAMOND_COST - 1 && broke.wishUsed === 0, "diamond short changes nothing");
+  const badPay = broke.wishDraw({ pay: "coupon" });
+  const blank = broke.wishDraw({});
+  assert(badPay.ok === false && badPay.code === ErrorCode.WISH_PAY_INVALID && wishFailToast(blank) === "请选择许愿方式", "bad pay");
+  assert(broke.gold === WISH_GOLD_COST - 1 && broke.wishCursor === 0, "bad pay changes nothing");
+
+  const limited = new MockGameSession();
+  for (let i = 0; i < WISH_DAILY_LIMIT; i++) {
+    const once = limited.wishDraw({ pay: "gold" });
+    assert(once.ok && once.used === i + 1 && once.kind === WISH_DROPS[i].kind, "wish " + (i + 1));
+  }
+  assert(limited.wishCursor === WISH_DAILY_LIMIT && limited.itemCounts[IDLE_ITEM_ID] === 3 && limited.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION + 1, "five wishes pay the table");
+  const stopped = limited.wishDraw({ pay: "gold" });
+  assert(stopped.ok === false && stopped.code === ErrorCode.WISH_NO_CHANCE && wishFailToast(stopped) === "今日许愿次数已用完", "no chance");
+  assert(limited.wishUsed === WISH_DAILY_LIMIT && limited.wishCursor === WISH_DAILY_LIMIT && limited.gold === stopped.gold, "cap spends nothing");
+  const stillItem = limited.wishDraw({ pay: "item" });
+  assert(stillItem.ok === false && stillItem.code === ErrorCode.WISH_NO_CHANCE && limited.itemCounts[ITEM_WISH_TOKEN] === STARTER_WISH_TOKEN, "item shares the cap");
+
+  const nextDay = new MockGameSession({ openDay: 2, wishDay: 1, wishUsed: WISH_DAILY_LIMIT, wishCursor: 3 });
+  const restocked = nextDay.wishView();
+  assert(restocked.used === 0 && restocked.cursor === 3 && restocked.openDay === 2, "open day clears chances");
+  const again = nextDay.wishDraw({ pay: "diamond" });
+  assert(again.ok && again.kind === "gold" && again.count === 60 && again.cursor === 4, "cursor continues after reset");
+  assert(again.diamond === MOCK_STARTER_DIAMOND - WISH_DIAMOND_COST && again.gold === MOCK_STARTER_GOLD + 60, "diamond pay still grants gold");
+
+  const pushed = new MockGameSession();
+  assert(pushed.wishDraw({ pay: "gold" }).ok, "wish before push");
+  const rush = pushed.stagePush({});
+  assert(rush.ok && pushed.openDay === 15 && pushed.wishCursor === 1, "push keeps cursor");
+  assert(pushed.wishView().used === 0 && pushed.gold === MOCK_STARTER_GOLD - WISH_GOLD_COST + 40 + 700, "push restocks chances and stacks gold");
+
+  const early = new MockGameSession();
+  for (let stage = 1; stage <= 8; stage++) {
+    const entered = early.stageEnter({ stageId: stage });
+    const won = early.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(won.ok && won.win, "win " + stage);
+  }
+  assert(early.role.level === 9 && early.clearedStage === 8, "eight wins stay at lv9");
+  const ninth = early.stageResult({ stageId: 9, battleId: early.stageEnter({ stageId: 9 }).battleId, win: true });
+  assert(ninth.ok && early.role.level === 10 && early.clearedStage === 9 && early.openDay === 2, "nine wins reach lv10");
+  assert(early.wishView().used === 0 && early.wishDraw({ pay: "gold" }).ok, "lv10 can wish");
+
+  const reset = new MockGameSession({ wishUsed: 2, wishCursor: 4, wishDay: 3, openDay: 3, gold: 10 });
+  assert(reset.wishView().used === 2 && reset.wishView().cursor === 4, "preset cursor");
+  assert(reset.roleCreate({ name: "新人" }).ok, "create");
+  assert(reset.gold === MOCK_STARTER_GOLD && reset.wishView().used === 0 && reset.wishView().cursor === 0, "create clears wishes");
+  assert(reset.itemCounts[ITEM_WISH_TOKEN] === STARTER_WISH_TOKEN && reset.itemCounts[IDLE_ITEM_ID] === undefined, "create restores tokens");
+  assert(reset.arenaUsed === 0 && reset.shopView().skus[0].bought === 0, "create leaves other modes reset");
+
+  const transport = new MockTransport({ latencyMs: 5 });
+  const net = quietNet(transport);
+  await net.connect("mock://local");
+  const remoteView = await Proto.wishView({}, net);
+  assert(remoteView.ok && remoteView.used === 0 && remoteView.tokenOwned === STARTER_WISH_TOKEN, "proto view");
+  const remoteGold = await Proto.wishDraw({ pay: "gold" }, net);
+  const remoteItem = await Proto.wishDraw({ pay: "item" }, net);
+  assert(remoteGold.ok && remoteGold.gold === MOCK_STARTER_GOLD - WISH_GOLD_COST + 40, "proto gold wish");
+  assert(remoteItem.ok && remoteItem.kind === "stone" && remoteItem.tokenOwned === 1, "proto item wish");
+  const remoteShort = await Proto.wishDraw({ pay: "diamond" }, net);
+  assert(remoteShort.ok && remoteShort.kind === "potion" && remoteShort.diamond === MOCK_STARTER_DIAMOND - WISH_DIAMOND_COST, "proto diamond wish");
+  const remoteBag = await Proto.bagList({}, net);
+  assert(bagItem(remoteBag.items, IDLE_ITEM_ID) !== null && bagItem(remoteBag.items, ITEM_EXP_POTION)!.count === STARTER_EXP_POTION + 1, "proto bag sees rewards");
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.wishView || row.cmd === Cmd.wishDraw).map((row) => row.id);
+  assert(ids.length === 2 && ids[0] === 2501 && ids[1] === 2502, "wish cmd ids");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyWishDraw(remoteGold);
+  assert(Session.gold === remoteGold.gold && Session.diamond === remoteGold.diamond, "apply wish");
+  applyWishDraw({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteGold.gold && Session.diamond === remoteGold.diamond, "failed wish ignored");
   Session.gold = prevGold;
   Session.diamond = prevDiamond;
   net.close();
