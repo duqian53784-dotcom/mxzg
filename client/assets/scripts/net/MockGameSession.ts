@@ -68,6 +68,16 @@ import {
   tallyLogin7,
 } from "../module/login7/rewards";
 import {
+  copyGoal7Rewards,
+  findGoal7Task,
+  goal7Current,
+  goal7State,
+  heroLevelsToUpgrades,
+  listGoal7Tasks,
+  tallyGoal7,
+  Goal7Progress,
+} from "../module/goal7/tasks";
+import {
   isSummonCount,
   poolAt,
   shardItemId,
@@ -105,6 +115,8 @@ import {
   Login7AdvanceResp,
   Login7ClaimResp,
   Login7ViewResp,
+  Goal7ClaimResp,
+  Goal7ViewResp,
 } from "./protocol/types";
 
 /** 一场预览里的假服状态。同一 MockTransport 上多次请求共用这一份。 */
@@ -179,6 +191,13 @@ export interface MockSessionSeed {
   loginDay?: number;
   /** 已经领取的登录天。只认 1 到 7。不填则都没领。 */
   loginClaimed?: number[];
+  /**
+   * 成功领取挂机的次数。不填为 0。
+   * 时间太短被拒绝的不算。创角清零。七日目标的「领取挂机」读这个数。
+   */
+  idleClaimCount?: number;
+  /** 已经领取的七日目标 id。不认识的字符串会记下，但不出现在任务列表里。 */
+  goalClaimed?: string[];
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -187,7 +206,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本和七日登录都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录和七日目标都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -252,6 +271,10 @@ export class MockGameSession {
   loginDay = 1;
   /** 下标 1 到 7。true 表示这一天已经领过。 */
   private loginClaimed: boolean[] = [false, false, false, false, false, false, false, false];
+  /** 成功领取挂机的次数。七日目标读它，不跟挂机起算时刻混。 */
+  idleClaimCount = 0;
+  /** 七日目标 id → 已领取。 */
+  private goalClaimed: { [id: string]: boolean } = {};
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
@@ -304,7 +327,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数和七日登录重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数、七日登录和七日目标重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -335,6 +358,7 @@ export class MockGameSession {
     this.dailyUsed = 0;
     this.dailyDay = this.openDay;
     this.resetLogin7();
+    this.resetGoal7();
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
 
@@ -441,6 +465,7 @@ export class MockGameSession {
     this.addRewards(rewards);
     if (view.pendingItem > 0) this.addItem(IDLE_ITEM_ID, view.pendingItem);
     this.idleAnchorMs = this.clock();
+    this.idleClaimCount += 1;
     return {
       ok: true,
       rewards,
@@ -802,6 +827,62 @@ export class MockGameSession {
    * 调试：角色登录天 +1，最多到第 7 天。
    * 不改开服天，不自动领取，也不动钱包。
    */
+  /**
+   * 只读七日目标。按当前通关、召唤、升级和挂机领取列出任务，不改钱包。
+   * 第 70 关在通关数到 70 之前是未开启。天数只分组。
+   */
+  goal7View(): Goal7ViewResp {
+    this.ensureHeroes();
+    const progress = this.goal7Progress();
+    return {
+      ok: true,
+      clearedStage: this.clearedStage,
+      tasks: listGoal7Tasks(progress, (id) => this.goalClaimed[id] === true),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 领取一个已完成且未领的目标。
+   * 未开启、还没完成、已经领过、没有这个 id 都拒绝，钱包和背包不动。
+   * 金币钻石进钱包，其它道具进背包。不改主线、英雄、召唤、挂机次数和七日登录。
+   */
+  goal7Claim(data: unknown): Goal7ClaimResp {
+    this.ensureHeroes();
+    const id = strField(asRecord(data), "id").trim();
+    const def = findGoal7Task(id);
+    if (!def) return this.goal7Fail(id, "", "in-progress", 0, 0, ErrorCode.GOAL7_NOT_FOUND);
+    const progress = this.goal7Progress();
+    const current = goal7Current(def, progress);
+    const state = goal7State(def, progress, this.goalClaimed[def.id] === true);
+    if (state === "claimed") return this.goal7Fail(def.id, def.title, state, current, def.target, ErrorCode.GOAL7_CLAIMED);
+    if (state === "locked") return this.goal7Fail(def.id, def.title, state, current, def.target, ErrorCode.GOAL7_LOCKED);
+    if (state !== "claimable") {
+      return this.goal7Fail(def.id, def.title, state, current, def.target, ErrorCode.GOAL7_INCOMPLETE);
+    }
+    const grant = tallyGoal7(def.rewards);
+    this.gold += grant.gold;
+    this.diamond += grant.diamond;
+    for (let i = 0; i < grant.items.length; i++) {
+      this.addItem(grant.items[i].id, grant.items[i].count);
+    }
+    this.goalClaimed[def.id] = true;
+    return {
+      ok: true,
+      id: def.id,
+      title: def.title,
+      state: "claimed",
+      current,
+      target: def.target,
+      rewards: copyGoal7Rewards(def.rewards),
+      goldGain: grant.gold,
+      diamondGain: grant.diamond,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
   login7Advance(): Login7AdvanceResp {
     if (this.loginDay >= LOGIN7_DAYS) {
       return {
@@ -1201,6 +1282,18 @@ export class MockGameSession {
         if (day >= 1 && day <= LOGIN7_DAYS) this.loginClaimed[day] = true;
       }
     }
+    if (typeof seed.idleClaimCount === "number" && isFinite(seed.idleClaimCount)) {
+      const count = Math.floor(seed.idleClaimCount);
+      this.idleClaimCount = count > 0 ? count : 0;
+    }
+    if (Array.isArray(seed.goalClaimed)) {
+      for (let i = 0; i < seed.goalClaimed.length; i++) {
+        const raw = seed.goalClaimed[i];
+        if (typeof raw !== "string") continue;
+        const id = raw.trim();
+        if (id) this.goalClaimed[id] = true;
+      }
+    }
   }
 
   /** id 1 金币，id 2 钻石。其它 id 先忽略。 */
@@ -1388,6 +1481,46 @@ export class MockGameSession {
   private resetLogin7(): void {
     this.loginDay = 1;
     for (let i = 0; i < this.loginClaimed.length; i++) this.loginClaimed[i] = false;
+  }
+
+  private resetGoal7(): void {
+    this.idleClaimCount = 0;
+    this.goalClaimed = {};
+  }
+
+  private goal7Progress(): Goal7Progress {
+    const levels: number[] = [];
+    for (let i = 0; i < this.heroes.length; i++) levels.push(this.heroes[i].level);
+    return {
+      clearedStage: this.clearedStage,
+      summonCount: this.summonCursor,
+      heroUpgradeCount: heroLevelsToUpgrades(levels),
+      idleClaimCount: this.idleClaimCount,
+    };
+  }
+
+  private goal7Fail(
+    id: string,
+    title: string,
+    state: Goal7ClaimResp["state"],
+    current: number,
+    target: number,
+    code: number
+  ): Goal7ClaimResp {
+    return {
+      ok: false,
+      id,
+      title,
+      state,
+      current,
+      target,
+      rewards: [],
+      goldGain: 0,
+      diamondGain: 0,
+      gold: this.gold,
+      diamond: this.diamond,
+      code,
+    };
   }
 
   private login7Fail(day: number, code: number): Login7ClaimResp {

@@ -1,5 +1,5 @@
 /**
- * B3–C13 自检（不启动 Creator）。
+ * B3–C14 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -158,6 +158,35 @@ import {
   login7TodayClaimed,
   login7WalletLine,
 } from "../assets/scripts/module/login7/rewards";
+import {
+  applyGoal7Claim,
+  findGoal7Task,
+  GOAL7_DAYS,
+  GOAL7_LATE_ID,
+  GOAL7_LATE_STAGE,
+  GOAL7_TABLE,
+  goal7BadJumpToast,
+  goal7ClaimableCount,
+  goal7ClaimedToast,
+  goal7ClaimText,
+  goal7ClaimToast,
+  goal7DayHint,
+  goal7DayLabel,
+  goal7DetailLine,
+  goal7FailToast,
+  goal7GoText,
+  goal7HeadLine,
+  goal7IncompleteToast,
+  goal7LockedToast,
+  goal7MissingToast,
+  goal7RewardText,
+  goal7SubLine,
+  goal7TasksOnDay,
+  goal7TitleLine,
+  goal7WalletLine,
+  heroLevelsToUpgrades,
+} from "../assets/scripts/module/goal7/tasks";
+import { Goal7Task } from "../assets/scripts/net/protocol/types";
 import {
   applySummon,
   diamondShortToast,
@@ -817,6 +846,22 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(entryAccess(login7Entry, 1, 1, null).open && entryAccess(login7Entry, 1, 1, db).open, "login7 open on day 1");
   assert(entryAccess(login7Entry, 1, 30, db).open && login7Entry.blurb.indexOf("登录天") >= 0, "login7 ignores open day");
   assert(rootTabFor("login7") === "plays", "login7 stays on plays");
+  const goal7Entry = findNavEntry("goal7");
+  assert(goal7Entry !== null && !goal7Entry.gateId && !goal7Entry.serverGateKey, "goal7 has no gate");
+  assert(entryAccess(goal7Entry, 1, 1, null).open && entryAccess(goal7Entry, 1, 1, db).open, "goal7 open on day 1");
+  assert(entryAccess(goal7Entry, 1, 30, db).open && goal7Entry.blurb.indexOf("70") >= 0, "goal7 ignores open day");
+  assert(rootTabFor("goal7") === "plays", "goal7 stays on plays");
+  const goalFromCity = new NavHistory();
+  goalFromCity.reset("city");
+  goalFromCity.push("goal7");
+  goalFromCity.push("mainline");
+  assert(goalFromCity.current === "mainline" && goalFromCity.pop() === "mainline" && goalFromCity.current === "goal7", "mainline returns to goals");
+  goalFromCity.push("hero");
+  assert(goalFromCity.rootTab() === "hero" && goalFromCity.pop() === "hero" && goalFromCity.current === "goal7", "hero returns to goals");
+  goalFromCity.reset("city");
+  goalFromCity.push("plays");
+  goalFromCity.push("goal7");
+  assert(goalFromCity.rootTab() === "plays", "goals opened from plays");
   const magicEntry = findNavEntry("magic");
   assert(
     magicEntry !== null && magicEntry.gateId === "magic_tower" && magicEntry.serverGateKey === "magic_tower_open_day",
@@ -916,6 +961,14 @@ function checkPanelNav(): void {
   nav.openRoot("city");
   assert(nav.current === "city" && stack.depth === 1 && stack.current === "city", "back to city");
   assert(nav.back() === false && nav.current === "city", "city has no back");
+  nav.openChild("goal7");
+  nav.openChild("mainline");
+  assert(nav.current === "mainline" && stack.depth === 3, "goal jump stacks mainline");
+  assert(nav.back() && nav.current === "goal7", "back from mainline to goals");
+  nav.openChild("idle");
+  assert(nav.back() && nav.current === "goal7", "back from idle to goals");
+  nav.openChild("summon");
+  assert(nav.rootTab === "summon" && nav.back() && nav.current === "goal7", "summon returns to goals");
 }
 
 function checkMainline(): void {
@@ -2379,7 +2432,194 @@ async function main(): Promise<void> {
   await checkTower();
   await checkDaily();
   await checkLogin7();
+  await checkGoal7();
   console.log("skeleton-check ok");
+}
+
+function goalTask(tasks: readonly Goal7Task[], id: string): Goal7Task | null {
+  for (let i = 0; i < tasks.length; i++) {
+    if (tasks[i].id === id) return tasks[i];
+  }
+  return null;
+}
+
+async function checkGoal7(): Promise<void> {
+  assert(GOAL7_DAYS === 7 && GOAL7_LATE_STAGE === 70 && GOAL7_LATE_ID === "stage-70", "goal constants");
+  assert(GOAL7_TABLE.length === 7, "seven seeded tasks");
+  const stage1 = findGoal7Task("stage-1");
+  const late = findGoal7Task(GOAL7_LATE_ID);
+  assert(stage1 !== null && stage1.day === 1 && stage1.target === 1 && stage1.unlockStage === 0 && stage1.jump === "mainline", "stage 1 def");
+  assert(findGoal7Task("summon-1")!.jump === "summon" && findGoal7Task("hero-1")!.jump === "hero", "summon and hero jumps");
+  assert(findGoal7Task("idle-1")!.jump === "idle" && findGoal7Task("stage-5")!.day === 4, "idle and stage 5");
+  assert(late !== null && late.day === 7 && late.target === 70 && late.unlockStage === 70 && late.jump === "mainline", "stage 70 hook");
+  assert(findGoal7Task("") === null && findGoal7Task("nope") === null, "missing task");
+  assert(goal7RewardText(stage1!.rewards) === "金币 +40", "stage 1 reward");
+  assert(goal7RewardText(findGoal7Task("stage-5")!.rewards) === "金币 +80、小金币袋 ×1", "stage 5 reward");
+  assert(goal7RewardText(late!.rewards) === "金币 +500、钻石 +80、经验药水 ×1", "stage 70 reward");
+  assert(heroLevelsToUpgrades([1, 1, 1]) === 0 && heroLevelsToUpgrades([2, 4]) === 4, "upgrade sum");
+  assert(goal7SubLine().indexOf("70") >= 0 && goal7DayLabel(7) === "第7天", "sub and day label");
+  assert(goal7WalletLine(140, 30) === "持有金币 140 · 钻石 30", "wallet line");
+  assert(goal7GoText("mainline") === "前往主线" && goal7GoText("summon") === "前往召唤", "go labels");
+  assert(goal7GoText("hero") === "前往英雄" && goal7GoText("idle") === "前往挂机" && goal7GoText("shop") === "前往", "go labels rest");
+  assert(goal7ClaimText("in-progress") === "领取" && goal7ClaimText("claimable") === "领取", "claim label");
+  assert(goal7ClaimText("locked") === "未开启" && goal7ClaimText("claimed") === "已领取", "locked and claimed labels");
+  assert(goal7BadJumpToast() === "这里还去不了" && goal7MissingToast() === "没有这个目标", "bad jump and missing");
+  assert(goal7LockedToast(70) === "通关第70关后才能领取" && goal7LockedToast(1) === "目标尚未开启", "lock copy");
+  assert(goal7IncompleteToast("通关主线第1关", 0, 1) === "通关主线第1关尚未完成（0/1）", "incomplete copy");
+  assert(goal7ClaimedToast("召唤1次") === "召唤1次已经领取" && goal7ClaimedToast("") === "这个目标已经领取", "claimed copy");
+  assert(goal7DayHint(5, 0) === "这一天还没有目标" && goal7DayHint(7, 1).indexOf("70") >= 0, "day hints");
+  assert(errorText(ErrorCode.GOAL7_NOT_FOUND) === "没有这个目标", "missing text");
+  assert(errorText(ErrorCode.GOAL7_LOCKED) === "目标尚未开启", "locked text");
+  assert(errorText(ErrorCode.GOAL7_INCOMPLETE) === "目标尚未完成", "incomplete text");
+  assert(errorText(ErrorCode.GOAL7_CLAIMED) === "这个目标已经领取", "claimed text");
+
+  const fresh = new MockGameSession();
+  const view = fresh.goal7View();
+  assert(view.ok && view.clearedStage === 0 && view.tasks.length === 7, "fresh view");
+  assert(view.gold === MOCK_STARTER_GOLD && view.diamond === MOCK_STARTER_DIAMOND, "view wallet");
+  assert(goal7ClaimableCount(view.tasks) === 0 && goal7HeadLine(view.clearedStage, 0) === "已通关第 0 关 · 可领 0 项", "nothing ready");
+  assert(goal7TasksOnDay(view.tasks, 1).length === 2 && goal7TasksOnDay(view.tasks, 5).length === 0, "day groups");
+  assert(goal7TasksOnDay(view.tasks, 6).length === 0 && goal7TasksOnDay(view.tasks, 7).length === 1, "empty and late days");
+  const row1 = goalTask(view.tasks, "stage-1");
+  const row70 = goalTask(view.tasks, GOAL7_LATE_ID);
+  assert(row1 !== null && row1.state === "in-progress" && row1.current === 0 && row1.target === 1, "stage 1 progress");
+  assert(goal7TitleLine(row1!) === "通关主线第1关 · 进行中" && goal7DetailLine(row1!) === "0/1 · 金币 +40", "stage 1 lines");
+  assert(goalTask(view.tasks, "summon-1")!.state === "in-progress" && goalTask(view.tasks, "hero-1")!.state === "in-progress", "summon and hero open");
+  assert(goalTask(view.tasks, "idle-1")!.state === "in-progress" && goalTask(view.tasks, "stage-5")!.current === 0, "idle and stage 5 open");
+  assert(row70 !== null && row70.state === "locked" && row70.current === 0 && row70.target === 70, "stage 70 locked");
+  assert(goal7TitleLine(row70!) === "通关主线第70关 · 未开启" && goal7DetailLine(row70!) === "0/70 · 金币 +500、钻石 +80、经验药水 ×1", "stage 70 lines");
+
+  const early = fresh.goal7Claim({ id: "stage-1" });
+  assert(early.ok === false && early.code === ErrorCode.GOAL7_INCOMPLETE && goal7FailToast(early) === "通关主线第1关尚未完成（0/1）", "incomplete claim");
+  assert(fresh.gold === MOCK_STARTER_GOLD && fresh.diamond === MOCK_STARTER_DIAMOND && fresh.clearedStage === 0, "incomplete spends nothing");
+  const missing = fresh.goal7Claim({ id: "nope" });
+  assert(missing.ok === false && missing.code === ErrorCode.GOAL7_NOT_FOUND && goal7FailToast(missing) === "没有这个目标", "missing id");
+  const blank = fresh.goal7Claim({});
+  assert(blank.ok === false && blank.code === ErrorCode.GOAL7_NOT_FOUND && fresh.gold === MOCK_STARTER_GOLD, "blank id");
+  const lockedNow = fresh.goal7Claim({ id: GOAL7_LATE_ID });
+  assert(lockedNow.ok === false && lockedNow.code === ErrorCode.GOAL7_LOCKED && goal7FailToast(lockedNow) === "通关第70关后才能领取", "fresh late lock");
+  assert(fresh.loginDay === 1 && fresh.idleClaimCount === 0 && fresh.stageId === 1, "reject leaves login and idle");
+
+  const entered = fresh.stageEnter({ stageId: 1 });
+  const won = fresh.stageResult({ stageId: 1, battleId: entered.battleId, win: true });
+  assert(won.ok && fresh.clearedStage === 1 && fresh.gold === MOCK_STARTER_GOLD + 10, "clear stage 1");
+  const ready = goalTask(fresh.goal7View().tasks, "stage-1");
+  assert(ready !== null && ready.state === "claimable" && goal7DetailLine(ready) === "1/1 · 金币 +40", "stage 1 claimable");
+  assert(goalTask(fresh.goal7View().tasks, "stage-3")!.state === "in-progress" && goalTask(fresh.goal7View().tasks, "stage-3")!.current === 1, "stage 3 still short");
+  assert(goalTask(fresh.goal7View().tasks, GOAL7_LATE_ID)!.state === "locked", "one clear does not open 70");
+  const claimed = fresh.goal7Claim({ id: "stage-1" });
+  assert(claimed.ok && claimed.goldGain === 40 && claimed.diamondGain === 0 && claimed.state === "claimed", "claim stage 1");
+  assert(claimed.gold === MOCK_STARTER_GOLD + 50 && fresh.loginDay === 1 && fresh.openDay === 1, "claim gold only");
+  assert(goal7ClaimToast(claimed.title, claimed.rewards) === "领取成功：通关主线第1关，金币 +40", "claim toast");
+  const again = fresh.goal7Claim({ id: "stage-1" });
+  assert(again.ok === false && again.code === ErrorCode.GOAL7_CLAIMED && goal7FailToast(again) === "通关主线第1关已经领取", "already claimed");
+  assert(fresh.gold === MOCK_STARTER_GOLD + 50 && goalTask(fresh.goal7View().tasks, "stage-1")!.state === "claimed", "second claim keeps wallet");
+
+  const broke = new MockGameSession({ diamond: 0 });
+  assert(broke.summon({ count: 1 }).ok === false && goalTask(broke.goal7View().tasks, "summon-1")!.state === "in-progress", "failed summon ignored");
+  const pull = new MockGameSession();
+  assert(pull.summon({ count: 1 }).ok && pull.goal7View().tasks.length === 7, "one summon");
+  const summonTask = goalTask(pull.goal7View().tasks, "summon-1");
+  assert(summonTask !== null && summonTask.state === "claimable" && summonTask.current === 1, "summon claimable");
+  const gems = pull.goal7Claim({ id: "summon-1" });
+  assert(gems.ok && gems.diamondGain === 10 && pull.diamond === MOCK_STARTER_DIAMOND - SUMMON_SINGLE_COST + 10, "summon diamonds");
+  assert(pull.gold === MOCK_STARTER_GOLD && pull.clearedStage === 0 && goal7FailToast(pull.goal7Claim({ id: "summon-1" })) === "召唤1次已经领取", "summon once");
+
+  const poor = new MockGameSession({ gold: 10 });
+  assert(poor.heroUpgrade({ heroId: poor.heroes[0].id }).ok === false && poor.gold === 10, "upgrade refused");
+  assert(goalTask(poor.goal7View().tasks, "hero-1")!.state === "in-progress", "failed upgrade ignored");
+  const grow = new MockGameSession();
+  const upgraded = grow.heroUpgrade({ heroId: grow.heroes[0].id });
+  assert(upgraded.ok && grow.gold === MOCK_STARTER_GOLD - 30, "upgrade spends gold");
+  assert(goalTask(grow.goal7View().tasks, "hero-1")!.state === "claimable", "upgrade claimable");
+  const heroPay = grow.goal7Claim({ id: "hero-1" });
+  assert(heroPay.ok && heroPay.goldGain === 50 && grow.gold === MOCK_STARTER_GOLD - 30 + 50, "hero payout");
+  const potion = new MockGameSession();
+  assert(potion.bagUse({ id: ITEM_EXP_POTION, count: 1 }).ok, "potion levels leader");
+  assert(goalTask(potion.goal7View().tasks, "hero-1")!.state === "claimable" && goalTask(potion.goal7View().tasks, "hero-1")!.current >= 1, "potion counts");
+
+  let now = 1700000000000;
+  const idle = new MockGameSession(undefined, () => now);
+  assert(idle.idleClaim().ok === false && idle.idleClaimCount === 0, "short idle ignored");
+  assert(goalTask(idle.goal7View().tasks, "idle-1")!.state === "in-progress", "idle still open");
+  now += 30000;
+  const idlePay = idle.idleClaim();
+  assert(idlePay.ok && idle.idleClaimCount === 1 && idlePay.ownedItem === 1, "idle counted");
+  assert(goalTask(idle.goal7View().tasks, "idle-1")!.state === "claimable", "idle claimable");
+  const stones = idle.goal7Claim({ id: "idle-1" });
+  assert(stones.ok && stones.goldGain === 0 && idle.itemCounts[IDLE_ITEM_ID] === 3, "idle stones");
+  assert(idle.gold === MOCK_STARTER_GOLD + 3 && idle.clearedStage === 0, "idle goal leaves stage");
+
+  const near = new MockGameSession({ clearedStage: 69, openDay: 14 });
+  const nearTask = goalTask(near.goal7View().tasks, GOAL7_LATE_ID);
+  assert(nearTask !== null && nearTask.state === "locked" && nearTask.current === 69 && goal7DetailLine(nearTask) === "69/70 · 金币 +500、钻石 +80、经验药水 ×1", "69 still locked");
+  assert(goalTask(near.goal7View().tasks, "stage-1")!.state === "claimable" && goalTask(near.goal7View().tasks, "stage-5")!.state === "claimable", "early tasks follow clears");
+  const nearLock = near.goal7Claim({ id: GOAL7_LATE_ID });
+  assert(nearLock.ok === false && nearLock.code === ErrorCode.GOAL7_LOCKED && near.gold === MOCK_STARTER_GOLD, "69 cannot claim");
+  const loseEnter = near.stageEnter({ stageId: 70 });
+  const lost = near.stageResult({ stageId: 70, battleId: loseEnter.battleId, win: false });
+  assert(lost.ok && lost.win === false && near.clearedStage === 69 && goalTask(near.goal7View().tasks, GOAL7_LATE_ID)!.state === "locked", "loss stays locked");
+  const winEnter = near.stageEnter({ stageId: 70 });
+  const cleared = near.stageResult({ stageId: 70, battleId: winEnter.battleId, win: true });
+  assert(cleared.ok && near.clearedStage === 70 && near.role.level === 71, "clear 70");
+  const opened = goalTask(near.goal7View().tasks, GOAL7_LATE_ID);
+  assert(opened !== null && opened.state === "claimable" && goal7TitleLine(opened) === "通关主线第70关 · 可领取", "70 claimable");
+  assert(goal7HeadLine(70, goal7ClaimableCount(near.goal7View().tasks)).indexOf("已通关第 70 关") === 0, "head shows 70");
+  const latePay = near.goal7Claim({ id: GOAL7_LATE_ID });
+  assert(latePay.ok && latePay.goldGain === 500 && latePay.diamondGain === 80, "late payout");
+  assert(near.gold === MOCK_STARTER_GOLD + 10 + 500 && near.diamond === MOCK_STARTER_DIAMOND + 80, "late wallet");
+  assert(near.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION + 1 && near.loginDay === 1, "late potion leaves login");
+  assert(goalTask(near.goal7View().tasks, GOAL7_LATE_ID)!.state === "claimed" && near.arenaUsed === 0 && near.towerFloor === 1 && near.dailyUsed === 0, "late leaves modes");
+
+  const seeded = new MockGameSession({
+    clearedStage: 5,
+    idleClaimCount: 1,
+    summonCursor: 2,
+    goalClaimed: ["stage-1", "nope"],
+    heroes: [{ id: 10001, name: "光耀骑士", level: 2, star: 3 }],
+  });
+  assert(goalTask(seeded.goal7View().tasks, "stage-1")!.state === "claimed", "seed claimed wins");
+  assert(goalTask(seeded.goal7View().tasks, "stage-5")!.state === "claimable" && goalTask(seeded.goal7View().tasks, "summon-1")!.state === "claimable", "seed progress");
+  assert(goalTask(seeded.goal7View().tasks, "hero-1")!.state === "claimable" && goalTask(seeded.goal7View().tasks, "idle-1")!.state === "claimable", "seed hero and idle");
+  assert(goalTask(seeded.goal7View().tasks, GOAL7_LATE_ID)!.state === "locked" && seeded.goal7Claim({ id: "stage-1" }).code === ErrorCode.GOAL7_CLAIMED, "seeded claimed");
+  const preset = new MockGameSession({ goalClaimed: [GOAL7_LATE_ID] });
+  assert(goalTask(preset.goal7View().tasks, GOAL7_LATE_ID)!.state === "claimed" && preset.gold === MOCK_STARTER_GOLD, "claimed beats locked");
+
+  const reset = new MockGameSession({ clearedStage: 70, idleClaimCount: 4, summonCursor: 3, goalClaimed: ["stage-70", "stage-1"], gold: 900 });
+  assert(reset.roleCreate({ name: "新人" }).ok, "create");
+  assert(reset.clearedStage === 0 && reset.idleClaimCount === 0 && reset.gold === MOCK_STARTER_GOLD, "create resets counters");
+  assert(goalTask(reset.goal7View().tasks, "stage-1")!.state === "in-progress" && goalTask(reset.goal7View().tasks, GOAL7_LATE_ID)!.state === "locked", "create clears claims");
+  assert(reset.login7View().days[0].state === "ready" && reset.loginDay === 1, "create still resets login7");
+
+  const both = new MockGameSession();
+  assert(both.login7Claim({ day: 1 }).ok && goalTask(both.goal7View().tasks, "stage-1")!.state === "in-progress", "login7 leaves goals");
+  const transport = new MockTransport({ latencyMs: 5 });
+  const net = quietNet(transport);
+  await net.connect("mock://local");
+  const remoteView = await Proto.goal7View({}, net);
+  assert(remoteView.ok && remoteView.tasks.length === 7 && goalTask(remoteView.tasks, GOAL7_LATE_ID)!.state === "locked", "proto view");
+  const remoteEarly = await Proto.goal7Claim({ id: "stage-1" }, net);
+  assert(remoteEarly.ok === false && remoteEarly.code === ErrorCode.GOAL7_INCOMPLETE && remoteEarly.gold === MOCK_STARTER_GOLD, "proto incomplete");
+  const remoteEnter = await Proto.stageEnter({ stageId: 1 }, net);
+  const remoteWin = await Proto.stageResult({ stageId: 1, battleId: remoteEnter.battleId, win: true }, net);
+  assert(remoteWin.ok && remoteWin.win, "proto clear");
+  const remoteClaim = await Proto.goal7Claim({ id: "stage-1" }, net);
+  assert(remoteClaim.ok && remoteClaim.gold === MOCK_STARTER_GOLD + 10 + 40 && remoteClaim.rewards.length === 1, "proto claim");
+  const remoteAgain = await Proto.goal7Claim({ id: "stage-1" }, net);
+  assert(remoteAgain.ok === false && remoteAgain.code === ErrorCode.GOAL7_CLAIMED && remoteAgain.gold === remoteClaim.gold, "proto claimed");
+  const remoteLocked = await Proto.goal7Claim({ id: GOAL7_LATE_ID }, net);
+  assert(remoteLocked.ok === false && remoteLocked.code === ErrorCode.GOAL7_LOCKED && transport.session.clearedStage === 1, "proto late stays locked");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyGoal7Claim(remoteClaim);
+  assert(Session.gold === remoteClaim.gold && Session.diamond === remoteClaim.diamond, "apply goal7");
+  applyGoal7Claim({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteClaim.gold && Session.diamond === remoteClaim.diamond, "failed goal7 ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.goal7View || row.cmd === Cmd.goal7Claim).map((row) => row.id);
+  assert(ids.length === 2 && ids[0] === 2301 && ids[1] === 2302, "goal7 cmd ids");
+  net.close();
 }
 
 void main().catch((err) => {

@@ -38,6 +38,8 @@ import { ArenaPage, buildArenaPage } from "./ArenaPage";
 import { buildTowerPage, TowerPage } from "./TowerPage";
 import { buildDailyGoldPage, DailyGoldPage } from "./DailyGoldPage";
 import { buildLogin7Page, Login7Page } from "./Login7Page";
+import { buildGoal7Page, Goal7Page } from "./Goal7Page";
+import { goal7BadJumpToast } from "../module/goal7/tasks";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -56,6 +58,7 @@ const IDLE_FILL = new Color(168, 116, 42, 255);
 const BAG_FILL = new Color(36, 128, 96, 255);
 const MAIL_FILL = new Color(110, 78, 168, 255);
 const LOGIN7_FILL = new Color(156, 52, 78, 255);
+const GOAL7_FILL = new Color(184, 122, 36, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -75,6 +78,7 @@ export class MainApp extends Component {
   private tower: TowerPage | null = null;
   private daily: DailyGoldPage | null = null;
   private login7: Login7Page | null = null;
+  private goal7: Goal7Page | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -114,6 +118,8 @@ export class MainApp extends Component {
     this.daily = null;
     this.login7?.dispose();
     this.login7 = null;
+    this.goal7?.dispose();
+    this.goal7 = null;
     this.shell?.dispose();
   }
 
@@ -163,7 +169,7 @@ export class MainApp extends Component {
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
     if (!this.allow(id)) return;
-    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7") && !this.ensureNet()) return;
+    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7") && !this.ensureNet()) return;
     this.panels?.openChild(id);
     this.refreshChrome();
   }
@@ -172,6 +178,7 @@ export class MainApp extends Component {
     const closed = this.panels?.back() === true;
     if (!closed) return;
     GameLog.shared.info("MainApp", "back to " + (this.panels?.current || ""));
+    if (this.panels?.current === "goal7") this.goal7?.reload();
     this.refreshChrome();
   }
 
@@ -199,6 +206,7 @@ export class MainApp extends Component {
     if (id === "tower") return this.mountTower();
     if (id === "daily") return this.mountDaily();
     if (id === "login7") return this.mountLogin7();
+    if (id === "goal7") return this.mountGoal7();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -217,7 +225,8 @@ export class MainApp extends Component {
     place(createButton("挂机", () => this.openIdle(), 420, 64, IDLE_FILL), page, 0, 200);
     place(createButton("背包", () => this.openBag(), 420, 64, BAG_FILL), page, 0, 120);
     place(createButton("邮件", () => this.openMail(), 420, 64, MAIL_FILL), page, 0, 40);
-    place(createButton("七日登录", () => this.openLogin7(), 420, 64, LOGIN7_FILL), page, 0, -120);
+    place(createButton("七日登录", () => this.openLogin7(), 200, 64, LOGIN7_FILL, 22), page, -110, -120);
+    place(createButton("七日目标", () => this.openGoal7(), 200, 64, GOAL7_FILL, 22), page, 110, -120);
     place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, -40);
     place(
       createButton("公告", () => {
@@ -422,6 +431,58 @@ export class MainApp extends Component {
     });
     this.login7 = page;
     return page.node;
+  }
+
+  /**
+   * 主城和玩法都能进。不看主线等级和开服天。
+   * 没连上时不压页面。前往再压一层已有界面，返回回到本页。
+   */
+  private openGoal7(): void {
+    GameLog.shared.info("MainApp", "click goal7");
+    if (!this.allow("goal7")) return;
+    if (!this.ensureNet()) return;
+    this.panels?.openChild("goal7");
+    this.refreshChrome();
+  }
+
+  private mountGoal7(): Node {
+    this.goal7?.dispose();
+    const page = buildGoal7Page({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.goal7View({}, NetClient.shared),
+      claim: (id) => Proto.goal7Claim({ id }, NetClient.shared),
+      go: (jump) => this.jumpFromGoal(jump),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.goal7 = page;
+    return page.node;
+  }
+
+  /** 七日目标的「前往」。压在当前页上面，返回仍回到目标列表。 */
+  private jumpFromGoal(jump: string): void {
+    GameLog.shared.info("MainApp", "goal7 jump " + jump);
+    if (jump === "mainline") {
+      this.openMainline();
+      return;
+    }
+    if (jump === "idle") {
+      this.openIdle();
+      return;
+    }
+    if (jump === "hero" || jump === "summon") {
+      if (!this.allow(jump)) return;
+      if (!this.ensureNet()) return;
+      this.panels?.openChild(jump);
+      this.refreshChrome();
+      return;
+    }
+    this.shell?.showToast(goal7BadJumpToast(), 2200);
   }
 
   /** 玩法「日常副本」。未到主线 Lv15 时 allow 已经 Toast，不会进到这里。本页只做金币。 */
@@ -739,6 +800,10 @@ export class MainApp extends Component {
     if (id === "login7") {
       this.login7?.dispose();
       this.login7 = null;
+    }
+    if (id === "goal7") {
+      this.goal7?.dispose();
+      this.goal7 = null;
     }
   }
 
