@@ -187,3 +187,37 @@ export interface HeroUpgradeResp {
   /** 没有英雄、金币不足、已满级。成功可以不带。 */
   code?: number;
 }
+
+export interface SummonPullReq {
+  /** 1 单抽，10 十连。其它次数拒绝。 */
+  count: number;
+}
+
+export interface SummonDrop {
+  heroId: number;
+  name: string;
+  star: number;
+  /** new：新英雄已写入名册。shard：已拥有，转碎片。 */
+  kind: "new" | "shard";
+  shardId: number;
+  shardGain: number;
+  shardOwned: number;
+}
+
+export interface SummonPullResp {
+  ok: boolean;
+  count: number;
+  /** 本次扣掉的钻石。失败为 0。 */
+  cost: number;
+  drops: SummonDrop[];
+  /** 本次新进名册的人数。 */
+  newCount: number;
+  /** 本次转成碎片的次数。 */
+  shardCount: number;
+  gold: number;
+  diamond: number;
+  /** 钻石不足时，这次召唤实际需要的数量。 */
+  needDiamond?: number;
+  /** 钻石不足 SUMMON_DIAMOND_SHORT，次数不对 SUMMON_COUNT_INVALID。成功可以不带。 */
+  code?: number;
+}
