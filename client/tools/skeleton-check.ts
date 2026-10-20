@@ -1,5 +1,5 @@
 /**
- * B3–C14 自检（不启动 Creator）。
+ * B3–C15 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -231,8 +231,14 @@ import {
   challengeBlock,
   listStages,
   loseToast,
+  MAINLINE_PUSH_MAX,
+  MAINLINE_PUSH_STAGE,
   planBattle,
+  pushAlreadyToast,
+  pushButtonText,
+  pushToast,
   rewardLines,
+  STAGE_WIN_GOLD,
   winToast,
 } from "../assets/scripts/module/mainline/battle";
 import { MockTransport } from "../assets/scripts/net/MockTransport";
@@ -2433,6 +2439,7 @@ async function main(): Promise<void> {
   await checkDaily();
   await checkLogin7();
   await checkGoal7();
+  await checkStagePush();
   console.log("skeleton-check ok");
 }
 
@@ -2619,6 +2626,92 @@ async function checkGoal7(): Promise<void> {
   Session.diamond = prevDiamond;
   const ids = P0_CMDS.filter((row) => row.cmd === Cmd.goal7View || row.cmd === Cmd.goal7Claim).map((row) => row.id);
   assert(ids.length === 2 && ids[0] === 2301 && ids[1] === 2302, "goal7 cmd ids");
+  net.close();
+}
+
+async function checkStagePush(): Promise<void> {
+  assert(MAINLINE_PUSH_STAGE === 70 && MAINLINE_PUSH_STAGE === GOAL7_LATE_STAGE, "push target is day-7 stage");
+  assert(STAGE_WIN_GOLD === 10 && MAINLINE_PUSH_MAX === 200, "win gold and push cap");
+  assert(pushButtonText() === "推关到70（调试）", "push button");
+  assert(pushToast(70, 71, 700) === "已推到第70关，金币 +700，下一关 71", "push toast");
+  assert(pushAlreadyToast(70) === "已经通关第70关", "already toast");
+
+  const fresh = new MockGameSession();
+  const anchor = fresh.idleAnchorMs;
+  const heroLevel = fresh.heroes[0].level;
+  fresh.arenaUsed = 2;
+  const pushed = fresh.stagePush({});
+  assert(pushed.ok && pushed.already === false && pushed.fromStage === 0 && pushed.clearedStage === 70, "push clears 70");
+  assert(pushed.goldGain === 70 * STAGE_WIN_GOLD && pushed.rewards.length === 1 && pushed.rewards[0].count === 700, "push gold reward");
+  assert(fresh.clearedStage === 70 && fresh.stageId === 71 && fresh.role.level === 71, "push progress");
+  assert(fresh.gold === MOCK_STARTER_GOLD + 700 && fresh.diamond === MOCK_STARTER_DIAMOND, "push wallet");
+  assert(fresh.openDay === 15 && fresh.loginDay === 1 && fresh.idleAnchorMs === anchor, "push day and idle clock");
+  assert(fresh.heroes[0].level === heroLevel && fresh.summonCursor === 0 && fresh.idleClaimCount === 0, "push leaves growth");
+  assert(fresh.arenaUsed === 2 && fresh.towerFloor === 1 && fresh.dailyUsed === 0, "push leaves daily counts");
+  assert(goalTask(fresh.goal7View().tasks, GOAL7_LATE_ID)!.state === "claimable", "day 7 claimable after push");
+  const late = fresh.goal7Claim({ id: GOAL7_LATE_ID });
+  assert(late.ok && late.goldGain === 500 && late.diamondGain === 80, "day 7 claim after push");
+  assert(fresh.itemCounts[ITEM_EXP_POTION] === STARTER_EXP_POTION + 1 && fresh.clearedStage === 70, "potion and stage stay");
+  const again = fresh.stagePush({ target: 70 });
+  assert(again.ok && again.already === true && again.goldGain === 0 && fresh.gold === late.gold, "second push is free");
+  assert(pushAlreadyToast(again.clearedStage) === "已经通关第70关", "second toast");
+
+  const viewed = fresh.arenaView();
+  assert(viewed.ok && fresh.arenaUsed === 0 && fresh.arenaDay === 15, "arena resets on the new open day");
+  assert(isServerGateOpen({ key: "magic_tower_open_day", open_server_day: 30, note: "幻魔塔" }, fresh.openDay) === false, "day 15 keeps magic tower shut");
+
+  for (let stage = 71; stage <= 75; stage++) {
+    const entered = fresh.stageEnter({ stageId: stage });
+    const won = fresh.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(won.ok && won.win && won.rewards[0].count === STAGE_WIN_GOLD, "past 70 still wins " + stage);
+  }
+  assert(fresh.clearedStage === 75 && fresh.stageId === 76 && fresh.role.level === 76 && fresh.openDay === 16, "stage 75 day");
+  const lost = fresh.stageResult({ stageId: 76, win: false });
+  assert(lost.ok && lost.win === false && fresh.clearedStage === 75 && fresh.gold === late.gold + 50, "loss after 75 stays");
+  const past = fresh.stagePush({ target: 70 });
+  assert(past.ok && past.already === true && fresh.clearedStage === 75 && fresh.stageId === 76, "push does not rewind");
+
+  const manual = new MockGameSession();
+  for (let stage = 1; stage <= 70; stage++) {
+    const entered = manual.stageEnter({ stageId: stage });
+    const won = manual.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(won.ok && won.win, "manual " + stage);
+  }
+  assert(manual.gold === MOCK_STARTER_GOLD + 700 && manual.role.level === 71 && manual.openDay === 15, "manual matches push");
+  assert(goalTask(manual.goal7View().tasks, GOAL7_LATE_ID)!.state === "claimable", "manual also opens day 7");
+
+  const partial = new MockGameSession({ clearedStage: 65, openDay: 20, arenaUsed: 1, arenaDay: 20 });
+  const step = partial.stagePush({ target: MAINLINE_PUSH_STAGE });
+  assert(step.ok && step.fromStage === 65 && step.goldGain === 50 && step.clearedStage === 70, "partial push");
+  assert(partial.role.level === 71 && partial.openDay === 20 && partial.stageId === 71, "higher open day stays");
+  assert(partial.arenaUsed === 1 && partial.arenaView().used === 1, "same day keeps arena chances");
+  assert(goalTask(partial.goal7View().tasks, GOAL7_LATE_ID)!.state === "claimable", "partial opens day 7");
+
+  const blocked = new MockGameSession({ clearedStage: 3, gold: 40 });
+  const bad = blocked.stagePush({ target: 0 });
+  const high = blocked.stagePush({ target: MAINLINE_PUSH_MAX + 1 });
+  const nan = blocked.stagePush({ target: Number.NaN });
+  assert(bad.ok === false && high.ok === false && nan.ok === false, "bad targets");
+  assert(bad.code === ErrorCode.STAGE_ID_INVALID && blocked.clearedStage === 3 && blocked.gold === 40 && blocked.role.level === 4, "bad target leaves progress");
+
+  const quick = new MockGameSession({ clearedStage: 69 });
+  const entered = quick.stageEnter({ stageId: quick.stageId });
+  const won = quick.stageResult({ stageId: entered.stageId, battleId: entered.battleId, win: true });
+  assert(won.ok && quick.clearedStage === 70 && quick.gold === MOCK_STARTER_GOLD + STAGE_WIN_GOLD, "quick battle still one stage");
+
+  const transport = new MockTransport({ latencyMs: 5 });
+  const net = quietNet(transport);
+  await net.connect("mock://local");
+  const remote = await Proto.stagePush({ target: 70 }, net);
+  assert(remote.ok && remote.clearedStage === 70 && remote.goldGain === 700 && remote.level === 71 && remote.openDay === 15, "proto push");
+  const lockedBefore = await Proto.goal7View({}, net);
+  assert(goalTask(lockedBefore.tasks, GOAL7_LATE_ID)!.state === "claimable", "proto day 7 open");
+  const claimed = await Proto.goal7Claim({ id: GOAL7_LATE_ID }, net);
+  assert(claimed.ok && claimed.gold === MOCK_STARTER_GOLD + 700 + 500 && claimed.diamond === MOCK_STARTER_DIAMOND + 80, "proto claim day 7");
+  const repeat = await Proto.stagePush({}, net);
+  assert(repeat.ok && repeat.already === true && repeat.gold === claimed.gold, "proto second push");
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.stagePush).map((row) => row.id);
+  assert(ids.length === 1 && ids[0] === 1203, "stage push cmd id");
   net.close();
 }
 

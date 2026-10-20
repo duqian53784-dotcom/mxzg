@@ -96,6 +96,22 @@ export interface StageResultResp {
   code?: number;
 }
 
+export interface StagePushReq {
+  /** 连胜推到这一关（含）。缺省 70。只给 Mock 预览调试。 */
+  target?: number;
+}
+
+export interface StagePushResp extends StageResultResp {
+  /** 这次开始前已经通关的关数。 */
+  fromStage: number;
+  /** 结算后的已通关关数。 */
+  clearedStage: number;
+  /** 这次新发的金币。已经到了目标时是 0。 */
+  goldGain: number;
+  /** 开始前就已经到达目标。进度和钱包不动。 */
+  already: boolean;
+}
+
 export interface IdleReward {
   id: number;
   count: number;

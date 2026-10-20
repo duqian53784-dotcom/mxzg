@@ -17,8 +17,15 @@ import {
   quickBatchToast,
   quickToast,
 } from "../module/idle/rewards";
-import { applyStageProgress, loseToast } from "../module/mainline/battle";
-import { IdleClaimResp, IdleQueryResp, StageEnterResp, StageResultReq, StageResultResp } from "../net/protocol/types";
+import {
+  applyStageProgress,
+  loseToast,
+  MAINLINE_PUSH_STAGE,
+  pushAlreadyToast,
+  pushButtonText,
+  pushToast,
+} from "../module/mainline/battle";
+import { IdleClaimResp, IdleQueryResp, StageEnterResp, StagePushResp, StageResultReq, StageResultResp } from "../net/protocol/types";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 const PAGE_BG = new Color(8, 16, 32, 255);
@@ -28,6 +35,7 @@ const GOLD = new Color(255, 214, 120, 255);
 const ITEM = new Color(186, 214, 170, 255);
 const WARN = new Color(255, 176, 120, 255);
 const CLAIM_FILL = new Color(168, 116, 42, 255);
+const DEBUG_FILL = new Color(72, 64, 112, 255);
 const BACK_FILL = new Color(36, 72, 120, 255);
 
 export interface IdleHost {
@@ -38,6 +46,7 @@ export interface IdleHost {
   claim(): Promise<IdleClaimResp>;
   enter(stageId: number): Promise<StageEnterResp>;
   settle(req: StageResultReq): Promise<StageResultResp>;
+  push(target: number): Promise<StagePushResp>;
   onProgress(): void;
   close(): void;
 }
@@ -119,12 +128,18 @@ class IdleController implements IdlePage {
       -165
     );
     place(
-      createLabel("快速作战直接结算当前关，不播战报，可连续点", 18, { color: MUTED, width: 640 }),
+      createButton(pushButtonText(), () => void this.pushToGoal(), 420, 52, DEBUG_FILL, 22),
       this.body,
       0,
-      -230
+      -245
     );
-    place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -300);
+    place(
+      createLabel("快速作战结算当前关。调试按钮连推到第70关，每关金币相同，不播战报", 16, { color: MUTED, width: 640 }),
+      this.body,
+      0,
+      -310
+    );
+    place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -375);
   }
 
   private async refresh(): Promise<void> {
@@ -252,6 +267,39 @@ class IdleController implements IdlePage {
     } catch (err) {
       const text = messageOf(err);
       GameLog.shared.error("Idle", "quick " + text);
+      if (!this.disposed && this.host.alive()) this.host.showToast(text);
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  /** 连胜推到第 70 关。已经到了只提示。挂机计时不因这次结算清掉。 */
+  private async pushToGoal(): Promise<void> {
+    if (this.busy || this.disposed) return;
+    this.busy = true;
+    this.ticket += 1;
+    GameLog.shared.info("Idle", "push to " + MAINLINE_PUSH_STAGE);
+    try {
+      const result = await this.host.push(MAINLINE_PUSH_STAGE);
+      if (this.disposed || !this.host.alive()) return;
+      if (!result.ok) {
+        const text = errorText(result.code ?? ErrorCode.STAGE_ID_INVALID);
+        GameLog.shared.warn("Idle", text);
+        this.host.showToast(text);
+        await this.refresh();
+        return;
+      }
+      applyStageProgress(result);
+      if (this.host.alive()) this.host.onProgress();
+      const text = result.already
+        ? pushAlreadyToast(result.clearedStage)
+        : pushToast(result.clearedStage, result.nextStageId, result.goldGain);
+      GameLog.shared.info("Idle", text);
+      this.host.showToast(text);
+      await this.refresh();
+    } catch (err) {
+      const text = messageOf(err);
+      GameLog.shared.error("Idle", "push " + text);
       if (!this.disposed && this.host.alive()) this.host.showToast(text);
     } finally {
       this.busy = false;

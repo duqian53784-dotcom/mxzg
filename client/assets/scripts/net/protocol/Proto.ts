@@ -63,6 +63,8 @@ import {
   IdleQueryResp,
   StageEnterReq,
   StageEnterResp,
+  StagePushReq,
+  StagePushResp,
   StageResultReq,
   StageResultResp,
 } from "./types";
@@ -102,6 +104,11 @@ export const Proto = {
 
   stageResult(req: StageResultReq, net: NetClient = NetClient.shared): Promise<StageResultResp> {
     return call(net, Cmd.stageResult, req);
+  },
+
+  /** Mock 调试：从下一关连胜推到 target（缺省 70）。不播战报。 */
+  stagePush(req: StagePushReq, net: NetClient = NetClient.shared): Promise<StagePushResp> {
+    return call(net, Cmd.stagePush, req);
   },
 
   idleQuery(req: IdleQueryReq, net: NetClient = NetClient.shared): Promise<IdleQueryResp> {

@@ -25,7 +25,8 @@
 - 默认角色属于账号 `mock`。还没登录，或登录账号就是所属账号时，`role.enter` 回当前角色，并带 `openDay`、`stageId`、`gold`、`diamond`。登录别的账号时 `hasRole` 为 false，金币钻石回 0，不改掉已有角色。`role.create` 成功后角色改归当前登录账号。Boot 在有角色时把结果写进 `Session`（含所选服务器名和钱包）。
 - `role.create` 名字去空白后为空则拒绝，不改状态。成功则改名，`roleId` 仍是 1001，主线、等级、开服天回到新号，钱包回到金币 100、钻石 20，挂机时长、强化石、挂机领取次数和召唤碎片清掉，背包重新放上小金币袋 ×2 和经验药水 ×2，英雄回到起步三名 Lv1 且新手短剑 Lv1，邮箱回到起步三封，竞技场积分回到 1000、今日次数清零，幻境之塔回到第 1 层、今日次数清零，金币副本今日次数清零，七日登录回到第 1 天且已领记录清掉，七日目标已领记录清掉。
 - `stage.enter` 的 `stageId < 1` 失败。成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。Mock 仍允许跳关，方便自检。主线界面只放行下一关（C3）。
-- `stage.result` 胜利且关卡高于已通关：`clearedStage` 推进，`level = 1 + clearedStage`，`openDay` 至少为 `1 + floor(clearedStage / 5)`（只升不降）。`nextStageId = clearedStage + 1`。奖励占位 `{ id: 1, count: 10 }`，id 1 加金币、id 2 加钻石。失败停在本关，奖励空，进度和钱包不变。回包带结算后的 `gold` / `diamond`。不改挂机起算时刻。
+- `stage.result` 胜利且关卡高于已通关：`clearedStage` 推进，`level = 1 + clearedStage`，`openDay` 至少为 `1 + floor(clearedStage / 5)`（只升不降）。`nextStageId = clearedStage + 1`。奖励占位 `{ id: 1, count: 10 }`，id 1 加金币、id 2 加钻石。失败停在本关，奖励空，进度和钱包不变。回包带结算后的 `gold` / `diamond`。不改挂机起算时刻。第 70 关之后仍按同一条规则。
+- `stage.push` 调试用。缺省把已通关连胜推到第 70 关，每一关金币 +10，等级和开服天跟一关关打相同。已经到了不加金币。不改挂机起算和角色登录天。开服天变了之后，竞技场、幻境之塔、金币副本的今日次数留到下次进入再清零。默认录包没有这条；预览仍走 MockTransport。
 - `idle.query` / `idle.claim`：时长从会话创建、上次领取或创角起算，上限 8 小时。收益按当前已通关关数乘整段时长。领取把金币和强化石（id 101）写入会话。不够 1 个单位时拒绝。创角清空强化石并重新起算。断线重连沿用同一会话，时长还在。
 - `hero.list` / `hero.upgrade`：名册空时种下起步三名。升级只扣金币、升 1 级，星级不变，不动挂机计时和主线。金币不足、满级或没有这名英雄时拒绝。默认录包没有这两条；预览仍走 MockTransport。
 - `summon.pull`：单抽扣 10 钻石，十连扣 90。新英雄追加到名册，重复转碎片（id = 40000 + 英雄 id，每次 +10）。钻石不足或次数不是 1/10 时整次拒绝。创角把召唤游标和碎片清掉。默认录包没有这条；预览仍走 MockTransport。
@@ -68,7 +69,7 @@ const login = await Proto.login({ account: "mock" }, net);
 
 ## 主城「主线」
 
-Boot 进 Main 之后，点 **主线 · 第 N 关** 打开关卡列表，挑战当前关。先 `Proto.stageEnter`，播一段简化战报，再 `Proto.stageResult`。胜利 `win: true`，Toast 和结算都给出奖励；顶栏等级、金币和「Lv / 开服D」跟着会话变。撤退是 `win: false`，Toast「挑战失败，进度不变」，金币不加。第 4 胜后等级到 5，底栏铁匠铺解锁；第 5 胜后等级到 6、开服天到 2、金币 150。连胜可以推过第 70 关。
+Boot 进 Main 之后，点 **主线 · 第 N 关** 打开关卡列表，挑战当前关。先 `Proto.stageEnter`，播一段简化战报，再 `Proto.stageResult`。胜利 `win: true`，Toast 和结算都给出奖励；顶栏等级、金币和「Lv / 开服D」跟着会话变。撤退是 `win: false`，Toast「挑战失败，进度不变」，金币不加。第 4 胜后等级到 5，底栏铁匠铺解锁；第 5 胜后等级到 6、开服天到 2、金币 150。连胜可以推过第 70 关。列表上的 **推关到70（调试）** 走 `Proto.stagePush`，一次补到第 70 关，不播战报。
 
 界面不让跳关。Mock 的 `stage.enter` 仍接受更高的关卡号，自检和录包还走这条。
 
@@ -76,7 +77,7 @@ Boot 进 Main 之后，点 **主线 · 第 N 关** 打开关卡列表，挑战�
 
 ## 主城「挂机」
 
-点 **挂机** 打开收益页：时长、当前可领、挂满 8 小时的预览。领取走 `Proto.idleClaim`，顶栏金币跟着变。**快速作战** 对当前关发 `stage.enter` 再 `stage.result`（`win: true`），不播战报。默认录包没有这两条挂机消息；预览仍走 MockTransport。
+点 **挂机** 打开收益页：时长、当前可领、挂满 8 小时的预览。领取走 `Proto.idleClaim`，顶栏金币跟着变。**快速作战** 对当前关发 `stage.enter` 再 `stage.result`（`win: true`），不播战报。**推关到70（调试）** 和主线列表是同一个 `stage.push`。默认录包没有这两条挂机消息，也没有 `stage.push`；预览仍走 MockTransport。
 
 ## 主城「英雄」
 

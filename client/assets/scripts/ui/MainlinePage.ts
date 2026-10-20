@@ -6,7 +6,7 @@ import { Color, Node, UITransform } from "cc";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import { Session } from "../core/Session";
-import { StageEnterResp, StageResultReq, StageResultResp } from "../net/protocol/types";
+import { StageEnterResp, StagePushResp, StageResultReq, StageResultResp } from "../net/protocol/types";
 import {
   applyStageProgress,
   BattlePlan,
@@ -16,7 +16,12 @@ import {
   challengeBlock,
   listStages,
   loseToast,
+  MAINLINE_PUSH_STAGE,
   planBattle,
+  pushAlreadyToast,
+  pushButtonText,
+  pushHint,
+  pushToast,
   reasonText,
   rewardLines,
   winToast,
@@ -30,6 +35,7 @@ const OPEN_FILL = new Color(46, 110, 190, 255);
 const LOCKED_FILL = new Color(78, 84, 98, 255);
 const RETREAT_FILL = new Color(150, 64, 64, 255);
 const LIST_FILL = new Color(36, 72, 120, 255);
+const DEBUG_FILL = new Color(72, 64, 112, 255);
 const WIN = new Color(255, 214, 120, 255);
 const LOSE = new Color(230, 120, 110, 255);
 const ALLY_BG = new Color(28, 58, 96, 255);
@@ -53,6 +59,7 @@ export interface MainlineHost {
   alive(): boolean;
   enter(stageId: number): Promise<StageEnterResp>;
   settle(req: StageResultReq): Promise<StageResultResp>;
+  push(target: number): Promise<StagePushResp>;
   onProgress(): void;
   close(): void;
 }
@@ -136,8 +143,47 @@ class MainlineController implements MainlinePage {
       );
       place(button, this.body, 0, 320 - i * 68);
     }
-    place(createLabel("挑战当前关。战斗中可以跳过，撤退算失败", 18, { color: MUTED, width: 640 }), this.body, 0, -150);
-    place(createButton("返回主城", () => this.host.close(), 240, 52), this.body, 0, -230);
+    place(createLabel("挑战当前关。战斗中可以跳过，撤退算失败", 18, { color: MUTED, width: 640 }), this.body, 0, -130);
+    place(
+      createButton(pushButtonText(), () => void this.pushToGoal(), 420, 52, DEBUG_FILL, 22),
+      this.body,
+      0,
+      -200
+    );
+    place(createLabel(pushHint(), 16, { color: MUTED, width: 640 }), this.body, 0, -258);
+    place(createButton("返回主城", () => this.host.close(), 240, 52), this.body, 0, -330);
+  }
+
+  /** 连胜推到第 70 关，不播战报。已经到了只提示，不加金币。 */
+  private async pushToGoal(): Promise<void> {
+    if (this.busy || this.disposed) return;
+    if (this.phase === "battle" || this.phase === "resolve") return;
+    this.busy = true;
+    GameLog.shared.info("Mainline", "push to " + MAINLINE_PUSH_STAGE);
+    try {
+      const result = await this.host.push(MAINLINE_PUSH_STAGE);
+      if (this.disposed || !this.host.alive()) return;
+      if (!result.ok) {
+        const text = errorText(result.code ?? ErrorCode.STAGE_ID_INVALID);
+        GameLog.shared.warn("Mainline", text);
+        this.host.showToast(text);
+        return;
+      }
+      applyStageProgress(result);
+      if (this.host.alive()) this.host.onProgress();
+      const text = result.already
+        ? pushAlreadyToast(result.clearedStage)
+        : pushToast(result.clearedStage, result.nextStageId, result.goldGain);
+      GameLog.shared.info("Mainline", text);
+      this.host.showToast(text);
+      if (!this.disposed && this.host.alive()) this.showList();
+    } catch (err) {
+      const text = messageOf(err);
+      GameLog.shared.error("Mainline", "push " + text);
+      if (!this.disposed && this.host.alive()) this.host.showToast(text);
+    } finally {
+      this.busy = false;
+    }
   }
 
   private onRow(stageId: number): void {

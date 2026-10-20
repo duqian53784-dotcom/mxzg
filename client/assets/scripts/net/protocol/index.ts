@@ -44,6 +44,8 @@ export type {
   RoleEnterResp,
   StageEnterReq,
   StageEnterResp,
+  StagePushReq,
+  StagePushResp,
   SmithGear,
   SmithStrengthenReq,
   SmithStrengthenResp,

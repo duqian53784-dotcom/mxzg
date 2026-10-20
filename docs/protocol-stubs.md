@@ -25,6 +25,7 @@ B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `h
 | 1102 | `role.create` | `RoleCreateReq` | `RoleCreateResp` | 登录面板「创角」 |
 | 1201 | `stage.enter` | `StageEnterReq` | `StageEnterResp` | 主线战报（C3）。界面只打下一关。快速作战也走这条 |
 | 1202 | `stage.result` | `StageResultReq` | `StageResultResp` | 主线结算（C3）。撤退传 `win: false`。快速作战传 `win: true` |
+| 1203 | `stage.push` | `StagePushReq` | `StagePushResp` | Mock 调试（C15）。从下一关连胜推到 `target`（缺省 70，含本关，最大 200）。每关金币 +10。已经到达则不加金币。关卡号无效是 `STAGE_ID_INVALID` |
 | 1301 | `idle.query` | `IdleQueryReq` | `IdleQueryResp` | 挂机预览（C4）。不改钱包 |
 | 1302 | `idle.claim` | `IdleClaimReq` | `IdleClaimResp` | 领取挂机（C4）。太短则 `IDLE_EMPTY` |
 | 1401 | `hero.list` | `HeroListReq` | `HeroListResp` | 英雄名册（C5）。空名册先种下起步三名。不改钱包 |
@@ -66,7 +67,8 @@ Mock 约定（给 C1 / C6 直接用，不用再改传输层）：
 - `role.enter` 额外带 `openDay`、`stageId`、`gold`、`diamond`（真服可以不带）。Boot 写进 `Session`。没有角色时金币钻石回 0。
 - `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线、开服天、钱包（金币 100、钻石 20）、挂机（时长、强化石、领取次数）、召唤碎片和英雄名册（回到起步三名 Lv1，每人新手短剑 Lv1）。背包重新放上小金币袋 ×2、经验药水 ×2。邮箱回到起步三封。竞技场积分回到 1000，今日次数清零。幻境之塔回到第 1 层，今日次数清零。金币副本今日次数清零。七日登录回到第 1 天，已领记录清掉。七日目标已领记录清掉。
 - `stage.enter` 的 `stageId < 1` 失败；成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。Mock 允许跳关。主线列表只放行下一关，高于等级的战报判负。
-- `stage.result` 新通关后 `nextStageId = clearedStage + 1`，`level = 1 + clearedStage`，奖励占位 `{ id: 1, count: 10 }`（id 1 加金币，id 2 加钻石）。失败停在本关，奖励空，钱包不变。回包可带 `openDay` / `level` / `gold` / `diamond`。快速作战和主线战报共用这条，不另开消息。
+- `stage.result` 新通关后 `nextStageId = clearedStage + 1`，`level = 1 + clearedStage`，奖励占位 `{ id: 1, count: 10 }`（id 1 加金币，id 2 加钻石）。失败停在本关，奖励空，钱包不变。回包可带 `openDay` / `level` / `gold` / `diamond`。快速作战和主线战报共用这条，不另开消息。单次跳关只发这一关的 10 金币。
+- `stage.push` 只给 Mock 预览。缺省目标第 70 关。从已通关的下一关起，每一关都按 `stage.result` 胜利结算，所以金币、等级、开服天和一关关打相同。已经到达目标时 `already: true`，金币不加。`target` 小于 1、不是数字、或大于 200 时 `STAGE_ID_INVALID`，进度不动。不改挂机起算、角色登录天、英雄和已领记录。默认录包没有这条。
 - `idle.query` 只读。时长 = 现在 − 起算时刻，上限 8 小时。金币、强化石（id 101）按当前已通关关数计算。回包带可领数量、挂满 8 小时的预览、已有强化石和钱包。
 - `idle.claim` 把可领的金币和强化石计入钱包，然后重新起算。一个都不够时 `ok: false`，`code` 为 `IDLE_EMPTY`（「挂机时间太短，暂无收益」），钱包和起算时刻不动。创角会把时长和强化石清掉。
 - `hero.list` 只读。名册为空时种下光耀骑士（id 10001，3星）、林间游侠（10002，2星）、星辉法师（10003，1星），都是 Lv1，并各带新手短剑 Lv1。回包带每名英雄的等级、星级、占位属性（攻击 / 生命 / 防御）、武器等级和武器攻击、下一级金币消耗，以及当前钱包。剑是 Lv1 时攻击加成为 0。
