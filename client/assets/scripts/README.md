@@ -3,7 +3,7 @@
 - `core/` 启动、会话（Boot、Session）
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
-- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场）
+- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场，`tower/` 幻境之塔）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
 
 场景在 `assets/scenes/`。Boot / Main / Battle 已建好。Boot 的 Canvas 上已经挂了 Boot。其余界面由代码生成，不用再挂组件。
@@ -33,7 +33,7 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 
 Boot 的登录不再手写 `request("login")`，改走 `Proto.login` / `Proto.roleEnter`。回包仍由 MockTransport 发出。
 
-P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`、`bag.list`、`bag.use`、`mail.list`、`mail.read`、`mail.claim`、`mail.claimAll`、`mail.delete`、`smith.view`、`smith.strengthen`、`arena.view`、`arena.challenge`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。背包会列出道具并使用。邮件会列出、领取和删除。铁匠铺会看武器并强化。竞技场会看积分并挑战。创角从登录面板进，见下面 C1。
+P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`、`bag.list`、`bag.use`、`mail.list`、`mail.read`、`mail.claim`、`mail.claimAll`、`mail.delete`、`smith.view`、`smith.strengthen`、`arena.view`、`arena.challenge`、`tower.view`、`tower.challenge`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。背包会列出道具并使用。邮件会列出、领取和删除。铁匠铺会看武器并强化。竞技场会看积分并挑战。幻境之塔会看当前层并挑战。创角从登录面板进，见下面 C1。
 
 同一局 Mock 会记住开服天、等级、主线进度和英雄等级。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
 
@@ -84,7 +84,7 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 | 英雄 | 主线 Lv1 | 列表、详情、升级（C5） |
 | 召唤 | 主线 Lv1 | 单抽、十连、新英雄或碎片（C6） |
 | 铁匠铺 | 主线 Lv5 | 强化新手短剑（C9）。Lv1 到 Lv4 应带锁 |
-| 玩法 | 随时 | 挂机、背包（C7）、邮件（C8）、羁绊、竞技场（C10，主线 Lv8）、许愿池、咖啡馆、日常副本、幻境之塔、幻魔塔 |
+| 玩法 | 随时 | 挂机、背包（C7）、邮件（C8）、羁绊、竞技场（C10，主线 Lv8）、许愿池、咖啡馆、日常副本（主线 Lv15）、幻境之塔（C11，主线 Lv16）、幻魔塔（开服第 30 天） |
 | 幻魔塔 | 开服第 30 天（`opencondition` 和 `magic_tower_open_day`） | 占位。D1 点它应 Toast「开服第30天」 |
 
 金币、钻石来自 Mock 会话：新号 100 / 20，主线胜利每次 +10 金币。顶栏在结算后刷新。
@@ -226,5 +226,30 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 4. **失败。** 选铁壁守卫再挑战。Toast「挑战失败：不敌铁壁守卫，积分 -12」。金币不加。积分最低到 800，再输会 Toast「积分没有再降」。
 5. **今日 5 次。** 第 6 次点挑战，Toast「今日挑战次数已用完」。积分和金币不变。次数跟着 Mock 的开服天走：再打主线把开服天加 1（每 5 关一次）后，剩余回到 5。创角把积分重置回 1000，次数清零。
 6. **战力。** 英雄升级或铁匠铺强化会提高攻击，竞技场战力跟着变。强化不改积分。挑战不改英雄等级、武器、钻石、挂机计时和主线进度。
+
+不需要起 server，也不用改场景。
+
+## 幻境之塔（C11）
+
+不改 `.scene`，不用新挂组件。幻境之塔在主城页面栈里用代码生成。竞技场、铁匠铺、邮件、背包、英雄升级和挂机入口都还在。锁在玩法列表里的「幻境之塔」，条件是 `opencondition` 的 `main_fantasy_tower`，主线 Lv16，不看开服天。没有绕过，也没有单独的主城按钮。
+
+这不是幻魔塔。幻魔塔仍是玩法列表最后一项，要开服第 30 天，主线等级不够开。到了 Lv16、开服天还在 D4 时，幻魔塔继续带锁。
+
+**先开锁。** 新号是 Lv1。底栏点 **玩法**，列表里是「锁·幻境之塔」。点它只 Toast「幻境之塔未开启，需要主线达到 Lv16」，不进面板。等级 = 1 + 已通关关数。Lv15 仍然带锁。下面两条都能到 Lv16：
+
+1. 主城点 **主线**，把第 1 关到第 15 关各打赢一次。第 15 胜后顶栏是 Lv16。
+2. 或者主城点 **挂机**，连续点 15 次 **快速作战**。每次结算当前关，不播战报。第 15 次后顶栏同样是 Lv16。
+
+第 14 胜是 Lv15：玩法里「日常副本」不再带锁，但还是占位；「幻境之塔」仍是「锁·」。再胜 1 关才开塔。第 15 胜时开服天会到 D4（每 5 关 +1）。D4 不开幻魔塔。若玩法页是在升级前打开的，先返回再进一次，锁的文案才会刷新。
+
+玩法里点 **幻境之塔**（网络没连上时 Toast「网络未连接」，不进页面）：
+
+1. **当前层。** 从第 1 层开始，一共 20 层。守关是迷雾守卫，战力 100。我方战力是三名起步英雄的攻击之和（165，含武器；Lv1 新手短剑不加攻击），标「可胜」。今日剩余 10/10。
+2. **挑战。** 按钮写着「挑战第1层（剩余 10）」。点一下直接结算，**不播**主线战报。胜利 Toast「通关第1层，进入第2层，金币 +30，强化石 ×1」。顶栏金币增加 30。页面变成第 2 层，强化石数量变成 1。
+3. **连胜到第 4 层。** 第 2 层金币 +40，第 3 层 +50，第 4 层 +60。四次都胜之后，当前是第 5 层塔心守关，战力 180，标「较难」。若没领过邮件和挂机，背包里强化石是 ×4。
+4. **失败。** 再点挑战。Toast「第5层挑战失败，层数不变」。金币和强化石不加，仍停在第 5 层。
+5. **今日 10 次。** 胜负都占 1 次。次数用完再点，Toast「今日挑战次数已用完」。层数和金币不变。次数跟着 Mock 的开服天走。创角把层数重置回第 1 层，次数清零，塔里拿到的强化石清掉。
+6. **塔顶。** 打完第 20 层后再点，Toast「已到达塔顶」。层数不再增加。起步战力到不了塔顶，先养成再爬。
+7. 返回后，竞技场、铁匠铺、邮件、背包、召唤、英雄升级和挂机仍能打开。挑战不改英雄等级、武器、钻石和主线关卡。
 
 不需要起 server，也不用改场景。

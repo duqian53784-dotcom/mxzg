@@ -161,6 +161,14 @@ export class MockTransport implements ITransport {
       this.emit(encodeRequest(Cmd.arenaChallenge, session.arenaChallenge(msg.data)));
       return;
     }
+    if (msg.cmd === Cmd.towerView) {
+      this.emit(encodeRequest(Cmd.towerView, session.towerView()));
+      return;
+    }
+    if (msg.cmd === Cmd.towerChallenge) {
+      this.emit(encodeRequest(Cmd.towerChallenge, session.towerChallenge()));
+      return;
+    }
     this.emit(encodeRequest(msg.cmd, { ok: true, echo: msg.data ?? null }));
   }
 

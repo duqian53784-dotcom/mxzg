@@ -39,6 +39,10 @@ import {
   ArenaChallengeResp,
   ArenaViewReq,
   ArenaViewResp,
+  TowerChallengeReq,
+  TowerChallengeResp,
+  TowerViewReq,
+  TowerViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -148,5 +152,13 @@ export const Proto = {
 
   arenaChallenge(req: ArenaChallengeReq, net: NetClient = NetClient.shared): Promise<ArenaChallengeResp> {
     return call(net, Cmd.arenaChallenge, req);
+  },
+
+  towerView(req: TowerViewReq, net: NetClient = NetClient.shared): Promise<TowerViewResp> {
+    return call(net, Cmd.towerView, req);
+  },
+
+  towerChallenge(req: TowerChallengeReq, net: NetClient = NetClient.shared): Promise<TowerChallengeResp> {
+    return call(net, Cmd.towerChallenge, req);
   },
 };
