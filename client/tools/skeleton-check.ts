@@ -1,7 +1,7 @@
 /**
  * B3/B4 自检（不启动 Creator）。
  * 从仓库根目录：
- * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
+ * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
