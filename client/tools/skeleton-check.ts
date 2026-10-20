@@ -1,5 +1,5 @@
 /**
- * B3–C10 自检（不启动 Creator）。
+ * B3–C11 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -101,6 +101,24 @@ import {
   rankFromScore,
   rosterPower,
 } from "../assets/scripts/module/arena/match";
+import {
+  applyTowerChallenge,
+  floorGuardianName,
+  floorPower,
+  goldForFloor,
+  TOWER_DAILY_LIMIT,
+  TOWER_MAX_FLOOR,
+  towerChallengeButton,
+  towerClearedToast,
+  towerDailyLine,
+  towerFailToast,
+  towerFloorLine,
+  towerLoseToast,
+  towerNoChanceToast,
+  towerPowerLine,
+  towerReportLine,
+  towerWinToast,
+} from "../assets/scripts/module/tower/climb";
 import {
   applySummon,
   diamondShortToast,
@@ -285,6 +303,13 @@ function checkGates(): void {
   const arenaRow = rows.find((row) => row.id === "main_pvp");
   assert(arenaRow && arenaRow.level === 8, "arena row");
   assert(!isEntryOpen(arenaRow, 7, 99) && isEntryOpen(arenaRow, 8, 1), "arena at lv8");
+  const fantasy = rows.find((row) => row.id === "main_fantasy_tower");
+  assert(fantasy && fantasy.level === 16 && fantasy.open_server_day === 0, "fantasy row");
+  assert(!isEntryOpen(fantasy, 15, 30) && isEntryOpen(fantasy, 16, 1), "fantasy at lv16 not day");
+  const lv15 = listOpenEntries(rows, 15, 1).map((row) => row.id);
+  assert(lv15.indexOf("main_mission") >= 0 && lv15.indexOf("main_fantasy_tower") < 0, "lv15 daily not tower");
+  const lv16 = listOpenEntries(rows, 16, 1).map((row) => row.id);
+  assert(lv16.indexOf("main_fantasy_tower") >= 0 && lv16.indexOf("magic_tower") < 0, "lv16 tower not magic");
   const names = listOpenEntries(rows, 1, 1).map((row) => row.id);
   assert(names.indexOf("main_summon") >= 0 && names.indexOf("main_smith_shop") < 0 && names.indexOf("main_pvp") < 0, "lv1 list");
   const lv8 = listOpenEntries(rows, 8, 1).map((row) => row.id);
@@ -727,6 +752,20 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(!entryAccess(arenaEntry, 7, 30, db).open && entryAccess(arenaEntry, 8, 1, db).open, "arena opens at lv8");
   assert(tabLabel("竞技场", false) === "锁·竞技场", "arena locked label");
   assert(arenaEntry.blurb.indexOf("积分") >= 0, "arena blurb");
+  const towerEntry = findNavEntry("tower");
+  assert(towerEntry !== null && towerEntry.gateId === "main_fantasy_tower", "tower gate");
+  const towerLock = entryAccess(towerEntry, 1, 1, db);
+  assert(!towerLock.open && towerLock.hint === "幻境之塔未开启，需要主线达到 Lv16", "tower hint");
+  assert(towerLock.hint.indexOf("开服") < 0, "tower hint has no open day");
+  assert(!entryAccess(towerEntry, 15, 30, db).open && entryAccess(towerEntry, 16, 1, db).open, "tower opens at lv16");
+  assert(tabLabel("幻境之塔", false) === "锁·幻境之塔", "tower locked label");
+  assert(towerEntry.blurb.indexOf("Lv16") >= 0, "tower blurb");
+  assert(rootTabFor("tower") === "plays", "tower stays on plays");
+  const magicEntry = findNavEntry("magic");
+  assert(
+    magicEntry !== null && magicEntry.gateId === "magic_tower" && magicEntry.serverGateKey === "magic_tower_open_day",
+    "magic stays day gate"
+  );
   assert(rootTabFor("arena") === "plays" && rootTabFor("log") === "city" && rootTabFor("smith") === "smith", "root tab");
   assert(rootTabFor("mainline") === "city", "mainline stays on city tab");
   const heroEntry = findNavEntry("hero");
@@ -1818,6 +1857,156 @@ async function checkArena(): Promise<void> {
   net.close();
 }
 
+async function checkTower(): Promise<void> {
+  const fresh = new MockGameSession();
+  const anchor = fresh.idleAnchorMs;
+  const power = rosterPower(fresh.heroes);
+  assert(power === 70 + 55 + 40, "starter tower power");
+  assert(floorPower(1) === 100 && floorPower(4) === 160 && floorPower(5) === 180, "floor power curve");
+  assert(goldForFloor(1) === 30 && goldForFloor(2) === 40 && goldForFloor(4) === 60, "floor gold");
+  assert(floorGuardianName(1) === "迷雾守卫" && floorGuardianName(5) === "塔心守关", "guardian names");
+  assert(towerFloorLine(1, TOWER_MAX_FLOOR, "迷雾守卫", 100, false) === "当前第 1 层 / 20 · 守关 迷雾守卫 · 战力 100", "floor line");
+  assert(towerFloorLine(21, TOWER_MAX_FLOOR, "", 0, true) === "已到达塔顶 · 共 20 层", "cleared line");
+  assert(towerPowerLine(power, 100, false) === "我方战力 165 · 可胜", "easy power line");
+  assert(towerPowerLine(power, 180, false) === "我方战力 165 · 较难", "hard power line");
+  assert(towerDailyLine(0, TOWER_DAILY_LIMIT, 100, 0) === "今日剩余 10/10 · 持有金币 100 · 强化石 ×0", "tower daily line");
+  assert(towerChallengeButton(1, 0, TOWER_DAILY_LIMIT, false) === "挑战第1层（剩余 10）", "fight label");
+  assert(towerChallengeButton(5, TOWER_DAILY_LIMIT, TOWER_DAILY_LIMIT, false) === "今日已用完", "spent label");
+  assert(towerChallengeButton(21, 0, TOWER_DAILY_LIMIT, true) === "已到塔顶", "top label");
+  assert(towerWinToast(1, 2, 30, "强化石", 1) === "通关第1层，进入第2层，金币 +30，强化石 ×1", "tower win toast");
+  assert(towerLoseToast(5) === "第5层挑战失败，层数不变", "tower lose toast");
+  assert(towerNoChanceToast() === "今日挑战次数已用完" && towerClearedToast() === "已到达塔顶", "tower fail copy");
+  assert(towerReportLine(power, 100, 1, true) === "战力 165 对 100，第1层胜利", "tower report");
+
+  const view = fresh.towerView();
+  assert(view.ok && view.floor === 1 && view.maxFloor === TOWER_MAX_FLOOR && view.cleared === false, "tower view");
+  assert(view.name === "迷雾守卫" && view.floorPower === 100 && view.playerPower === power, "floor 1 guardian");
+  assert(view.used === 0 && view.limit === TOWER_DAILY_LIMIT && view.stoneOwned === 0 && view.gold === MOCK_STARTER_GOLD, "tower wallet");
+
+  const win = fresh.towerChallenge();
+  assert(win.ok && win.win && win.floor === 1 && win.nextFloor === 2 && win.goldGain === 30 && win.itemGain === 1, "floor 1 win");
+  assert(win.itemName === "强化石" && win.stoneOwned === 1 && win.gold === MOCK_STARTER_GOLD + 30 && win.used === 1, "floor 1 reward");
+  assert(fresh.towerFloor === 2 && fresh.stageId === 1 && fresh.role.level === 1, "tower leaves stage");
+  assert(fresh.arenaScore === 1000 && fresh.arenaUsed === 0 && fresh.diamond === MOCK_STARTER_DIAMOND, "tower leaves arena and diamond");
+  assert(fresh.idleAnchorMs === anchor && fresh.heroes[0].level === 1 && fresh.heroes[0].weaponLevel === 1, "tower leaves growth");
+  const second = fresh.towerChallenge();
+  assert(second.ok && second.win && second.goldGain === 40 && second.nextFloor === 3, "floor 2 win");
+  const third = fresh.towerChallenge();
+  assert(third.ok && third.win && third.name === "梦境法师" && third.goldGain === 50 && third.nextFloor === 4, "floor 3 win");
+  const fourth = fresh.towerChallenge();
+  assert(fourth.ok && fourth.win && fourth.name === "星河幻影" && fourth.goldGain === 60 && fourth.nextFloor === 5, "floor 4 win");
+  assert(fresh.gold === MOCK_STARTER_GOLD + 180 && fresh.towerView().stoneOwned === 4, "four floors paid");
+  assert(fresh.towerView().name === "塔心守关" && fresh.towerView().floorPower === 180, "floor 5 waiting");
+  const lose = fresh.towerChallenge();
+  assert(lose.ok && lose.win === false && lose.floor === 5 && lose.nextFloor === 5 && lose.goldGain === 0 && lose.itemGain === 0, "floor 5 lose");
+  assert(fresh.towerFloor === 5 && fresh.gold === MOCK_STARTER_GOLD + 180 && fresh.towerView().stoneOwned === 4 && fresh.towerUsed === 5, "loss keeps floor");
+  assert(towerLoseToast(lose.floor) === "第5层挑战失败，层数不变", "lose toast from resp");
+  const bag = fresh.bagList().items;
+  let stoneCount = 0;
+  let stoneName = "";
+  for (let i = 0; i < bag.length; i++) {
+    if (bag[i].id !== 101) continue;
+    stoneCount = bag[i].count;
+    stoneName = bag[i].name;
+  }
+  assert(stoneCount === 4 && stoneName === "强化石", "stones land in bag");
+
+  fresh.roleCreate({ name: "新人" });
+  assert(fresh.towerFloor === 1 && fresh.towerUsed === 0 && fresh.gold === MOCK_STARTER_GOLD, "create resets tower");
+  assert(fresh.towerView().floor === 1 && fresh.towerView().stoneOwned === 0 && fresh.towerView().used === 0, "create clears stones and chances");
+
+  const limited = new MockGameSession();
+  for (let i = 0; i < TOWER_DAILY_LIMIT; i++) {
+    const once = limited.towerChallenge();
+    assert(once.ok, "tower chance " + i);
+  }
+  assert(limited.towerUsed === TOWER_DAILY_LIMIT && limited.towerFloor === 5, "ten tries stop at floor 5");
+  const blocked = limited.towerChallenge();
+  assert(
+    blocked.ok === false && blocked.code === ErrorCode.TOWER_NO_CHANCE && towerFailToast(blocked) === "今日挑战次数已用完",
+    "tower daily cap"
+  );
+  assert(limited.towerFloor === 5 && limited.gold === MOCK_STARTER_GOLD + 180 && limited.towerView().stoneOwned === 4, "cap spends nothing");
+
+  const shifted = new MockGameSession({ openDay: 4, towerDay: 1, towerUsed: 10, towerFloor: 5 });
+  assert(shifted.towerView().used === 0 && shifted.towerFloor === 5 && shifted.gold === MOCK_STARTER_GOLD, "stale day clears tower chances");
+
+  const topped = new MockGameSession({ towerFloor: 21, towerUsed: 3 });
+  assert(topped.towerView().cleared && topped.towerView().floor === 21 && topped.towerView().name === "", "seeded top");
+  const stuckTop = topped.towerChallenge();
+  assert(stuckTop.ok === false && stuckTop.code === ErrorCode.TOWER_CLEARED && towerFailToast(stuckTop) === "已到达塔顶", "already cleared");
+  assert(topped.towerFloor === 21 && topped.towerUsed === 3 && topped.gold === MOCK_STARTER_GOLD, "cleared spends nothing");
+
+  const climber = new MockGameSession({
+    towerFloor: 20,
+    heroes: [
+      { id: 10001, name: "光耀骑士", level: 10, star: 5, weaponLevel: 10 },
+      { id: 10002, name: "林间游侠", level: 10, star: 5, weaponLevel: 10 },
+      { id: 10003, name: "星辉法师", level: 10, star: 5, weaponLevel: 10 },
+    ],
+  });
+  const capWin = climber.towerChallenge();
+  assert(capWin.ok && capWin.win && capWin.floor === 20 && capWin.nextFloor === 21 && capWin.goldGain === goldForFloor(20), "clear floor 20");
+  assert(climber.towerView().cleared, "view after cap");
+  const noMoreTop = climber.towerChallenge();
+  assert(noMoreTop.ok === false && noMoreTop.code === ErrorCode.TOWER_CLEARED && climber.towerUsed === 1, "second tap at top");
+
+  const zero = new MockGameSession({ towerFloor: 0, towerUsed: -3 });
+  assert(zero.towerFloor === 1 && zero.towerUsed === 0, "clamp empty floor");
+  const huge = new MockGameSession({ towerFloor: 99, towerUsed: 40 });
+  assert(huge.towerFloor === TOWER_MAX_FLOOR + 1 && huge.towerUsed === TOWER_DAILY_LIMIT, "clamp high floor");
+
+  const mid = new MockGameSession({ towerFloor: 3, towerUsed: 2, towerDay: 1 });
+  for (let stage = 1; stage <= 5; stage++) {
+    const entered = mid.stageEnter({ stageId: stage });
+    const wonStage = mid.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(wonStage.ok && wonStage.level === stage + 1, "win toward tower day " + stage);
+  }
+  assert(mid.role.level === 6 && mid.openDay === 2 && mid.towerFloor === 3, "stages keep tower floor");
+  assert(mid.towerView().used === 0 && mid.towerView().floor === 3, "new day clears tower used only");
+
+  const unlock = new MockGameSession();
+  for (let stage = 1; stage <= 15; stage++) {
+    const entered = unlock.stageEnter({ stageId: stage });
+    const wonStage = unlock.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(wonStage.ok && wonStage.level === stage + 1, "win toward lv16 " + stage);
+  }
+  assert(unlock.role.level === 16 && unlock.openDay === 4 && unlock.gold === MOCK_STARTER_GOLD + 150, "fifteen wins unlock level");
+  assert(unlock.towerView().floor === 1 && unlock.towerView().used === 0 && unlock.towerView().playerPower === power, "stages do not climb tower");
+  const early = new MockGameSession({ clearedStage: 14 });
+  assert(early.role.level === 15 && early.towerFloor === 1, "lv15 still floor 1");
+
+  const armed = new MockGameSession();
+  armed.heroes[0].weaponLevel = 2;
+  assert(armed.towerView().playerPower === power + 8, "sword adds tower power");
+  const arenaOnly = new MockGameSession();
+  const arenaWin = arenaOnly.arenaChallenge({ opponentId: 1 });
+  assert(arenaWin.ok && arenaOnly.towerFloor === 1 && arenaOnly.towerUsed === 0, "arena leaves tower");
+
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const remoteView = await Proto.towerView({}, net);
+  assert(remoteView.ok && remoteView.floor === 1 && remoteView.playerPower === power && remoteView.cleared === false, "proto tower view");
+  const remoteWin = await Proto.towerChallenge({}, net);
+  assert(remoteWin.ok && remoteWin.win && remoteWin.nextFloor === 2 && remoteWin.gold === MOCK_STARTER_GOLD + 30, "proto tower win");
+  let last = remoteWin;
+  for (let i = 0; i < 3; i++) last = await Proto.towerChallenge({}, net);
+  assert(last.ok && last.win && last.nextFloor === 5 && last.gold === MOCK_STARTER_GOLD + 180, "proto through floor 4");
+  const remoteLose = await Proto.towerChallenge({}, net);
+  assert(remoteLose.ok && remoteLose.win === false && remoteLose.nextFloor === 5 && remoteLose.gold === last.gold, "proto floor 5 lose");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyTowerChallenge(remoteWin);
+  assert(Session.gold === remoteWin.gold && Session.diamond === remoteWin.diamond, "apply tower");
+  applyTowerChallenge({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteWin.gold && Session.diamond === remoteWin.diamond, "failed tower ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.towerView || row.cmd === Cmd.towerChallenge).map((row) => row.id);
+  assert(ids.length === 2 && ids[0] === 2001 && ids[1] === 2002, "tower cmd ids");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -1839,6 +2028,7 @@ async function main(): Promise<void> {
   await checkMail();
   await checkSmith();
   await checkArena();
+  await checkTower();
   console.log("skeleton-check ok");
 }
 

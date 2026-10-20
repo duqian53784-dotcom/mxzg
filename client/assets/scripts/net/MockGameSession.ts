@@ -42,6 +42,17 @@ import {
   settleArena,
 } from "../module/arena/match";
 import {
+  clampTowerFloor,
+  floorGuardianName,
+  floorPower,
+  settleTower,
+  TOWER_DAILY_LIMIT,
+  TOWER_ITEM_ID,
+  TOWER_ITEM_NAME,
+  TOWER_MAX_FLOOR,
+  towerCleared,
+} from "../module/tower/climb";
+import {
   isSummonCount,
   poolAt,
   shardItemId,
@@ -72,6 +83,8 @@ import {
   ArenaViewResp,
   SummonDrop,
   SummonPullResp,
+  TowerChallengeResp,
+  TowerViewResp,
 } from "./protocol/types";
 
 /** 一场预览里的假服状态。同一 MockTransport 上多次请求共用这一份。 */
@@ -123,6 +136,15 @@ export interface MockSessionSeed {
    * 和 openDay 不一致时，下一次查看或挑战会把次数清零。
    */
   arenaDay?: number;
+  /** 幻境之塔下一层。不填为 1。通关第 20 层后为 21。创角回到 1。 */
+  towerFloor?: number;
+  /** 今日已挑战幻境之塔的次数。不填为 0。超过每日上限时按上限计。 */
+  towerUsed?: number;
+  /**
+   * 塔次数所属的开服天。不填则跟当前 openDay 对齐。
+   * 和 openDay 不一致时，下一次查看或挑战会把次数清零，层数不动。
+   */
+  towerDay?: number;
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -131,7 +153,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化和竞技场挑战都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战和幻境之塔都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -177,6 +199,13 @@ export class MockGameSession {
   /** 次数所属开服天。和 openDay 不同时，下一次竞技场操作清零。 */
   arenaDay = 1;
   private arenaDaySeeded = false;
+  /** 幻境之塔下一层。不随主线变化。创角回到 1。 */
+  towerFloor = 1;
+  /** 当前 towerDay 上已经用掉的挑战次数。 */
+  towerUsed = 0;
+  /** 次数所属开服天。和 openDay 不同时，下一次塔操作清零。 */
+  towerDay = 1;
+  private towerDaySeeded = false;
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
@@ -184,6 +213,7 @@ export class MockGameSession {
     this.idleAnchorMs = this.clock();
     this.applySeed(seed);
     if (!this.arenaDaySeeded) this.arenaDay = this.openDay;
+    if (!this.towerDaySeeded) this.towerDay = this.openDay;
     this.ensureHeroes();
     this.ensureStarterGear();
     if (!this.itemsSeeded) this.grantStarterItems();
@@ -227,7 +257,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱和竞技场重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场和幻境之塔重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -252,6 +282,9 @@ export class MockGameSession {
     this.arenaScore = ARENA_START_SCORE;
     this.arenaUsed = 0;
     this.arenaDay = this.openDay;
+    this.towerFloor = 1;
+    this.towerUsed = 0;
+    this.towerDay = this.openDay;
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
 
@@ -544,6 +577,70 @@ export class MockGameSession {
       diamond: this.diamond,
       used: this.arenaUsed,
       limit: ARENA_DAILY_LIMIT,
+    };
+  }
+
+  /**
+   * 只读幻境之塔。按当前开服天刷新今日次数，不改层数和钱包。
+   * 入口等级锁在客户端，这里不重复判断主线等级，也不看开服天。
+   */
+  towerView(): TowerViewResp {
+    this.ensureHeroes();
+    this.refreshTowerDay();
+    const floor = this.towerFloor;
+    const cleared = towerCleared(floor);
+    return {
+      ok: true,
+      floor,
+      maxFloor: TOWER_MAX_FLOOR,
+      cleared,
+      name: floorGuardianName(floor),
+      floorPower: floorPower(floor),
+      playerPower: rosterPower(this.heroes),
+      used: this.towerUsed,
+      limit: TOWER_DAILY_LIMIT,
+      stoneOwned: this.itemCount(TOWER_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 挑战当前层，一键结算。战力不低于守关则胜。
+   * 胜利层数 +1，加金币和 1 个强化石。失败层数不变，不发奖励。胜负都占用 1 次今日次数。
+   * 已到塔顶或次数用完时拒绝，层数、金币、道具和次数都不变。
+   * 不改英雄、武器、钻石、挂机起算、主线进度和竞技场。
+   */
+  towerChallenge(): TowerChallengeResp {
+    this.ensureHeroes();
+    this.refreshTowerDay();
+    if (towerCleared(this.towerFloor)) return this.towerFail(ErrorCode.TOWER_CLEARED);
+    if (this.towerUsed >= TOWER_DAILY_LIMIT) return this.towerFail(ErrorCode.TOWER_NO_CHANCE);
+    const playerPower = rosterPower(this.heroes);
+    const settled = settleTower(playerPower, this.towerFloor);
+    if (settled.win) {
+      this.towerFloor = settled.nextFloor;
+      if (settled.goldGain > 0) this.gold += settled.goldGain;
+      if (settled.itemGain > 0) this.addItem(TOWER_ITEM_ID, settled.itemGain);
+    }
+    this.towerUsed += 1;
+    return {
+      ok: true,
+      floor: settled.floor,
+      nextFloor: this.towerFloor,
+      name: floorGuardianName(settled.floor),
+      win: settled.win,
+      playerPower,
+      floorPower: settled.floorPower,
+      goldGain: settled.goldGain,
+      itemId: TOWER_ITEM_ID,
+      itemName: TOWER_ITEM_NAME,
+      itemGain: settled.itemGain,
+      stoneOwned: this.itemCount(TOWER_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+      used: this.towerUsed,
+      limit: TOWER_DAILY_LIMIT,
     };
   }
 
@@ -890,6 +987,19 @@ export class MockGameSession {
       this.arenaDay = Math.floor(seed.arenaDay);
       this.arenaDaySeeded = true;
     }
+    if (typeof seed.towerFloor === "number" && isFinite(seed.towerFloor)) {
+      this.towerFloor = clampTowerFloor(seed.towerFloor);
+    }
+    if (typeof seed.towerUsed === "number" && isFinite(seed.towerUsed)) {
+      let used = Math.floor(seed.towerUsed);
+      if (used < 0) used = 0;
+      if (used > TOWER_DAILY_LIMIT) used = TOWER_DAILY_LIMIT;
+      this.towerUsed = used;
+    }
+    if (typeof seed.towerDay === "number" && isFinite(seed.towerDay) && seed.towerDay >= 1) {
+      this.towerDay = Math.floor(seed.towerDay);
+      this.towerDaySeeded = true;
+    }
   }
 
   /** id 1 金币，id 2 钻石。其它 id 先忽略。 */
@@ -1058,6 +1168,37 @@ export class MockGameSession {
     if (this.arenaDay === this.openDay) return;
     this.arenaDay = this.openDay;
     this.arenaUsed = 0;
+  }
+
+  /** 开服天变了就把塔的今日次数清零。层数不动。 */
+  private refreshTowerDay(): void {
+    if (this.towerDay === this.openDay) return;
+    this.towerDay = this.openDay;
+    this.towerUsed = 0;
+  }
+
+  private towerFail(code: number): TowerChallengeResp {
+    const floor = this.towerFloor;
+    const cleared = towerCleared(floor);
+    return {
+      ok: false,
+      floor: cleared ? TOWER_MAX_FLOOR : floor,
+      nextFloor: floor,
+      name: floorGuardianName(floor),
+      win: false,
+      playerPower: rosterPower(this.heroes),
+      floorPower: floorPower(floor),
+      goldGain: 0,
+      itemId: TOWER_ITEM_ID,
+      itemName: TOWER_ITEM_NAME,
+      itemGain: 0,
+      stoneOwned: this.itemCount(TOWER_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+      used: this.towerUsed,
+      limit: TOWER_DAILY_LIMIT,
+      code,
+    };
   }
 
   private arenaFail(opponentId: number, name: string, code: number): ArenaChallengeResp {

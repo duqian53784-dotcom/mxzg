@@ -41,6 +41,8 @@ B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `h
 | 1802 | `smith.strengthen` | `SmithStrengthenReq` | `SmithStrengthenResp` | 强化 1 级（C9）。扣金币和 1 个强化石。不足 `SMITH_GOLD_SHORT` / `SMITH_STONE_SHORT`，满级 `SMITH_LEVEL_MAX`，没有英雄 `HERO_NOT_FOUND` |
 | 1901 | `arena.view` | `ArenaViewReq` | `ArenaViewResp` | 竞技场（C10）。积分、约占位名次、战力和固定对手。按开服天刷新今日次数。不改钱包 |
 | 1902 | `arena.challenge` | `ArenaChallengeReq` | `ArenaChallengeResp` | 一键挑战（C10）。战力不低于对手则胜，加积分和金币；否则扣积分。每天 5 次。没有对手 `ARENA_NOT_FOUND`，次数用完 `ARENA_NO_CHANCE` |
+| 2001 | `tower.view` | `TowerViewReq` | `TowerViewResp` | 幻境之塔（C11）。当前层、守关战力和今日次数。按开服天刷新次数。不改钱包。不是幻魔塔 |
+| 2002 | `tower.challenge` | `TowerChallengeReq` | `TowerChallengeResp` | 一键挑战当前层（C11）。战力不低于守关则胜，层数 +1，加金币和强化石；否则层数不变。每天 10 次。已到塔顶 `TOWER_CLEARED`，次数用完 `TOWER_NO_CHANCE` |
 
 代码在 `client/assets/scripts/net/protocol/`：`cmds.ts`（名字和 ID）、`types.ts`（字段）、`codec.ts`（现在是明文对象）、`Proto.ts`（`Proto.login` 等）。
 
@@ -55,7 +57,7 @@ Mock 约定（给 C1 / C6 直接用，不用再改传输层）：
 
 - 每个 MockTransport 带一份 `MockGameSession`。一开始就有角色 `1001 / MockHero / Lv1`，属于账号 `mock`，下一关 1、开服第 1 天。还没 `login`，或登录的就是 `mock` 时，只 `role.enter` 也能进主城。登录别的账号则 `hasRole` 为 false，直到 `role.create`。同一局里进度会留下来。细节和录包见 `docs/mock-replay.md`。
 - `role.enter` 额外带 `openDay`、`stageId`、`gold`、`diamond`（真服可以不带）。Boot 写进 `Session`。没有角色时金币钻石回 0。
-- `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线、开服天、钱包（金币 100、钻石 20）、挂机（时长、强化石）、召唤碎片和英雄名册（回到起步三名 Lv1，每人新手短剑 Lv1）。背包重新放上小金币袋 ×2、经验药水 ×2。邮箱回到起步三封。竞技场积分回到 1000，今日次数清零。
+- `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线、开服天、钱包（金币 100、钻石 20）、挂机（时长、强化石）、召唤碎片和英雄名册（回到起步三名 Lv1，每人新手短剑 Lv1）。背包重新放上小金币袋 ×2、经验药水 ×2。邮箱回到起步三封。竞技场积分回到 1000，今日次数清零。幻境之塔回到第 1 层，今日次数清零。
 - `stage.enter` 的 `stageId < 1` 失败；成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。Mock 允许跳关。主线列表只放行下一关，高于等级的战报判负。
 - `stage.result` 新通关后 `nextStageId = clearedStage + 1`，`level = 1 + clearedStage`，奖励占位 `{ id: 1, count: 10 }`（id 1 加金币，id 2 加钻石）。失败停在本关，奖励空，钱包不变。回包可带 `openDay` / `level` / `gold` / `diamond`。快速作战和主线战报共用这条，不另开消息。
 - `idle.query` 只读。时长 = 现在 − 起算时刻，上限 8 小时。金币、强化石（id 101）按当前已通关关数计算。回包带可领数量、挂满 8 小时的预览、已有强化石和钱包。
@@ -74,8 +76,10 @@ Mock 约定（给 C1 / C6 直接用，不用再改传输层）：
 - `smith.strengthen` 把指定英雄的新手短剑升 1 级。Lv1→2 花 20 金币和 1 个强化石，之后每级金币再多 10，最高 Lv10。每级攻击 +8，Lv1 加成为 0。金币不够 `SMITH_GOLD_SHORT`（「金币不足，无法强化」），并带 `needGold`；强化石不够 `SMITH_STONE_SHORT`（「强化石不足」），并带 `needStone`；已满级 `SMITH_LEVEL_MAX`；没有这名英雄 `HERO_NOT_FOUND`。失败不扣金币和强化石，也不提升已有等级。不改英雄等级、星级、钻石、挂机计时和主线。创角把剑重置回 Lv1。
 - `arena.view` 只读。新号积分 1000，约第 41 名。战力是名册攻击之和（含武器）。对手固定五名。`used` / `limit` 是今日次数，上限 5。开服天和上次挑战不是同一天时，次数清零，积分不动。不改钱包。入口仍由客户端 `opencondition` 的 `main_pvp`（主线 Lv8）上锁，Mock 不重复拦等级。
 - `arena.challenge` 按 `opponentId` 一键结算，不播战报。玩家战力不低于对手战力则胜：积分 +24、金币 +20。否则积分 -12，金币不变。积分限制在 800 到 2000，到边界时实际增减可以更少，到下限再输则变化为 0。胜负都占 1 次今日次数。没有这位对手 `ARENA_NOT_FOUND`（「没有这位对手」），次数用完 `ARENA_NO_CHANCE`（「今日挑战次数已用完」）。失败不改积分、金币和次数。不改英雄、武器、钻石、挂机计时和主线。创角把积分重置回 1000、次数清零。
+- `tower.view` 只读。新号在第 1 层，共 20 层。守关战力从 100 起，每层 +20。我方战力是名册攻击之和（含武器）。`used` / `limit` 是今日次数，上限 10。开服天和上次挑战不是同一天时，次数清零，层数不动。不改钱包。入口仍由客户端 `opencondition` 的 `main_fantasy_tower`（主线 Lv16，不看开服天）上锁，Mock 不重复拦等级。幻魔塔不走这两条消息。
+- `tower.challenge` 只打当前层，一键结算，不播战报。玩家战力不低于守关则胜：层数 +1，金币为 `20 + 层数 × 10`（第 1 层 30），强化石（id 101）+1。否则层数不变，金币和强化石不加。胜负都占 1 次今日次数。已到塔顶 `TOWER_CLEARED`（「已到达塔顶」），次数用完 `TOWER_NO_CHANCE`（「今日挑战次数已用完」）。这两种失败不改层数、金币、道具和次数。不改英雄、武器、钻石、挂机计时、主线和竞技场。创角把层数重置回 1、次数清零。
 
-1301 / 1302 / 1401 / 1402 / 1501 / 1601 / 1602 / 1701–1705 / 1801 / 1802 / 1901 / 1902 仍是客户端占位号，不是旧服消息号。
+1301 / 1302 / 1401 / 1402 / 1501 / 1601 / 1602 / 1701–1705 / 1801 / 1802 / 1901 / 1902 / 2001 / 2002 仍是客户端占位号，不是旧服消息号。
 
 ## 以后换成真 Protobuf
 

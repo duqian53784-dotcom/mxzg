@@ -27,6 +27,8 @@ export const Cmd = {
   smithStrengthen: "smith.strengthen",
   arenaView: "arena.view",
   arenaChallenge: "arena.challenge",
+  towerView: "tower.view",
+  towerChallenge: "tower.challenge",
 } as const;
 
 export const CmdId = {
@@ -52,6 +54,8 @@ export const CmdId = {
   smithStrengthen: 1802,
   arenaView: 1901,
   arenaChallenge: 1902,
+  towerView: 2001,
+  towerChallenge: 2002,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -85,4 +89,6 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.smithStrengthen, cmd: Cmd.smithStrengthen },
   { id: CmdId.arenaView, cmd: Cmd.arenaView },
   { id: CmdId.arenaChallenge, cmd: Cmd.arenaChallenge },
+  { id: CmdId.towerView, cmd: Cmd.towerView },
+  { id: CmdId.towerChallenge, cmd: Cmd.towerChallenge },
 ];

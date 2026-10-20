@@ -516,3 +516,66 @@ export interface ArenaChallengeResp {
    */
   code?: number;
 }
+
+export interface TowerViewReq {
+  /** 占位。Mock 不看请求体。打开时按当前开服天刷新今日次数。 */
+  clientTime?: number;
+}
+
+export interface TowerViewResp {
+  ok: boolean;
+  /** 下一层。通关最后一层后为 maxFloor + 1。 */
+  floor: number;
+  maxFloor: number;
+  /** 已经打完最后一层。 */
+  cleared: boolean;
+  /** 当前层守关。已到塔顶时为空。 */
+  name: string;
+  /** 当前层守关战力。已到塔顶为 0。 */
+  floorPower: number;
+  /** 名册攻击之和，含武器。 */
+  playerPower: number;
+  /** 今日已挑战次数。 */
+  used: number;
+  /** 今日上限。Mock 为 10。 */
+  limit: number;
+  /** 背包里的强化石。 */
+  stoneOwned: number;
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface TowerChallengeReq {
+  /** 占位。只打当前层，不选层。 */
+  clientTime?: number;
+}
+
+export interface TowerChallengeResp {
+  ok: boolean;
+  /** 这次打的层。拒绝时仍是当前层。 */
+  floor: number;
+  /** 胜利后的下一层。失败、次数用完或已到塔顶时与挑战前相同。 */
+  nextFloor: number;
+  name: string;
+  win: boolean;
+  playerPower: number;
+  floorPower: number;
+  /** 胜利才有金币。失败为 0。 */
+  goldGain: number;
+  /** 胜利发放的道具。Mock 是强化石 id 101。失败时仍带回 id，数量为 0。 */
+  itemId: number;
+  itemName: string;
+  itemGain: number;
+  stoneOwned: number;
+  gold: number;
+  diamond: number;
+  used: number;
+  limit: number;
+  /**
+   * 已到塔顶 TOWER_CLEARED，今日次数用完 TOWER_NO_CHANCE。
+   * 成功可以不带。失败不改层数、金币、道具和已用次数。
+   * 战力不够也是成功回包，win 为 false，层数不变，仍占 1 次。
+   */
+  code?: number;
+}

@@ -35,6 +35,7 @@ import { buildSummonPage, SummonPage } from "./SummonPage";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
+import { buildTowerPage, TowerPage } from "./TowerPage";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -68,6 +69,7 @@ export class MainApp extends Component {
   private mail: MailPage | null = null;
   private smith: SmithPage | null = null;
   private arena: ArenaPage | null = null;
+  private tower: TowerPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -101,6 +103,8 @@ export class MainApp extends Component {
     this.smith = null;
     this.arena?.dispose();
     this.arena = null;
+    this.tower?.dispose();
+    this.tower = null;
     this.shell?.dispose();
   }
 
@@ -150,7 +154,7 @@ export class MainApp extends Component {
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
     if (!this.allow(id)) return;
-    if (id === "arena" && !this.ensureNet()) return;
+    if ((id === "arena" || id === "tower") && !this.ensureNet()) return;
     this.panels?.openChild(id);
     this.refreshChrome();
   }
@@ -183,6 +187,7 @@ export class MainApp extends Component {
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
     if (id === "arena") return this.mountArena();
+    if (id === "tower") return this.mountTower();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -374,6 +379,25 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.arena = page;
+    return page.node;
+  }
+
+  /** 玩法「幻境之塔」。未到主线 Lv16 时 allow 已经 Toast，不会进到这里。不是幻魔塔。 */
+  private mountTower(): Node {
+    this.tower?.dispose();
+    const page = buildTowerPage({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.towerView({}, NetClient.shared),
+      challenge: () => Proto.towerChallenge({}, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.tower = page;
     return page.node;
   }
 
@@ -642,6 +666,10 @@ export class MainApp extends Component {
     if (id === "arena") {
       this.arena?.dispose();
       this.arena = null;
+    }
+    if (id === "tower") {
+      this.tower?.dispose();
+      this.tower = null;
     }
   }
 

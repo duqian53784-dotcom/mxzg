@@ -34,7 +34,7 @@ export const PLAY_ENTRIES: NavEntry[] = [
   { id: "wish", title: "许愿池", gateId: "main_blessingpool", blurb: "许愿池占位" },
   { id: "cafe", title: "咖啡馆", gateId: "main_cafe", blurb: "咖啡馆占位" },
   { id: "daily", title: "日常副本", gateId: "main_mission", blurb: "日常副本留到 C12" },
-  { id: "tower", title: "幻境之塔", gateId: "main_fantasy_tower", blurb: "幻境之塔留到 C11" },
+  { id: "tower", title: "幻境之塔", gateId: "main_fantasy_tower", blurb: "当前层与挑战。胜利给金币和强化石，主线 Lv16 开启" },
   {
     id: "magic",
     title: "幻魔塔",
