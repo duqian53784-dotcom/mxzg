@@ -31,9 +31,9 @@
 | 微信小游戏 | ❌ 未开始 | H5 稳定后再做 |
 | App 包 | ❌ 未开始 | H5 之后 |
 
-**当前焦点（唯一）：** A9 — 倩在 Creator 里建 Boot/Main/Battle 场景，启动场景设 Boot，Web Mobile 构建通过。
+**当前焦点（唯一）：** B1–B4 — 启动流、UI 壳、读表、网络 Mock（P0 技术骨架）。
 
-**上次更新：** 2026-10-20（Asia/Shanghai）— A10 目录与脚本占位已建；等 A9 Creator 场景与 Web Mobile 构建。
+**上次更新：** 2026-10-20（Asia/Shanghai）— A9 完成：Boot/Main/Battle 场景已建、启动场景 Boot、Web 桌面端构建通过（移动端同属 H5，后续可再补）。
 
 ---
 
@@ -185,7 +185,7 @@ flowchart TD
 - [x] A6 清理残留 `mxzg-client` 目录
 - [x] A7 写入本规划 `PROJECT_PLAN.md`
 - [x] A8 将「前60天-按开服自然日」拷贝到 `docs/day60-open-server.md`
-- [ ] A9 Creator 构建目标确认：Web Mobile 能空场景预览/构建
+- [x] A9 Creator 构建目标确认：场景已建；Web 桌面端构建通过（H5 验证完成，Web Mobile 可后续补）
 - [x] A10 约定 `client` 内目录规范并建空目录（见 A10 明细）
 
 **A10 建议目录（建好后勾选子项）**
@@ -211,7 +211,7 @@ client/assets/
 - [x] A10.3 `scripts/config`
 - [x] A10.4 `scripts/module`
 - [x] A10.5 `scripts/ui`（含 MainApp.ts 占位）
-- [ ] A10.6 `scenes/Boot|Main|Battle` 占位（需在 Creator 内创建，见 assets/scenes/README.md）
+- [x] A10.6 `scenes/Boot|Main|Battle` 已在 Creator 内创建
 
 ### 阶段 B · P0 技术骨架
 
@@ -331,11 +331,12 @@ client/assets/
 |------|------|
 | 2026-10-20 | 首版：目标、目录、P0–P3、阶段 A–F、维护约定；记录仓库已推送 |
 | 2026-10-20 | A10：创建 scripts/scenes 目录与 Boot/NetClient/MainApp 占位；焦点改为 A9 |
+| 2026-10-20 | A9/A10.6：Boot/Main/Battle 场景 + 启动场景 Boot + Web 桌面端构建通过；焦点改为 B1–B4 |
 
 ---
 
 ## 13. 下一步（写给下一回合的自己）
 
-1. 勾选推进 **A8–A10**（文档拷贝、Web Mobile 确认、目录骨架）。  
-2. 进入 **B1–B4**（启动、UI 壳、读表、网络 Mock）。  
-3. 每完成一项，更新第 1 节与本清单。  
+1. 推进 **B1–B4**（启动、UI 壳、读表、网络 Mock）。  
+2. 每完成一项，更新第 1 节与本清单。  
+3. 有空时补一次 Web Mobile 构建（非阻塞）。  
