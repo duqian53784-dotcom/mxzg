@@ -9,7 +9,7 @@ import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
 import { listOpenEntries } from "../config/gates";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
-import { Session } from "../core/Session";
+import { formatHubIdentity, Session } from "../core/Session";
 import { NetClient } from "../net/NetClient";
 import { NetState } from "../net/NetTypes";
 import { Proto } from "../net/protocol";
@@ -56,7 +56,15 @@ export class MainApp extends Component {
     }
     if (!this.isValid || !this.shell) return;
     this.shell.openPage("hub", this.buildHub());
-    GameLog.shared.info("MainApp", "hub ready account=" + (Session.account || "(none)"));
+    GameLog.shared.info(
+      "MainApp",
+      "hub ready account=" +
+        (Session.account || "(none)") +
+        " role=" +
+        (Session.role?.name || "(none)") +
+        " server=" +
+        (Session.serverName || "(none)")
+    );
   }
 
   private buildHub(): Node {
@@ -195,9 +203,7 @@ export class MainApp extends Component {
   }
 
   private accountText(): string {
-    const level = Session.role?.level ?? 1;
-    if (!Session.account) return "未登录（请从 Boot 进入）";
-    return Session.account + " · " + (Session.role?.name ?? "") + " Lv" + level;
+    return formatHubIdentity();
   }
 
   private stageButtonText(): string {

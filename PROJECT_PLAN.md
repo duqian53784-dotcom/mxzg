@@ -26,14 +26,14 @@
 | server 进 Git | ⏸ 暂不 | 本机 **junction** → `F:\源码\mj\program\server` |
 | 旧仓 / 旧客户端 | 📦 归档参考 | 旧代码在 `F:\源码\mj\program`；GitHub 旧大体积内容勿再整仓硬推 |
 | 进度文档 | ✅ 本文 | `PROJECT_PLAN.md` |
-| P0 可玩闭环 | ❌ 未开始 | 玩法未开始；技术骨架 B1–B8 已完成。主城可点「主线」走假战斗；失败有中文 Toast；H5 安全区已接上 |
+| P0 可玩闭环 | ❌ 未开始 | 阶段 C 已开始：Mock 可选服、登录、创角后进主城。主线仍是假战斗；失败有中文 Toast；H5 安全区已接上 |
 | 连真实服 | ❌ 未开始 | 协议 / 网关 / 登录 |
 | 微信小游戏 | ❌ 未开始 | H5 稳定后再做 |
 | App 包 | ❌ 未开始 | H5 之后 |
 
-**当前焦点（唯一）：** C1 — 账号登录 / 选服 / 创角。
+**当前焦点（唯一）：** C2 — 主城 / 主界面导航（按 `opencondition` 显隐）。
 
-**上次更新：** 2026-10-20（Asia/Shanghai）— B8 完成：安全区按可见区域给 Boot / 主城留边，不改 Fit Width / Fit Height。阶段 B 技术骨架收口。
+**上次更新：** 2026-10-20（Asia/Shanghai）— C1 完成：登录面板可选服、填账号，没有角色或点「创角」走 `Proto.roleCreate`。上次账号和服务器记在本地。主城显示角色名和服务器。
 
 ---
 
@@ -226,7 +226,7 @@ client/assets/
 
 ### 阶段 C · P0 玩法垂直切片
 
-- [ ] C1 账号登录 / 选服 / 创角（UI + 协议或 Mock）
+- [x] C1 账号登录 / 选服 / 创角（UI + 协议或 Mock）（登录面板：账号 / 密码占位 / 本地Mock·提审·正式占位；`Proto.login` + `roleEnter`，无角色或点「创角」再 `roleCreate`。上次账号、服务器写在 `mxzg.account` / `mxzg.serverId`。主城显示角色名和服务器。`skipLogin` 仍跳过面板）
 - [ ] C2 主城 / 主界面导航（按 `opencondition` 显隐）
 - [ ] C3 主线关卡：进战、战报或简化表现、结算、下一关
 - [ ] C4 挂机：时长、收益预览、快速作战入口
@@ -337,12 +337,13 @@ client/assets/
 | 2026-10-20（Asia/Shanghai） | B6：MockGameSession 记住开服天 / 等级 / 主线进度；录包 `resources/mock/session-login-stage.json` + ReplayTransport。主城「主线」可假战斗结算。焦点改为 B7 |
 | 2026-10-20（Asia/Shanghai） | B7：GameLog（级别、环形缓冲、`[mxzg]` 镜像）；错误码表；失败 Toast；主城「日志」面板。焦点改为 B8 |
 | 2026-10-20（Asia/Shanghai） | B8：H5 安全区 / 多分辨率。设计分辨率保持 720×1280，代码不改 Fit Width / Fit Height。焦点改为 C1 |
+| 2026-10-20（Asia/Shanghai） | C1：账号登录、选服（本地Mock / 提审 / 正式占位）、创角。上次账号和服务器记在本地。主城显示角色名和服务器。焦点改为 C2 |
 
 ---
 
 ## 13. 下一步（写给下一回合的自己）
 
-1. 推进 **C1**：账号登录 / 选服 / 创角（UI + Mock 协议）。Boot 上已有单账号「进入游戏」，C1 补选服和创角，沿用 `Proto.login` / `Proto.roleCreate`，不要另起网络。  
-2. B8 预览：拖浏览器窗口（很扁或很窄）时主城按钮和 Toast 应留在画面内。桌面没有刘海时，控制台 `localStorage.setItem("mxzg.safe","88,0,34,0")` 再拖一次窗口。说明见 `docs/safe-area.md`。  
+1. 推进 **C2**：主城 / 主界面导航（按 `opencondition` 显隐）。C1 已能选服、登录、创角，主城标题下能看到角色名和服务器。  
+2. C1 预览：Boot 登录面板里点一个服务器。账号保持 `mock` 时点「进入游戏」直接进主城（已有 MockHero），标题下应带所选服。点「创角」，或把账号改成别的名字再进入，会出创角面板；空名字 Toast「角色名不能为空」；填名字后进主城，标题下是该角色和所选服。上次账号和服务器在 `localStorage` 的 `mxzg.account` / `mxzg.serverId`。`skipLogin` 仍跳过面板。说明见 `client/assets/scripts/README.md`。  
 3. 每完成一项，更新第 1 节与本清单。  
-4. 有空时补一次 Web Mobile 构建（非阻塞）。对照旧 `.proto` 的真实消息号留到阶段 D，不要在 C1 做。  
+4. 有空时补一次 Web Mobile 构建（非阻塞）。对照旧 `.proto` 的真实消息号留到阶段 D，不要在 C2 做。安全区说明仍在 `docs/safe-area.md`。  

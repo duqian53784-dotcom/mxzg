@@ -13,16 +13,16 @@
 | `heartbeat` | `serverTime` | NetClient 定时发送，不走 `request` |
 | 其它 cmd | `{ ok: true, echo }` | 自检里的 `bag.list` |
 
-B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `hasRole`。原字段还在，Boot → Main 的 Mock 登录不变。B6 起，主城「主线」会发 `stage.enter` / `stage.result`。
+B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `hasRole`。原字段还在。C1 登录面板会把选中的服务器放进 `serverId`。B6 起，主城「主线」会发 `stage.enter` / `stage.result`。
 
 ## P0 清单
 
 | 占位 ID | cmd | 请求 | 响应 | 留给 |
 |---------|-----|------|------|------|
-| 1001 | `login` | `LoginReq` | `LoginResp` | Boot，C1 选服可带 `serverId` |
+| 1001 | `login` | `LoginReq` | `LoginResp` | Boot 登录，带上选中的 `serverId` |
 | 1002 | `heartbeat` | `HeartbeatReq` | `HeartbeatResp` | NetClient |
-| 1101 | `role.enter` | `RoleEnterReq` | `RoleEnterResp` | Boot；默认已有角色 |
-| 1102 | `role.create` | `RoleCreateReq` | `RoleCreateResp` | C1 创角 |
+| 1101 | `role.enter` | `RoleEnterReq` | `RoleEnterResp` | Boot；账号 `mock` 默认已有角色，其它账号 `hasRole` 为 false |
+| 1102 | `role.create` | `RoleCreateReq` | `RoleCreateResp` | 登录面板「创角」 |
 | 1201 | `stage.enter` | `StageEnterReq` | `StageEnterResp` | 主城假战斗；表现留给 C3 |
 | 1202 | `stage.result` | `StageResultReq` | `StageResultResp` | 主城假战斗；表现留给 C3 |
 
@@ -37,7 +37,7 @@ const role = await Proto.roleEnter({ account: login.account });
 
 Mock 约定（给 C1 / C3 直接用，不用再改传输层）：
 
-- 每个 MockTransport 带一份 `MockGameSession`。一开始就有角色 `1001 / MockHero / Lv1`、下一关 1、开服第 1 天，所以只 `role.enter` 也能进主城。同一局里进度会留下来。细节和录包见 `docs/mock-replay.md`。
+- 每个 MockTransport 带一份 `MockGameSession`。一开始就有角色 `1001 / MockHero / Lv1`，属于账号 `mock`，下一关 1、开服第 1 天。还没 `login`，或登录的就是 `mock` 时，只 `role.enter` 也能进主城。登录别的账号则 `hasRole` 为 false，直到 `role.create`。同一局里进度会留下来。细节和录包见 `docs/mock-replay.md`。
 - `role.enter` 额外带 `openDay`、`stageId`（真服可以不带）。Boot 写进 `Session`。
 - `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线和开服天。
 - `stage.enter` 的 `stageId < 1` 失败；成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。允许跳关。

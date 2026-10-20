@@ -1,6 +1,7 @@
 import {
   Button,
   Color,
+  EditBox,
   Graphics,
   HorizontalTextAlignment,
   Label,
@@ -61,6 +62,74 @@ export function createRect(name: string, width: number, height: number, color: C
   g.rect(-width / 2, -height / 2, width, height);
   g.fill();
   return node;
+}
+
+export function paintRect(node: Node, color: Color): void {
+  const g = node.getComponent(Graphics);
+  const ui = node.getComponent(UITransform);
+  if (!g || !ui) return;
+  const size = ui.contentSize;
+  const width = size && typeof size.width === "number" ? size.width : 0;
+  const height = size && typeof size.height === "number" ? size.height : 0;
+  if (typeof g.clear === "function") g.clear();
+  g.fillColor = color;
+  g.rect(-width / 2, -height / 2, width, height);
+  g.fill();
+}
+
+export interface TextField {
+  node: Node;
+  getValue(): string;
+  setValue(value: string): void;
+}
+
+/** 单行输入。密码只影响显示，调用方决定要不要把值发出去。 */
+export function createField(
+  placeholder: string,
+  width: number,
+  height: number,
+  options?: { password?: boolean; text?: string; maxLength?: number }
+): TextField {
+  const root = uiNode("Field");
+  const ui = root.addComponent(UITransform);
+  ui.setContentSize(width, height);
+  const bg = createRect("bg", width, height, new Color(32, 48, 78, 255));
+  bg.parent = root;
+
+  const initial = options?.text ?? "";
+  const text = createLabel(initial, 22, {
+    color: new Color(255, 255, 255, 255),
+    width: width - 28,
+    align: "left",
+  });
+  place(text, root, 0, 0);
+  const hint = createLabel(placeholder, 22, {
+    color: new Color(150, 166, 186, 255),
+    width: width - 28,
+    align: "left",
+  });
+  place(hint, root, 0, 0);
+  if (initial) hint.active = false;
+
+  const edit = root.addComponent(EditBox);
+  edit.textLabel = text.getComponent(Label);
+  edit.placeholderLabel = hint.getComponent(Label);
+  edit.placeholder = placeholder;
+  edit.maxLength = options?.maxLength ?? 16;
+  edit.inputMode = EditBox.InputMode.SINGLE_LINE;
+  edit.inputFlag = options?.password ? EditBox.InputFlag.PASSWORD : EditBox.InputFlag.DEFAULT;
+  edit.string = initial;
+
+  return {
+    node: root,
+    getValue(): string {
+      return typeof edit.string === "string" ? edit.string : "";
+    },
+    setValue(value: string): void {
+      edit.string = value;
+      hint.active = !value;
+    },
+  };
 }
 
 export function createButton(

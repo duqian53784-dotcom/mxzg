@@ -40,6 +40,13 @@ export class MockGameSession {
   token = "mock-token";
   serverId = 1;
   role: MockRoleState = { roleId: 1001, name: "MockHero", level: 1 };
+  /**
+   * 默认角色属于账号 mock。
+   * 已登录且账号对不上时，role.enter 报没有角色，但不清掉这份数据。
+   * 创角成功后改归当前登录账号。
+   */
+  roleAccount = "mock";
+  hasRole = true;
   /** 下一关。 */
   stageId = 1;
   clearedStage = 0;
@@ -61,6 +68,17 @@ export class MockGameSession {
   }
 
   roleEnter(): RoleEnterResp {
+    if (!this.visibleRole()) {
+      return {
+        ok: true,
+        hasRole: false,
+        roleId: 0,
+        name: "",
+        level: 0,
+        openDay: this.openDay,
+        stageId: 1,
+      };
+    }
     return {
       ok: true,
       hasRole: true,
@@ -79,6 +97,8 @@ export class MockGameSession {
       return { ok: false, code: ErrorCode.ROLE_NAME_EMPTY, roleId: 0, name: "", level: 0 };
     }
     this.role = { roleId: this.role.roleId || 1001, name, level: 1 };
+    this.hasRole = true;
+    if (this.account) this.roleAccount = this.account;
     this.clearedStage = 0;
     this.stageId = 1;
     this.battleId = "";
@@ -136,7 +156,10 @@ export class MockGameSession {
 
   private applySeed(seed?: MockSessionSeed): void {
     if (!seed) return;
-    if (typeof seed.account === "string") this.account = seed.account;
+    if (typeof seed.account === "string") {
+      this.account = seed.account;
+      if (seed.account) this.roleAccount = seed.account;
+    }
     if (typeof seed.token === "string" && seed.token) this.token = seed.token;
     if (typeof seed.serverId === "number" && isFinite(seed.serverId)) this.serverId = seed.serverId;
     if (typeof seed.clearedStage === "number" && isFinite(seed.clearedStage) && seed.clearedStage >= 0) {
@@ -157,6 +180,13 @@ export class MockGameSession {
     if (typeof seed.openDay === "number" && isFinite(seed.openDay) && seed.openDay >= 1) {
       this.openDay = Math.floor(seed.openDay);
     }
+  }
+
+  /** 还没 login 时沿用默认角色，Boot 的 skipLogin 和旧自检都能进。 */
+  private visibleRole(): boolean {
+    if (!this.hasRole) return false;
+    if (!this.account) return true;
+    return this.account === this.roleAccount;
   }
 
   /** resetOpenDay：创角时开服天回到推导值，而不是保留旧号的天数。 */

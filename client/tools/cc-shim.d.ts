@@ -58,8 +58,21 @@ declare module "cc" {
 
   export class Graphics {
     fillColor: Color;
+    clear(): void;
     rect(x: number, y: number, w: number, h: number): void;
     fill(): void;
+  }
+
+  export class EditBox extends Component {
+    static InputFlag: { DEFAULT: number; PASSWORD: number };
+    static InputMode: { ANY: number; SINGLE_LINE: number };
+    string: string;
+    placeholder: string;
+    maxLength: number;
+    inputFlag: number;
+    inputMode: number;
+    textLabel: Label | null;
+    placeholderLabel: Label | null;
   }
 
   export class Button {
@@ -101,6 +114,10 @@ declare module "cc" {
 
   export const sys: {
     getSafeAreaRect(): { x: number; y: number; width: number; height: number };
+    localStorage?: {
+      getItem(key: string): string | null;
+      setItem(key: string, value: string): void;
+    };
   };
 
   export const resources: {

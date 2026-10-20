@@ -1,0 +1,80 @@
+import { BlockInputEvents, Button, Color, Node, UITransform } from "cc";
+import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
+
+export interface CreateRolePanelView {
+  root: Node;
+  setStatus(text: string): void;
+  setBusy(busy: boolean): void;
+  /** 原始输入，不去空白。全空格仍交给 Proto.roleCreate。 */
+  name(): string;
+}
+
+export interface CreateRolePanelOptions {
+  account: string;
+  serverName: string;
+  /** 该账号在 Mock 里已经有角色。确认后会换成新名字，并重置主线。 */
+  hadRole: boolean;
+}
+
+/**
+ * 创角面板。确认由调用方走 Proto.roleCreate，再 Proto.roleEnter。
+ */
+export function buildCreateRolePanel(
+  parent: Node,
+  handlers: { onConfirm: () => void; onBack: () => void },
+  options: CreateRolePanelOptions
+): CreateRolePanelView {
+  const root = uiNode("CreateRolePanel");
+  const rootUi = root.addComponent(UITransform);
+  rootUi.setContentSize(2000, 2000);
+  root.addComponent(BlockInputEvents);
+  root.parent = parent;
+
+  const card = createRect("card", 560, 520, new Color(16, 28, 52, 245));
+  place(card, root, 0, 20);
+
+  place(createLabel("创角", 48, { color: new Color(255, 228, 170, 255), width: 500 }), root, 0, 200);
+  const hint = options.hadRole
+    ? "已有角色。确认后换成新名字，主线回到第 1 关"
+    : "这个账号还没有角色";
+  place(createLabel(hint, 20, { color: new Color(180, 196, 220, 255), width: 500 }), root, 0, 140);
+  place(
+    createLabel(options.serverName + " · " + options.account, 22, { color: new Color(240, 240, 240, 255), width: 500 }),
+    root,
+    0,
+    96
+  );
+
+  place(createLabel("角色名", 20, { color: new Color(180, 196, 220, 255), width: 460 }), root, 0, 40);
+  const nameField = createField("请输入角色名", 460, 52, { maxLength: 12 });
+  place(nameField.node, root, 0, -8);
+
+  const status = createLabel("填写名字后确认", 20, { color: new Color(240, 240, 240, 255), width: 500 });
+  place(status, root, 0, -70);
+
+  const confirmNode = createButton("确认创角", handlers.onConfirm, 280, 56);
+  place(confirmNode, root, 0, -140);
+  const backNode = createButton("返回", handlers.onBack, 280, 52, new Color(62, 78, 104, 255));
+  place(backNode, root, 0, -210);
+
+  const confirm = confirmNode.getComponent(Button);
+  const back = backNode.getComponent(Button);
+
+  return {
+    root,
+    setStatus(text: string) {
+      setText(status, text);
+    },
+    setBusy(busy: boolean) {
+      if (confirm) confirm.interactable = !busy;
+      if (back) back.interactable = !busy;
+    },
+    name(): string {
+      return readField(nameField);
+    },
+  };
+}
+
+function readField(field: TextField): string {
+  return field.getValue();
+}
