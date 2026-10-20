@@ -1,5 +1,5 @@
 /**
- * B3–C9 自检（不启动 Creator）。
+ * B3–C10 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -80,6 +80,27 @@ import {
   strengthenToast,
   toSmithGear,
 } from "../assets/scripts/module/smith/forge";
+import {
+  applyArenaChallenge,
+  ARENA_DAILY_LIMIT,
+  ARENA_LOSE_SCORE,
+  ARENA_OPPONENTS,
+  ARENA_START_SCORE,
+  ARENA_WIN_GOLD,
+  ARENA_WIN_SCORE,
+  arenaDailyLine,
+  arenaFailToast,
+  arenaLoseToast,
+  arenaMissingToast,
+  arenaNoChanceToast,
+  arenaReportLine,
+  arenaRowText,
+  arenaScoreLine,
+  arenaWinToast,
+  challengeButtonText,
+  rankFromScore,
+  rosterPower,
+} from "../assets/scripts/module/arena/match";
 import {
   applySummon,
   diamondShortToast,
@@ -261,8 +282,13 @@ function checkGates(): void {
   assert(isEntryOpen(summon, 1, 1), "summon open at lv1");
   assert(!isEntryOpen(smith, 1, 1) && isEntryOpen(smith, 5, 1), "smith at lv5");
   assert(!isEntryOpen(tower, 1, 1) && isEntryOpen(tower, 1, 30), "magic tower on D30");
+  const arenaRow = rows.find((row) => row.id === "main_pvp");
+  assert(arenaRow && arenaRow.level === 8, "arena row");
+  assert(!isEntryOpen(arenaRow, 7, 99) && isEntryOpen(arenaRow, 8, 1), "arena at lv8");
   const names = listOpenEntries(rows, 1, 1).map((row) => row.id);
-  assert(names.indexOf("main_summon") >= 0 && names.indexOf("main_smith_shop") < 0, "lv1 list");
+  assert(names.indexOf("main_summon") >= 0 && names.indexOf("main_smith_shop") < 0 && names.indexOf("main_pvp") < 0, "lv1 list");
+  const lv8 = listOpenEntries(rows, 8, 1).map((row) => row.id);
+  assert(lv8.indexOf("main_pvp") >= 0 && lv8.indexOf("main_smith_shop") >= 0, "lv8 list");
 
   const war = gateFile.rows.find((row) => row.key === "clan_war_open_day");
   const magic = gateFile.rows.find((row) => row.key === "magic_tower_open_day");
@@ -694,6 +720,13 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(!entryAccess(magic, 1, 29, db).open && entryAccess(magic, 1, 30, db).open, "magic opens on D30");
   assert(!entryAccess(smith, 9, 30, null).open && entryAccess(smith, 9, 30, null).hint.indexOf("配置未加载") >= 0, "gated without config");
   assert(tabLabel("铁匠铺", false) === "锁·铁匠铺" && tabLabel("铁匠铺", true) === "铁匠铺", "locked label");
+  const arenaEntry = findNavEntry("arena");
+  assert(arenaEntry !== null && arenaEntry.gateId === "main_pvp", "arena gate");
+  const arenaLock = entryAccess(arenaEntry, 1, 1, db);
+  assert(!arenaLock.open && arenaLock.hint.indexOf("Lv8") >= 0, "arena hint");
+  assert(!entryAccess(arenaEntry, 7, 30, db).open && entryAccess(arenaEntry, 8, 1, db).open, "arena opens at lv8");
+  assert(tabLabel("竞技场", false) === "锁·竞技场", "arena locked label");
+  assert(arenaEntry.blurb.indexOf("积分") >= 0, "arena blurb");
   assert(rootTabFor("arena") === "plays" && rootTabFor("log") === "city" && rootTabFor("smith") === "smith", "root tab");
   assert(rootTabFor("mainline") === "city", "mainline stays on city tab");
   const heroEntry = findNavEntry("hero");
@@ -1656,6 +1689,135 @@ async function checkSmith(): Promise<void> {
   net.close();
 }
 
+async function checkArena(): Promise<void> {
+  const starters = starterRoster();
+  const power = rosterPower(starters);
+  assert(power === 70 + 55 + 40, "starter arena power");
+  assert(ARENA_OPPONENTS.length === 5 && ARENA_OPPONENTS[0].name === "见习剑士" && ARENA_OPPONENTS[0].power < power, "easy opponent");
+  assert(ARENA_OPPONENTS[1].power === power && ARENA_OPPONENTS[2].power > power, "tie then harder");
+  assert(rankFromScore(ARENA_START_SCORE) === 41, "start rank");
+  assert(arenaScoreLine(1000, 41, power) === "积分 1000 · 约第 41 名 · 战力 " + power, "score line");
+  assert(arenaDailyLine(0, ARENA_DAILY_LIMIT, 100) === "今日剩余 5/5 · 持有金币 100", "daily line");
+  assert(arenaRowText("见习剑士", 960, 140, power).indexOf("可胜") >= 0, "easy row");
+  assert(arenaRowText("铁壁守卫", 1060, 220, power).indexOf("较难") >= 0, "hard row");
+  assert(challengeButtonText("见习剑士", 0, 5) === "挑战见习剑士（剩余 5）", "challenge button");
+  assert(challengeButtonText("见习剑士", 5, 5) === "今日已用完", "spent button");
+  assert(arenaWinToast("见习剑士", ARENA_WIN_SCORE, ARENA_WIN_GOLD) === "挑战胜利：击败见习剑士，积分 +24，金币 +20", "win toast");
+  assert(arenaLoseToast("铁壁守卫", -ARENA_LOSE_SCORE) === "挑战失败：不敌铁壁守卫，积分 -12", "lose toast");
+  assert(arenaLoseToast("铁壁守卫", 0) === "挑战失败：不敌铁壁守卫，积分没有再降", "floor toast");
+  assert(arenaNoChanceToast() === "今日挑战次数已用完" && arenaMissingToast() === "没有这位对手", "arena fail copy");
+  assert(errorText(ErrorCode.ARENA_NO_CHANCE) === "今日挑战次数已用完", "no chance text");
+  assert(errorText(ErrorCode.ARENA_NOT_FOUND) === "没有这位对手", "missing opponent text");
+  assert(arenaReportLine(power, 140, true) === "战力 " + power + " 对 140，胜利", "report line");
+
+  const fresh = new MockGameSession();
+  const anchor = fresh.idleAnchorMs;
+  const view = fresh.arenaView();
+  assert(view.ok && view.score === ARENA_START_SCORE && view.rank === 41 && view.power === power, "arena view");
+  assert(view.used === 0 && view.limit === ARENA_DAILY_LIMIT && view.opponents.length === 5, "arena roster");
+  assert(view.gold === MOCK_STARTER_GOLD && view.diamond === MOCK_STARTER_DIAMOND, "view leaves wallet");
+  const missing = fresh.arenaChallenge({ opponentId: 0 });
+  assert(missing.ok === false && missing.code === ErrorCode.ARENA_NOT_FOUND && arenaFailToast(missing) === "没有这位对手", "missing opponent");
+  assert(fresh.arenaScore === ARENA_START_SCORE && fresh.arenaUsed === 0 && fresh.gold === MOCK_STARTER_GOLD, "missing spends nothing");
+  const win = fresh.arenaChallenge({ opponentId: 1 });
+  assert(win.ok && win.win && win.scoreDelta === ARENA_WIN_SCORE && win.goldGain === ARENA_WIN_GOLD, "easy win");
+  assert(win.score === ARENA_START_SCORE + ARENA_WIN_SCORE && win.rank === 36 && win.used === 1, "score after win");
+  assert(win.gold === MOCK_STARTER_GOLD + ARENA_WIN_GOLD && fresh.diamond === MOCK_STARTER_DIAMOND, "gold only");
+  assert(fresh.stageId === 1 && fresh.heroes[0].level === 1 && fresh.heroes[0].weaponLevel === 1, "arena leaves growth");
+  assert(fresh.idleAnchorMs === anchor && fresh.role.level === 1, "arena leaves idle and level");
+  const tie = fresh.arenaChallenge({ opponentId: 2 });
+  assert(tie.ok && tie.win && tie.opponentName === "流浪佣兵" && tie.score === ARENA_START_SCORE + ARENA_WIN_SCORE * 2, "tie counts as win");
+  const lose = fresh.arenaChallenge({ opponentId: 3 });
+  assert(lose.ok && lose.win === false && lose.goldGain === 0 && lose.scoreDelta === -ARENA_LOSE_SCORE, "hard lose");
+  assert(lose.score === ARENA_START_SCORE + ARENA_WIN_SCORE * 2 - ARENA_LOSE_SCORE && fresh.gold === tie.gold, "lose keeps gold");
+  assert(arenaLoseToast(lose.opponentName, lose.scoreDelta).indexOf("积分 -12") >= 0, "lose toast from resp");
+  fresh.roleCreate({ name: "新人" });
+  assert(fresh.arenaScore === ARENA_START_SCORE && fresh.arenaUsed === 0 && fresh.gold === MOCK_STARTER_GOLD, "create resets arena");
+  assert(fresh.role.level === 1 && fresh.arenaDay === fresh.openDay, "create arena day");
+
+  const limited = new MockGameSession();
+  for (let i = 0; i < ARENA_DAILY_LIMIT; i++) {
+    const once = limited.arenaChallenge({ opponentId: 1 });
+    assert(once.ok && once.win && once.used === i + 1, "daily fight " + (i + 1));
+  }
+  assert(limited.arenaScore === ARENA_START_SCORE + ARENA_WIN_SCORE * ARENA_DAILY_LIMIT, "five wins");
+  assert(limited.gold === MOCK_STARTER_GOLD + ARENA_WIN_GOLD * ARENA_DAILY_LIMIT, "five gold");
+  const blocked = limited.arenaChallenge({ opponentId: 1 });
+  assert(blocked.ok === false && blocked.code === ErrorCode.ARENA_NO_CHANCE && arenaFailToast(blocked) === "今日挑战次数已用完", "daily cap");
+  assert(limited.arenaScore === ARENA_START_SCORE + ARENA_WIN_SCORE * 5 && limited.gold === MOCK_STARTER_GOLD + ARENA_WIN_GOLD * 5, "cap spends nothing");
+  for (let stage = 1; stage <= 5; stage++) {
+    const entered = limited.stageEnter({ stageId: stage });
+    const won = limited.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(won.ok && won.level === stage + 1, "win toward new day " + stage);
+  }
+  assert(limited.role.level === 6 && limited.openDay === 2, "five wins reach day 2");
+  const refreshed = limited.arenaView();
+  assert(refreshed.used === 0 && refreshed.score === ARENA_START_SCORE + ARENA_WIN_SCORE * 5, "new day clears chances");
+  const again = limited.arenaChallenge({ opponentId: 1 });
+  assert(again.ok && again.used === 1 && again.score === refreshed.score + ARENA_WIN_SCORE, "fight after new day");
+
+  const climb = new MockGameSession();
+  for (let stage = 1; stage <= 7; stage++) {
+    const entered = climb.stageEnter({ stageId: stage });
+    const won = climb.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(won.ok && won.level === stage + 1, "win toward lv8 " + stage);
+  }
+  assert(climb.role.level === 8 && climb.openDay === 2 && climb.gold === MOCK_STARTER_GOLD + 70, "seven wins unlock level");
+  const opened = climb.arenaView();
+  assert(opened.score === ARENA_START_SCORE && opened.used === 0 && opened.power === power, "stages do not change arena");
+  assert(climb.heroes[0].weaponLevel === 1, "stages do not strengthen");
+
+  const armed = new MockGameSession();
+  armed.heroes[0].weaponLevel = 2;
+  assert(armed.arenaView().power === power + 8, "sword adds arena power");
+  const stillHard = armed.arenaChallenge({ opponentId: 3 });
+  assert(stillHard.ok && stillHard.win === false && armed.heroes[0].weaponLevel === 2, "one sword still loses to guard");
+
+  const floored = new MockGameSession({ arenaScore: 800, arenaUsed: 0 });
+  const stuck = floored.arenaChallenge({ opponentId: 3 });
+  assert(stuck.ok && stuck.win === false && stuck.scoreDelta === 0 && stuck.score === 800, "score floor");
+  assert(floored.gold === MOCK_STARTER_GOLD && arenaLoseToast(stuck.opponentName, stuck.scoreDelta).indexOf("没有再降") >= 0, "floor keeps gold");
+  const partial = new MockGameSession({ arenaScore: 805 });
+  const clipped = partial.arenaChallenge({ opponentId: 3 });
+  assert(clipped.score === 800 && clipped.scoreDelta === -5, "partial drop");
+  const capped = new MockGameSession({ arenaScore: 1990 });
+  const topped = capped.arenaChallenge({ opponentId: 1 });
+  assert(topped.win && topped.score === 2000 && topped.scoreDelta === 10 && topped.goldGain === ARENA_WIN_GOLD, "score cap");
+  assert(arenaWinToast(topped.opponentName, topped.scoreDelta, topped.goldGain).indexOf("积分 +10") >= 0, "capped toast");
+
+  const seeded = new MockGameSession({ arenaScore: 1100, arenaUsed: 4, arenaDay: 1, openDay: 1 });
+  assert(seeded.arenaView().used === 4 && seeded.arenaView().rank === rankFromScore(1100), "seeded chances");
+  const last = seeded.arenaChallenge({ opponentId: 1 });
+  assert(last.ok && last.used === 5, "last seeded chance");
+  const noMore = seeded.arenaChallenge({ opponentId: 1 });
+  assert(noMore.ok === false && noMore.code === ErrorCode.ARENA_NO_CHANCE, "seeded cap");
+  const shifted = new MockGameSession({ openDay: 4, arenaDay: 1, arenaUsed: 5, arenaScore: 900 });
+  assert(shifted.arenaView().used === 0 && shifted.arenaScore === 900, "stale day clears used");
+
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const remoteView = await Proto.arenaView({}, net);
+  assert(remoteView.ok && remoteView.opponents.length === 5 && remoteView.score === ARENA_START_SCORE, "proto view");
+  const remoteWin = await Proto.arenaChallenge({ opponentId: 1 }, net);
+  assert(
+    remoteWin.ok && remoteWin.win && remoteWin.gold === MOCK_STARTER_GOLD + ARENA_WIN_GOLD && remoteWin.score === ARENA_START_SCORE + ARENA_WIN_SCORE,
+    "proto challenge"
+  );
+  const remoteMiss = await Proto.arenaChallenge({ opponentId: 99 }, net);
+  assert(remoteMiss.ok === false && remoteMiss.code === ErrorCode.ARENA_NOT_FOUND && remoteMiss.used === 1, "proto missing");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyArenaChallenge(remoteWin);
+  assert(Session.gold === remoteWin.gold && Session.diamond === remoteWin.diamond, "apply arena");
+  applyArenaChallenge({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteWin.gold && Session.diamond === remoteWin.diamond, "failed arena ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.arenaView || row.cmd === Cmd.arenaChallenge).map((row) => row.id);
+  assert(ids.length === 2 && ids[0] === 1901 && ids[1] === 1902, "arena cmd ids");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -1676,6 +1838,7 @@ async function main(): Promise<void> {
   await checkBag();
   await checkMail();
   await checkSmith();
+  await checkArena();
   console.log("skeleton-check ok");
 }
 

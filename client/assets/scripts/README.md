@@ -3,7 +3,7 @@
 - `core/` 启动、会话（Boot、Session）
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
-- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化）
+- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
 
 场景在 `assets/scenes/`。Boot / Main / Battle 已建好。Boot 的 Canvas 上已经挂了 Boot。其余界面由代码生成，不用再挂组件。
@@ -33,7 +33,7 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 
 Boot 的登录不再手写 `request("login")`，改走 `Proto.login` / `Proto.roleEnter`。回包仍由 MockTransport 发出。
 
-P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`、`bag.list`、`bag.use`、`mail.list`、`mail.read`、`mail.claim`、`mail.claimAll`、`mail.delete`、`smith.view`、`smith.strengthen`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。背包会列出道具并使用。邮件会列出、领取和删除。铁匠铺会看武器并强化。创角从登录面板进，见下面 C1。
+P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`、`bag.list`、`bag.use`、`mail.list`、`mail.read`、`mail.claim`、`mail.claimAll`、`mail.delete`、`smith.view`、`smith.strengthen`、`arena.view`、`arena.challenge`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。背包会列出道具并使用。邮件会列出、领取和删除。铁匠铺会看武器并强化。竞技场会看积分并挑战。创角从登录面板进，见下面 C1。
 
 同一局 Mock 会记住开服天、等级、主线进度和英雄等级。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
 
@@ -84,7 +84,7 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 | 英雄 | 主线 Lv1 | 列表、详情、升级（C5） |
 | 召唤 | 主线 Lv1 | 单抽、十连、新英雄或碎片（C6） |
 | 铁匠铺 | 主线 Lv5 | 强化新手短剑（C9）。Lv1 到 Lv4 应带锁 |
-| 玩法 | 随时 | 挂机、背包（C7）、邮件（C8）、羁绊、竞技场、许愿池、咖啡馆、日常副本、幻境之塔、幻魔塔 |
+| 玩法 | 随时 | 挂机、背包（C7）、邮件（C8）、羁绊、竞技场（C10，主线 Lv8）、许愿池、咖啡馆、日常副本、幻境之塔、幻魔塔 |
 | 幻魔塔 | 开服第 30 天（`opencondition` 和 `magic_tower_open_day`） | 占位。D1 点它应 Toast「开服第30天」 |
 
 金币、钻石来自 Mock 会话：新号 100 / 20，主线胜利每次 +10 金币。顶栏在结算后刷新。
@@ -204,5 +204,27 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 6. **已满级**。升到 Lv10 再点，Toast「武器已达最高强化」，不扣材料。
 7. **英雄和背包**。点底栏 **英雄**，光耀骑士那一行带「武器Lv2」。详情里攻击比未强化时高 8，并写「武器 新手短剑 Lv2 · 攻击 +8」。再进背包，强化石少 1 个。英雄升级仍然只花金币，不改武器。
 8. 换一名英雄再强化，只动那一名的剑。创角会把武器重置回 Lv1，并清掉领过的强化石。
+
+不需要起 server，也不用改场景。
+
+## 竞技场（C10）
+
+不改 `.scene`，不用新挂组件。竞技场在主城页面栈里用代码生成。铁匠铺、邮件、背包、英雄升级和挂机入口都还在。锁还是玩法列表里的「竞技场」，条件是 `opencondition` 的 `main_pvp`，主线 Lv8。没有绕过，也没有单独的主城按钮。
+
+**先开锁。** 新号是 Lv1。底栏点 **玩法**，列表里是「锁·竞技场」。点它只 Toast「竞技场未开启，需要主线达到 Lv8」，不进面板。等级 = 1 + 已通关关数。Lv7 仍然带锁。下面两条都能到 Lv8：
+
+1. 主城点 **主线**，把第 1 关到第 7 关各打赢一次。第 7 胜后顶栏是 Lv8。
+2. 或者主城点 **挂机**，连续点 7 次 **快速作战**。每次结算当前关，不播战报。第 7 次后顶栏同样是 Lv8。
+
+第 5 胜时开服天会到 D2（每 5 关 +1）。这只影响竞技场的「今日次数」按哪一天计算，到达 Lv8 时次数仍是满的 5 次。回到 **玩法**，「竞技场」不再带锁。若玩法页是在升级前打开的，先返回再进一次，锁的文案才会刷新。
+
+玩法里点 **竞技场**（网络没连上时 Toast「网络未连接」，不进页面）：
+
+1. **自己的占位。** 积分 1000，约第 41 名，战力是三名起步英雄的攻击之和（165，含武器；Lv1 新手短剑不加攻击）。约排名由积分换算，不是真实排行榜。
+2. **对手。** 固定五名，从上到下：见习剑士、流浪佣兵、铁壁守卫、银月骑士、冠军候补。战力够的标「可胜」，不够的标「较难」。起步名册能胜前两名。点一行变成「已选」。
+3. **挑战。** 按钮写着「挑战见习剑士（剩余 5）」。点一下直接结算，**不播**主线战报。胜利 Toast「挑战胜利：击败见习剑士，积分 +24，金币 +20」。顶栏金币从当前值再加 20。页面上的积分、约排名和「今日剩余」一起变。
+4. **失败。** 选铁壁守卫再挑战。Toast「挑战失败：不敌铁壁守卫，积分 -12」。金币不加。积分最低到 800，再输会 Toast「积分没有再降」。
+5. **今日 5 次。** 第 6 次点挑战，Toast「今日挑战次数已用完」。积分和金币不变。次数跟着 Mock 的开服天走：再打主线把开服天加 1（每 5 关一次）后，剩余回到 5。创角把积分重置回 1000，次数清零。
+6. **战力。** 英雄升级或铁匠铺强化会提高攻击，竞技场战力跟着变。强化不改积分。挑战不改英雄等级、武器、钻石、挂机计时和主线进度。
 
 不需要起 server，也不用改场景。

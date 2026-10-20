@@ -32,6 +32,16 @@ import {
 } from "../module/mail/inbox";
 import { strengthenGoldCost, STRENGTHEN_STONE_COST, toSmithGear } from "../module/smith/forge";
 import {
+  ARENA_DAILY_LIMIT,
+  ARENA_START_SCORE,
+  clampArenaScore,
+  findArenaOpponent,
+  listArenaOpponents,
+  rankFromScore,
+  rosterPower,
+  settleArena,
+} from "../module/arena/match";
+import {
   isSummonCount,
   poolAt,
   shardItemId,
@@ -58,6 +68,8 @@ import {
   MailReadResp,
   SmithStrengthenResp,
   SmithViewResp,
+  ArenaChallengeResp,
+  ArenaViewResp,
   SummonDrop,
   SummonPullResp,
 } from "./protocol/types";
@@ -102,6 +114,15 @@ export interface MockSessionSeed {
    * 填了（含空数组）就只用这里的邮件。
    */
   mails?: MailSeed[];
+  /** 竞技场积分。不填则 1000。创角回到 1000。 */
+  arenaScore?: number;
+  /** 今日已挑战次数。不填为 0。超过每日上限时按上限计。 */
+  arenaUsed?: number;
+  /**
+   * 次数所属的开服天。不填则跟当前 openDay 对齐，避免一打开就把次数清掉。
+   * 和 openDay 不一致时，下一次查看或挑战会把次数清零。
+   */
+  arenaDay?: number;
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -110,7 +131,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取和铁匠铺强化都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化和竞技场挑战都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -149,12 +170,20 @@ export class MockGameSession {
   heroes: HeroRosterEntry[] = [];
   /** 下一抽出 SUMMON_POOL 的下标。单抽走 1 格，十连走 10 格。不足时不动。 */
   summonCursor = 0;
+  /** 竞技场积分。不随主线变化。创角回到 1000。 */
+  arenaScore = ARENA_START_SCORE;
+  /** 当前 arenaDay 上已经用掉的挑战次数。 */
+  arenaUsed = 0;
+  /** 次数所属开服天。和 openDay 不同时，下一次竞技场操作清零。 */
+  arenaDay = 1;
+  private arenaDaySeeded = false;
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
     if (typeof clock === "function") this.clock = clock;
     this.idleAnchorMs = this.clock();
     this.applySeed(seed);
+    if (!this.arenaDaySeeded) this.arenaDay = this.openDay;
     this.ensureHeroes();
     this.ensureStarterGear();
     if (!this.itemsSeeded) this.grantStarterItems();
@@ -198,7 +227,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标和邮箱重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱和竞技场重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -220,6 +249,9 @@ export class MockGameSession {
     this.grantStarterMails();
     this.idleAnchorMs = this.clock();
     this.syncDerived(true);
+    this.arenaScore = ARENA_START_SCORE;
+    this.arenaUsed = 0;
+    this.arenaDay = this.openDay;
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
 
@@ -453,6 +485,65 @@ export class MockGameSession {
       stoneOwned: this.itemCount(IDLE_ITEM_ID),
       gold: this.gold,
       diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 只读竞技场。按当前开服天刷新今日次数，不改积分和钱包。
+   * 对手是固定名单。入口等级锁在客户端，这里不重复判断主线等级。
+   */
+  arenaView(): ArenaViewResp {
+    this.ensureHeroes();
+    this.refreshArenaDay();
+    return {
+      ok: true,
+      score: this.arenaScore,
+      rank: rankFromScore(this.arenaScore),
+      power: rosterPower(this.heroes),
+      used: this.arenaUsed,
+      limit: ARENA_DAILY_LIMIT,
+      opponents: listArenaOpponents(),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 挑战一名固定对手，一键结算。战力不低于对手则胜。
+   * 胜利加积分和金币，失败只扣积分。胜负都占用 1 次今日次数。
+   * 没有这位对手或次数用完时拒绝，积分、金币和次数都不变。
+   * 不改英雄、武器、钻石、挂机起算和主线进度。
+   */
+  arenaChallenge(data: unknown): ArenaChallengeResp {
+    this.ensureHeroes();
+    this.refreshArenaDay();
+    const opponentId = Math.floor(numField(asRecord(data), "opponentId", 0));
+    const opponent = findArenaOpponent(opponentId);
+    if (!opponent) return this.arenaFail(opponentId, "", ErrorCode.ARENA_NOT_FOUND);
+    if (this.arenaUsed >= ARENA_DAILY_LIMIT) {
+      return this.arenaFail(opponentId, opponent.name, ErrorCode.ARENA_NO_CHANCE);
+    }
+    const playerPower = rosterPower(this.heroes);
+    const settled = settleArena(playerPower, opponent.power, this.arenaScore);
+    this.arenaScore = settled.score;
+    if (settled.goldGain > 0) this.gold += settled.goldGain;
+    this.arenaUsed += 1;
+    return {
+      ok: true,
+      opponentId,
+      opponentName: opponent.name,
+      win: settled.win,
+      playerPower,
+      opponentPower: opponent.power,
+      scoreBefore: settled.scoreBefore,
+      score: settled.score,
+      scoreDelta: settled.scoreDelta,
+      rank: settled.rank,
+      goldGain: settled.goldGain,
+      gold: this.gold,
+      diamond: this.diamond,
+      used: this.arenaUsed,
+      limit: ARENA_DAILY_LIMIT,
     };
   }
 
@@ -786,6 +877,19 @@ export class MockGameSession {
       this.mailsSeeded = true;
       this.mails = normalizeMailList(seed.mails);
     }
+    if (typeof seed.arenaScore === "number" && isFinite(seed.arenaScore)) {
+      this.arenaScore = clampArenaScore(seed.arenaScore);
+    }
+    if (typeof seed.arenaUsed === "number" && isFinite(seed.arenaUsed)) {
+      let used = Math.floor(seed.arenaUsed);
+      if (used < 0) used = 0;
+      if (used > ARENA_DAILY_LIMIT) used = ARENA_DAILY_LIMIT;
+      this.arenaUsed = used;
+    }
+    if (typeof seed.arenaDay === "number" && isFinite(seed.arenaDay) && seed.arenaDay >= 1) {
+      this.arenaDay = Math.floor(seed.arenaDay);
+      this.arenaDaySeeded = true;
+    }
   }
 
   /** id 1 金币，id 2 钻石。其它 id 先忽略。 */
@@ -947,6 +1051,34 @@ export class MockGameSession {
     for (let i = 0; i < this.heroes.length; i++) {
       this.heroes[i].weaponLevel = clampWeaponLevel(this.heroes[i].weaponLevel);
     }
+  }
+
+  /** 开服天变了就把今日次数清零。积分不动。 */
+  private refreshArenaDay(): void {
+    if (this.arenaDay === this.openDay) return;
+    this.arenaDay = this.openDay;
+    this.arenaUsed = 0;
+  }
+
+  private arenaFail(opponentId: number, name: string, code: number): ArenaChallengeResp {
+    return {
+      ok: false,
+      opponentId,
+      opponentName: name,
+      win: false,
+      playerPower: rosterPower(this.heroes),
+      opponentPower: 0,
+      scoreBefore: this.arenaScore,
+      score: this.arenaScore,
+      scoreDelta: 0,
+      rank: rankFromScore(this.arenaScore),
+      goldGain: 0,
+      gold: this.gold,
+      diamond: this.diamond,
+      used: this.arenaUsed,
+      limit: ARENA_DAILY_LIMIT,
+      code,
+    };
   }
 
   private smithFail(

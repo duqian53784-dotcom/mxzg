@@ -455,3 +455,64 @@ export interface SmithStrengthenResp {
    */
   code?: number;
 }
+
+/** 一名固定的 Mock 对手。积分和战力都不随玩家变化。 */
+export interface ArenaOpponent {
+  id: number;
+  name: string;
+  score: number;
+  power: number;
+}
+
+export interface ArenaViewReq {
+  /** 占位。Mock 不看请求体。打开时按当前开服天刷新今日次数。 */
+  clientTime?: number;
+}
+
+export interface ArenaViewResp {
+  ok: boolean;
+  /** 玩家积分。新号 1000。 */
+  score: number;
+  /** 由积分换算的约占位名次，不是真实排行榜。 */
+  rank: number;
+  /** 名册攻击之和，含武器。 */
+  power: number;
+  /** 今日已挑战次数。 */
+  used: number;
+  /** 今日上限。Mock 为 5。 */
+  limit: number;
+  opponents: ArenaOpponent[];
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface ArenaChallengeReq {
+  opponentId: number;
+}
+
+export interface ArenaChallengeResp {
+  ok: boolean;
+  opponentId: number;
+  opponentName: string;
+  win: boolean;
+  /** 挑战时的名册战力。 */
+  playerPower: number;
+  opponentPower: number;
+  scoreBefore: number;
+  score: number;
+  /** 实际变化。胜利为正，失败为负或 0（已经到积分下限）。 */
+  scoreDelta: number;
+  rank: number;
+  /** 胜利才有金币。失败为 0。 */
+  goldGain: number;
+  gold: number;
+  diamond: number;
+  used: number;
+  limit: number;
+  /**
+   * 没有这位对手 ARENA_NOT_FOUND，今日次数用完 ARENA_NO_CHANCE。
+   * 成功可以不带。失败不改积分、金币和已用次数。
+   */
+  code?: number;
+}
