@@ -15,7 +15,7 @@ export interface MockTransportOptions {
 /**
  * 不连服务器的假传输。默认预览走这条，不用另起进程。
  * 业务状态在 MockGameSession：开服天、角色等级、主线进度，同一局里多次请求都改它。
- * 内置回包：login、heartbeat、role.enter、role.create、stage.enter、stage.result、stage.push、idle.query、idle.claim、hero.list、hero.upgrade、summon.pull、bag.list、bag.use、mail.list、mail.read、mail.claim、mail.claimAll、mail.delete、smith.view、smith.strengthen、arena.view、arena.challenge、tower.view、tower.challenge、daily.view、daily.challenge、login7.view、login7.claim、login7.advance、goal7.view、goal7.claim。
+ * 内置回包：login、heartbeat、role.enter、role.create、stage.enter、stage.result、stage.push、idle.query、idle.claim、hero.list、hero.upgrade、summon.pull、bag.list、bag.use、mail.list、mail.read、mail.claim、mail.claimAll、mail.delete、smith.view、smith.strengthen、arena.view、arena.challenge、tower.view、tower.challenge、daily.view、daily.challenge、login7.view、login7.claim、login7.advance、goal7.view、goal7.claim、shop.view、shop.buy、wish.view、wish.draw、cafe.view、cafe.send、cafe.claim。
  * 其它 cmd 原样 echo。引擎 websocket 模块当前是关的，这里故意不用 WebSocket。
  * 默认已有角色 MockHero，且属于账号 mock。Boot 只调 role.enter 也能进主城。
  * 登录别的账号时 role.enter 的 hasRole 为 false，直到 role.create。
@@ -215,6 +215,18 @@ export class MockTransport implements ITransport {
     }
     if (msg.cmd === Cmd.wishDraw) {
       this.emit(encodeRequest(Cmd.wishDraw, session.wishDraw(msg.data)));
+      return;
+    }
+    if (msg.cmd === Cmd.cafeView) {
+      this.emit(encodeRequest(Cmd.cafeView, session.cafeView()));
+      return;
+    }
+    if (msg.cmd === Cmd.cafeSend) {
+      this.emit(encodeRequest(Cmd.cafeSend, session.cafeSend(msg.data)));
+      return;
+    }
+    if (msg.cmd === Cmd.cafeClaim) {
+      this.emit(encodeRequest(Cmd.cafeClaim, session.cafeClaim()));
       return;
     }
     this.emit(encodeRequest(msg.cmd, { ok: true, echo: msg.data ?? null }));

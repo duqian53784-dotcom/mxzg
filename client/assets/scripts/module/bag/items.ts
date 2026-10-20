@@ -9,13 +9,16 @@ import { BagItem, BagItemKind, BagUseResp } from "../../net/protocol/types";
  * 强化石来自挂机，英雄碎片来自召唤重复。
  * 小金币袋和经验药水是可直接使用的消耗品。
  * 许愿符只在低级许愿池消耗，背包里不能直接使用。
+ * 咖啡豆只由咖啡馆招待产出，背包里不能直接使用。
  * 领队是名册第一名（起步为光耀骑士）。经验满 100 升 1 级。
  */
 
 export const ITEM_GOLD_BAG = 201;
 export const ITEM_EXP_POTION = 202;
 export const ITEM_WISH_TOKEN = 203;
+export const ITEM_CAFE_BEAN = 204;
 export const WISH_TOKEN_NAME = "许愿符";
+export const CAFE_BEAN_NAME = "咖啡豆";
 export const GOLD_BAG_GAIN = 50;
 export const EXP_POTION_GAIN = 100;
 export const EXP_PER_LEVEL = 100;
@@ -53,6 +56,13 @@ const CATALOG: readonly CatalogRow[] = [
     kind: "material",
     usable: false,
     desc: "在低级许愿池消耗，不能直接使用",
+  },
+  {
+    id: ITEM_CAFE_BEAN,
+    name: CAFE_BEAN_NAME,
+    kind: "material",
+    usable: false,
+    desc: "咖啡馆招待获得，不能直接使用",
   },
   {
     id: IDLE_ITEM_ID,
@@ -126,7 +136,7 @@ export function heroIdFromShard(itemId: number): number | null {
 
 /**
  * 只列出数量大于 0 的道具。
- * 顺序：小金币袋、经验药水、许愿符、强化石，然后碎片和其它材料按 id 升序。
+ * 顺序：小金币袋、经验药水、许愿符、咖啡豆、强化石，然后碎片和其它材料按 id 升序。
  * 金币 id 1、钻石 id 2 不进背包。
  */
 export function listBagItems(

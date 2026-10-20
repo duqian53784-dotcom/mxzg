@@ -1,5 +1,5 @@
 /**
- * B3–C15、基础商店与低级许愿池自检（不启动 Creator）。
+ * B3–C15、基础商店、低级许愿池与咖啡馆招待自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -26,7 +26,9 @@ import {
   GOLD_BAG_GAIN,
   ITEM_EXP_POTION,
   ITEM_GOLD_BAG,
+  ITEM_CAFE_BEAN,
   ITEM_WISH_TOKEN,
+  CAFE_BEAN_NAME,
   STARTER_WISH_TOKEN,
   notEnoughToast,
   notUsableTip,
@@ -237,6 +239,36 @@ import {
   wishSuccessToast,
   wishWalletLine,
 } from "../assets/scripts/module/wish/pool";
+import {
+  applyCafeClaim,
+  CAFE_BEAN_ONE,
+  CAFE_BEAN_TWO,
+  CAFE_DAILY_LIMIT,
+  CAFE_GOLD_ONE,
+  CAFE_GOLD_TWO,
+  CAFE_MAX_HEROES,
+  cafeAttemptsLine,
+  cafeBusyToast,
+  cafeClaimButton,
+  cafeClaimToast,
+  cafeDuplicateToast,
+  cafeEmptyToast,
+  cafeFailToast,
+  cafeHasDuplicate,
+  cafeHeroRow,
+  cafeMissingToast,
+  cafeNoChanceToast,
+  cafeNoHeroToast,
+  cafeNothingToast,
+  cafePreviewLine,
+  cafeReward,
+  cafeSendButton,
+  cafeSendToast,
+  cafeStatusLine,
+  cafeTooManyToast,
+  cafeWalletLine,
+  readCafeHeroIds,
+} from "../assets/scripts/module/cafe/serve";
 import { Goal7Task, ShopSku } from "../assets/scripts/net/protocol/types";
 import {
   applySummon,
@@ -439,7 +471,10 @@ function checkGates(): void {
   assert(!isEntryOpen(blessing, 9, 99) && isEntryOpen(blessing, 10, 1), "wish at lv10 not day");
   const cafeRow = rows.find((row) => row.id === "main_cafe");
   assert(cafeRow && cafeRow.level === 12, "cafe still lv12");
-  assert(!isEntryOpen(cafeRow, 10, 1) && !isEntryOpen(cafeRow, 11, 30) && isEntryOpen(cafeRow, 12, 1), "cafe stays shut at lv10");
+  assert(!isEntryOpen(cafeRow, 10, 1) && !isEntryOpen(cafeRow, 11, 30) && isEntryOpen(cafeRow, 12, 1), "cafe stays shut at lv11");
+  const lv11 = listOpenEntries(rows, 11, 1).map((row) => row.id);
+  const lv12 = listOpenEntries(rows, 12, 1).map((row) => row.id);
+  assert(lv11.indexOf("main_cafe") < 0 && lv12.indexOf("main_cafe") >= 0, "lv12 list opens cafe");
   const lv9 = listOpenEntries(rows, 9, 1).map((row) => row.id);
   const lv10 = listOpenEntries(rows, 10, 1).map((row) => row.id);
   assert(lv9.indexOf("main_blessingpool") < 0 && lv10.indexOf("main_blessingpool") >= 0, "lv10 list");
@@ -933,7 +968,14 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(wishEntry.blurb.indexOf("Lv10") >= 0 && wishEntry.blurb.indexOf("许愿符") >= 0, "wish blurb");
   assert(rootTabFor("wish") === "plays", "wish stays on plays");
   const cafeEntry = findNavEntry("cafe");
-  assert(cafeEntry !== null && cafeEntry.gateId === "main_cafe" && !entryAccess(cafeEntry, 10, 1, db).open, "cafe still locked at lv10");
+  assert(cafeEntry !== null && cafeEntry.gateId === "main_cafe", "cafe gate");
+  const cafeLock = entryAccess(cafeEntry, 1, 1, db);
+  assert(!cafeLock.open && cafeLock.hint === "咖啡馆未开启，需要主线达到 Lv12", "cafe hint");
+  assert(cafeLock.hint.indexOf("开服") < 0, "cafe hint has no open day");
+  assert(!entryAccess(cafeEntry, 11, 30, db).open && entryAccess(cafeEntry, 12, 1, db).open, "cafe opens at lv12");
+  assert(tabLabel("咖啡馆", false) === "锁·咖啡馆", "cafe locked label");
+  assert(cafeEntry.blurb.indexOf("Lv12") >= 0 && cafeEntry.blurb.indexOf("招待") >= 0, "cafe blurb");
+  assert(rootTabFor("cafe") === "plays", "cafe stays on plays");
   const shopFromCity = new NavHistory();
   shopFromCity.reset("city");
   shopFromCity.push("shop");
@@ -2533,6 +2575,7 @@ async function main(): Promise<void> {
   await checkStagePush();
   await checkShop();
   await checkWish();
+  await checkCafe();
   console.log("skeleton-check ok");
 }
 
@@ -3088,6 +3131,132 @@ async function checkWish(): Promise<void> {
   assert(Session.gold === remoteGold.gold && Session.diamond === remoteGold.diamond, "apply wish");
   applyWishDraw({ ok: false, gold: 1, diamond: 1 });
   assert(Session.gold === remoteGold.gold && Session.diamond === remoteGold.diamond, "failed wish ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  net.close();
+}
+
+async function checkCafe(): Promise<void> {
+  assert(CAFE_DAILY_LIMIT === 3 && CAFE_MAX_HEROES === 2, "cafe limits");
+  assert(cafeReward(0).gold === 0 && cafeReward(1).gold === CAFE_GOLD_ONE && cafeReward(1).beans === CAFE_BEAN_ONE, "one hero reward");
+  assert(cafeReward(2).gold === CAFE_GOLD_TWO && cafeReward(2).beans === CAFE_BEAN_TWO && cafeReward(9).beans === CAFE_BEAN_TWO, "two hero reward");
+  assert(readCafeHeroIds(undefined).problem === "empty" && readCafeHeroIds([]).problem === "empty", "empty ids");
+  assert(readCafeHeroIds([10001]).ids[0] === 10001 && readCafeHeroIds([10001, 0]).problem === "bad", "id read");
+  assert(readCafeHeroIds(["10001"]).problem === "bad" && cafeHasDuplicate([10001, 10001]) && !cafeHasDuplicate([10001, 10002]), "bad and duplicate");
+  assert(cafeAttemptsLine(0, 3) === "今日剩余 3/3" && cafeAttemptsLine(3, 3) === "今日剩余 0/3", "cafe attempts");
+  assert(cafeWalletLine(100, 0) === "持有金币 100 · 咖啡豆 ×0", "cafe wallet");
+  assert(cafePreviewLine().indexOf("立刻可领") >= 0 && cafePreviewLine().indexOf("100") >= 0, "cafe preview");
+  assert(cafeStatusLine([], false) === "还没有派出英雄", "idle status");
+  assert(cafeStatusLine(["光耀骑士"], true) === "招待中：光耀骑士，可以领取", "ready status");
+  assert(cafeHeroRow("光耀骑士", 1, true, false) === "光耀骑士 Lv1 · 已选", "picked row");
+  assert(cafeHeroRow("林间游侠", 1, false, true) === "林间游侠 Lv1 · 招待中", "serving row");
+  assert(cafeSendButton(0, 0, 3, false) === "请选择英雄" && cafeSendButton(2, 0, 3, false) === "派出招待（2人）", "send button");
+  assert(cafeSendButton(1, 0, 3, true) === "招待中，请先领取" && cafeSendButton(1, 3, 3, false) === "今日已用完", "blocked send button");
+  assert(cafeClaimButton(false) === "还没有招待" && cafeClaimButton(true) === "领取招待", "claim button");
+  assert(cafeSendToast(["光耀骑士", "林间游侠"]) === "已派出招待：光耀骑士、林间游侠", "send toast");
+  assert(cafeClaimToast(100, "咖啡豆", 2) === "招待完成：金币 +100，咖啡豆 ×2", "claim toast");
+  assert(cafeEmptyToast() === "没有可招待的英雄" && cafeNoHeroToast() === "请先选择招待的英雄", "empty copy");
+  assert(cafeTooManyToast() === "一次最多派出 2 名英雄" && cafeDuplicateToast() === "请选择不同的英雄", "pick copy");
+  assert(cafeMissingToast() === "没有这名英雄" && cafeBusyToast() === "英雄正在招待，请先领取", "missing and busy copy");
+  assert(cafeNoChanceToast() === "今日招待次数已用完" && cafeNothingToast() === "还没有可领取的招待", "chance copy");
+  assert(errorText(ErrorCode.CAFE_NO_CHANCE) === "今日招待次数已用完" && errorText(ErrorCode.CAFE_BUSY) === "英雄正在招待，请先领取", "cafe error text");
+  assert(cafeFailToast({ code: ErrorCode.CAFE_NO_HERO }) === cafeNoHeroToast(), "fail toast");
+
+  const fresh = new MockGameSession();
+  const view = fresh.cafeView();
+  assert(view.ok && view.used === 0 && view.limit === 3 && view.servingCount === 0 && view.ready === false, "fresh view");
+  assert(view.heroes.length === 3 && view.beanOwned === 0 && view.gold === MOCK_STARTER_GOLD, "fresh roster");
+  assert(view.goldOne === CAFE_GOLD_ONE && view.goldTwo === CAFE_GOLD_TWO, "preview on view");
+  const none = fresh.cafeSend({});
+  assert(none.ok === false && none.code === ErrorCode.CAFE_NO_HERO && none.gold === MOCK_STARTER_GOLD && fresh.cafeUsed === 0, "no hero");
+  const missing = fresh.cafeSend({ heroIds: [999] });
+  assert(missing.ok === false && missing.code === ErrorCode.CAFE_HERO_MISSING && fresh.cafeView().servingCount === 0, "missing hero");
+  const dup = fresh.cafeSend({ heroIds: [10001, 10001] });
+  assert(dup.ok === false && dup.code === ErrorCode.CAFE_DUPLICATE, "duplicate hero");
+  const many = fresh.cafeSend({ heroIds: [10001, 10002, 10003] });
+  assert(many.ok === false && many.code === ErrorCode.CAFE_TOO_MANY && fresh.cafeUsed === 0, "too many");
+  const earlyClaim = fresh.cafeClaim();
+  assert(earlyClaim.ok === false && earlyClaim.code === ErrorCode.CAFE_NOTHING && earlyClaim.gold === MOCK_STARTER_GOLD, "nothing to claim");
+
+  const one = fresh.cafeSend({ heroIds: [10001] });
+  assert(one.ok && one.names[0] === "光耀骑士" && one.goldPreview === CAFE_GOLD_ONE && one.beanPreview === CAFE_BEAN_ONE, "send one");
+  assert(one.gold === MOCK_STARTER_GOLD && one.ready && one.used === 1 && fresh.heroes[0].level === 1, "send does not pay or level");
+  assert(fresh.cafeView().servingCount === 1 && fresh.cafeView().heroes[0].serving === true, "knight is serving");
+  const busy = fresh.cafeSend({ heroIds: [10002] });
+  assert(busy.ok === false && busy.code === ErrorCode.CAFE_BUSY && cafeFailToast(busy) === cafeBusyToast(), "busy");
+  assert(fresh.cafeUsed === 1 && fresh.gold === MOCK_STARTER_GOLD, "busy keeps the seat");
+  const claimed = fresh.cafeClaim();
+  assert(claimed.ok && claimed.goldGain === CAFE_GOLD_ONE && claimed.itemGain === CAFE_BEAN_ONE && claimed.itemId === ITEM_CAFE_BEAN, "claim one");
+  assert(claimed.gold === MOCK_STARTER_GOLD + CAFE_GOLD_ONE && claimed.beanOwned === 1 && claimed.diamond === MOCK_STARTER_DIAMOND, "gold and bean land");
+  assert(fresh.cafeView().servingCount === 0 && fresh.cafeView().ready === false && fresh.cafeUsed === 1, "seat cleared, chance spent");
+  assert(cafeClaimToast(claimed.goldGain, claimed.itemName, claimed.itemGain) === "招待完成：金币 +60，咖啡豆 ×1", "toast from session");
+  const again = fresh.cafeClaim();
+  assert(again.ok === false && again.gold === claimed.gold && fresh.itemCounts[ITEM_CAFE_BEAN] === 1, "second claim refused");
+  const beanUse = fresh.bagUse({ id: ITEM_CAFE_BEAN });
+  assert(beanUse.ok === false && beanUse.code === ErrorCode.BAG_NOT_USABLE && beanUse.name === CAFE_BEAN_NAME, "bean not usable");
+  assert(notUsableTip(beanUse.kind, beanUse.name) === "咖啡豆不能直接使用" && fresh.itemCounts[ITEM_CAFE_BEAN] === 1, "bean toast and count");
+  assert(fresh.wishView().used === 0 && fresh.arenaUsed === 0 && fresh.heroes[0].level === 1, "cafe leaves wish arena hero");
+
+  const pair = fresh.cafeSend({ heroIds: [10002, 10003] });
+  assert(pair.ok && pair.goldPreview === CAFE_GOLD_TWO && pair.used === 2, "send two");
+  const pairClaim = fresh.cafeClaim();
+  assert(pairClaim.ok && pairClaim.goldGain === CAFE_GOLD_TWO && pairClaim.itemGain === CAFE_BEAN_TWO, "claim two");
+  assert(pairClaim.beanOwned === 3 && pairClaim.gold === claimed.gold + CAFE_GOLD_TWO, "beans stack");
+  const third = fresh.cafeSend({ heroIds: [10001] });
+  assert(third.ok && third.used === 3, "third serve");
+  const spent = fresh.cafeSend({ heroIds: [10002] });
+  assert(spent.ok === false && spent.code === ErrorCode.CAFE_BUSY, "still busy at the limit");
+  const thirdClaim = fresh.cafeClaim();
+  assert(thirdClaim.ok && thirdClaim.goldGain === CAFE_GOLD_ONE, "claim the last seat");
+  const noChance = fresh.cafeSend({ heroIds: [10001] });
+  assert(noChance.ok === false && noChance.code === ErrorCode.CAFE_NO_CHANCE && noChance.gold === thirdClaim.gold, "daily limit");
+
+  const rolled = new MockGameSession({ openDay: 2, cafeDay: 1, cafeUsed: 3, cafeHeroIds: [10001, 999, 10001] });
+  const rolledView = rolled.cafeView();
+  assert(rolledView.used === 0 && rolledView.servingCount === 1 && rolledView.ready, "new day clears count and keeps a real hero");
+  assert(rolled.cafeClaim().ok && rolled.cafeClaim().code === ErrorCode.CAFE_NOTHING, "pending serve still pays once");
+  assert(rolled.cafeSend({ heroIds: [10002] }).ok && rolled.cafeUsed === 1, "fresh chances after the day change");
+
+  const early = new MockGameSession();
+  for (let stage = 1; stage <= 10; stage++) {
+    const entered = early.stageEnter({ stageId: stage });
+    const won = early.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(won.ok && won.win, "cafe win " + stage);
+  }
+  assert(early.role.level === 11 && early.clearedStage === 10, "ten wins stay at lv11");
+  const eleventh = early.stageResult({ stageId: 11, battleId: early.stageEnter({ stageId: 11 }).battleId, win: true });
+  assert(eleventh.ok && early.role.level === 12 && early.clearedStage === 11, "eleven wins reach lv12");
+  assert(early.cafeView().used === 0 && early.cafeSend({ heroIds: [10001] }).ok, "lv12 can serve");
+
+  const reset = new MockGameSession({ cafeUsed: 2, cafeHeroIds: [10001], cafeDay: 4, openDay: 4, gold: 10 });
+  assert(reset.cafeView().used === 2 && reset.cafeView().servingCount === 1, "preset serve");
+  assert(reset.roleCreate({ name: "新人" }).ok, "create");
+  assert(reset.gold === MOCK_STARTER_GOLD && reset.cafeView().used === 0 && reset.cafeView().servingCount === 0, "create clears cafe");
+  assert(reset.itemCounts[ITEM_CAFE_BEAN] === undefined && reset.wishView().cursor === 0, "create drops beans and wishes");
+
+  const transport = new MockTransport({ latencyMs: 5 });
+  const net = quietNet(transport);
+  await net.connect("mock://local");
+  const remoteView = await Proto.cafeView({}, net);
+  assert(remoteView.ok && remoteView.used === 0 && remoteView.heroes.length === 3, "proto view");
+  const remoteNone = await Proto.cafeSend({ heroIds: [] }, net);
+  assert(remoteNone.ok === false && remoteNone.code === ErrorCode.CAFE_NO_HERO, "proto no hero");
+  const remoteSend = await Proto.cafeSend({ heroIds: [10001, 10002] }, net);
+  assert(remoteSend.ok && remoteSend.goldPreview === CAFE_GOLD_TWO && remoteSend.gold === MOCK_STARTER_GOLD, "proto send");
+  const remoteBusy = await Proto.cafeSend({ heroIds: [10003] }, net);
+  assert(remoteBusy.ok === false && remoteBusy.code === ErrorCode.CAFE_BUSY, "proto busy");
+  const remoteClaim = await Proto.cafeClaim({}, net);
+  assert(remoteClaim.ok && remoteClaim.gold === MOCK_STARTER_GOLD + CAFE_GOLD_TWO && remoteClaim.itemGain === 2, "proto claim");
+  const remoteBag = await Proto.bagList({}, net);
+  assert(bagItem(remoteBag.items, ITEM_CAFE_BEAN) !== null && bagItem(remoteBag.items, ITEM_CAFE_BEAN)!.count === 2, "proto bag sees beans");
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.cafeView || row.cmd === Cmd.cafeSend || row.cmd === Cmd.cafeClaim).map((row) => row.id);
+  assert(ids.length === 3 && ids[0] === 2601 && ids[1] === 2602 && ids[2] === 2603, "cafe cmd ids");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyCafeClaim(remoteClaim);
+  assert(Session.gold === remoteClaim.gold && Session.diamond === remoteClaim.diamond, "apply cafe");
+  applyCafeClaim({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteClaim.gold && Session.diamond === remoteClaim.diamond, "failed cafe ignored");
   Session.gold = prevGold;
   Session.diamond = prevDiamond;
   net.close();

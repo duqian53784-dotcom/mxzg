@@ -930,3 +930,88 @@ export interface WishDrawResp {
    */
   code?: number;
 }
+
+/** 名册里的一名英雄，以及是否正在未领取的招待中。 */
+export interface CafeHero {
+  id: number;
+  name: string;
+  level: number;
+  serving: boolean;
+}
+
+export interface CafeViewReq {
+  /** 占位。Mock 不看请求体。打开时按当前开服天刷新今日次数。 */
+  clientTime?: number;
+}
+
+export interface CafeViewResp {
+  ok: boolean;
+  used: number;
+  limit: number;
+  /** 当前开服天。次数跟着它走，不是墙钟倒计时。 */
+  openDay: number;
+  /** 正在招待、还没领取的人数。0 表示没有派出。 */
+  servingCount: number;
+  /** 有派出时即可领取。MVP 不走倒计时。 */
+  ready: boolean;
+  heroes: CafeHero[];
+  goldOne: number;
+  goldTwo: number;
+  beanOne: number;
+  beanTwo: number;
+  /** 背包里的咖啡豆。 */
+  beanOwned: number;
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface CafeSendReq {
+  /** 1 到 2 个已拥有的英雄 id。 */
+  heroIds: number[];
+}
+
+export interface CafeSendResp {
+  ok: boolean;
+  heroIds: number[];
+  names: string[];
+  /** 领取时会得到的金币。失败时按当前未领取的招待计算，没有派出则为 0。 */
+  goldPreview: number;
+  beanPreview: number;
+  used: number;
+  limit: number;
+  ready: boolean;
+  gold: number;
+  diamond: number;
+  /**
+   * 没选英雄 CAFE_NO_HERO，超过 2 人 CAFE_TOO_MANY，重复 CAFE_DUPLICATE，
+   * 名册没有 CAFE_HERO_MISSING，已经派出还没领 CAFE_BUSY，今日次数用完 CAFE_NO_CHANCE。
+   * 成功可以不带。失败不改次数、钱包和背包。成功只占 1 次，奖励在 cafe.claim。
+   */
+  code?: number;
+}
+
+export interface CafeClaimReq {
+  /** 占位。Mock 不看请求体。 */
+  clientTime?: number;
+}
+
+export interface CafeClaimResp {
+  ok: boolean;
+  names: string[];
+  goldGain: number;
+  itemId: number;
+  itemName: string;
+  itemGain: number;
+  /** 领取后背包里的咖啡豆。失败时是领取前的数量。 */
+  beanOwned: number;
+  gold: number;
+  diamond: number;
+  used: number;
+  limit: number;
+  /**
+   * 没有可领的招待 CAFE_NOTHING。
+   * 成功可以不带。失败不改钱包、背包和招待。成功清掉本次派出，次数不退回。
+   */
+  code?: number;
+}

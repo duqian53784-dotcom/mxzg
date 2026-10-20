@@ -41,6 +41,9 @@ export const Cmd = {
   shopBuy: "shop.buy",
   wishView: "wish.view",
   wishDraw: "wish.draw",
+  cafeView: "cafe.view",
+  cafeSend: "cafe.send",
+  cafeClaim: "cafe.claim",
 } as const;
 
 export const CmdId = {
@@ -80,6 +83,9 @@ export const CmdId = {
   shopBuy: 2402,
   wishView: 2501,
   wishDraw: 2502,
+  cafeView: 2601,
+  cafeSend: 2602,
+  cafeClaim: 2603,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -127,4 +133,7 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.shopBuy, cmd: Cmd.shopBuy },
   { id: CmdId.wishView, cmd: Cmd.wishView },
   { id: CmdId.wishDraw, cmd: Cmd.wishDraw },
+  { id: CmdId.cafeView, cmd: Cmd.cafeView },
+  { id: CmdId.cafeSend, cmd: Cmd.cafeSend },
+  { id: CmdId.cafeClaim, cmd: Cmd.cafeClaim },
 ];
