@@ -647,6 +647,7 @@ export class MainApp extends Component {
       claim: () => Proto.idleClaim({}, NetClient.shared),
       enter: (stageId) => Proto.stageEnter({ stageId }, NetClient.shared),
       settle: (req) => Proto.stageResult(req, NetClient.shared),
+      push: (target) => Proto.stagePush({ target }, NetClient.shared),
       onProgress: () => {
         if (this.isValid) this.refreshHub();
       },
@@ -666,6 +667,7 @@ export class MainApp extends Component {
       alive: () => this.isValid,
       enter: (stageId) => Proto.stageEnter({ stageId }, NetClient.shared),
       settle: (req) => Proto.stageResult(req, NetClient.shared),
+      push: (target) => Proto.stagePush({ target }, NetClient.shared),
       onProgress: () => {
         if (this.isValid) this.refreshHub();
       },

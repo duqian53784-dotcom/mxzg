@@ -4,10 +4,18 @@ import { StageResultResp, StageReward } from "../../net/protocol/types";
 /**
  * 主线简化战报。不读表，不改协议号。
  * 自然推进时等级 = 1 + 已通关，下一关 = 已通关 + 1，所以「关卡号 ≤ 等级」必胜，
- * 连打可以推到第 70 关。高于等级的跳关判负。
+ * 连打可以推过第 70 关。高于等级的跳关判负。
  * 主线页打当前关时会把等级抬到至少等于关卡号，避免等级暂时落后时判负卡死。
  * 撤退由界面改判负，不在这里自动出现。
+ * 「推关到70（调试）」只提供文案和目标关；结算仍走 Mock 的 stage.push，金币和一关关打相同。
  */
+
+/** 每关胜利的占位金币。主线、快速作战和推关调试用同一个数。 */
+export const STAGE_WIN_GOLD = 10;
+/** 七日目标第 7 日要的关卡。调试按钮推到这里，含本关。 */
+export const MAINLINE_PUSH_STAGE = 70;
+/** stage.push 单次允许的目标上限。手动 stage.result 不受这限制，70 关之后仍能一关关打。 */
+export const MAINLINE_PUSH_MAX = 200;
 
 export type StageRowState = "cleared" | "current" | "locked";
 
@@ -147,6 +155,25 @@ export function loseToast(stageId: number): string {
   return "第" + normalizeStageId(stageId) + "关挑战失败，进度不变";
 }
 
+export function pushButtonText(): string {
+  return "推关到" + MAINLINE_PUSH_STAGE + "（调试）";
+}
+
+export function pushHint(): string {
+  return "一关关仍可打。调试按钮连推到第" + MAINLINE_PUSH_STAGE + "关，每关金币 +" + STAGE_WIN_GOLD + "，不播战报";
+}
+
+export function pushToast(clearedStage: number, nextStageId: number, goldGain: number): string {
+  const cleared = finiteStage(clearedStage);
+  const next = finiteStage(nextStageId);
+  const gold = finiteStage(goldGain);
+  return "已推到第" + cleared + "关，金币 +" + gold + "，下一关 " + next;
+}
+
+export function pushAlreadyToast(clearedStage: number): string {
+  return "已经通关第" + finiteStage(clearedStage) + "关";
+}
+
 export function reasonText(reason: BattleReason): string {
   if (reason === "retreat") return "已撤退";
   if (reason === "overreach") return "战力不足";
@@ -198,6 +225,11 @@ function frame(
     enemies.push(unit(enemyNames[i], ENEMY_HP, enemyRatio[i]));
   }
   return { round, line: "第" + round + "回合 · " + line, actor, allies, enemies };
+}
+
+function finiteStage(value: number): number {
+  if (typeof value !== "number" || !isFinite(value)) return 0;
+  return Math.floor(value);
 }
 
 function unit(name: string, maxHp: number, ratio: number | undefined): BattleUnit {

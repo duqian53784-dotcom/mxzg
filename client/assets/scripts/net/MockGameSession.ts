@@ -21,6 +21,7 @@ import {
   WEAPON_MAX_LEVEL,
 } from "../module/hero/growth";
 import { buildIdleView, elapsedSince, IDLE_ITEM_ID, IDLE_ITEM_NAME } from "../module/idle/rewards";
+import { MAINLINE_PUSH_MAX, MAINLINE_PUSH_STAGE, STAGE_WIN_GOLD } from "../module/mainline/battle";
 import {
   attachmentName,
   MailSeed,
@@ -95,6 +96,7 @@ import {
   RoleCreateResp,
   RoleEnterResp,
   StageEnterResp,
+  StagePushResp,
   StageResultResp,
   MailAttachment,
   MailClaimAllResp,
@@ -400,7 +402,7 @@ export class MockGameSession {
     }
     const nextStageId = win ? this.clearedStage + 1 : stageId;
     if (win) this.stageId = nextStageId;
-    const rewards = win ? [{ id: 1, count: 10 }] : [];
+    const rewards = win ? [{ id: 1, count: STAGE_WIN_GOLD }] : [];
     this.addRewards(rewards);
     this.battleId = "";
     return {
@@ -409,6 +411,55 @@ export class MockGameSession {
       win,
       nextStageId,
       rewards,
+      openDay: this.openDay,
+      level: this.role.level,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 调试：从下一关起连胜推到 target（缺省第 70 关，含本关）。
+   * 每一关都走 stageResult 的胜利，所以金币、等级、开服天和一关关打相同。
+   * 已经到达则不加金币。不改挂机起算、角色登录天、英雄、召唤和已领记录。
+   * 开服天只升不降；竞技场、塔、金币副本的今日次数留到下次进入再按天刷新。
+   */
+  stagePush(data: unknown): StagePushResp {
+    const target = readPushTarget(data);
+    if (target === null) return this.pushFail();
+    const fromStage = this.clearedStage;
+    if (fromStage >= target) {
+      return {
+        ok: true,
+        already: true,
+        fromStage,
+        clearedStage: fromStage,
+        stageId: fromStage,
+        win: true,
+        nextStageId: this.stageId,
+        rewards: [],
+        goldGain: 0,
+        openDay: this.openDay,
+        level: this.role.level,
+        gold: this.gold,
+        diamond: this.diamond,
+      };
+    }
+    const goldBefore = this.gold;
+    for (let stage = fromStage + 1; stage <= target; stage++) {
+      this.stageResult({ stageId: stage, win: true });
+    }
+    const goldGain = this.gold - goldBefore;
+    return {
+      ok: true,
+      already: false,
+      fromStage,
+      clearedStage: this.clearedStage,
+      stageId: this.clearedStage,
+      win: true,
+      nextStageId: this.stageId,
+      rewards: goldGain > 0 ? [{ id: 1, count: goldGain }] : [],
+      goldGain,
       openDay: this.openDay,
       level: this.role.level,
       gold: this.gold,
@@ -1604,6 +1655,25 @@ export class MockGameSession {
     };
   }
 
+  private pushFail(): StagePushResp {
+    return {
+      ok: false,
+      already: false,
+      fromStage: this.clearedStage,
+      clearedStage: this.clearedStage,
+      stageId: 0,
+      win: false,
+      nextStageId: this.stageId >= 1 ? this.stageId : 1,
+      rewards: [],
+      goldGain: 0,
+      openDay: this.openDay,
+      level: this.role.level,
+      gold: this.gold,
+      diamond: this.diamond,
+      code: ErrorCode.STAGE_ID_INVALID,
+    };
+  }
+
   private smithFail(
     heroId: number,
     code: number,
@@ -1665,6 +1735,16 @@ function strField(body: Record<string, unknown>, key: string): string {
 function numField(body: Record<string, unknown>, key: string, fallback: number): number {
   const value = body[key];
   return typeof value === "number" && isFinite(value) ? value : fallback;
+}
+
+function readPushTarget(data: unknown): number | null {
+  const body = asRecord(data);
+  if (!Object.prototype.hasOwnProperty.call(body, "target") || body.target === undefined) return MAINLINE_PUSH_STAGE;
+  const value = body.target;
+  if (typeof value !== "number" || !isFinite(value)) return null;
+  const target = Math.floor(value);
+  if (target < 1 || target > MAINLINE_PUSH_MAX) return null;
+  return target;
 }
 
 function readMailId(data: unknown): number {

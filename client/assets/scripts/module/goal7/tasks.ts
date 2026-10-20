@@ -7,7 +7,8 @@ import { Goal7Jump, Goal7Reward, Goal7State, Goal7Task } from "../../net/protoco
 /**
  * 七日目标（C14）骨架。天数只用来分组，不按登录天锁任务。
  * 进度读当前会话：已通关、召唤次数、英雄升级次数、挂机领取次数。
- * 早期任务完成就能领。第 7 日「通关第 70 关」在通关数到 70 之前保持未开启，留给下一步把主线推上去。
+ * 早期任务完成就能领。第 7 日「通关第 70 关」在通关数到 70 之前保持未开启。
+ * 主线调试推关把 clearedStage 推到 70 之后，这里不用改领取逻辑就能领。
  * 金币、钻石进钱包；强化石、小金币袋、经验药水进背包。
  */
 
@@ -258,7 +259,7 @@ export function goal7HeadLine(clearedStage: number, claimable: number): string {
 }
 
 export function goal7SubLine(): string {
-  return "天数只分组。第7日通关第70关仍锁着，推关是下一步";
+  return "天数只分组。第7日通关第70关后可领，主线或挂机可调试推关";
 }
 
 export function goal7WalletLine(gold: number, diamond: number): string {
@@ -267,7 +268,7 @@ export function goal7WalletLine(gold: number, diamond: number): string {
 
 export function goal7DayHint(day: number, count: number): string {
   if (finite(count) <= 0) return "这一天还没有目标";
-  if (finite(day) === 7) return "通关第70关后才能领取。主线推到这里留给下一步";
+  if (finite(day) === 7) return "通关第70关后可领取。主线或挂机点「推关到70（调试）」";
   return "完成后点领取。还没完成会提示";
 }
 
