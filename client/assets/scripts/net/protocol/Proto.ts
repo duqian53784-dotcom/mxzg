@@ -21,6 +21,16 @@ import {
   BagListResp,
   BagUseReq,
   BagUseResp,
+  MailClaimAllReq,
+  MailClaimAllResp,
+  MailClaimReq,
+  MailClaimResp,
+  MailDeleteReq,
+  MailDeleteResp,
+  MailListReq,
+  MailListResp,
+  MailReadReq,
+  MailReadResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -94,5 +104,25 @@ export const Proto = {
 
   bagUse(req: BagUseReq, net: NetClient = NetClient.shared): Promise<BagUseResp> {
     return call(net, Cmd.bagUse, req);
+  },
+
+  mailList(req: MailListReq, net: NetClient = NetClient.shared): Promise<MailListResp> {
+    return call(net, Cmd.mailList, req);
+  },
+
+  mailRead(req: MailReadReq, net: NetClient = NetClient.shared): Promise<MailReadResp> {
+    return call(net, Cmd.mailRead, req);
+  },
+
+  mailClaim(req: MailClaimReq, net: NetClient = NetClient.shared): Promise<MailClaimResp> {
+    return call(net, Cmd.mailClaim, req);
+  },
+
+  mailClaimAll(req: MailClaimAllReq, net: NetClient = NetClient.shared): Promise<MailClaimAllResp> {
+    return call(net, Cmd.mailClaimAll, req);
+  },
+
+  mailDelete(req: MailDeleteReq, net: NetClient = NetClient.shared): Promise<MailDeleteResp> {
+    return call(net, Cmd.mailDelete, req);
   },
 };

@@ -18,6 +18,11 @@ export const Cmd = {
   summonPull: "summon.pull",
   bagList: "bag.list",
   bagUse: "bag.use",
+  mailList: "mail.list",
+  mailRead: "mail.read",
+  mailClaim: "mail.claim",
+  mailClaimAll: "mail.claimAll",
+  mailDelete: "mail.delete",
 } as const;
 
 export const CmdId = {
@@ -34,6 +39,11 @@ export const CmdId = {
   summonPull: 1501,
   bagList: 1601,
   bagUse: 1602,
+  mailList: 1701,
+  mailRead: 1702,
+  mailClaim: 1703,
+  mailClaimAll: 1704,
+  mailDelete: 1705,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -58,4 +68,9 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.summonPull, cmd: Cmd.summonPull },
   { id: CmdId.bagList, cmd: Cmd.bagList },
   { id: CmdId.bagUse, cmd: Cmd.bagUse },
+  { id: CmdId.mailList, cmd: Cmd.mailList },
+  { id: CmdId.mailRead, cmd: Cmd.mailRead },
+  { id: CmdId.mailClaim, cmd: Cmd.mailClaim },
+  { id: CmdId.mailClaimAll, cmd: Cmd.mailClaimAll },
+  { id: CmdId.mailDelete, cmd: Cmd.mailDelete },
 ];

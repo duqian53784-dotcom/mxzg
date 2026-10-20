@@ -32,6 +32,7 @@ import { BagPage, buildBagPage } from "./BagPage";
 import { CityChrome, mountCityChrome, TabState } from "./CityChrome";
 import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage } from "./HeroPage";
 import { buildSummonPage, SummonPage } from "./SummonPage";
+import { buildMailPage, MailPage } from "./MailPage";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -48,6 +49,7 @@ const LOCKED_FILL = new Color(78, 84, 98, 255);
 const OPEN_FILL = new Color(46, 110, 190, 255);
 const IDLE_FILL = new Color(168, 116, 42, 255);
 const BAG_FILL = new Color(36, 128, 96, 255);
+const MAIL_FILL = new Color(110, 78, 168, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -61,6 +63,7 @@ export class MainApp extends Component {
   private heroDetail: HeroDetailPage | null = null;
   private summon: SummonPage | null = null;
   private bag: BagPage | null = null;
+  private mail: MailPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -88,6 +91,8 @@ export class MainApp extends Component {
     this.summon = null;
     this.bag?.dispose();
     this.bag = null;
+    this.mail?.dispose();
+    this.mail = null;
     this.shell?.dispose();
   }
 
@@ -166,6 +171,7 @@ export class MainApp extends Component {
     if (id === "hero-detail") return this.mountHeroDetail();
     if (id === "summon") return this.mountSummon();
     if (id === "bag") return this.mountBag();
+    if (id === "mail") return this.mountMail();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -183,7 +189,8 @@ export class MainApp extends Component {
     );
     place(createButton("挂机", () => this.openIdle(), 420, 64, IDLE_FILL), page, 0, 200);
     place(createButton("背包", () => this.openBag(), 420, 64, BAG_FILL), page, 0, 120);
-    place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, 30);
+    place(createButton("邮件", () => this.openMail(), 420, 64, MAIL_FILL), page, 0, 40);
+    place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, -40);
     place(
       createButton("公告", () => {
         GameLog.shared.info("MainApp", "click notice");
@@ -193,7 +200,7 @@ export class MainApp extends Component {
       }, 140, 48),
       page,
       0,
-      30
+      -40
     );
     place(
       createButton("模拟断线", () => {
@@ -203,10 +210,10 @@ export class MainApp extends Component {
       }, 160, 48),
       page,
       190,
-      30
+      -40
     );
-    place(createLabel("主城场景占位", 26, { color: MUTED }), page, 0, -50);
-    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -100);
+    place(createLabel("主城场景占位", 26, { color: MUTED }), page, 0, -110);
+    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -160);
 
     this.gateNode = place(
       createLabel(this.gateText(), 20, { color: GATE_COLOR, width: 680, height: 72 }),
@@ -387,6 +394,39 @@ export class MainApp extends Component {
     return page.node;
   }
 
+  /**
+   * 主城和玩法都能进。opencondition 未开时只 Toast，和背包一样。
+   * 没连上时不压页面。
+   */
+  private openMail(): void {
+    GameLog.shared.info("MainApp", "click mail");
+    if (!this.allow("mail")) return;
+    if (!this.ensureNet()) return;
+    this.panels?.openChild("mail");
+    this.refreshChrome();
+  }
+
+  private mountMail(): Node {
+    this.mail?.dispose();
+    const page = buildMailPage({
+      showToast: (text) => this.shell?.showToast(text, 2200),
+      alive: () => this.isValid,
+      list: () => Proto.mailList({}, NetClient.shared),
+      read: (id) => Proto.mailRead({ id }, NetClient.shared),
+      claim: (id) => Proto.mailClaim({ id }, NetClient.shared),
+      claimAll: () => Proto.mailClaimAll({}, NetClient.shared),
+      remove: (id) => Proto.mailDelete({ id }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.mail = page;
+    return page.node;
+  }
+
   /** 挂机随时可进。时长和领取在 IdlePage 里，不改场景。 */
   private openIdle(): void {
     GameLog.shared.info("MainApp", "click idle");
@@ -537,6 +577,10 @@ export class MainApp extends Component {
     if (id === "bag") {
       this.bag?.dispose();
       this.bag = null;
+    }
+    if (id === "mail") {
+      this.mail?.dispose();
+      this.mail = null;
     }
   }
 

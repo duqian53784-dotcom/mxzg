@@ -37,6 +37,7 @@ export interface BagHost {
 
 export interface BagPage {
   node: Node;
+  reload(): void;
   dispose(): void;
 }
 
@@ -68,6 +69,11 @@ class BagController implements BagPage {
     this.detailHost = place(uiNode("detail-host"), this.body, 0, 0);
     place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -430);
     GameLog.shared.info("Bag", "open");
+    void this.refresh();
+  }
+
+  reload(): void {
+    if (this.disposed) return;
     void this.refresh();
   }
 

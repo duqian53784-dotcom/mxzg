@@ -4,7 +4,7 @@ import { GameLog } from "./GameLog";
  * Mock / 网络已经会返回的失败。
  * 数值是客户端自己的，不是旧服错误码。阶段 D 再对照。
  *
- * 未登记的业务 cmd 仍按 B4 echo（自检 mail.list）。空 cmd 才回 UNKNOWN_CMD。
+ * 未登记的业务 cmd 仍按 B4 echo（自检 echo.ping）。空 cmd 才回 UNKNOWN_CMD。
  * ok:false 但没带 code 时，展示也按未知指令。
  */
 export const ErrorCode = {
@@ -25,6 +25,11 @@ export const ErrorCode = {
   BAG_NOT_USABLE: 1014,
   BAG_COUNT_INVALID: 1015,
   BAG_HERO_MAX: 1016,
+  MAIL_NOT_FOUND: 1017,
+  MAIL_NO_ATTACHMENT: 1018,
+  MAIL_ALREADY_CLAIMED: 1019,
+  MAIL_NOTHING: 1020,
+  MAIL_DELETE_BLOCKED: 1021,
   NET_NOT_CONNECTED: 2001,
   NET_CLOSED: 2002,
   NET_TIMEOUT: 2003,
@@ -53,6 +58,11 @@ const TEXT: Record<number, string> = {
   [ErrorCode.BAG_NOT_USABLE]: "该道具不能直接使用",
   [ErrorCode.BAG_COUNT_INVALID]: "使用数量无效",
   [ErrorCode.BAG_HERO_MAX]: "英雄已满级，无法使用",
+  [ErrorCode.MAIL_NOT_FOUND]: "没有这封邮件",
+  [ErrorCode.MAIL_NO_ATTACHMENT]: "这封邮件没有附件",
+  [ErrorCode.MAIL_ALREADY_CLAIMED]: "附件已经领取过了",
+  [ErrorCode.MAIL_NOTHING]: "没有可领取的附件",
+  [ErrorCode.MAIL_DELETE_BLOCKED]: "请先领取附件再删除",
   [ErrorCode.NET_NOT_CONNECTED]: "网络未连接",
   [ErrorCode.NET_CLOSED]: "网络已断开",
   [ErrorCode.NET_TIMEOUT]: "请求超时",

@@ -1,5 +1,5 @@
 /**
- * B3–C7 自检（不启动 Creator）。
+ * B3–C8 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -31,6 +31,25 @@ import {
   STARTER_EXP_POTION,
   STARTER_GOLD_BAG,
 } from "../assets/scripts/module/bag/items";
+import {
+  applyMailClaim,
+  attachmentText,
+  claimAllButtonText,
+  claimButtonText,
+  deletedToast,
+  emptyMailToast,
+  MAIL_NOTICE_ID,
+  MAIL_REWARD_GOLD,
+  MAIL_REWARD_GOLD_BAG,
+  MAIL_REWARD_ID,
+  MAIL_REWARD_STONE,
+  MAIL_WELCOME_ID,
+  mailClaimToast,
+  mailFailToast,
+  mailRowText,
+  mailSummaryText,
+  pickMailToast,
+} from "../assets/scripts/module/mail/inbox";
 import {
   applyHeroUpgrade,
   goldShortToast,
@@ -255,10 +274,10 @@ async function checkNet(): Promise<void> {
   const role = await net.request("role.enter", {});
   const roleData = role.data as { name?: string; level?: number };
   assert(roleData.name === "MockHero" && roleData.level === 1, "role payload");
-  const echo = await net.request("mail.list", { page: 1 });
+  const echo = await net.request("echo.ping", { page: 1 });
   const echoData = echo.data as { ok?: boolean; echo?: { page?: number } };
   assert(echoData.ok === true && echoData.echo && echoData.echo.page === 1, "echo payload");
-  assert(seen.indexOf("login") >= 0 && seen.indexOf("role.enter") >= 0 && seen.indexOf("mail.list") >= 0, "dispatch");
+  assert(seen.indexOf("login") >= 0 && seen.indexOf("role.enter") >= 0 && seen.indexOf("echo.ping") >= 0, "dispatch");
 
   const typedLogin = await Proto.login({ account: "mock", serverId: 3 }, net);
   assert(typedLogin.ok && typedLogin.token === "mock-token" && typedLogin.serverId === 3, "proto login");
@@ -695,6 +714,19 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   bagFromCity.push("plays");
   bagFromCity.push("bag");
   assert(bagFromCity.current === "bag" && bagFromCity.rootTab() === "plays", "bag opened from plays");
+  const mailEntry = findNavEntry("mail");
+  assert(mailEntry !== null && mailEntry.gateId === "mail", "mail entry");
+  assert(entryAccess(mailEntry, 1, 1, db).open, "mail open at lv1");
+  const mailLock = entryAccess(mailEntry, 0, 1, db);
+  assert(!mailLock.open && mailLock.hint.indexOf("Lv1") >= 0, "mail locked below lv1");
+  const mailFromCity = new NavHistory();
+  mailFromCity.reset("city");
+  mailFromCity.push("mail");
+  assert(mailFromCity.current === "mail" && mailFromCity.rootTab() === "city", "mail opened from city");
+  mailFromCity.reset("city");
+  mailFromCity.push("plays");
+  mailFromCity.push("mail");
+  assert(mailFromCity.current === "mail" && mailFromCity.rootTab() === "plays", "mail opened from plays");
 
   const history = new NavHistory();
   history.reset("city");
@@ -1261,6 +1293,224 @@ async function checkBag(): Promise<void> {
   net.close();
 }
 
+async function checkMail(): Promise<void> {
+  assert(MAIL_REWARD_GOLD === 80 && MAIL_REWARD_STONE === 3 && MAIL_REWARD_GOLD_BAG === 1, "mail amounts");
+  assert(
+    mailRowText({ unread: true, title: "开服补给", hasAttachment: true, claimed: false }) === "未读 · 开服补给 · 有附件",
+    "unread reward row"
+  );
+  assert(
+    mailRowText({ unread: false, title: "开服补给", hasAttachment: true, claimed: true }) === "已读 · 开服补给 · 已领取",
+    "claimed row"
+  );
+  assert(
+    mailRowText({ unread: false, title: "维护公告", hasAttachment: false, claimed: false }) === "已读 · 维护公告",
+    "notice row"
+  );
+  assert(mailSummaryText(3, 2, 1) === "3 封 · 未读 2 · 可领 1", "summary");
+  assert(mailSummaryText(0, 0, 0) === "邮箱是空的" && emptyMailToast() === "邮箱是空的", "empty mail text");
+  assert(pickMailToast() === "请先选择一封邮件", "pick mail");
+  assert(claimButtonText(null) === "领取" && claimButtonText({ hasAttachment: false, claimed: false }) === "无附件", "claim labels");
+  assert(claimButtonText({ hasAttachment: true, claimed: true }) === "已领取", "claimed label");
+  assert(claimAllButtonText(1) === "全部领取（1）" && claimAllButtonText(0) === "全部领取", "claim all label");
+  assert(deletedToast("维护公告") === "已删除：维护公告", "deleted text");
+  assert(
+    attachmentText({
+      hasAttachment: true,
+      claimed: false,
+      attachments: [
+        { id: 1, name: "金币", count: 80 },
+        { id: 101, name: "强化石", count: 3 },
+      ],
+    }) === "附件：金币 ×80、强化石 ×3",
+    "attachment line"
+  );
+  assert(attachmentText({ hasAttachment: false, claimed: false, attachments: [] }) === "这封邮件没有附件", "no attachment line");
+  assert(
+    mailClaimToast({
+      count: 1,
+      rewards: [
+        { id: 1, name: "金币", count: 80 },
+        { id: 101, name: "强化石", count: 3 },
+        { id: 201, name: "小金币袋", count: 1 },
+      ],
+    }) === "领取成功：金币 +80、强化石 ×3、小金币袋 ×1",
+    "claim toast"
+  );
+  assert(
+    mailClaimToast({ count: 2, rewards: [{ id: 1, name: "金币", count: 15 }] }) === "领取成功：2 封，金币 +15",
+    "claim all toast"
+  );
+  assert(mailFailToast({ code: ErrorCode.MAIL_NOT_FOUND }) === "没有这封邮件", "missing mail text");
+  assert(mailFailToast({ code: ErrorCode.MAIL_NO_ATTACHMENT }) === "这封邮件没有附件", "no attachment text");
+  assert(mailFailToast({ code: ErrorCode.MAIL_ALREADY_CLAIMED }) === "附件已经领取过了", "already claimed text");
+  assert(mailFailToast({ code: ErrorCode.MAIL_NOTHING }) === "没有可领取的附件", "nothing text");
+  assert(mailFailToast({ code: ErrorCode.MAIL_DELETE_BLOCKED }) === "请先领取附件再删除", "delete blocked text");
+  assert(errorText(ErrorCode.MAIL_ALREADY_CLAIMED) === "附件已经领取过了", "already claimed code");
+
+  const fresh = new MockGameSession();
+  const anchor = fresh.idleAnchorMs;
+  const listed = fresh.mailList();
+  assert(listed.ok && listed.mails.length === 3 && listed.unread === 2 && listed.claimable === 1, "starter inbox");
+  assert(listed.gold === MOCK_STARTER_GOLD && listed.diamond === MOCK_STARTER_DIAMOND, "list leaves wallet");
+  const welcome = listed.mails[0];
+  const reward = listed.mails[1];
+  const notice = listed.mails[2];
+  assert(welcome.id === MAIL_WELCOME_ID && welcome.unread && welcome.hasAttachment === false && welcome.title === "欢迎来到梦想之光", "welcome mail");
+  assert(reward.id === MAIL_REWARD_ID && reward.unread && reward.hasAttachment && reward.claimed === false, "reward mail");
+  assert(reward.attachments.length === 3 && reward.attachments[0].name === "金币" && reward.attachments[0].count === MAIL_REWARD_GOLD, "reward gold");
+  assert(reward.attachments[1].name === "强化石" && reward.attachments[1].count === MAIL_REWARD_STONE, "reward stones");
+  assert(reward.attachments[2].name === "小金币袋" && reward.attachments[2].count === MAIL_REWARD_GOLD_BAG, "reward bag");
+  assert(notice.id === MAIL_NOTICE_ID && notice.unread === false && notice.hasAttachment === false && notice.title === "维护公告", "notice already read");
+
+  const read = fresh.mailRead({ id: MAIL_WELCOME_ID });
+  assert(read.ok && read.mail && read.mail.unread === false && fresh.gold === MOCK_STARTER_GOLD, "read welcome");
+  const readAgain = fresh.mailRead({ id: MAIL_WELCOME_ID });
+  assert(readAgain.ok && readAgain.mail && readAgain.mail.unread === false, "read twice");
+  assert(fresh.mailList().unread === 1 && fresh.mailList().claimable === 1, "welcome no longer unread");
+  const noAtt = fresh.mailClaim({ id: MAIL_WELCOME_ID });
+  assert(noAtt.ok === false && noAtt.code === ErrorCode.MAIL_NO_ATTACHMENT && mailFailToast(noAtt) === "这封邮件没有附件", "welcome has no attachment");
+  assert(fresh.gold === MOCK_STARTER_GOLD && fresh.itemCounts[IDLE_ITEM_ID] === undefined, "no attachment changes nothing");
+  const noticeClaim = fresh.mailClaim({ id: MAIL_NOTICE_ID });
+  assert(noticeClaim.ok === false && noticeClaim.code === ErrorCode.MAIL_NO_ATTACHMENT && fresh.mails[2].read === true, "notice cannot be claimed");
+  const missing = fresh.mailClaim({ id: 0 });
+  assert(missing.ok === false && missing.code === ErrorCode.MAIL_NOT_FOUND, "missing mail");
+  const blocked = fresh.mailDelete({ id: MAIL_REWARD_ID });
+  assert(blocked.ok === false && blocked.code === ErrorCode.MAIL_DELETE_BLOCKED && fresh.mails.length === 3, "cannot delete unclaimed");
+  assert(fresh.gold === MOCK_STARTER_GOLD && fresh.idleAnchorMs === anchor && fresh.heroes[0].level === 1 && fresh.stageId === 1 && fresh.summonCursor === 0, "blocked delete leaves progress");
+
+  const claimed = fresh.mailClaim({ id: MAIL_REWARD_ID });
+  assert(claimed.ok && claimed.count === 1 && claimed.goldGain === MAIL_REWARD_GOLD && claimed.diamondGain === 0, "claim reward");
+  assert(mailClaimToast(claimed) === "领取成功：金币 +80、强化石 ×3、小金币袋 ×1", "claim toast from session");
+  assert(fresh.gold === MOCK_STARTER_GOLD + MAIL_REWARD_GOLD && fresh.diamond === MOCK_STARTER_DIAMOND, "gold only");
+  assert(fresh.itemCounts[IDLE_ITEM_ID] === MAIL_REWARD_STONE, "stones enter bag");
+  assert(fresh.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG + MAIL_REWARD_GOLD_BAG, "gold bag stacks");
+  assert(fresh.mails[1].claimed === true && fresh.mails[1].read === true, "reward marked claimed");
+  assert(fresh.idleAnchorMs === anchor && fresh.heroes[0].level === 1 && fresh.heroes[0].star === 3 && fresh.stageId === 1 && fresh.summonCursor === 0, "claim leaves hero idle and stage");
+  const twice = fresh.mailClaim({ id: MAIL_REWARD_ID });
+  assert(twice.ok === false && twice.code === ErrorCode.MAIL_ALREADY_CLAIMED && fresh.gold === MOCK_STARTER_GOLD + MAIL_REWARD_GOLD, "already claimed");
+  assert(fresh.itemCounts[IDLE_ITEM_ID] === MAIL_REWARD_STONE, "second claim does not stack");
+  const none = fresh.mailClaimAll();
+  assert(none.ok === false && none.code === ErrorCode.MAIL_NOTHING && fresh.gold === MOCK_STARTER_GOLD + MAIL_REWARD_GOLD, "nothing left");
+  const bag = fresh.bagList();
+  const bags = bag.items.filter((item) => item.id === ITEM_GOLD_BAG);
+  const stones = bag.items.filter((item) => item.id === IDLE_ITEM_ID);
+  assert(bags.length === 1 && bags[0].count === STARTER_GOLD_BAG + MAIL_REWARD_GOLD_BAG, "bag shows mailed bags");
+  assert(stones.length === 1 && stones[0].count === MAIL_REWARD_STONE && stones[0].usable === false, "bag shows mailed stones");
+  const used = fresh.bagUse({ id: ITEM_GOLD_BAG, count: 1 });
+  assert(used.ok && used.goldGain === GOLD_BAG_GAIN && fresh.gold === MOCK_STARTER_GOLD + MAIL_REWARD_GOLD + GOLD_BAG_GAIN, "mailed bag still usable");
+  const upgraded = fresh.heroUpgrade({ heroId: 10001 });
+  assert(upgraded.ok && upgraded.cost === 30 && fresh.heroes[0].level === 2 && fresh.mails.length === 3, "upgrade still spends mailed gold");
+  const pull = fresh.summon({ count: 1 });
+  assert(pull.ok && pull.drops[0].name === "霜刃刺客" && pull.diamond === MOCK_STARTER_DIAMOND - SUMMON_SINGLE_COST, "summon still works after mail");
+  const removed = fresh.mailDelete({ id: MAIL_REWARD_ID });
+  assert(removed.ok && removed.title === "开服补给" && fresh.mails.length === 2, "delete claimed");
+  const removedWelcome = fresh.mailDelete({ id: MAIL_WELCOME_ID });
+  assert(removedWelcome.ok && fresh.mails.length === 1 && fresh.mails[0].id === MAIL_NOTICE_ID, "delete read mail");
+  const gone = fresh.mailDelete({ id: MAIL_WELCOME_ID });
+  assert(gone.ok === false && gone.code === ErrorCode.MAIL_NOT_FOUND, "delete missing");
+  fresh.roleCreate({ name: "新人" });
+  assert(fresh.role.name === "新人" && fresh.gold === MOCK_STARTER_GOLD && fresh.heroes[0].level === 1, "create resets wallet and hero");
+  assert(fresh.mails.length === 3 && fresh.mails[0].read === false && fresh.mails[1].claimed === false && fresh.mails[2].read === true, "create restores inbox");
+  assert(fresh.itemCounts[IDLE_ITEM_ID] === undefined && fresh.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG, "create clears mailed items");
+
+  const batch = new MockGameSession();
+  const all = batch.mailClaimAll();
+  assert(all.ok && all.count === 1 && all.ids.length === 1 && all.ids[0] === MAIL_REWARD_ID, "claim all one reward");
+  assert(all.goldGain === MAIL_REWARD_GOLD && all.rewards.length === 3 && batch.gold === MOCK_STARTER_GOLD + MAIL_REWARD_GOLD, "claim all gold");
+  assert(batch.mailList().unread === 1 && batch.mails[0].read === false && batch.mails[1].claimed === true, "claim all leaves welcome unread");
+  const againAll = batch.mailClaimAll();
+  assert(againAll.ok === false && againAll.code === ErrorCode.MAIL_NOTHING, "claim all twice");
+
+  const twin = new MockGameSession({
+    mails: [
+      { id: 1, title: "甲", attachments: [{ id: 1, count: 10 }, { id: IDLE_ITEM_ID, count: 1 }] },
+      { id: 2, title: "乙", attachments: [{ id: 1, count: 5 }, { id: IDLE_ITEM_ID, count: 2 }] },
+      { id: 3, title: "公告", body: "只是看看" },
+    ],
+  });
+  assert(twin.mails.length === 3 && twin.itemCounts[ITEM_GOLD_BAG] === STARTER_GOLD_BAG, "custom mail keeps starter items");
+  const merged = twin.mailClaimAll();
+  assert(merged.ok && merged.count === 2 && merged.goldGain === 15 && twin.gold === MOCK_STARTER_GOLD + 15, "claim all merges gold");
+  const mergedStone = merged.rewards.filter((row) => row.id === IDLE_ITEM_ID);
+  assert(mergedStone.length === 1 && mergedStone[0].count === 3 && twin.itemCounts[IDLE_ITEM_ID] === 3, "claim all merges stones");
+  assert(twin.mailList().mails[2].unread === true && twin.mailList().claimable === 0, "plain mail stays unread");
+
+  const gems = new MockGameSession({
+    mails: [{ id: 9, title: "钻石信", body: "给钻石", attachments: [{ id: 2, count: 15 }] }],
+  });
+  const gem = gems.mailClaim({ id: 9 });
+  assert(gem.ok && gem.diamondGain === 15 && gems.diamond === MOCK_STARTER_DIAMOND + 15 && gems.gold === MOCK_STARTER_GOLD, "diamond attachment");
+  const shardId = shardItemId(10001);
+  const shards = new MockGameSession({
+    mails: [{ id: 4, title: "碎片信", attachments: [{ id: shardId, count: SUMMON_SHARD_GAIN }] }],
+  });
+  assert(shards.mailList().mails[0].attachments[0].name === "光耀骑士碎片", "shard attachment name");
+  const shardClaim = shards.mailClaim({ id: 4 });
+  assert(shardClaim.ok && shards.itemCounts[shardId] === SUMMON_SHARD_GAIN && shards.gold === MOCK_STARTER_GOLD, "shard enters bag");
+
+  const empty = new MockGameSession({ mails: [] });
+  assert(empty.mailList().mails.length === 0 && empty.mailList().unread === 0, "empty inbox");
+  assert(empty.mailClaimAll().code === ErrorCode.MAIL_NOTHING && empty.gold === MOCK_STARTER_GOLD, "empty claim all");
+  assert(empty.mailClaim({ id: MAIL_REWARD_ID }).code === ErrorCode.MAIL_NOT_FOUND, "empty claim one");
+  const dup = new MockGameSession({
+    mails: [
+      { id: 1, title: "先", body: "a" },
+      { id: 1, title: "后", body: "b" },
+    ],
+  });
+  assert(dup.mails.length === 1 && dup.mails[0].title === "先", "duplicate mail id dropped");
+
+  let now = 5000000;
+  const timed = new MockGameSession(undefined, () => now);
+  const timedAnchor = timed.idleAnchorMs;
+  assert(timed.mailClaim({ id: MAIL_REWARD_ID }).ok && timed.idleAnchorMs === timedAnchor, "claim keeps idle anchor");
+  now = timedAnchor + 60000;
+  const idle = timed.idleClaim();
+  assert(idle.ok && timed.itemCounts[IDLE_ITEM_ID] === MAIL_REWARD_STONE + 2, "idle stacks on mailed stones");
+  assert(timed.gold === MOCK_STARTER_GOLD + MAIL_REWARD_GOLD + 6, "idle gold stacks on mail gold");
+
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const remote = await Proto.mailList({}, net);
+  assert(remote.ok && remote.mails.length === 3 && remote.unread === 2 && remote.claimable === 1, "proto list");
+  const remoteRead = await Proto.mailRead({ id: MAIL_WELCOME_ID }, net);
+  assert(remoteRead.ok && remoteRead.mail && remoteRead.mail.unread === false, "proto read");
+  const remoteNo = await Proto.mailClaim({ id: MAIL_NOTICE_ID }, net);
+  assert(remoteNo.ok === false && remoteNo.code === ErrorCode.MAIL_NO_ATTACHMENT && remoteNo.gold === MOCK_STARTER_GOLD, "proto no attachment");
+  const remoteClaim = await Proto.mailClaim({ id: MAIL_REWARD_ID }, net);
+  assert(remoteClaim.ok && remoteClaim.gold === MOCK_STARTER_GOLD + MAIL_REWARD_GOLD && remoteClaim.rewards.length === 3, "proto claim");
+  const remoteAgain = await Proto.mailClaim({ id: MAIL_REWARD_ID }, net);
+  assert(remoteAgain.ok === false && remoteAgain.code === ErrorCode.MAIL_ALREADY_CLAIMED, "proto already claimed");
+  const remoteNone = await Proto.mailClaimAll({}, net);
+  assert(remoteNone.ok === false && remoteNone.code === ErrorCode.MAIL_NOTHING, "proto nothing");
+  const remoteBag = await Proto.bagList({}, net);
+  const remoteStones = remoteBag.items.filter((item) => item.id === IDLE_ITEM_ID);
+  assert(remoteStones.length === 1 && remoteStones[0].count === MAIL_REWARD_STONE, "proto bag sees mail items");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyMailClaim(remoteClaim);
+  assert(Session.gold === remoteClaim.gold && Session.diamond === remoteClaim.diamond, "apply mail");
+  applyMailClaim({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteClaim.gold && Session.diamond === remoteClaim.diamond, "failed mail ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const remoteDelete = await Proto.mailDelete({ id: MAIL_REWARD_ID }, net);
+  assert(remoteDelete.ok && remoteDelete.title === "开服补给", "proto delete");
+  const afterDelete = await Proto.mailList({}, net);
+  assert(afterDelete.mails.length === 2 && afterDelete.claimable === 0, "proto list after delete");
+  const ids = P0_CMDS.filter(
+    (row) =>
+      row.cmd === Cmd.mailList ||
+      row.cmd === Cmd.mailRead ||
+      row.cmd === Cmd.mailClaim ||
+      row.cmd === Cmd.mailClaimAll ||
+      row.cmd === Cmd.mailDelete
+  ).map((row) => row.id);
+  assert(ids.length === 5 && ids[0] === 1701 && ids[4] === 1705, "mail cmd ids");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -1279,6 +1529,7 @@ async function main(): Promise<void> {
   await checkHero();
   await checkSummon();
   await checkBag();
+  await checkMail();
   console.log("skeleton-check ok");
 }
 
