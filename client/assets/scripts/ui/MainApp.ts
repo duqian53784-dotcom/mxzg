@@ -40,6 +40,7 @@ import { buildDailyGoldPage, DailyGoldPage } from "./DailyGoldPage";
 import { buildLogin7Page, Login7Page } from "./Login7Page";
 import { buildGoal7Page, Goal7Page } from "./Goal7Page";
 import { buildShopPage, ShopPage } from "./ShopPage";
+import { buildWishPage, WishPage } from "./WishPage";
 import { goal7BadJumpToast } from "../module/goal7/tasks";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
@@ -82,6 +83,7 @@ export class MainApp extends Component {
   private login7: Login7Page | null = null;
   private goal7: Goal7Page | null = null;
   private shop: ShopPage | null = null;
+  private wish: WishPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -125,6 +127,8 @@ export class MainApp extends Component {
     this.goal7 = null;
     this.shop?.dispose();
     this.shop = null;
+    this.wish?.dispose();
+    this.wish = null;
     this.shell?.dispose();
   }
 
@@ -174,7 +178,9 @@ export class MainApp extends Component {
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
     if (!this.allow(id)) return;
-    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7") && !this.ensureNet()) return;
+    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish") && !this.ensureNet()) {
+      return;
+    }
     this.panels?.openChild(id);
     this.refreshChrome();
   }
@@ -213,6 +219,7 @@ export class MainApp extends Component {
     if (id === "login7") return this.mountLogin7();
     if (id === "goal7") return this.mountGoal7();
     if (id === "shop") return this.mountShop();
+    if (id === "wish") return this.mountWish();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -498,6 +505,25 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.shop = page;
+    return page.node;
+  }
+
+  /** 玩法「许愿池」。未到主线 Lv10 时 allow 已经 Toast，不会进到这里。只做低级。 */
+  private mountWish(): Node {
+    this.wish?.dispose();
+    const page = buildWishPage({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.wishView({}, NetClient.shared),
+      draw: (pay) => Proto.wishDraw({ pay }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.wish = page;
     return page.node;
   }
 
@@ -847,6 +873,10 @@ export class MainApp extends Component {
     if (id === "shop") {
       this.shop?.dispose();
       this.shop = null;
+    }
+    if (id === "wish") {
+      this.wish?.dispose();
+      this.wish = null;
     }
   }
 

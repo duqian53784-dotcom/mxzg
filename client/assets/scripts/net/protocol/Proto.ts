@@ -61,6 +61,10 @@ import {
   ShopBuyResp,
   ShopViewReq,
   ShopViewResp,
+  WishDrawReq,
+  WishDrawResp,
+  WishViewReq,
+  WishViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -221,5 +225,13 @@ export const Proto = {
 
   shopBuy(req: ShopBuyReq, net: NetClient = NetClient.shared): Promise<ShopBuyResp> {
     return call(net, Cmd.shopBuy, req);
+  },
+
+  wishView(req: WishViewReq, net: NetClient = NetClient.shared): Promise<WishViewResp> {
+    return call(net, Cmd.wishView, req);
+  },
+
+  wishDraw(req: WishDrawReq, net: NetClient = NetClient.shared): Promise<WishDrawResp> {
+    return call(net, Cmd.wishDraw, req);
   },
 };

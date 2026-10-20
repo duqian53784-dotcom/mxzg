@@ -8,16 +8,20 @@ import { BagItem, BagItemKind, BagUseResp } from "../../net/protocol/types";
  * 背包（C7）。金币和钻石仍在顶栏，不进格子。
  * 强化石来自挂机，英雄碎片来自召唤重复。
  * 小金币袋和经验药水是可直接使用的消耗品。
+ * 许愿符只在低级许愿池消耗，背包里不能直接使用。
  * 领队是名册第一名（起步为光耀骑士）。经验满 100 升 1 级。
  */
 
 export const ITEM_GOLD_BAG = 201;
 export const ITEM_EXP_POTION = 202;
+export const ITEM_WISH_TOKEN = 203;
+export const WISH_TOKEN_NAME = "许愿符";
 export const GOLD_BAG_GAIN = 50;
 export const EXP_POTION_GAIN = 100;
 export const EXP_PER_LEVEL = 100;
 export const STARTER_GOLD_BAG = 2;
 export const STARTER_EXP_POTION = 2;
+export const STARTER_WISH_TOKEN = 2;
 
 interface CatalogRow {
   id: number;
@@ -42,6 +46,13 @@ const CATALOG: readonly CatalogRow[] = [
     kind: "consumable",
     usable: true,
     desc: "使用后为领队英雄增加 " + EXP_POTION_GAIN + " 经验，满 " + EXP_PER_LEVEL + " 升 1 级",
+  },
+  {
+    id: ITEM_WISH_TOKEN,
+    name: WISH_TOKEN_NAME,
+    kind: "material",
+    usable: false,
+    desc: "在低级许愿池消耗，不能直接使用",
   },
   {
     id: IDLE_ITEM_ID,
@@ -115,7 +126,7 @@ export function heroIdFromShard(itemId: number): number | null {
 
 /**
  * 只列出数量大于 0 的道具。
- * 顺序：小金币袋、经验药水、强化石，然后碎片和其它材料按 id 升序。
+ * 顺序：小金币袋、经验药水、许愿符、强化石，然后碎片和其它材料按 id 升序。
  * 金币 id 1、钻石 id 2 不进背包。
  */
 export function listBagItems(

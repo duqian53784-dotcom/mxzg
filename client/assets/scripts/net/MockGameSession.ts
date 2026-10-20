@@ -6,8 +6,10 @@ import {
   ITEM_EXP_POTION,
   ITEM_GOLD_BAG,
   listBagItems,
+  ITEM_WISH_TOKEN,
   STARTER_EXP_POTION,
   STARTER_GOLD_BAG,
+  STARTER_WISH_TOKEN,
 } from "../module/bag/items";
 import {
   clampWeaponLevel,
@@ -80,6 +82,15 @@ import {
 } from "../module/goal7/tasks";
 import { findShopOffer, listShopSkus } from "../module/shop/catalog";
 import {
+  dropAt,
+  parseWishPay,
+  wishCost,
+  WISH_DAILY_LIMIT,
+  WISH_DIAMOND_COST,
+  WISH_GOLD_COST,
+  WISH_ITEM_COST,
+} from "../module/wish/pool";
+import {
   isSummonCount,
   poolAt,
   shardItemId,
@@ -122,6 +133,9 @@ import {
   Goal7ViewResp,
   ShopBuyResp,
   ShopViewResp,
+  WishDrawResp,
+  WishPay,
+  WishViewResp,
 } from "./protocol/types";
 
 /** 一场预览里的假服状态。同一 MockTransport 上多次请求共用这一份。 */
@@ -151,7 +165,7 @@ export interface MockSessionSeed {
   /** 挂机起算时刻（毫秒）。不填则从构造这一刻起算。 */
   idleAnchorMs?: number;
   /**
-   * 已持有的道具。id 101 是强化石，201 小金币袋，202 经验药水。
+   * 已持有的道具。id 101 是强化石，201 小金币袋，202 经验药水，203 许愿符。
    * 不填则发起步消耗品。填了（含空数组）就只用这里的数量。
    */
   items?: { id: number; count: number }[];
@@ -213,6 +227,15 @@ export interface MockSessionSeed {
    * 和 openDay 不一致时，下一次查看或购买会把次数清零，背包里已经买到的不收回。
    */
   shopDay?: number;
+  /** 今日已许愿次数。不填为 0。超过每日上限时按上限计。三种方式共用。 */
+  wishUsed?: number;
+  /**
+   * 许愿次数所属的开服天。不填则跟当前 openDay 对齐。
+   * 和 openDay 不一致时，下一次查看或许愿会把次数清零，奖池游标不动。
+   */
+  wishDay?: number;
+  /** 奖池游标。不填为 0。成功许愿后 +1，创角回到 0。失败不前进。 */
+  wishCursor?: number;
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -221,7 +244,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录、七日目标和基础商店都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录、七日目标、基础商店和低级许愿池都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -295,6 +318,13 @@ export class MockGameSession {
   /** 已购次数所属开服天。和 openDay 不同时，下一次商店操作清零。 */
   shopDay = 1;
   private shopDaySeeded = false;
+  /** 当前 wishDay 上已经用掉的许愿次数。金币、许愿符、钻石共用。 */
+  wishUsed = 0;
+  /** 次数所属开服天。和 openDay 不同时，下一次许愿操作清零。游标不动。 */
+  wishDay = 1;
+  private wishDaySeeded = false;
+  /** 下一次落到奖池的下标。成功才 +1。创角回到 0。 */
+  wishCursor = 0;
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
@@ -305,6 +335,7 @@ export class MockGameSession {
     if (!this.towerDaySeeded) this.towerDay = this.openDay;
     if (!this.dailyDaySeeded) this.dailyDay = this.openDay;
     if (!this.shopDaySeeded) this.shopDay = this.openDay;
+    if (!this.wishDaySeeded) this.wishDay = this.openDay;
     this.ensureHeroes();
     this.ensureStarterGear();
     if (!this.itemsSeeded) this.grantStarterItems();
@@ -348,7 +379,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数、七日登录、七日目标和商店已购重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数、七日登录、七日目标、商店已购和许愿次数重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -381,6 +412,7 @@ export class MockGameSession {
     this.resetLogin7();
     this.resetGoal7();
     this.resetShop();
+    this.resetWish();
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
 
@@ -896,6 +928,69 @@ export class MockGameSession {
       owned: this.itemCount(offer.itemId),
       gold: this.gold,
       diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 只读低级许愿池。按当前开服天刷新今日次数，不改钱包、背包和奖池游标。
+   * 入口仍由客户端 opencondition 的 main_blessingpool（主线 Lv10）上锁，这里不判断等级。
+   */
+  wishView(): WishViewResp {
+    this.refreshWishDay();
+    return this.wishSnapshot();
+  }
+
+  /**
+   * 许愿一次。pay 为 gold、item 或 diamond。
+   * 金币扣金币，许愿符扣背包，钻石扣钻石，然后按游标发一格奖励。
+   * 方式不对、今日次数用完、货币或许愿符不足时拒绝，钱包、背包、次数和游标都不变。
+   * 不改英雄、武器、挂机、主线、召唤、商店和其它玩法次数。
+   */
+  wishDraw(data: unknown): WishDrawResp {
+    this.refreshWishDay();
+    const pay = parseWishPay(strField(asRecord(data), "pay"));
+    if (!pay) return this.wishFail("", ErrorCode.WISH_PAY_INVALID);
+    if (this.wishUsed >= WISH_DAILY_LIMIT) return this.wishFail(pay, ErrorCode.WISH_NO_CHANCE);
+    const cost = wishCost(pay);
+    if (pay === "gold" && this.gold < cost) return this.wishFail(pay, ErrorCode.WISH_GOLD_SHORT);
+    if (pay === "diamond" && this.diamond < cost) return this.wishFail(pay, ErrorCode.WISH_DIAMOND_SHORT);
+    if (pay === "item" && this.itemCount(ITEM_WISH_TOKEN) < cost) return this.wishFail(pay, ErrorCode.WISH_ITEM_SHORT);
+    if (pay === "gold") this.gold -= cost;
+    else if (pay === "diamond") this.diamond -= cost;
+    else this.spendItem(ITEM_WISH_TOKEN, cost);
+    const drop = dropAt(this.wishCursor);
+    let goldGain = 0;
+    let diamondGain = 0;
+    let itemGain = 0;
+    if (drop.kind === "gold") {
+      goldGain = drop.count;
+      this.gold += goldGain;
+    } else if (drop.kind === "diamond") {
+      diamondGain = drop.count;
+      this.diamond += diamondGain;
+    } else if (drop.itemId > 0 && drop.count > 0) {
+      itemGain = drop.count;
+      this.addItem(drop.itemId, itemGain);
+    }
+    this.wishCursor += 1;
+    this.wishUsed += 1;
+    return {
+      ok: true,
+      pay,
+      cost,
+      kind: drop.kind,
+      name: drop.name,
+      count: drop.count,
+      goldGain,
+      diamondGain,
+      itemId: itemGain > 0 ? drop.itemId : 0,
+      itemGain,
+      tokenOwned: this.itemCount(ITEM_WISH_TOKEN),
+      gold: this.gold,
+      diamond: this.diamond,
+      used: this.wishUsed,
+      limit: WISH_DAILY_LIMIT,
+      cursor: this.wishCursor,
     };
   }
 
@@ -1426,6 +1521,19 @@ export class MockGameSession {
       this.shopDay = Math.floor(seed.shopDay);
       this.shopDaySeeded = true;
     }
+    if (typeof seed.wishUsed === "number" && isFinite(seed.wishUsed)) {
+      let used = Math.floor(seed.wishUsed);
+      if (used < 0) used = 0;
+      if (used > WISH_DAILY_LIMIT) used = WISH_DAILY_LIMIT;
+      this.wishUsed = used;
+    }
+    if (typeof seed.wishDay === "number" && isFinite(seed.wishDay) && seed.wishDay >= 1) {
+      this.wishDay = Math.floor(seed.wishDay);
+      this.wishDaySeeded = true;
+    }
+    if (typeof seed.wishCursor === "number" && isFinite(seed.wishCursor) && seed.wishCursor >= 0) {
+      this.wishCursor = Math.floor(seed.wishCursor);
+    }
     if (Array.isArray(seed.goalClaimed)) {
       for (let i = 0; i < seed.goalClaimed.length; i++) {
         const raw = seed.goalClaimed[i];
@@ -1461,6 +1569,7 @@ export class MockGameSession {
   private grantStarterItems(): void {
     this.addItem(ITEM_GOLD_BAG, STARTER_GOLD_BAG);
     this.addItem(ITEM_EXP_POTION, STARTER_EXP_POTION);
+    this.addItem(ITEM_WISH_TOKEN, STARTER_WISH_TOKEN);
   }
 
   private grantStarterMails(): void {
@@ -1630,6 +1739,35 @@ export class MockGameSession {
     this.shopDay = this.openDay;
   }
 
+  /** 开服天变了就把许愿今日次数清零。奖池游标和已经拿到的奖励留下。 */
+  private refreshWishDay(): void {
+    if (this.wishDay === this.openDay) return;
+    this.wishDay = this.openDay;
+    this.wishUsed = 0;
+  }
+
+  private resetWish(): void {
+    this.wishUsed = 0;
+    this.wishDay = this.openDay;
+    this.wishCursor = 0;
+  }
+
+  private wishSnapshot(): WishViewResp {
+    return {
+      ok: true,
+      used: this.wishUsed,
+      limit: WISH_DAILY_LIMIT,
+      openDay: this.openDay,
+      cursor: this.wishCursor,
+      goldCost: WISH_GOLD_COST,
+      diamondCost: WISH_DIAMOND_COST,
+      itemCost: WISH_ITEM_COST,
+      tokenOwned: this.itemCount(ITEM_WISH_TOKEN),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
   private shopBoughtCount(id: number): number {
     const raw = this.shopBought[id];
     if (typeof raw !== "number" || !isFinite(raw) || raw <= 0) return 0;
@@ -1691,6 +1829,29 @@ export class MockGameSession {
       gold: this.gold,
       diamond: this.diamond,
       loginDay: this.loginDay,
+      code,
+    };
+  }
+
+  private wishFail(pay: WishPay | "", code: number): WishDrawResp {
+    const cost = pay === "" ? 0 : wishCost(pay);
+    return {
+      ok: false,
+      pay,
+      cost,
+      kind: "",
+      name: "",
+      count: 0,
+      goldGain: 0,
+      diamondGain: 0,
+      itemId: 0,
+      itemGain: 0,
+      tokenOwned: this.itemCount(ITEM_WISH_TOKEN),
+      gold: this.gold,
+      diamond: this.diamond,
+      used: this.wishUsed,
+      limit: WISH_DAILY_LIMIT,
+      cursor: this.wishCursor,
       code,
     };
   }
