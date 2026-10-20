@@ -37,6 +37,8 @@ B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `h
 | 1703 | `mail.claim` | `MailClaimReq` | `MailClaimResp` | 领取一封（C8）。金币钻石进钱包，道具进背包。没有附件 `MAIL_NO_ATTACHMENT`，领过 `MAIL_ALREADY_CLAIMED` |
 | 1704 | `mail.claimAll` | `MailClaimAllReq` | `MailClaimAllResp` | 领取全部未领附件（C8）。一封都没有是 `MAIL_NOTHING` |
 | 1705 | `mail.delete` | `MailDeleteReq` | `MailDeleteResp` | 删除（C8）。未领附件 `MAIL_DELETE_BLOCKED` |
+| 1801 | `smith.view` | `SmithViewReq` | `SmithViewResp` | 铁匠铺（C9）。列出每名英雄的新手短剑。没有武器时补 Lv1，不扣费 |
+| 1802 | `smith.strengthen` | `SmithStrengthenReq` | `SmithStrengthenResp` | 强化 1 级（C9）。扣金币和 1 个强化石。不足 `SMITH_GOLD_SHORT` / `SMITH_STONE_SHORT`，满级 `SMITH_LEVEL_MAX`，没有英雄 `HERO_NOT_FOUND` |
 
 代码在 `client/assets/scripts/net/protocol/`：`cmds.ts`（名字和 ID）、`types.ts`（字段）、`codec.ts`（现在是明文对象）、`Proto.ts`（`Proto.login` 等）。
 
@@ -51,13 +53,13 @@ Mock 约定（给 C1 / C6 直接用，不用再改传输层）：
 
 - 每个 MockTransport 带一份 `MockGameSession`。一开始就有角色 `1001 / MockHero / Lv1`，属于账号 `mock`，下一关 1、开服第 1 天。还没 `login`，或登录的就是 `mock` 时，只 `role.enter` 也能进主城。登录别的账号则 `hasRole` 为 false，直到 `role.create`。同一局里进度会留下来。细节和录包见 `docs/mock-replay.md`。
 - `role.enter` 额外带 `openDay`、`stageId`、`gold`、`diamond`（真服可以不带）。Boot 写进 `Session`。没有角色时金币钻石回 0。
-- `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线、开服天、钱包（金币 100、钻石 20）、挂机（时长、强化石）、召唤碎片和英雄名册（回到起步三名 Lv1）。背包重新放上小金币袋 ×2、经验药水 ×2。邮箱回到起步三封。
+- `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线、开服天、钱包（金币 100、钻石 20）、挂机（时长、强化石）、召唤碎片和英雄名册（回到起步三名 Lv1，每人新手短剑 Lv1）。背包重新放上小金币袋 ×2、经验药水 ×2。邮箱回到起步三封。
 - `stage.enter` 的 `stageId < 1` 失败；成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。Mock 允许跳关。主线列表只放行下一关，高于等级的战报判负。
 - `stage.result` 新通关后 `nextStageId = clearedStage + 1`，`level = 1 + clearedStage`，奖励占位 `{ id: 1, count: 10 }`（id 1 加金币，id 2 加钻石）。失败停在本关，奖励空，钱包不变。回包可带 `openDay` / `level` / `gold` / `diamond`。快速作战和主线战报共用这条，不另开消息。
 - `idle.query` 只读。时长 = 现在 − 起算时刻，上限 8 小时。金币、强化石（id 101）按当前已通关关数计算。回包带可领数量、挂满 8 小时的预览、已有强化石和钱包。
 - `idle.claim` 把可领的金币和强化石计入钱包，然后重新起算。一个都不够时 `ok: false`，`code` 为 `IDLE_EMPTY`（「挂机时间太短，暂无收益」），钱包和起算时刻不动。创角会把时长和强化石清掉。
-- `hero.list` 只读。名册为空时种下光耀骑士（id 10001，3星）、林间游侠（10002，2星）、星辉法师（10003，1星），都是 Lv1。回包带每名英雄的等级、星级、占位属性（攻击 / 生命 / 防御）、下一级金币消耗，以及当前钱包。
-- `hero.upgrade` 把指定英雄升 1 级并扣除金币。Lv1→2 花 30，之后每级再多 20，最高 Lv10。星级不变。成功回包带新等级、新属性、本次花费和扣完后的钱包。金币不够时 `HERO_GOLD_SHORT`（「金币不足，无法升级」），并带 `needGold`；已满级 `HERO_LEVEL_MAX`；id 不存在 `HERO_NOT_FOUND`。这三种失败都不改等级和钱包，也不动挂机计时和主线进度。
+- `hero.list` 只读。名册为空时种下光耀骑士（id 10001，3星）、林间游侠（10002，2星）、星辉法师（10003，1星），都是 Lv1，并各带新手短剑 Lv1。回包带每名英雄的等级、星级、占位属性（攻击 / 生命 / 防御）、武器等级和武器攻击、下一级金币消耗，以及当前钱包。剑是 Lv1 时攻击加成为 0。
+- `hero.upgrade` 把指定英雄升 1 级并扣除金币。Lv1→2 花 30，之后每级再多 20，最高 Lv10。星级和武器等级不变。成功回包带新等级、新属性、本次花费和扣完后的钱包。金币不够时 `HERO_GOLD_SHORT`（「金币不足，无法升级」），并带 `needGold`；已满级 `HERO_LEVEL_MAX`；id 不存在 `HERO_NOT_FOUND`。这三种失败都不改等级和钱包，也不动挂机计时和主线进度。
 - `summon.pull` 的 `count` 只能是 1（10 钻石）或 10（90 钻石）。不够时 `SUMMON_DIAMOND_SHORT`（「钻石不足，无法召唤」），并带 `needDiamond`；其它次数 `SUMMON_COUNT_INVALID`。失败不改钻石、名册和召唤游标。成功按固定卡池顺序抽出：不在名册里的英雄追加到末尾（Lv1，星级按卡池），已拥有的不改等级星级，改为该英雄碎片 +10。碎片道具 id = `40000 + heroId`。回包带本次掉落、新英雄人数、碎片次数和扣完后的钱包。不改金币、挂机计时和主线。创角把游标和碎片清掉。
 - `bag.list` 只读。数量大于 0 才出现。顺序是小金币袋（id 201）、经验药水（id 202）、强化石（id 101），然后英雄碎片和其它材料。金币 id 1、钻石 id 2 不进背包。新号没有另填道具时，自带小金币袋 ×2、经验药水 ×2。
 - `bag.use` 的 `count` 缺省 1，小于 1 为 `BAG_COUNT_INVALID`。小金币袋每个 +50 金币。经验药水每个给名册第一名 +100 经验，满 100 升 1 级；领队已满级为 `BAG_HERO_MAX`，不扣药水。强化石和碎片为 `BAG_NOT_USABLE`，数量不动。背包没有任何道具时 `BAG_EMPTY`；有别的道具但没有这一个时 `BAG_NOT_FOUND`；持有不够 `BAG_NOT_ENOUGH`。失败不改金币、英雄、挂机和主线。成功回包带剩余数量、扣完后的钱包，经验药水再带英雄名和等级。
@@ -66,8 +68,10 @@ Mock 约定（给 C1 / C6 直接用，不用再改传输层）：
 - `mail.claim` 领取一封附件。id 1 加金币，id 2 加钻石，其它 id 进背包。成功后标成已领取和已读。没有这封 `MAIL_NOT_FOUND`，没有附件 `MAIL_NO_ATTACHMENT`（「这封邮件没有附件」），已经领过 `MAIL_ALREADY_CLAIMED`（「附件已经领取过了」）。失败不改钱包、背包、英雄、挂机和主线。
 - `mail.claimAll` 把每封还没领的附件都领掉，奖励按道具 id 合并。没有可领的是 `MAIL_NOTHING`（「没有可领取的附件」）。没有附件的信保持原样，不会被标成已读。
 - `mail.delete` 删一封。还有未领附件时 `MAIL_DELETE_BLOCKED`（「请先领取附件再删除」）。没有附件或已经领过可以删。没有这封是 `MAIL_NOT_FOUND`。
+- `smith.view` 只读武器，并给还没有剑的英雄补 Lv1 新手短剑。补武器不扣金币和强化石。回包带每名英雄的剑等级、当前攻击、下一次消耗、背包里的强化石和钱包。名册第一名是 `leadId`。
+- `smith.strengthen` 把指定英雄的新手短剑升 1 级。Lv1→2 花 20 金币和 1 个强化石，之后每级金币再多 10，最高 Lv10。每级攻击 +8，Lv1 加成为 0。金币不够 `SMITH_GOLD_SHORT`（「金币不足，无法强化」），并带 `needGold`；强化石不够 `SMITH_STONE_SHORT`（「强化石不足」），并带 `needStone`；已满级 `SMITH_LEVEL_MAX`；没有这名英雄 `HERO_NOT_FOUND`。失败不扣金币和强化石，也不提升已有等级。不改英雄等级、星级、钻石、挂机计时和主线。创角把剑重置回 Lv1。
 
-1301 / 1302 / 1401 / 1402 / 1501 / 1601 / 1602 / 1701–1705 仍是客户端占位号，不是旧服消息号。
+1301 / 1302 / 1401 / 1402 / 1501 / 1601 / 1602 / 1701–1705 / 1801 / 1802 仍是客户端占位号，不是旧服消息号。
 
 ## 以后换成真 Protobuf
 

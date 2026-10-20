@@ -15,6 +15,7 @@ import {
   upgradeFailToast,
   upgradeToast,
 } from "../module/hero/growth";
+import { weaponLineText } from "../module/smith/forge";
 import { HeroCard, HeroListResp, HeroUpgradeResp } from "../net/protocol/types";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
@@ -52,6 +53,7 @@ export interface HeroListPage {
 
 export interface HeroDetailPage {
   node: Node;
+  reload(): void;
   dispose(): void;
 }
 
@@ -129,7 +131,7 @@ class HeroListController implements HeroListPage {
     for (let i = 0; i < heroes.length; i++) {
       const hero = heroes[i];
       const button = createButton(
-        heroRowText(hero.name, hero.level, hero.star),
+        heroRowText(hero.name, hero.level, hero.star) + " · 武器Lv" + (hero.weaponLevel || 1),
         () => {
           if (this.disposed) return;
           GameLog.shared.info("Hero", "open detail " + hero.id);
@@ -170,6 +172,7 @@ class HeroDetailController implements HeroDetailPage {
   private atkLabel: Node | null = null;
   private hpLabel: Node | null = null;
   private defLabel: Node | null = null;
+  private weaponLabel: Node | null = null;
   private goldLabel: Node | null = null;
   private upgradeButton: Node | null = null;
 
@@ -180,6 +183,11 @@ class HeroDetailController implements HeroDetailPage {
     this.body.parent = this.node;
     this.build();
     GameLog.shared.info("Hero", "open detail " + this.host.heroId());
+    void this.refresh();
+  }
+
+  reload(): void {
+    if (this.disposed) return;
     void this.refresh();
   }
 
@@ -196,8 +204,9 @@ class HeroDetailController implements HeroDetailPage {
     place(createRect("card", 640, 220, new Color(16, 28, 48, 255)), this.body, 0, 170);
     this.atkLabel = place(createLabel("攻击 --", 26, { color: STAT, width: 560 }), this.body, 0, 230);
     this.hpLabel = place(createLabel("生命 --", 26, { color: STAT, width: 560 }), this.body, 0, 170);
-    this.defLabel = place(createLabel("防御 --", 26, { color: STAT, width: 560 }), this.body, 0, 110);
-    this.goldLabel = place(createLabel("持有金币 --", 22, { color: MUTED, width: 640 }), this.body, 0, 10);
+    this.defLabel = place(createLabel("防御 --", 26, { color: STAT, width: 560 }), this.body, 0, 120);
+    this.weaponLabel = place(createLabel("武器 --", 22, { color: STAT, width: 560 }), this.body, 0, 70);
+    this.goldLabel = place(createLabel("持有金币 --", 22, { color: MUTED, width: 640 }), this.body, 0, 0);
     this.upgradeButton = place(
       createButton("升级", () => void this.upgrade(), 460, 68, UPGRADE_FILL),
       this.body,
@@ -205,7 +214,7 @@ class HeroDetailController implements HeroDetailPage {
       -80
     );
     place(
-      createLabel("属性为占位。本页只做升级，星级不变", 18, { color: MUTED, width: 640 }),
+      createLabel("属性为占位。升级不改武器，武器到铁匠铺强化", 18, { color: MUTED, width: 640 }),
       this.body,
       0,
       -160
@@ -247,6 +256,7 @@ class HeroDetailController implements HeroDetailPage {
     this.write(this.atkLabel, "攻击 " + hero.atk);
     this.write(this.hpLabel, "生命 " + hero.hp);
     this.write(this.defLabel, "防御 " + hero.def);
+    this.write(this.weaponLabel, weaponLineText(hero.weaponName, hero.weaponLevel, hero.weaponAtk));
     this.write(this.goldLabel, ownedGoldText(gold));
     this.write(this.upgradeButton ? this.upgradeButton.getChildByName("Label") : null, upgradeButtonText(hero.level));
   }

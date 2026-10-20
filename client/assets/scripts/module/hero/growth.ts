@@ -3,13 +3,19 @@ import { Session } from "../../core/Session";
 import { HeroCard } from "../../net/protocol/types";
 
 /**
- * 英雄养成（C5）。只做升级这一条线，消耗金币。
+ * 英雄养成（C5）。升级只消耗金币。
  * 星级只展示，不在这里升。属性是占位，随等级和星级算出，不另存。
- * 空名册用三名起步英雄，避免底栏点进去是空的。
+ * 武器强化等级记在名册上（C9）。升级不改武器。Lv1 新手短剑不加攻击。
+ * 空名册用三名起步英雄，每人一把 Lv1 新手短剑。
  */
 
 export const HERO_MAX_LEVEL = 10;
 export const HERO_MAX_STAR = 5;
+/** 铁匠铺强化的那一件。全英雄同一把起步武器。 */
+export const WEAPON_NAME = "新手短剑";
+export const WEAPON_MAX_LEVEL = 10;
+/** 每比 Lv1 高 1 级，攻击 +8。Lv1 加成为 0，和没强化过的旧属性一致。 */
+export const WEAPON_ATK_STEP = 8;
 
 export interface HeroRosterEntry {
   id: number;
@@ -18,6 +24,11 @@ export interface HeroRosterEntry {
   star: number;
   /** 经验药水累加。缺省当 0。金币升级不改这项。 */
   exp?: number;
+  /**
+   * 新手短剑强化等级。缺省或小于 1 视为还没有武器，展示和铁匠铺都会补成 Lv1。
+   * 升级、召唤碎片、邮件都不改这项。
+   */
+  weaponLevel?: number;
 }
 
 export interface HeroSeed {
@@ -25,14 +36,28 @@ export interface HeroSeed {
   name?: string;
   level?: number;
   star?: number;
+  weaponLevel?: number;
 }
 
 export function starterRoster(): HeroRosterEntry[] {
   return [
-    { id: 10001, name: "光耀骑士", level: 1, star: 3 },
-    { id: 10002, name: "林间游侠", level: 1, star: 2 },
-    { id: 10003, name: "星辉法师", level: 1, star: 1 },
+    { id: 10001, name: "光耀骑士", level: 1, star: 3, weaponLevel: 1 },
+    { id: 10002, name: "林间游侠", level: 1, star: 2, weaponLevel: 1 },
+    { id: 10003, name: "星辉法师", level: 1, star: 1, weaponLevel: 1 },
   ];
+}
+
+/** 没有武器、或等级不合法时，补成 Lv1 新手短剑。已有等级只做取整和封顶。 */
+export function clampWeaponLevel(level: number | undefined): number {
+  if (typeof level !== "number" || !isFinite(level) || level < 1) return 1;
+  const value = Math.floor(level);
+  if (value > WEAPON_MAX_LEVEL) return WEAPON_MAX_LEVEL;
+  return value;
+}
+
+/** Lv1 为 0。之后每级 +WEAPON_ATK_STEP。 */
+export function weaponAtkBonus(level: number | undefined): number {
+  return (clampWeaponLevel(level) - 1) * WEAPON_ATK_STEP;
 }
 
 /** 不填、空数组、或每行都无效时，退回起步三名。重复 id 留第一条。 */
@@ -53,6 +78,7 @@ export function normalizeRoster(raw: HeroSeed[] | null | undefined): HeroRosterE
       name,
       level: clampLevel(row.level),
       star: clampStar(row.star),
+      weaponLevel: clampWeaponLevel(row.weaponLevel),
     });
   }
   if (out.length === 0) return starterRoster();
@@ -80,16 +106,21 @@ export function toHeroCard(entry: HeroRosterEntry): HeroCard {
   const level = clampLevel(entry.level);
   const star = clampStar(entry.star);
   const stats = heroStats(level, star);
+  const weaponLevel = clampWeaponLevel(entry.weaponLevel);
+  const weaponAtk = weaponAtkBonus(weaponLevel);
   return {
     id: entry.id,
     name: entry.name,
     level,
     star,
-    atk: stats.atk,
+    atk: stats.atk + weaponAtk,
     hp: stats.hp,
     def: stats.def,
     upgradeCost: upgradeCost(level),
     maxLevel: HERO_MAX_LEVEL,
+    weaponName: WEAPON_NAME,
+    weaponLevel,
+    weaponAtk,
   };
 }
 

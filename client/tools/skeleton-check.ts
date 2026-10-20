@@ -1,5 +1,5 @@
 /**
- * B3–C8 自检（不启动 Creator）。
+ * B3–C9 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -61,7 +61,25 @@ import {
   upgradeButtonText,
   upgradeCost,
   upgradeToast,
+  WEAPON_MAX_LEVEL,
+  WEAPON_NAME,
+  weaponAtkBonus,
 } from "../assets/scripts/module/hero/growth";
+import {
+  applySmithStrengthen,
+  smithCostLine,
+  smithFailToast,
+  smithGoldShortToast,
+  smithHeroLine,
+  smithMaxToast,
+  smithRowText,
+  smithStoneShortToast,
+  smithWalletLine,
+  strengthenButtonText,
+  strengthenGoldCost,
+  strengthenToast,
+  toSmithGear,
+} from "../assets/scripts/module/smith/forge";
 import {
   applySummon,
   diamondShortToast,
@@ -1511,6 +1529,133 @@ async function checkMail(): Promise<void> {
   net.close();
 }
 
+async function checkSmith(): Promise<void> {
+  const lead = toSmithGear(starterRoster()[0]);
+  assert(lead.weaponName === WEAPON_NAME && lead.weaponLevel === 1 && lead.weaponAtk === 0 && lead.atk === 70, "starter sword adds no attack");
+  assert(strengthenGoldCost(1) === 20 && strengthenGoldCost(2) === 30 && strengthenGoldCost(WEAPON_MAX_LEVEL) === 0, "strengthen gold");
+  assert(weaponAtkBonus(1) === 0 && weaponAtkBonus(2) === 8 && weaponAtkBonus(3) === 16, "weapon attack step");
+  assert(smithRowText("光耀骑士", 1) === "光耀骑士 · 新手短剑 Lv1", "smith row");
+  assert(smithHeroLine(lead) === "光耀骑士 · 新手短剑 Lv1 · 攻击 70", "smith hero line");
+  assert(smithCostLine(lead).indexOf("Lv2") >= 0 && smithCostLine(lead).indexOf("攻击 78") >= 0, "next attack line");
+  assert(strengthenButtonText(lead) === "强化（金币 20 · 强化石 ×1）", "strengthen button");
+  assert(smithWalletLine(100, 3) === "持有金币 100 · 强化石 ×3", "wallet line");
+  assert(
+    strengthenToast("光耀骑士", WEAPON_NAME, 2, 20, 1) === "强化成功：光耀骑士的新手短剑升至 Lv2，消耗金币 20、强化石 ×1",
+    "strengthen toast"
+  );
+  assert(smithGoldShortToast(20) === "金币不足，强化需要 20", "gold short toast");
+  assert(smithStoneShortToast(1) === "强化石不足，强化需要 1", "stone short toast");
+  assert(smithMaxToast() === "武器已达最高强化", "smith max toast");
+  assert(errorText(ErrorCode.SMITH_GOLD_SHORT) === "金币不足，无法强化", "smith gold text");
+  assert(errorText(ErrorCode.SMITH_STONE_SHORT) === "强化石不足", "smith stone text");
+  assert(errorText(ErrorCode.SMITH_LEVEL_MAX) === "武器已达最高强化", "smith max text");
+  const smithEntry = findNavEntry("smith");
+  assert(smithEntry !== null && smithEntry.gateId === "main_smith_shop", "smith gate unchanged");
+  assert(smithEntry.blurb.indexOf("强化石") >= 0, "smith blurb");
+
+  const bare = new MockGameSession();
+  bare.heroes[0].weaponLevel = 0;
+  bare.heroes[2].weaponLevel = undefined;
+  const opened = bare.smithView();
+  assert(opened.ok && opened.leadId === 10001 && opened.gears.length === 3 && opened.stoneOwned === 0, "smith view seeds");
+  assert(opened.gears[0].weaponLevel === 1 && opened.gears[2].weaponLevel === 1 && bare.gold === MOCK_STARTER_GOLD, "seed is free");
+  assert(bare.itemCounts[IDLE_ITEM_ID] === undefined && bare.heroes[0].level === 1, "seed skips stones and level");
+  const noStone = bare.smithStrengthen({ heroId: 10001 });
+  assert(noStone.ok === false && noStone.code === ErrorCode.SMITH_STONE_SHORT && noStone.needStone === 1, "no stone");
+  assert(smithFailToast(noStone) === "强化石不足，强化需要 1", "no stone toast");
+  assert(bare.gold === MOCK_STARTER_GOLD && bare.heroes[0].weaponLevel === 1 && bare.diamond === MOCK_STARTER_DIAMOND, "no stone keeps wallet");
+
+  const poor = new MockGameSession({ gold: 19, items: [{ id: IDLE_ITEM_ID, count: 2 }] });
+  const shortGold = poor.smithStrengthen({ heroId: 10001 });
+  assert(shortGold.ok === false && shortGold.code === ErrorCode.SMITH_GOLD_SHORT && shortGold.needGold === 20, "gold short");
+  assert(smithFailToast(shortGold) === "金币不足，强化需要 20", "gold short from session");
+  assert(poor.gold === 19 && poor.itemCounts[IDLE_ITEM_ID] === 2 && poor.heroes[0].weaponLevel === 1, "gold short spends nothing");
+
+  const fresh = new MockGameSession();
+  for (let stage = 1; stage <= 4; stage++) {
+    const entered = fresh.stageEnter({ stageId: stage });
+    const won = fresh.stageResult({ stageId: stage, battleId: entered.battleId, win: true });
+    assert(won.ok && won.level === stage + 1, "win toward lv5 " + stage);
+  }
+  assert(fresh.role.level === 5 && fresh.clearedStage === 4 && fresh.gold === MOCK_STARTER_GOLD + 40, "four wins unlock level");
+  assert(fresh.heroes[0].weaponLevel === 1, "wins do not strengthen");
+  fresh.roleCreate({ name: "新人" });
+  const anchor = fresh.idleAnchorMs;
+  const claimed = fresh.mailClaim({ id: MAIL_REWARD_ID });
+  assert(claimed.ok && fresh.itemCounts[IDLE_ITEM_ID] === MAIL_REWARD_STONE, "mail stones for smith");
+  const first = fresh.smithStrengthen({ heroId: 10001 });
+  assert(first.ok && first.goldCost === 20 && first.stoneCost === 1 && first.gear && first.gear.weaponLevel === 2, "first strengthen");
+  assert(first.gear.atk === 70 + 8 && first.stoneOwned === MAIL_REWARD_STONE - 1, "attack and stones");
+  assert(
+    first.gold === MOCK_STARTER_GOLD + MAIL_REWARD_GOLD - 20 && fresh.heroes[1].weaponLevel === 1 && fresh.heroes[0].level === 1,
+    "spend gold only on that hero"
+  );
+  assert(fresh.idleAnchorMs === anchor && fresh.stageId === 1 && fresh.diamond === MOCK_STARTER_DIAMOND, "smith leaves idle stage diamond");
+  assert(strengthenToast(first.gear.heroName, first.gear.weaponName, first.gear.weaponLevel, first.goldCost, first.stoneCost).indexOf("Lv2") >= 0, "toast from gear");
+  const listed = fresh.heroList();
+  assert(listed.heroes[0].weaponLevel === 2 && listed.heroes[0].atk === heroStats(1, 3).atk + 8 && listed.heroes[0].weaponName === WEAPON_NAME, "hero list sees sword");
+  const grown = fresh.heroUpgrade({ heroId: 10001 });
+  assert(grown.ok && grown.hero && grown.hero.level === 2 && grown.hero.weaponLevel === 2 && grown.hero.atk === heroStats(2, 3).atk + 8, "upgrade keeps sword");
+  const second = fresh.smithStrengthen({ heroId: 10002 });
+  assert(second.ok && second.gear && second.gear.weaponLevel === 2 && fresh.heroes[0].weaponLevel === 2, "other hero sword");
+  const third = fresh.smithStrengthen({ heroId: 10001 });
+  assert(third.ok && third.goldCost === 30 && third.gear && third.gear.weaponLevel === 3 && third.stoneOwned === 0, "second sword spends last stone");
+  assert(third.gold === MOCK_STARTER_GOLD + MAIL_REWARD_GOLD - 20 - 30 - 20 - 30, "gold after sword and upgrade");
+  const bag = fresh.bagList();
+  assert(bag.items.filter((item) => item.id === IDLE_ITEM_ID).length === 0, "bag hides empty stones");
+  const blocked = fresh.smithStrengthen({ heroId: 10001 });
+  assert(blocked.ok === false && blocked.code === ErrorCode.SMITH_STONE_SHORT && fresh.heroes[0].weaponLevel === 3, "next strengthen blocked");
+  assert(fresh.gold === third.gold, "blocked strengthen keeps gold");
+  const missing = fresh.smithStrengthen({ heroId: 999 });
+  assert(missing.ok === false && missing.code === ErrorCode.HERO_NOT_FOUND && missing.gear === null, "missing hero");
+  fresh.roleCreate({ name: "再来" });
+  const reset = fresh.smithView();
+  assert(reset.gears[0].weaponLevel === 1 && fresh.gold === MOCK_STARTER_GOLD && fresh.itemCounts[IDLE_ITEM_ID] === undefined, "create resets sword");
+  assert(fresh.heroes[0].level === 1 && fresh.role.level === 1, "create resets hero and role");
+
+  const capped = new MockGameSession({ gold: 500, items: [{ id: IDLE_ITEM_ID, count: 3 }] });
+  capped.heroes[0].weaponLevel = WEAPON_MAX_LEVEL;
+  const maxed = capped.smithStrengthen({ heroId: 10001 });
+  assert(maxed.ok === false && maxed.code === ErrorCode.SMITH_LEVEL_MAX && smithFailToast(maxed) === "武器已达最高强化", "max sword");
+  assert(capped.gold === 500 && capped.itemCounts[IDLE_ITEM_ID] === 3 && capped.heroes[0].weaponLevel === WEAPON_MAX_LEVEL, "max spends nothing");
+  const geared = new MockGameSession({ heroes: [{ id: 8, name: "单人", level: 1, star: 1, weaponLevel: 3 }] });
+  assert(geared.heroList().heroes[0].atk === heroStats(1, 1).atk + 16 && geared.heroList().heroes[0].weaponLevel === 3, "seeded sword");
+  const summoned = new MockGameSession({ diamond: 20 });
+  const pull = summoned.summon({ count: 1 });
+  assert(pull.ok && pull.newCount === 1, "summon still adds hero");
+  const assassin = summoned.heroList().heroes.filter((hero) => hero.id === 10004);
+  assert(assassin.length === 1 && assassin[0].weaponLevel === 1 && assassin[0].weaponAtk === 0, "new hero gets starter sword");
+
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const remoteView = await Proto.smithView({}, net);
+  assert(remoteView.ok && remoteView.gears.length === 3 && remoteView.gears[0].weaponLevel === 1, "proto view");
+  const remoteShort = await Proto.smithStrengthen({ heroId: 10001 }, net);
+  assert(remoteShort.ok === false && remoteShort.code === ErrorCode.SMITH_STONE_SHORT && remoteShort.gold === MOCK_STARTER_GOLD, "proto stone short");
+  await Proto.mailClaim({ id: MAIL_REWARD_ID }, net);
+  const remoteOk = await Proto.smithStrengthen({ heroId: 10001 }, net);
+  assert(
+    remoteOk.ok && remoteOk.gear && remoteOk.gear.weaponLevel === 2 && remoteOk.gold === MOCK_STARTER_GOLD + MAIL_REWARD_GOLD - 20,
+    "proto strengthen"
+  );
+  const remoteHero = await Proto.heroList({}, net);
+  assert(remoteHero.heroes[0].atk === 78 && remoteHero.heroes[0].weaponLevel === 2, "proto hero attack");
+  const remoteBag = await Proto.bagList({}, net);
+  const remoteStones = remoteBag.items.filter((item) => item.id === IDLE_ITEM_ID);
+  assert(remoteStones.length === 1 && remoteStones[0].count === MAIL_REWARD_STONE - 1, "proto bag stone left");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applySmithStrengthen(remoteOk);
+  assert(Session.gold === remoteOk.gold && Session.diamond === remoteOk.diamond, "apply smith");
+  applySmithStrengthen({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteOk.gold && Session.diamond === remoteOk.diamond, "failed smith ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.smithView || row.cmd === Cmd.smithStrengthen).map((row) => row.id);
+  assert(ids.length === 2 && ids[0] === 1801 && ids[1] === 1802, "smith cmd ids");
+  net.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -1530,6 +1675,7 @@ async function main(): Promise<void> {
   await checkSummon();
   await checkBag();
   await checkMail();
+  await checkSmith();
   console.log("skeleton-check ok");
 }
 

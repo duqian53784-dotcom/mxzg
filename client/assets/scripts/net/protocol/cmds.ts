@@ -23,6 +23,8 @@ export const Cmd = {
   mailClaim: "mail.claim",
   mailClaimAll: "mail.claimAll",
   mailDelete: "mail.delete",
+  smithView: "smith.view",
+  smithStrengthen: "smith.strengthen",
 } as const;
 
 export const CmdId = {
@@ -44,6 +46,8 @@ export const CmdId = {
   mailClaim: 1703,
   mailClaimAll: 1704,
   mailDelete: 1705,
+  smithView: 1801,
+  smithStrengthen: 1802,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -73,4 +77,6 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.mailClaim, cmd: Cmd.mailClaim },
   { id: CmdId.mailClaimAll, cmd: Cmd.mailClaimAll },
   { id: CmdId.mailDelete, cmd: Cmd.mailDelete },
+  { id: CmdId.smithView, cmd: Cmd.smithView },
+  { id: CmdId.smithStrengthen, cmd: Cmd.smithStrengthen },
 ];
