@@ -1,5 +1,5 @@
 /**
- * B3–C4 自检（不启动 Creator）。
+ * B3–C5 自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -14,6 +14,18 @@ import {
   tabLabel,
 } from "../assets/scripts/config/nav";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
+import {
+  applyHeroUpgrade,
+  goldShortToast,
+  heroRowText,
+  heroStats,
+  HERO_MAX_LEVEL,
+  maxLevelToast,
+  starterRoster,
+  upgradeButtonText,
+  upgradeCost,
+  upgradeToast,
+} from "../assets/scripts/module/hero/growth";
 import { GameLog } from "../assets/scripts/core/GameLog";
 import { loadLoginPrefs, LoginPrefs, PrefStore, resolveAccount, saveLoginPrefs } from "../assets/scripts/core/LoginPrefs";
 import {
@@ -618,6 +630,17 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(tabLabel("铁匠铺", false) === "锁·铁匠铺" && tabLabel("铁匠铺", true) === "铁匠铺", "locked label");
   assert(rootTabFor("arena") === "plays" && rootTabFor("log") === "city" && rootTabFor("smith") === "smith", "root tab");
   assert(rootTabFor("mainline") === "city", "mainline stays on city tab");
+  const heroEntry = findNavEntry("hero");
+  assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
+  assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
+  const heroNav = new NavHistory();
+  heroNav.reset("city");
+  heroNav.push("hero");
+  heroNav.push("hero-detail");
+  assert(heroNav.current === "hero-detail" && heroNav.rootTab() === "hero", "detail stays on hero tab");
+  assert(heroNav.pop() === "hero-detail" && heroNav.current === "hero", "back to hero list");
+  heroNav.pop();
+  assert(heroNav.current === "city" && heroNav.rootTab() === "city", "back to city from hero");
   const idleEntry = findNavEntry("idle");
   assert(idleEntry !== null && entryAccess(idleEntry, 1, 1, null).open, "idle always open");
   assert(rootTabFor("idle") === "city", "idle home is city");
@@ -882,6 +905,97 @@ async function checkIdleSession(): Promise<void> {
   net.close();
 }
 
+async function checkHero(): Promise<void> {
+  const starters = starterRoster();
+  assert(starters.length === 3 && starters[0].name === "光耀骑士" && starters[2].star === 1, "starter names");
+  assert(upgradeCost(1) === 30 && upgradeCost(2) === 50 && upgradeCost(HERO_MAX_LEVEL) === 0, "upgrade cost");
+  const star3 = heroStats(1, 3);
+  assert(star3.atk === 70 && star3.hp === 320 && star3.def === 20, "star 3 stats");
+  assert(heroStats(2, 3).atk === 82 && heroStats(1, 1).atk === 40, "level raises attack");
+  assert(heroRowText("光耀骑士", 1, 3) === "光耀骑士  Lv1 · 3星", "row text");
+  assert(upgradeButtonText(1) === "升级（金币 30）" && upgradeButtonText(HERO_MAX_LEVEL) === "已满级", "upgrade button");
+  assert(upgradeToast("光耀骑士", 2, 30) === "光耀骑士升至 Lv2，消耗金币 30", "upgrade toast");
+  assert(goldShortToast(70) === "金币不足，升级需要 70", "gold short toast");
+  assert(maxLevelToast() === "已达最高等级", "max toast");
+  assert(errorText(ErrorCode.HERO_NOT_FOUND) === "没有这名英雄", "missing hero text");
+  assert(errorText(ErrorCode.HERO_GOLD_SHORT) === "金币不足，无法升级", "gold short text");
+  assert(errorText(ErrorCode.HERO_LEVEL_MAX) === "已达最高等级", "max level text");
+
+  const fresh = new MockGameSession();
+  const listed = fresh.heroList();
+  assert(listed.ok && listed.heroes.length === 3 && listed.gold === MOCK_STARTER_GOLD, "default roster");
+  assert(listed.heroes[0].id === 10001 && listed.heroes[0].level === 1 && listed.heroes[0].star === 3, "first starter");
+  assert(listed.heroes[0].atk === 70 && listed.heroes[1].name === "林间游侠" && listed.heroes[2].star === 1, "roster order");
+  const anchor = fresh.idleAnchorMs;
+  const diamond = fresh.diamond;
+  const first = fresh.heroUpgrade({ heroId: 10001 });
+  assert(first.ok && first.cost === 30 && first.hero && first.hero.level === 2 && first.hero.star === 3, "first upgrade");
+  assert(first.hero.atk === 82 && first.gold === MOCK_STARTER_GOLD - 30 && fresh.diamond === diamond, "upgrade spends gold only");
+  assert(fresh.idleAnchorMs === anchor && fresh.stageId === 1 && fresh.heroes[1].level === 1, "upgrade leaves idle and other heroes");
+  const second = fresh.heroUpgrade({ heroId: 10001 });
+  assert(second.ok && second.cost === 50 && second.hero && second.hero.level === 3 && fresh.gold === MOCK_STARTER_GOLD - 80, "second upgrade");
+  const broke = fresh.heroUpgrade({ heroId: 10001 });
+  assert(broke.ok === false && broke.code === ErrorCode.HERO_GOLD_SHORT && broke.needGold === 70, "third upgrade short");
+  assert(fresh.gold === MOCK_STARTER_GOLD - 80 && fresh.heroes[0].level === 3 && broke.hero && broke.hero.level === 3, "short keeps level");
+  const missing = fresh.heroUpgrade({ heroId: 999 });
+  assert(missing.ok === false && missing.code === ErrorCode.HERO_NOT_FOUND && missing.hero === null && fresh.gold === MOCK_STARTER_GOLD - 80, "unknown hero");
+  const beforeStage = fresh.gold;
+  const entered = fresh.stageEnter({ stageId: 1 });
+  const won = fresh.stageResult({ stageId: 1, battleId: entered.battleId, win: true });
+  assert(won.ok && won.gold === beforeStage + 10 && fresh.heroes[0].level === 3, "stage gold stacks on upgrade");
+  fresh.roleCreate({ name: "新人" });
+  assert(fresh.role.name === "新人" && fresh.gold === MOCK_STARTER_GOLD && fresh.heroes[0].level === 1 && fresh.heroes.length === 3, "create resets roster");
+
+  const other = new MockGameSession();
+  assert(other.heroes[0].level === 1 && other.gold === MOCK_STARTER_GOLD, "sessions do not share roster");
+  const rich = new MockGameSession({ gold: 1000 });
+  assert(rich.heroes.length === 3 && rich.gold === 1000, "wallet seed keeps starters");
+  const custom = new MockGameSession({ heroes: [{ id: 8, name: "单人", level: 2, star: 4 }] });
+  assert(custom.heroes.length === 1 && custom.heroList().heroes[0].atk === heroStats(2, 4).atk && custom.heroList().heroes[0].star === 4, "custom roster");
+  const dup = new MockGameSession({
+    heroes: [
+      { id: 4, name: "甲", level: 2, star: 2 },
+      { id: 4, name: "乙", level: 9, star: 9 },
+      { id: 5, name: "丙" },
+    ],
+  });
+  assert(dup.heroes.length === 2 && dup.heroes[0].name === "甲" && dup.heroes[1].name === "丙" && dup.heroes[1].star === 1, "duplicate id skipped");
+  const blank = new MockGameSession({ heroes: [{ id: 1, name: " " }, { id: 0, name: "坏" }] });
+  assert(blank.heroes.length === 3 && blank.heroes[0].name === "光耀骑士", "bad seed uses starters");
+  const empty = new MockGameSession({ heroes: [] });
+  assert(empty.heroes.length === 3, "empty seed uses starters");
+  const maxed = new MockGameSession({ gold: 500, heroes: [{ id: 7, name: "满级", level: 99, star: 9 }] });
+  assert(maxed.heroes[0].level === HERO_MAX_LEVEL && maxed.heroes[0].star === 5, "seed clamps level and star");
+  const denied = maxed.heroUpgrade({ heroId: 7 });
+  assert(denied.ok === false && denied.code === ErrorCode.HERO_LEVEL_MAX && maxed.gold === 500 && maxed.heroes[0].level === HERO_MAX_LEVEL, "max level");
+
+  const net = quietNet(new MockTransport({ latencyMs: 5 }));
+  await net.connect("mock://local");
+  const remote = await Proto.heroList({}, net);
+  assert(remote.ok && remote.heroes.length === 3 && remote.heroes[0].name === "光耀骑士", "proto list");
+  const remoteUp = await Proto.heroUpgrade({ heroId: remote.heroes[0].id }, net);
+  assert(remoteUp.ok && remoteUp.hero && remoteUp.hero.level === 2 && remoteUp.cost === 30 && remoteUp.gold === MOCK_STARTER_GOLD - 30, "proto upgrade");
+  const again = await Proto.heroList({}, net);
+  assert(again.heroes[0].level === 2 && again.heroes[1].level === 1 && again.gold === remoteUp.gold, "proto list after upgrade");
+  const prevGold = Session.gold;
+  const prevDiamond = Session.diamond;
+  applyHeroUpgrade(remoteUp);
+  assert(Session.gold === remoteUp.gold && Session.diamond === remoteUp.diamond, "apply upgrade");
+  applyHeroUpgrade({ ok: false, gold: 1, diamond: 1 });
+  assert(Session.gold === remoteUp.gold && Session.diamond === remoteUp.diamond, "failed upgrade ignored");
+  Session.gold = prevGold;
+  Session.diamond = prevDiamond;
+  const poor = new MockGameSession({ gold: 10 });
+  const poorNet = quietNet(new MockTransport({ latencyMs: 5, session: poor }));
+  await poorNet.connect("mock://local");
+  const poorUp = await Proto.heroUpgrade({ heroId: 10001 }, poorNet);
+  assert(poorUp.ok === false && poorUp.code === ErrorCode.HERO_GOLD_SHORT && poorUp.needGold === 30 && poor.gold === 10 && poor.heroes[0].level === 1, "proto short");
+  const ids = P0_CMDS.filter((row) => row.cmd === Cmd.heroList || row.cmd === Cmd.heroUpgrade).map((row) => row.id);
+  assert(ids.length === 2 && ids[0] === 1401 && ids[1] === 1402, "hero cmd ids");
+  net.close();
+  poorNet.close();
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -897,6 +1011,7 @@ async function main(): Promise<void> {
   await checkNoRole();
   await checkReplay();
   await checkIdleSession();
+  await checkHero();
   console.log("skeleton-check ok");
 }
 

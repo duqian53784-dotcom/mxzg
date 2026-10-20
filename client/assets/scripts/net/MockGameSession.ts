@@ -1,6 +1,9 @@
 import { ErrorCode } from "../core/errors";
+import { HeroRosterEntry, HeroSeed, normalizeRoster, starterRoster, toHeroCard, upgradeCost, HERO_MAX_LEVEL } from "../module/hero/growth";
 import { buildIdleView, elapsedSince, IDLE_ITEM_ID, IDLE_ITEM_NAME } from "../module/idle/rewards";
 import {
+  HeroListResp,
+  HeroUpgradeResp,
   IdleClaimResp,
   IdleQueryResp,
   LoginResp,
@@ -38,6 +41,8 @@ export interface MockSessionSeed {
   idleAnchorMs?: number;
   /** 已持有的挂机道具。id 101 是强化石。 */
   items?: { id: number; count: number }[];
+  /** 英雄名册。不填或空数组则种下三名起步英雄。 */
+  heroes?: HeroSeed[];
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -46,7 +51,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打和挂机领取都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取和英雄升级都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -75,12 +80,15 @@ export class MockGameSession {
   idleAnchorMs = 0;
   /** 道具 id → 数量。顶栏不显示，挂机页用来写「已有强化石」。 */
   itemCounts: { [id: number]: number } = {};
+  /** 已拥有的英雄。空名册会在构造、创角和读列表时种下起步三名。 */
+  heroes: HeroRosterEntry[] = [];
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
     if (typeof clock === "function") this.clock = clock;
     this.idleAnchorMs = this.clock();
     this.applySeed(seed);
+    this.ensureHeroes();
   }
 
   login(data: unknown): LoginResp {
@@ -120,7 +128,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天和钱包重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包和英雄重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -135,6 +143,7 @@ export class MockGameSession {
     this.diamond = MOCK_STARTER_DIAMOND;
     this.battleId = "";
     this.itemCounts = {};
+    this.heroes = starterRoster();
     this.idleAnchorMs = this.clock();
     this.syncDerived(true);
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
@@ -253,6 +262,71 @@ export class MockGameSession {
     };
   }
 
+  /** 只读名册。空了会先种下起步英雄。不改钱包。 */
+  heroList(): HeroListResp {
+    this.ensureHeroes();
+    const heroes: HeroListResp["heroes"] = [];
+    for (let i = 0; i < this.heroes.length; i++) heroes.push(toHeroCard(this.heroes[i]));
+    return { ok: true, heroes, gold: this.gold, diamond: this.diamond };
+  }
+
+  /**
+   * 升级一名英雄，扣除金币。星级不动。
+   * 没有这名英雄、金币不够、或已满级时拒绝，等级和钱包都不变。
+   * 不改挂机起算，也不改主线进度。
+   */
+  heroUpgrade(data: unknown): HeroUpgradeResp {
+    this.ensureHeroes();
+    const heroId = Math.floor(numField(asRecord(data), "heroId", 0));
+    const hero = this.findHero(heroId);
+    if (!hero) {
+      return {
+        ok: false,
+        code: ErrorCode.HERO_NOT_FOUND,
+        heroId,
+        hero: null,
+        cost: 0,
+        gold: this.gold,
+        diamond: this.diamond,
+      };
+    }
+    const current = toHeroCard(hero);
+    if (hero.level >= HERO_MAX_LEVEL) {
+      return {
+        ok: false,
+        code: ErrorCode.HERO_LEVEL_MAX,
+        heroId,
+        hero: current,
+        cost: 0,
+        gold: this.gold,
+        diamond: this.diamond,
+      };
+    }
+    const cost = upgradeCost(hero.level);
+    if (this.gold < cost) {
+      return {
+        ok: false,
+        code: ErrorCode.HERO_GOLD_SHORT,
+        heroId,
+        hero: current,
+        cost: 0,
+        needGold: cost,
+        gold: this.gold,
+        diamond: this.diamond,
+      };
+    }
+    this.gold -= cost;
+    hero.level += 1;
+    return {
+      ok: true,
+      heroId,
+      hero: toHeroCard(hero),
+      cost,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
   private applySeed(seed?: MockSessionSeed): void {
     if (!seed) return;
     if (typeof seed.account === "string") {
@@ -294,6 +368,7 @@ export class MockGameSession {
         this.itemCounts[Math.floor(row.id)] = Math.floor(row.count);
       }
     }
+    if (Array.isArray(seed.heroes)) this.heroes = normalizeRoster(seed.heroes);
   }
 
   /** id 1 金币，id 2 钻石。其它 id 先忽略。 */
@@ -310,6 +385,17 @@ export class MockGameSession {
   private addItem(id: number, count: number): void {
     if (count <= 0) return;
     this.itemCounts[id] = this.itemCount(id) + count;
+  }
+
+  private ensureHeroes(): void {
+    if (this.heroes.length === 0) this.heroes = starterRoster();
+  }
+
+  private findHero(id: number): HeroRosterEntry | null {
+    for (let i = 0; i < this.heroes.length; i++) {
+      if (this.heroes[i].id === id) return this.heroes[i];
+    }
+    return null;
   }
 
   private itemCount(id: number): number {
