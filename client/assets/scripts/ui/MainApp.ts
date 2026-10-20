@@ -41,6 +41,7 @@ import { buildLogin7Page, Login7Page } from "./Login7Page";
 import { buildGoal7Page, Goal7Page } from "./Goal7Page";
 import { buildShopPage, ShopPage } from "./ShopPage";
 import { buildWishPage, WishPage } from "./WishPage";
+import { buildCafePage, CafePage } from "./CafePage";
 import { goal7BadJumpToast } from "../module/goal7/tasks";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
@@ -84,6 +85,7 @@ export class MainApp extends Component {
   private goal7: Goal7Page | null = null;
   private shop: ShopPage | null = null;
   private wish: WishPage | null = null;
+  private cafe: CafePage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -129,6 +131,8 @@ export class MainApp extends Component {
     this.shop = null;
     this.wish?.dispose();
     this.wish = null;
+    this.cafe?.dispose();
+    this.cafe = null;
     this.shell?.dispose();
   }
 
@@ -178,7 +182,7 @@ export class MainApp extends Component {
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
     if (!this.allow(id)) return;
-    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish") && !this.ensureNet()) {
+    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish" || id === "cafe") && !this.ensureNet()) {
       return;
     }
     this.panels?.openChild(id);
@@ -220,6 +224,7 @@ export class MainApp extends Component {
     if (id === "goal7") return this.mountGoal7();
     if (id === "shop") return this.mountShop();
     if (id === "wish") return this.mountWish();
+    if (id === "cafe") return this.mountCafe();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -524,6 +529,26 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.wish = page;
+    return page.node;
+  }
+
+  /** 玩法「咖啡馆」。未到主线 Lv12 时 allow 已经 Toast，不会进到这里。 */
+  private mountCafe(): Node {
+    this.cafe?.dispose();
+    const page = buildCafePage({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.cafeView({}, NetClient.shared),
+      send: (heroIds) => Proto.cafeSend({ heroIds }, NetClient.shared),
+      claim: () => Proto.cafeClaim({}, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.cafe = page;
     return page.node;
   }
 
@@ -877,6 +902,10 @@ export class MainApp extends Component {
     if (id === "wish") {
       this.wish?.dispose();
       this.wish = null;
+    }
+    if (id === "cafe") {
+      this.cafe?.dispose();
+      this.cafe = null;
     }
   }
 

@@ -65,6 +65,12 @@ import {
   WishDrawResp,
   WishViewReq,
   WishViewResp,
+  CafeClaimReq,
+  CafeClaimResp,
+  CafeSendReq,
+  CafeSendResp,
+  CafeViewReq,
+  CafeViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -233,5 +239,17 @@ export const Proto = {
 
   wishDraw(req: WishDrawReq, net: NetClient = NetClient.shared): Promise<WishDrawResp> {
     return call(net, Cmd.wishDraw, req);
+  },
+
+  cafeView(req: CafeViewReq, net: NetClient = NetClient.shared): Promise<CafeViewResp> {
+    return call(net, Cmd.cafeView, req);
+  },
+
+  cafeSend(req: CafeSendReq, net: NetClient = NetClient.shared): Promise<CafeSendResp> {
+    return call(net, Cmd.cafeSend, req);
+  },
+
+  cafeClaim(req: CafeClaimReq, net: NetClient = NetClient.shared): Promise<CafeClaimResp> {
+    return call(net, Cmd.cafeClaim, req);
   },
 };

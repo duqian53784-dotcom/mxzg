@@ -91,6 +91,19 @@ import {
   WISH_ITEM_COST,
 } from "../module/wish/pool";
 import {
+  cafeHasDuplicate,
+  cafeReward,
+  CAFE_BEAN_ITEM_ID,
+  CAFE_BEAN_ONE,
+  CAFE_BEAN_TWO,
+  CAFE_DAILY_LIMIT,
+  CAFE_GOLD_ONE,
+  CAFE_GOLD_TWO,
+  CAFE_MAX_HEROES,
+  readCafeHeroIds,
+} from "../module/cafe/serve";
+import { CAFE_BEAN_NAME } from "../module/bag/items";
+import {
   isSummonCount,
   poolAt,
   shardItemId,
@@ -136,6 +149,10 @@ import {
   WishDrawResp,
   WishPay,
   WishViewResp,
+  CafeClaimResp,
+  CafeHero,
+  CafeSendResp,
+  CafeViewResp,
 } from "./protocol/types";
 
 /** 一场预览里的假服状态。同一 MockTransport 上多次请求共用这一份。 */
@@ -236,6 +253,18 @@ export interface MockSessionSeed {
   wishDay?: number;
   /** 奖池游标。不填为 0。成功许愿后 +1，创角回到 0。失败不前进。 */
   wishCursor?: number;
+  /** 今日已派出招待的次数。不填为 0。超过每日上限时按上限计。 */
+  cafeUsed?: number;
+  /**
+   * 招待次数所属的开服天。不填则跟当前 openDay 对齐。
+   * 和 openDay 不一致时，下一次查看、派出或领取会把次数清零。未领取的招待留下。
+   */
+  cafeDay?: number;
+  /**
+   * 还没领取的招待英雄 id。不认识的 id 会丢掉。超过 2 人时只留前 2 个。
+   * 不填表示没有派出。创角清掉。
+   */
+  cafeHeroIds?: number[];
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -244,7 +273,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录、七日目标、基础商店和低级许愿池都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录、七日目标、基础商店、低级许愿池和咖啡馆招待都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -325,6 +354,13 @@ export class MockGameSession {
   private wishDaySeeded = false;
   /** 下一次落到奖池的下标。成功才 +1。创角回到 0。 */
   wishCursor = 0;
+  /** 当前 cafeDay 上已经派出的招待次数。领取不额外占次数。 */
+  cafeUsed = 0;
+  /** 次数所属开服天。和 openDay 不同时，下一次咖啡馆操作把次数清零。未领取的招待留下。 */
+  cafeDay = 1;
+  private cafeDaySeeded = false;
+  /** 还没领取的英雄 id。空表示没有派出。 */
+  private cafeServing: number[] = [];
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
@@ -336,6 +372,7 @@ export class MockGameSession {
     if (!this.dailyDaySeeded) this.dailyDay = this.openDay;
     if (!this.shopDaySeeded) this.shopDay = this.openDay;
     if (!this.wishDaySeeded) this.wishDay = this.openDay;
+    if (!this.cafeDaySeeded) this.cafeDay = this.openDay;
     this.ensureHeroes();
     this.ensureStarterGear();
     if (!this.itemsSeeded) this.grantStarterItems();
@@ -379,7 +416,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数、七日登录、七日目标、商店已购和许愿次数重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标、邮箱、竞技场、幻境之塔、金币副本次数、七日登录、七日目标、商店已购、许愿次数和咖啡馆招待重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -413,6 +450,7 @@ export class MockGameSession {
     this.resetGoal7();
     this.resetShop();
     this.resetWish();
+    this.resetCafe();
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
 
@@ -995,6 +1033,78 @@ export class MockGameSession {
   }
 
   /**
+   * 只读咖啡馆。按当前开服天刷新今日次数，不改钱包、背包和未领取的招待。
+   * 入口仍由客户端 opencondition 的 main_cafe（主线 Lv12）上锁，这里不判断等级。
+   */
+  cafeView(): CafeViewResp {
+    this.prepareCafe();
+    return this.cafeSnapshot();
+  }
+
+  /**
+   * 派出 1 到 2 名英雄招待。MVP 立刻可领，不扣金币。
+   * 没选、超过 2 人、重复、名册没有、已经派出还没领、今日次数用完时拒绝。
+   * 失败不改次数、钱包和背包。成功只占 1 次，奖励在 cafeClaim。
+   * 不改英雄等级、武器、挂机、主线、召唤、商店、许愿和其它玩法次数。
+   */
+  cafeSend(data: unknown): CafeSendResp {
+    this.prepareCafe();
+    if (this.cafeServing.length > 0) return this.cafeSendFail(ErrorCode.CAFE_BUSY);
+    const read = readCafeHeroIds(asRecord(data).heroIds);
+    if (read.problem === "empty") return this.cafeSendFail(ErrorCode.CAFE_NO_HERO);
+    if (read.problem === "bad") return this.cafeSendFail(ErrorCode.CAFE_HERO_MISSING);
+    if (read.ids.length > CAFE_MAX_HEROES) return this.cafeSendFail(ErrorCode.CAFE_TOO_MANY);
+    if (cafeHasDuplicate(read.ids)) return this.cafeSendFail(ErrorCode.CAFE_DUPLICATE);
+    for (let i = 0; i < read.ids.length; i++) {
+      if (!this.findHero(read.ids[i])) return this.cafeSendFail(ErrorCode.CAFE_HERO_MISSING);
+    }
+    if (this.cafeUsed >= CAFE_DAILY_LIMIT) return this.cafeSendFail(ErrorCode.CAFE_NO_CHANCE);
+    this.cafeServing = read.ids.slice();
+    this.cafeUsed += 1;
+    const reward = cafeReward(this.cafeServing.length);
+    return {
+      ok: true,
+      heroIds: this.cafeServing.slice(),
+      names: this.cafeNames(this.cafeServing),
+      goldPreview: reward.gold,
+      beanPreview: reward.beans,
+      used: this.cafeUsed,
+      limit: CAFE_DAILY_LIMIT,
+      ready: true,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 领取当前招待。金币进钱包，咖啡豆进背包，然后清掉派出。
+   * 没有派出时拒绝，钱包和背包不动，次数不退。
+   * 不改英雄等级、主线和其它玩法次数。
+   */
+  cafeClaim(): CafeClaimResp {
+    this.prepareCafe();
+    if (this.cafeServing.length === 0) return this.cafeClaimFail(ErrorCode.CAFE_NOTHING);
+    const names = this.cafeNames(this.cafeServing);
+    const reward = cafeReward(this.cafeServing.length);
+    this.gold += reward.gold;
+    if (reward.beans > 0) this.addItem(CAFE_BEAN_ITEM_ID, reward.beans);
+    this.cafeServing = [];
+    return {
+      ok: true,
+      names,
+      goldGain: reward.gold,
+      itemId: reward.beans > 0 ? CAFE_BEAN_ITEM_ID : 0,
+      itemName: CAFE_BEAN_NAME,
+      itemGain: reward.beans,
+      beanOwned: this.itemCount(CAFE_BEAN_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+      used: this.cafeUsed,
+      limit: CAFE_DAILY_LIMIT,
+    };
+  }
+
+  /**
    * 只读七日登录。按角色登录天列出七格，不改钱包，也不改开服天。
    * 新号第 1 天可领。入口不设等级锁。
    */
@@ -1534,6 +1644,25 @@ export class MockGameSession {
     if (typeof seed.wishCursor === "number" && isFinite(seed.wishCursor) && seed.wishCursor >= 0) {
       this.wishCursor = Math.floor(seed.wishCursor);
     }
+    if (typeof seed.cafeUsed === "number" && isFinite(seed.cafeUsed)) {
+      let used = Math.floor(seed.cafeUsed);
+      if (used < 0) used = 0;
+      if (used > CAFE_DAILY_LIMIT) used = CAFE_DAILY_LIMIT;
+      this.cafeUsed = used;
+    }
+    if (typeof seed.cafeDay === "number" && isFinite(seed.cafeDay) && seed.cafeDay >= 1) {
+      this.cafeDay = Math.floor(seed.cafeDay);
+      this.cafeDaySeeded = true;
+    }
+    if (Array.isArray(seed.cafeHeroIds)) {
+      const ids: number[] = [];
+      for (let i = 0; i < seed.cafeHeroIds.length; i++) {
+        const raw = seed.cafeHeroIds[i];
+        if (typeof raw !== "number" || !isFinite(raw) || raw <= 0) continue;
+        ids.push(Math.floor(raw));
+      }
+      this.cafeServing = ids;
+    }
     if (Array.isArray(seed.goalClaimed)) {
       for (let i = 0; i < seed.goalClaimed.length; i++) {
         const raw = seed.goalClaimed[i];
@@ -1750,6 +1879,117 @@ export class MockGameSession {
     this.wishUsed = 0;
     this.wishDay = this.openDay;
     this.wishCursor = 0;
+  }
+
+  /** 开服天变了就把招待今日次数清零。还没领取的英雄留下，咖啡豆也不收回。 */
+  private refreshCafeDay(): void {
+    if (this.cafeDay === this.openDay) return;
+    this.cafeDay = this.openDay;
+    this.cafeUsed = 0;
+  }
+
+  private resetCafe(): void {
+    this.cafeUsed = 0;
+    this.cafeDay = this.openDay;
+    this.cafeServing = [];
+  }
+
+  private prepareCafe(): void {
+    this.ensureHeroes();
+    this.refreshCafeDay();
+    this.sanitizeCafeServing();
+  }
+
+  private sanitizeCafeServing(): void {
+    const next: number[] = [];
+    const seen: { [id: number]: boolean } = {};
+    for (let i = 0; i < this.cafeServing.length; i++) {
+      const id = this.cafeServing[i];
+      if (seen[id]) continue;
+      if (!this.findHero(id)) continue;
+      seen[id] = true;
+      next.push(id);
+      if (next.length >= CAFE_MAX_HEROES) break;
+    }
+    this.cafeServing = next;
+  }
+
+  private cafeNames(ids: number[]): string[] {
+    const names: string[] = [];
+    for (let i = 0; i < ids.length; i++) {
+      const hero = this.findHero(ids[i]);
+      names.push(hero ? hero.name : "");
+    }
+    return names;
+  }
+
+  private cafeHeroRows(): CafeHero[] {
+    const serving: { [id: number]: boolean } = {};
+    for (let i = 0; i < this.cafeServing.length; i++) serving[this.cafeServing[i]] = true;
+    const rows: CafeHero[] = [];
+    for (let i = 0; i < this.heroes.length; i++) {
+      const hero = this.heroes[i];
+      rows.push({
+        id: hero.id,
+        name: hero.name,
+        level: hero.level,
+        serving: serving[hero.id] === true,
+      });
+    }
+    return rows;
+  }
+
+  private cafeSnapshot(): CafeViewResp {
+    return {
+      ok: true,
+      used: this.cafeUsed,
+      limit: CAFE_DAILY_LIMIT,
+      openDay: this.openDay,
+      servingCount: this.cafeServing.length,
+      ready: this.cafeServing.length > 0,
+      heroes: this.cafeHeroRows(),
+      goldOne: CAFE_GOLD_ONE,
+      goldTwo: CAFE_GOLD_TWO,
+      beanOne: CAFE_BEAN_ONE,
+      beanTwo: CAFE_BEAN_TWO,
+      beanOwned: this.itemCount(CAFE_BEAN_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  private cafeSendFail(code: number): CafeSendResp {
+    const reward = cafeReward(this.cafeServing.length);
+    return {
+      ok: false,
+      heroIds: this.cafeServing.slice(),
+      names: this.cafeNames(this.cafeServing),
+      goldPreview: reward.gold,
+      beanPreview: reward.beans,
+      used: this.cafeUsed,
+      limit: CAFE_DAILY_LIMIT,
+      ready: this.cafeServing.length > 0,
+      gold: this.gold,
+      diamond: this.diamond,
+      code,
+    };
+  }
+
+  private cafeClaimFail(code: number): CafeClaimResp {
+    return {
+      ok: false,
+      names: this.cafeNames(this.cafeServing),
+      goldGain: 0,
+      itemId: 0,
+      itemName: CAFE_BEAN_NAME,
+      itemGain: 0,
+      beanOwned: this.itemCount(CAFE_BEAN_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+      used: this.cafeUsed,
+      limit: CAFE_DAILY_LIMIT,
+      code,
+    };
   }
 
   private wishSnapshot(): WishViewResp {
