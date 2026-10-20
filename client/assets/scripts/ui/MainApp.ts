@@ -42,6 +42,7 @@ import { buildGoal7Page, Goal7Page } from "./Goal7Page";
 import { buildShopPage, ShopPage } from "./ShopPage";
 import { buildWishPage, WishPage } from "./WishPage";
 import { buildCafePage, CafePage } from "./CafePage";
+import { buildGiftPage, GiftPage } from "./GiftPage";
 import { goal7BadJumpToast } from "../module/goal7/tasks";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
@@ -63,6 +64,7 @@ const MAIL_FILL = new Color(110, 78, 168, 255);
 const LOGIN7_FILL = new Color(156, 52, 78, 255);
 const GOAL7_FILL = new Color(184, 122, 36, 255);
 const SHOP_FILL = new Color(42, 108, 132, 255);
+const GIFT_FILL = new Color(140, 52, 108, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -86,6 +88,7 @@ export class MainApp extends Component {
   private shop: ShopPage | null = null;
   private wish: WishPage | null = null;
   private cafe: CafePage | null = null;
+  private gift: GiftPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -133,6 +136,8 @@ export class MainApp extends Component {
     this.wish = null;
     this.cafe?.dispose();
     this.cafe = null;
+    this.gift?.dispose();
+    this.gift = null;
     this.shell?.dispose();
   }
 
@@ -182,7 +187,7 @@ export class MainApp extends Component {
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
     if (!this.allow(id)) return;
-    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish" || id === "cafe") && !this.ensureNet()) {
+    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish" || id === "cafe" || id === "gift") && !this.ensureNet()) {
       return;
     }
     this.panels?.openChild(id);
@@ -225,6 +230,7 @@ export class MainApp extends Component {
     if (id === "shop") return this.mountShop();
     if (id === "wish") return this.mountWish();
     if (id === "cafe") return this.mountCafe();
+    if (id === "gift") return this.mountGift();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -243,9 +249,10 @@ export class MainApp extends Component {
     place(createButton("挂机", () => this.openIdle(), 420, 64, IDLE_FILL), page, 0, 200);
     place(createButton("背包", () => this.openBag(), 420, 64, BAG_FILL), page, 0, 120);
     place(createButton("邮件", () => this.openMail(), 420, 64, MAIL_FILL), page, 0, 40);
-    place(createButton("七日登录", () => this.openLogin7(), 180, 56, LOGIN7_FILL, 20), page, -200, -120);
-    place(createButton("七日目标", () => this.openGoal7(), 180, 56, GOAL7_FILL, 20), page, 0, -120);
-    place(createButton("商店", () => this.openShop(), 180, 56, SHOP_FILL, 20), page, 200, -120);
+    place(createButton("七日登录", () => this.openLogin7(), 156, 52, LOGIN7_FILL, 18), page, -249, -120);
+    place(createButton("七日目标", () => this.openGoal7(), 156, 52, GOAL7_FILL, 18), page, -83, -120);
+    place(createButton("商店", () => this.openShop(), 156, 52, SHOP_FILL, 18), page, 83, -120);
+    place(createButton("礼包", () => this.openGift(), 156, 52, GIFT_FILL, 18), page, 249, -120);
     place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, -40);
     place(
       createButton("公告", () => {
@@ -549,6 +556,39 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.cafe = page;
+    return page.node;
+  }
+
+  /**
+   * 主城和玩法都能进。不看主线等级和开服天。
+   * 没连上时不压页面。页内再分升级有礼、每日礼包、首充和累充。
+   */
+  private openGift(): void {
+    GameLog.shared.info("MainApp", "click gift");
+    if (!this.allow("gift")) return;
+    if (!this.ensureNet()) return;
+    this.panels?.openChild("gift");
+    this.refreshChrome();
+  }
+
+  private mountGift(): Node {
+    this.gift?.dispose();
+    const page = buildGiftPage({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.giftView({}, NetClient.shared),
+      claimLevel: (level) => Proto.giftClaimLevel({ level }, NetClient.shared),
+      buyDaily: () => Proto.giftBuyDaily({}, NetClient.shared),
+      recharge: (kind) => Proto.giftRecharge({ kind }, NetClient.shared),
+      claimAcc: (amount) => Proto.giftClaimAcc({ amount }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.gift = page;
     return page.node;
   }
 
@@ -906,6 +946,10 @@ export class MainApp extends Component {
     if (id === "cafe") {
       this.cafe?.dispose();
       this.cafe = null;
+    }
+    if (id === "gift") {
+      this.gift?.dispose();
+      this.gift = null;
     }
   }
 

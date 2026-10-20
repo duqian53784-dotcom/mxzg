@@ -1015,3 +1015,164 @@ export interface CafeClaimResp {
    */
   code?: number;
 }
+
+/** 升级有礼一档。locked 是主线等级还没到，claimable 可领，claimed 已领。 */
+export type GiftLevelState = "locked" | "claimable" | "claimed";
+
+/** 累充一档。locked 是累计金额还没到。 */
+export type GiftAccState = "locked" | "claimable" | "claimed";
+
+/** first 是一次性首充。acc 是再模拟一笔，只加累充。 */
+export type GiftRechargeKind = "first" | "acc";
+
+export interface GiftLevelRow {
+  /** 主线等级门槛，例如 5、10、15。 */
+  level: number;
+  state: GiftLevelState;
+  gold: number;
+  diamond: number;
+  itemId: number;
+  itemName: string;
+  itemCount: number;
+}
+
+export interface GiftAccRow {
+  /** 累充金额门槛。单位是模拟的「元」，不是钻石。 */
+  amount: number;
+  state: GiftAccState;
+  gold: number;
+  diamond: number;
+  itemId: number;
+  itemName: string;
+  itemCount: number;
+}
+
+export interface GiftViewReq {
+  /** 占位。Mock 不看请求体。打开时按当前开服天刷新每日礼包。 */
+  clientTime?: number;
+}
+
+export interface GiftViewResp {
+  ok: boolean;
+  /** 当前主线等级。升级有礼用它，不看英雄等级。 */
+  level: number;
+  /** 当前开服天。每日礼包跟着它走。 */
+  openDay: number;
+  gold: number;
+  diamond: number;
+  levels: GiftLevelRow[];
+  dailyPrice: number;
+  dailyBought: boolean;
+  dailyGold: number;
+  dailyItemId: number;
+  dailyItemName: string;
+  dailyItemCount: number;
+  firstChargeDone: boolean;
+  /** 首充计入累充的金额。 */
+  firstAmount: number;
+  firstDiamond: number;
+  firstItemId: number;
+  firstItemName: string;
+  firstItemCount: number;
+  /** 模拟充值累计。首充和累充页的模拟充值都加在这里。每日礼包不加。 */
+  totalRecharge: number;
+  rechargeStep: number;
+  rechargeDiamond: number;
+  tiers: GiftAccRow[];
+  code?: number;
+}
+
+export interface GiftClaimLevelReq {
+  /** 门槛等级，不是当前等级。 */
+  level: number;
+}
+
+export interface GiftClaimLevelResp {
+  ok: boolean;
+  level: number;
+  state: GiftLevelState | "";
+  goldGain: number;
+  diamondGain: number;
+  itemId: number;
+  itemName: string;
+  itemGain: number;
+  gold: number;
+  diamond: number;
+  /**
+   * 没有这一档 GIFT_LEVEL_NOT_FOUND，等级不够 GIFT_LEVEL_LOCKED，领过 GIFT_LEVEL_CLAIMED。
+   * 成功可以不带。失败不改钱包、背包和已领记录。
+   */
+  code?: number;
+}
+
+export interface GiftBuyDailyReq {
+  /** 占位。Mock 不看请求体。 */
+  clientTime?: number;
+}
+
+export interface GiftBuyDailyResp {
+  ok: boolean;
+  price: number;
+  bought: boolean;
+  goldGain: number;
+  itemId: number;
+  itemName: string;
+  itemGain: number;
+  gold: number;
+  diamond: number;
+  /**
+   * 今天已经买过 GIFT_DAILY_BOUGHT，钻石不够 GIFT_DAILY_SHORT。
+   * 成功可以不带。失败不改钱包、背包和今日已购。
+   */
+  code?: number;
+}
+
+export interface GiftRechargeReq {
+  kind: GiftRechargeKind;
+}
+
+export interface GiftRechargeResp {
+  ok: boolean;
+  kind: GiftRechargeKind | "";
+  /** 本次加到累充上的金额。失败为 0。 */
+  added: number;
+  firstChargeDone: boolean;
+  /** 这一次刚刚完成首充时为 true。再次模拟累充为 false。 */
+  firstGranted: boolean;
+  diamondGain: number;
+  itemId: number;
+  itemName: string;
+  itemGain: number;
+  totalRecharge: number;
+  gold: number;
+  diamond: number;
+  /**
+   * 首充已经完成 GIFT_FIRST_DONE，方式不对 GIFT_RECHARGE_INVALID。
+   * 成功可以不带。失败不改累充、首充标记、钱包和背包。
+   */
+  code?: number;
+}
+
+export interface GiftClaimAccReq {
+  /** 金额门槛，例如 6、30、68。 */
+  amount: number;
+}
+
+export interface GiftClaimAccResp {
+  ok: boolean;
+  amount: number;
+  state: GiftAccState | "";
+  goldGain: number;
+  diamondGain: number;
+  itemId: number;
+  itemName: string;
+  itemGain: number;
+  totalRecharge: number;
+  gold: number;
+  diamond: number;
+  /**
+   * 没有这一档 GIFT_ACC_NOT_FOUND，金额不够 GIFT_ACC_LOCKED，领过 GIFT_ACC_CLAIMED。
+   * 成功可以不带。失败不改钱包、背包、累充金额和已领记录。
+   */
+  code?: number;
+}
