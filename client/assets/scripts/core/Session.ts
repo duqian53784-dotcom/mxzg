@@ -9,4 +9,8 @@ export class Session {
   static account = "";
   static token = "";
   static role: MockRole | null = null;
+  /** 开服自然日。来自 Mock 的 role.enter；缺省第 1 天。 */
+  static openDay = 1;
+  /** 下一关。主城「主线」用它发 stage.enter。 */
+  static stageId = 1;
 }

@@ -11,9 +11,9 @@
 | `login` | `ok` / `account` / `token` | Boot |
 | `role.enter` | `roleId` / `name` / `level`（默认 MockHero） | Boot |
 | `heartbeat` | `serverTime` | NetClient 定时发送，不走 `request` |
-| 其它 cmd | `{ ok: true, echo }` | 自检里的 `bag.list`；MainApp 不发业务包 |
+| 其它 cmd | `{ ok: true, echo }` | 自检里的 `bag.list` |
 
-B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `hasRole`。原字段还在，Boot → Main 的 Mock 登录不变。
+B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `hasRole`。原字段还在，Boot → Main 的 Mock 登录不变。B6 起，主城「主线」会发 `stage.enter` / `stage.result`。
 
 ## P0 清单
 
@@ -23,8 +23,8 @@ B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `h
 | 1002 | `heartbeat` | `HeartbeatReq` | `HeartbeatResp` | NetClient |
 | 1101 | `role.enter` | `RoleEnterReq` | `RoleEnterResp` | Boot；默认已有角色 |
 | 1102 | `role.create` | `RoleCreateReq` | `RoleCreateResp` | C1 创角 |
-| 1201 | `stage.enter` | `StageEnterReq` | `StageEnterResp` | C3 进关 |
-| 1202 | `stage.result` | `StageResultReq` | `StageResultResp` | C3 结算 |
+| 1201 | `stage.enter` | `StageEnterReq` | `StageEnterResp` | 主城假战斗；表现留给 C3 |
+| 1202 | `stage.result` | `StageResultReq` | `StageResultResp` | 主城假战斗；表现留给 C3 |
 
 代码在 `client/assets/scripts/net/protocol/`：`cmds.ts`（名字和 ID）、`types.ts`（字段）、`codec.ts`（现在是明文对象）、`Proto.ts`（`Proto.login` 等）。
 
@@ -37,10 +37,11 @@ const role = await Proto.roleEnter({ account: login.account });
 
 Mock 约定（给 C1 / C3 直接用，不用再改传输层）：
 
-- 每个 MockTransport 一开始就有角色 `1001 / MockHero / Lv1`，所以只 `role.enter` 也能进主城。
-- `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，之后 `role.enter` 返回新名字，`roleId` 仍是 1001。
-- `stage.enter` 的 `stageId < 1` 失败；成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。
-- `stage.result` 胜利时 `nextStageId = stageId + 1`，奖励占位 `{ id: 1, count: 10 }`；失败停在本关，奖励空。`id: 1` 不是真实道具表。
+- 每个 MockTransport 带一份 `MockGameSession`。一开始就有角色 `1001 / MockHero / Lv1`、下一关 1、开服第 1 天，所以只 `role.enter` 也能进主城。同一局里进度会留下来。细节和录包见 `docs/mock-replay.md`。
+- `role.enter` 额外带 `openDay`、`stageId`（真服可以不带）。Boot 写进 `Session`。
+- `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线和开服天。
+- `stage.enter` 的 `stageId < 1` 失败；成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。允许跳关。
+- `stage.result` 新通关后 `nextStageId = clearedStage + 1`，`level = 1 + clearedStage`，奖励占位 `{ id: 1, count: 10 }`。失败停在本关，奖励空。`id: 1` 不是真实道具表。回包可带 `openDay` / `level`。
 
 ## 以后换成真 Protobuf
 

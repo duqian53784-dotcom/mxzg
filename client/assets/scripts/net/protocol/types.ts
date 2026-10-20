@@ -31,6 +31,10 @@ export interface RoleEnterResp {
   roleId: number;
   name: string;
   level: number;
+  /** Mock 会话：开服自然日。真服可以不带。 */
+  openDay?: number;
+  /** Mock 会话：下一关。真服可以不带。 */
+  stageId?: number;
 }
 
 export interface RoleCreateReq {
@@ -72,4 +76,7 @@ export interface StageResultResp {
   win: boolean;
   nextStageId: number;
   rewards: StageReward[];
+  /** Mock 会话结算后的开服天 / 等级。真服可以不带。 */
+  openDay?: number;
+  level?: number;
 }

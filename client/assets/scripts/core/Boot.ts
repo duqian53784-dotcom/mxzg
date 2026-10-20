@@ -143,7 +143,9 @@ export class Boot extends Component {
       name: role.name,
       level: role.level,
     };
-    console.log("[Boot] mock login ok", Session.account, Session.role.name);
+    Session.openDay = typeof role.openDay === "number" && role.openDay >= 1 ? role.openDay : 1;
+    Session.stageId = typeof role.stageId === "number" && role.stageId >= 1 ? role.stageId : 1;
+    console.log("[Boot] mock login ok", Session.account, Session.role.name, "stage", Session.stageId);
   }
 
   private enterMain(): void {

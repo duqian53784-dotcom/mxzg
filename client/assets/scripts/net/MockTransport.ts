@@ -1,42 +1,33 @@
+import { MockGameSession } from "./MockGameSession";
 import { encodeRequest } from "./protocol/codec";
 import { Cmd } from "./protocol/cmds";
-import {
-  HeartbeatResp,
-  LoginResp,
-  RoleCreateResp,
-  RoleEnterResp,
-  StageEnterResp,
-  StageResultResp,
-} from "./protocol/types";
+import { HeartbeatResp } from "./protocol/types";
 import { ITransport, NetHandler, NetMessage } from "./NetTypes";
 
 export interface MockTransportOptions {
   /** 回包延迟。默认很短，方便编辑器预览。 */
   latencyMs?: number;
-}
-
-interface MockRole {
-  roleId: number;
-  name: string;
-  level: number;
+  /** 不传则新建一局。断线重连沿用同一个对象，进度还在。 */
+  session?: MockGameSession;
 }
 
 /**
- * 不连服务器的假传输。
+ * 不连服务器的假传输。默认预览走这条，不用另起进程。
+ * 业务状态在 MockGameSession：开服天、角色等级、主线进度，同一局里多次请求都改它。
  * 内置回包：login、heartbeat、role.enter、role.create、stage.enter、stage.result。
  * 其它 cmd 原样 echo。引擎 websocket 模块当前是关的，这里故意不用 WebSocket。
- * 默认已有角色 MockHero，Boot 只调 role.enter 也能进主城。role.create 会改掉这个角色。
+ * 默认已有角色 MockHero，Boot 只调 role.enter 也能进主城。
  */
 export class MockTransport implements ITransport {
+  readonly session: MockGameSession;
   private latencyMs: number;
   private opened = false;
   private messageHandler: NetHandler | null = null;
   private closeHandler: (() => void) | null = null;
-  private role: MockRole = { roleId: 1001, name: "MockHero", level: 1 };
-  private battleSeq = 0;
 
   constructor(options?: MockTransportOptions) {
     this.latencyMs = options?.latencyMs ?? 30;
+    this.session = options?.session ?? new MockGameSession();
   }
 
   connect(_url: string): Promise<void> {
@@ -73,12 +64,9 @@ export class MockTransport implements ITransport {
 
   private reply(msg: NetMessage): void {
     if (!this.opened) return;
-    const body = asRecord(msg.data);
+    const session = this.session;
     if (msg.cmd === Cmd.login) {
-      const account = strField(body, "account") || "mock";
-      const serverId = numField(body, "serverId", 1);
-      const data: LoginResp = { ok: true, account, token: "mock-token", serverId };
-      this.emit(encodeRequest(Cmd.login, data));
+      this.emit(encodeRequest(Cmd.login, session.login(msg.data)));
       return;
     }
     if (msg.cmd === Cmd.heartbeat) {
@@ -87,60 +75,19 @@ export class MockTransport implements ITransport {
       return;
     }
     if (msg.cmd === Cmd.roleEnter) {
-      const data: RoleEnterResp = { ok: true, hasRole: true, ...this.role };
-      this.emit(encodeRequest(Cmd.roleEnter, data));
+      this.emit(encodeRequest(Cmd.roleEnter, session.roleEnter()));
       return;
     }
     if (msg.cmd === Cmd.roleCreate) {
-      const name = strField(body, "name").trim();
-      if (!name) {
-        const data: RoleCreateResp = { ok: false, roleId: 0, name: "", level: 0 };
-        this.emit(encodeRequest(Cmd.roleCreate, data));
-        return;
-      }
-      this.role = { roleId: this.role.roleId || 1001, name, level: 1 };
-      const data: RoleCreateResp = { ok: true, ...this.role };
-      this.emit(encodeRequest(Cmd.roleCreate, data));
+      this.emit(encodeRequest(Cmd.roleCreate, session.roleCreate(msg.data)));
       return;
     }
     if (msg.cmd === Cmd.stageEnter) {
-      const stageId = numField(body, "stageId", 0);
-      if (stageId < 1) {
-        const data: StageEnterResp = { ok: false, stageId: 0, battleId: "" };
-        this.emit(encodeRequest(Cmd.stageEnter, data));
-        return;
-      }
-      this.battleSeq += 1;
-      const data: StageEnterResp = {
-        ok: true,
-        stageId,
-        battleId: "mock-battle-" + stageId + "-" + this.battleSeq,
-      };
-      this.emit(encodeRequest(Cmd.stageEnter, data));
+      this.emit(encodeRequest(Cmd.stageEnter, session.stageEnter(msg.data)));
       return;
     }
     if (msg.cmd === Cmd.stageResult) {
-      const stageId = numField(body, "stageId", 0);
-      const win = body.win === true;
-      if (stageId < 1) {
-        const data: StageResultResp = {
-          ok: false,
-          stageId: 0,
-          win: false,
-          nextStageId: 0,
-          rewards: [],
-        };
-        this.emit(encodeRequest(Cmd.stageResult, data));
-        return;
-      }
-      const data: StageResultResp = {
-        ok: true,
-        stageId,
-        win,
-        nextStageId: win ? stageId + 1 : stageId,
-        rewards: win ? [{ id: 1, count: 10 }] : [],
-      };
-      this.emit(encodeRequest(Cmd.stageResult, data));
+      this.emit(encodeRequest(Cmd.stageResult, session.stageResult(msg.data)));
       return;
     }
     this.emit(encodeRequest(msg.cmd, { ok: true, echo: msg.data ?? null }));
@@ -149,19 +96,4 @@ export class MockTransport implements ITransport {
   private emit(msg: NetMessage): void {
     if (this.messageHandler) this.messageHandler(msg);
   }
-}
-
-function asRecord(data: unknown): Record<string, unknown> {
-  if (data && typeof data === "object") return data as Record<string, unknown>;
-  return {};
-}
-
-function strField(body: Record<string, unknown>, key: string): string {
-  const value = body[key];
-  return typeof value === "string" ? value : "";
-}
-
-function numField(body: Record<string, unknown>, key: string, fallback: number): number {
-  const value = body[key];
-  return typeof value === "number" && isFinite(value) ? value : fallback;
 }
