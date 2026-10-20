@@ -26,14 +26,14 @@
 | server 进 Git | ⏸ 暂不 | 本机 **junction** → `F:\源码\mj\program\server` |
 | 旧仓 / 旧客户端 | 📦 归档参考 | 旧代码在 `F:\源码\mj\program`；GitHub 旧大体积内容勿再整仓硬推 |
 | 进度文档 | ✅ 本文 | `PROJECT_PLAN.md` |
-| P0 可玩闭环 | ❌ 未开始 | 玩法未开始；技术骨架 B1–B7 已完成。主城可点「主线」走假战斗；失败有中文 Toast |
+| P0 可玩闭环 | ❌ 未开始 | 玩法未开始；技术骨架 B1–B8 已完成。主城可点「主线」走假战斗；失败有中文 Toast；H5 安全区已接上 |
 | 连真实服 | ❌ 未开始 | 协议 / 网关 / 登录 |
 | 微信小游戏 | ❌ 未开始 | H5 稳定后再做 |
 | App 包 | ❌ 未开始 | H5 之后 |
 
-**当前焦点（唯一）：** B8 — 多分辨率 / 安全区（H5）。
+**当前焦点（唯一）：** C1 — 账号登录 / 选服 / 创角。
 
-**上次更新：** 2026-10-20（Asia/Shanghai）— B7 完成：GameLog 环形缓冲与 `[mxzg]` 控制台镜像；错误码中文 Toast；主城「日志」可看最近记录。
+**上次更新：** 2026-10-20（Asia/Shanghai）— B8 完成：安全区按可见区域给 Boot / 主城留边，不改 Fit Width / Fit Height。阶段 B 技术骨架收口。
 
 ---
 
@@ -213,7 +213,7 @@ client/assets/
 - [x] A10.5 `scripts/ui`（含 MainApp.ts 占位）
 - [x] A10.6 `scenes/Boot|Main|Battle` 已在 Creator 内创建
 
-### 阶段 B · P0 技术骨架
+### 阶段 B · P0 技术骨架（已完成）
 
 - [x] B1 启动流程：Boot → 热更/版本检查占位 → 登录场景
 - [x] B2 UI 框架：一层 Canvas、页面栈、弹窗队列、Toast
@@ -222,7 +222,7 @@ client/assets/
 - [x] B5 协议：梳理旧 Protobuf 列表；P0 只用到的先生成/手写 stub（旧 .proto 不在本仓；手写 stub 见 `docs/protocol-stubs.md`）
 - [x] B6 本地 Mock 服或录包回放（无真实服前可玩）（进程内 MockGameSession + ReplayTransport，见 `docs/mock-replay.md`）
 - [x] B7 日志与错误码展示（GameLog + 错误码中文 Toast + 主城「日志」）
-- [ ] B8 多分辨率 / 安全区（H5）
+- [x] B8 多分辨率 / 安全区（H5）（`SafeArea` 读可见区域与 `sys.getSafeAreaRect`，Boot / UIShell 留边；设计分辨率保持 720×1280，不改适配策略。见 `docs/safe-area.md`）
 
 ### 阶段 C · P0 玩法垂直切片
 
@@ -336,12 +336,13 @@ client/assets/
 | 2026-10-20（Asia/Shanghai） | B5：P0 手写协议 stub（`Proto.login` / `roleEnter` / `roleCreate` / `stageEnter` / `stageResult` / `heartbeat`），MockTransport 补创角与主线进关/结算。焦点改为 B6 |
 | 2026-10-20（Asia/Shanghai） | B6：MockGameSession 记住开服天 / 等级 / 主线进度；录包 `resources/mock/session-login-stage.json` + ReplayTransport。主城「主线」可假战斗结算。焦点改为 B7 |
 | 2026-10-20（Asia/Shanghai） | B7：GameLog（级别、环形缓冲、`[mxzg]` 镜像）；错误码表；失败 Toast；主城「日志」面板。焦点改为 B8 |
+| 2026-10-20（Asia/Shanghai） | B8：H5 安全区 / 多分辨率。设计分辨率保持 720×1280，代码不改 Fit Width / Fit Height。焦点改为 C1 |
 
 ---
 
 ## 13. 下一步（写给下一回合的自己）
 
-1. 推进 **B8**：多分辨率 / 安全区（H5）。  
-2. B7 已可在主城点「日志」看最近记录。「空名创角」Toast「角色名不能为空」，「断开提示」Toast「网络已断开」。说明见 `client/assets/scripts/README.md`。  
+1. 推进 **C1**：账号登录 / 选服 / 创角（UI + Mock 协议）。Boot 上已有单账号「进入游戏」，C1 补选服和创角，沿用 `Proto.login` / `Proto.roleCreate`，不要另起网络。  
+2. B8 预览：拖浏览器窗口（很扁或很窄）时主城按钮和 Toast 应留在画面内。桌面没有刘海时，控制台 `localStorage.setItem("mxzg.safe","88,0,34,0")` 再拖一次窗口。说明见 `docs/safe-area.md`。  
 3. 每完成一项，更新第 1 节与本清单。  
-4. 有空时补一次 Web Mobile 构建（非阻塞）。对照旧 `.proto` 的真实消息号留到阶段 D，不要在 B8 做。  
+4. 有空时补一次 Web Mobile 构建（非阻塞）。对照旧 `.proto` 的真实消息号留到阶段 D，不要在 C1 做。  

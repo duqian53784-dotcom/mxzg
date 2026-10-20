@@ -4,7 +4,7 @@
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
 - `module/` 业务系统（尚未开始）
-- `ui/` 页面栈、弹窗队列、Toast、主城壳
+- `ui/` 页面栈、弹窗队列、Toast、主城壳、安全区（`SafeArea.ts`）
 
 场景在 `assets/scenes/`。Boot / Main / Battle 已建好。本目录脚本不会写进 `.scene`，需要在 Creator 里挂一次组件。
 
@@ -48,3 +48,11 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 - 主城「日志」打开最近 10 条，新的在上（代码生成，不改场景）。里面两个按钮用来验收：
   1. **空名创角**：Toast「角色名不能为空」。当前角色不变。
   2. **断开提示**：Toast「网络已断开」，并关掉 Mock 连接。要继续主线请重新预览。「模拟断线」仍会重连，不会停在断开。
+
+## 安全区（B8）
+
+设计分辨率保持 **720×1280**（`settings/v2/packages/project.json`）。运行时不改 Fit Width / Fit Height。
+
+`ui/SafeArea.ts` 在 Boot 和主城 `start` 时读可见区域与 `sys.getSafeAreaRect()`，窗口变化后再算。登录面板、主城按钮和 Toast 会让开刘海；安全区比设计分辨率小时只缩小不放大。不用改 `.scene`，也不要给 Canvas 再挂引擎自带的 SafeArea。
+
+`GameLog` 的 `minLevel` 为 `debug`（默认）时，左上角有一行尺寸。桌面没有刘海时，控制台执行 `localStorage.setItem("mxzg.safe", "88,0,34,0")` 再拖一下窗口。说明见 `docs/safe-area.md`。
