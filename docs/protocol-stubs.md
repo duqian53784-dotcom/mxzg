@@ -53,6 +53,10 @@ B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `h
 | 2302 | `goal7.claim` | `Goal7ClaimReq` | `Goal7ClaimResp` | 领取一个已完成的目标（C14）。未开启 `GOAL7_LOCKED`，未完成 `GOAL7_INCOMPLETE`，领过 `GOAL7_CLAIMED`，没有这个 id `GOAL7_NOT_FOUND` |
 | 2401 | `shop.view` | `ShopViewReq` | `ShopViewResp` | 基础商店。今日限购和三样商品。按开服天刷新已购次数。不改钱包 |
 | 2402 | `shop.buy` | `ShopBuyReq` | `ShopBuyResp` | 购买一件（基础商店）。扣金币或钻石，道具进背包。没有商品 `SHOP_NOT_FOUND`，售罄 `SHOP_SOLD_OUT`，金币不足 `SHOP_GOLD_SHORT`，钻石不足 `SHOP_DIAMOND_SHORT` |
+| 2801 | `limited.view` | `LimitedViewReq` | `LimitedViewResp` | 限时活动。兑换项、点石次数和限时礼包。按开服天刷新兑换和点石。不改钱包 |
+| 2802 | `limited.exchange` | `LimitedExchangeReq` | `LimitedExchangeResp` | 兑换一次。咖啡豆或金币换道具。没有这项 `LIMITED_EX_NOT_FOUND`，兑完 `LIMITED_EX_SOLD_OUT`，金币不足 `LIMITED_EX_GOLD_SHORT`，材料不足 `LIMITED_EX_ITEM_SHORT` |
+| 2803 | `limited.alchemy` | `LimitedAlchemyReq` | `LimitedAlchemyResp` | 点石一次。今日第一次免费，之后钻石换金币。次数用完 `LIMITED_STONE_NO_CHANCE`，钻石不足 `LIMITED_STONE_SHORT` |
+| 2804 | `limited.buy` | `LimitedBuyReq` | `LimitedBuyResp` | 买一个限时礼包。库存 1。模拟购买不扣钻石。买过 `LIMITED_PACK_BOUGHT`，本轮结束 `LIMITED_PACK_ENDED`，钻石不足 `LIMITED_PACK_SHORT`，没有这个 id `LIMITED_PACK_NOT_FOUND` |
 
 代码在 `client/assets/scripts/net/protocol/`：`cmds.ts`（名字和 ID）、`types.ts`（字段）、`codec.ts`（现在是明文对象）、`Proto.ts`（`Proto.login` 等）。
 
@@ -67,7 +71,7 @@ Mock 约定（给 C1 / C6 直接用，不用再改传输层）：
 
 - 每个 MockTransport 带一份 `MockGameSession`。一开始就有角色 `1001 / MockHero / Lv1`，属于账号 `mock`，下一关 1、开服第 1 天。还没 `login`，或登录的就是 `mock` 时，只 `role.enter` 也能进主城。登录别的账号则 `hasRole` 为 false，直到 `role.create`。同一局里进度会留下来。细节和录包见 `docs/mock-replay.md`。
 - `role.enter` 额外带 `openDay`、`stageId`、`gold`、`diamond`（真服可以不带）。Boot 写进 `Session`。没有角色时金币钻石回 0。
-- `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线、开服天、钱包（金币 100、钻石 20）、挂机（时长、强化石、领取次数）、召唤碎片和英雄名册（回到起步三名 Lv1，每人新手短剑 Lv1）。背包重新放上小金币袋 ×2、经验药水 ×2、许愿符 ×2。邮箱回到起步三封。竞技场积分回到 1000，今日次数清零。幻境之塔回到第 1 层，今日次数清零。金币副本今日次数清零。七日登录回到第 1 天，已领记录清掉。七日目标已领记录清掉。商店今日已购清掉。许愿次数和奖池游标清掉。咖啡馆次数和未领取的招待清掉。礼包的升级领取、每日已购、首充和累充清掉。
+- `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线、开服天、钱包（金币 100、钻石 20）、挂机（时长、强化石、领取次数）、召唤碎片和英雄名册（回到起步三名 Lv1，每人新手短剑 Lv1）。背包重新放上小金币袋 ×2、经验药水 ×2、许愿符 ×2。邮箱回到起步三封。竞技场积分回到 1000，今日次数清零。幻境之塔回到第 1 层，今日次数清零。金币副本今日次数清零。七日登录回到第 1 天，已领记录清掉。七日目标已领记录清掉。商店今日已购清掉。许愿次数和奖池游标清掉。咖啡馆次数和未领取的招待清掉。礼包的升级领取、每日已购、首充和累充清掉。限时兑换今日次数、点石次数和限时礼包已购清掉。
 - `stage.enter` 的 `stageId < 1` 失败；成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。Mock 允许跳关。主线列表只放行下一关，高于等级的战报判负。
 - `stage.result` 新通关后 `nextStageId = clearedStage + 1`，`level = 1 + clearedStage`，奖励占位 `{ id: 1, count: 10 }`（id 1 加金币，id 2 加钻石）。失败停在本关，奖励空，钱包不变。回包可带 `openDay` / `level` / `gold` / `diamond`。快速作战和主线战报共用这条，不另开消息。单次跳关只发这一关的 10 金币。
 - `stage.push` 只给 Mock 预览。缺省目标第 70 关。从已通关的下一关起，每一关都按 `stage.result` 胜利结算，所以金币、等级、开服天和一关关打相同。已经到达目标时 `already: true`，金币不加。`target` 小于 1、不是数字、或大于 200 时 `STAGE_ID_INVALID`，进度不动。不改挂机起算、角色登录天、英雄和已领记录。默认录包没有这条。
@@ -108,8 +112,12 @@ Mock 约定（给 C1 / C6 直接用，不用再改传输层）：
 - `gift.buyDaily` 花 10 钻石买今日礼包，得金币 80 和强化石 ×2。今天买过 `GIFT_DAILY_BOUGHT`（「今日礼包已购买」），钻石不够 `GIFT_DAILY_SHORT`（「钻石不足，每日礼包需要 10」）。失败不改钱包和已购。不计入累充。
 - `gift.recharge` 模拟充值，不走真实支付。`kind` 为 `first` 时只完成一次：累充 +6，钻石 +60，经验药水 ×1，并记下 `firstChargeDone`。已经完成 `GIFT_FIRST_DONE`（「首充已完成」）。`kind` 为 `acc` 时每次累充 +30，并另发钻石 +30，不重复发首充礼包。方式不对 `GIFT_RECHARGE_INVALID`（「请选择充值方式」）。失败不改累充、钱包和背包。
 - `gift.claimAcc` 按金额门槛领一档累充。累计达到且还没领过才发。没有这一档 `GIFT_ACC_NOT_FOUND`（「没有这一档累充」），金额不够 `GIFT_ACC_LOCKED`（「累充未达到 30」），领过 `GIFT_ACC_CLAIMED`（「累充 6 奖励已经领取」）。失败不改钱包、背包和累充金额。创角把升级领取、每日已购、首充和累充清掉。
+- `limited.view` 只读限时活动。回包带开服天、两档兑换、点石已用次数和是否免费、两档限时礼包，以及倒计时。不改钱包。入口不设等级锁，主城和玩法都能进。兑换次数和点石次数跟着开服天清掉。限时礼包已购留下，直到创角。
+- `limited.exchange` 按兑换项 `id` 兑一次。咖啡豆 ×2 换经验药水 ×1，今日 2 次。金币 50 换强化石 ×4，今日 3 次。没有这项 `LIMITED_EX_NOT_FOUND`（「没有这个兑换」），兑完 `LIMITED_EX_SOLD_OUT`（「经验药水今日已兑完」），金币不够 `LIMITED_EX_GOLD_SHORT`（「金币不足，兑换需要 50」），咖啡豆不够 `LIMITED_EX_ITEM_SHORT`（「咖啡豆不足，兑换需要 2」）。失败不改钱包、背包和今日次数。
+- `limited.alchemy` 点石一次。每天 3 次。第一次不扣钻石，获得金币 100。之后每次钻石 5 换金币 100。次数用完 `LIMITED_STONE_NO_CHANCE`（「今日点石次数已用完」），钻石不够 `LIMITED_STONE_SHORT`（「钻石不足，点石需要 5」）。失败不改钱包和次数。
+- `limited.buy` 按礼包 `id` 买一次。开服礼包花钻石 15，得金币 180 和强化石 ×3。限时补给是模拟购买，不扣钻石，得钻石 30 和经验药水 ×1。两种都只在开服第 1 天到第 7 天可买，库存 1。买过 `LIMITED_PACK_BOUGHT`（「开服礼包已经购买」），超过第 7 天且还没买 `LIMITED_PACK_ENDED`（「限时礼包已结束」），钻石不够 `LIMITED_PACK_SHORT`（「钻石不足，开服礼包需要 15」），没有这个 id `LIMITED_PACK_NOT_FOUND`（「没有这个礼包」）。已经买过优先于已结束。失败不改钱包和已购。不计入礼包页的累充。创角把兑换次数、点石次数和限时礼包已购清掉。
 
-1301 / 1302 / 1401 / 1402 / 1501 / 1601 / 1602 / 1701–1705 / 1801 / 1802 / 1901 / 1902 / 2001 / 2002 / 2101 / 2102 / 2201 / 2202 / 2203 / 2301 / 2302 / 2401 / 2402 / 2501 / 2502 / 2601 / 2602 / 2603 / 2701 / 2702 / 2703 / 2704 / 2705 仍是客户端占位号，不是旧服消息号。
+1301 / 1302 / 1401 / 1402 / 1501 / 1601 / 1602 / 1701–1705 / 1801 / 1802 / 1901 / 1902 / 2001 / 2002 / 2101 / 2102 / 2201 / 2202 / 2203 / 2301 / 2302 / 2401 / 2402 / 2501 / 2502 / 2601 / 2602 / 2603 / 2701 / 2702 / 2703 / 2704 / 2705 / 2801 / 2802 / 2803 / 2804 仍是客户端占位号，不是旧服消息号。
 
 ## 以后换成真 Protobuf
 

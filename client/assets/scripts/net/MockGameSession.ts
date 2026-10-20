@@ -123,6 +123,20 @@ import {
   parseGiftRecharge,
 } from "../module/gift/packs";
 import {
+  findLimitedOffer,
+  findLimitedPack,
+  limitedCountdown,
+  limitedPackEnded,
+  limitedStoneCost,
+  limitedStoneFree,
+  LIMITED_BEAN_ITEM_ID,
+  LIMITED_PACK_DAYS,
+  LIMITED_STONE_GOLD,
+  LIMITED_STONE_LIMIT,
+  listLimitedOffers,
+  listLimitedPacks,
+} from "../module/limited/event";
+import {
   isSummonCount,
   poolAt,
   shardItemId,
@@ -179,6 +193,10 @@ import {
   GiftAccState,
   GiftRechargeResp,
   GiftViewResp,
+  LimitedAlchemyResp,
+  LimitedBuyResp,
+  LimitedExchangeResp,
+  LimitedViewResp,
 } from "./protocol/types";
 
 /** 一场预览里的假服状态。同一 MockTransport 上多次请求共用这一份。 */
@@ -306,6 +324,25 @@ export interface MockSessionSeed {
   totalRecharge?: number;
   /** 已经领取的累充门槛，例如 6、30、68。不认识的数字会丢掉。 */
   giftAccClaimed?: number[];
+  /**
+   * 今日各兑换已兑次数。id 是兑换项 id，不是道具 id。
+   * 不认识的 id 忽略。超过限购时按限购计。
+   */
+  limitedExBought?: { id: number; count: number }[];
+  /**
+   * 兑换次数所属的开服天。不填则跟当前 openDay 对齐。
+   * 和 openDay 不一致时，下一次查看或兑换会把次数清零，已经换到的不收回。
+   */
+  limitedExDay?: number;
+  /** 今日已点石次数。不填为 0。超过每日上限时按上限计。第一次免费。 */
+  limitedStoneUsed?: number;
+  /**
+   * 点石次数所属的开服天。不填则跟当前 openDay 对齐。
+   * 和 openDay 不一致时，下一次查看或点石会把次数清零。
+   */
+  limitedStoneDay?: number;
+  /** 已经购买的限时礼包 id。不认识的数字会丢掉。不随开服天补货。 */
+  limitedPackBought?: number[];
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -314,7 +351,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录、七日目标、基础商店、低级许愿池、咖啡馆招待和礼包骨架都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取、铁匠铺强化、竞技场挑战、幻境之塔、日常金币副本、七日登录、七日目标、基础商店、低级许愿池、咖啡馆招待、礼包骨架和限时活动都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -415,6 +452,18 @@ export class MockGameSession {
   totalRecharge = 0;
   /** 累充门槛 → 已领取。 */
   private giftAccClaimed: { [amount: number]: boolean } = {};
+  /** 兑换项 id → 当前 limitedExDay 上已经兑换的次数。 */
+  private limitedExBought: { [id: number]: number } = {};
+  /** 兑换次数所属开服天。和 openDay 不同时，下一次限时兑换操作清零。 */
+  limitedExDay = 1;
+  private limitedExDaySeeded = false;
+  /** 当前 limitedStoneDay 上已经用掉的点石次数。 */
+  limitedStoneUsed = 0;
+  /** 点石次数所属开服天。和 openDay 不同时，下一次点石操作清零。 */
+  limitedStoneDay = 1;
+  private limitedStoneDaySeeded = false;
+  /** 限时礼包 id → 已购买。不随开服天清掉。 */
+  private limitedPacks: { [id: number]: boolean } = {};
   private clock: () => number = () => Date.now();
 
   constructor(seed?: MockSessionSeed, clock?: () => number) {
@@ -428,6 +477,8 @@ export class MockGameSession {
     if (!this.wishDaySeeded) this.wishDay = this.openDay;
     if (!this.cafeDaySeeded) this.cafeDay = this.openDay;
     if (!this.giftDailyDaySeeded) this.giftDailyDay = this.openDay;
+    if (!this.limitedExDaySeeded) this.limitedExDay = this.openDay;
+    if (!this.limitedStoneDaySeeded) this.limitedStoneDay = this.openDay;
     this.ensureHeroes();
     this.ensureStarterGear();
     if (!this.itemsSeeded) this.grantStarterItems();
@@ -507,6 +558,7 @@ export class MockGameSession {
     this.resetWish();
     this.resetCafe();
     this.resetGift();
+    this.resetLimited();
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
   }
 
@@ -1303,6 +1355,113 @@ export class MockGameSession {
   }
 
   /**
+   * 只读限时活动。按当前开服天刷新兑换和点石次数，不改钱包和已购礼包。
+   * 入口不设等级锁。限时礼包是否结束只看开服天。
+   */
+  limitedView(): LimitedViewResp {
+    this.refreshLimitedDay();
+    return this.limitedSnapshot();
+  }
+
+  /**
+   * 兑换一次。材料兑换扣背包，金币兑换扣金币，奖励进背包。
+   * 没有这项、今日已兑完、材料或金币不足时拒绝，钱包、背包和次数都不变。
+   * 不改点石次数、限时礼包、礼包骨架和各玩法次数。
+   */
+  limitedExchange(data: unknown): LimitedExchangeResp {
+    this.refreshLimitedDay();
+    const id = Math.floor(numField(asRecord(data), "id", 0));
+    const offer = findLimitedOffer(id);
+    if (!offer) return this.limitedExchangeFail(id, ErrorCode.LIMITED_EX_NOT_FOUND);
+    const bought = this.limitedExCount(id);
+    if (offer.limit > 0 && bought >= offer.limit) return this.limitedExchangeFail(id, ErrorCode.LIMITED_EX_SOLD_OUT);
+    if (offer.pay === "gold" && this.gold < offer.costCount) return this.limitedExchangeFail(id, ErrorCode.LIMITED_EX_GOLD_SHORT);
+    if (offer.pay === "item" && this.itemCount(offer.costItemId) < offer.costCount) {
+      return this.limitedExchangeFail(id, ErrorCode.LIMITED_EX_ITEM_SHORT);
+    }
+    if (offer.pay === "gold") this.gold -= offer.costCount;
+    else this.spendItem(offer.costItemId, offer.costCount);
+    this.addItem(offer.rewardItemId, offer.rewardCount);
+    this.limitedExBought[id] = bought + 1;
+    return {
+      ok: true,
+      id,
+      pay: offer.pay,
+      costName: offer.costName,
+      costCount: offer.costCount,
+      rewardName: offer.rewardName,
+      rewardItemId: offer.rewardItemId,
+      rewardCount: offer.rewardCount,
+      bought: bought + 1,
+      limit: offer.limit,
+      owned: offer.pay === "item" ? this.itemCount(offer.costItemId) : 0,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 点石一次。今日第一次不扣钻石，之后按固定汇率扣钻石换金币。
+   * 次数用完或钻石不够时拒绝，钱包和次数不变。
+   * 不改兑换次数、限时礼包和各玩法。
+   */
+  limitedAlchemy(): LimitedAlchemyResp {
+    this.refreshLimitedDay();
+    if (this.limitedStoneUsed >= LIMITED_STONE_LIMIT) return this.limitedAlchemyFail(ErrorCode.LIMITED_STONE_NO_CHANCE);
+    const free = limitedStoneFree(this.limitedStoneUsed);
+    const cost = limitedStoneCost(this.limitedStoneUsed);
+    if (!free && this.diamond < cost) return this.limitedAlchemyFail(ErrorCode.LIMITED_STONE_SHORT);
+    if (cost > 0) this.diamond -= cost;
+    this.gold += LIMITED_STONE_GOLD;
+    this.limitedStoneUsed += 1;
+    return {
+      ok: true,
+      free,
+      cost,
+      goldGain: LIMITED_STONE_GOLD,
+      used: this.limitedStoneUsed,
+      limit: LIMITED_STONE_LIMIT,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 买一个限时礼包。库存 1。钻石礼包扣钻石，模拟购买不扣。
+   * 买过、本轮已结束、钻石不够、没有这个 id 都拒绝，钱包和已购记录不变。
+   * 已经买过的优先于已结束。不改兑换、点石、礼包骨架和累充。
+   */
+  limitedBuy(data: unknown): LimitedBuyResp {
+    this.refreshLimitedDay();
+    const id = Math.floor(numField(asRecord(data), "id", 0));
+    const pack = findLimitedPack(id);
+    if (!pack) return this.limitedBuyFail(id, ErrorCode.LIMITED_PACK_NOT_FOUND);
+    if (this.limitedPacks[id] === true) return this.limitedBuyFail(id, ErrorCode.LIMITED_PACK_BOUGHT);
+    if (limitedPackEnded(this.openDay, pack.openThrough)) return this.limitedBuyFail(id, ErrorCode.LIMITED_PACK_ENDED);
+    if (pack.pay === "diamond" && this.diamond < pack.price) return this.limitedBuyFail(id, ErrorCode.LIMITED_PACK_SHORT);
+    if (pack.pay === "diamond" && pack.price > 0) this.diamond -= pack.price;
+    if (pack.gold > 0) this.gold += pack.gold;
+    if (pack.diamond > 0) this.diamond += pack.diamond;
+    if (pack.itemCount > 0) this.addItem(pack.itemId, pack.itemCount);
+    this.limitedPacks[id] = true;
+    return {
+      ok: true,
+      id,
+      name: pack.name,
+      pay: pack.pay,
+      price: pack.price,
+      goldGain: pack.gold,
+      diamondGain: pack.diamond,
+      itemId: pack.itemCount > 0 ? pack.itemId : 0,
+      itemName: pack.itemName,
+      itemGain: pack.itemCount,
+      bought: true,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
    * 只读七日登录。按角色登录天列出七格，不改钱包，也不改开服天。
    * 新号第 1 天可领。入口不设等级锁。
    */
@@ -1887,6 +2046,41 @@ export class MockGameSession {
         if (findGiftAcc(amount)) this.giftAccClaimed[amount] = true;
       }
     }
+    if (Array.isArray(seed.limitedExBought)) {
+      for (let i = 0; i < seed.limitedExBought.length; i++) {
+        const row = seed.limitedExBought[i];
+        if (!row || typeof row.id !== "number" || !isFinite(row.id)) continue;
+        if (typeof row.count !== "number" || !isFinite(row.count)) continue;
+        const offer = findLimitedOffer(Math.floor(row.id));
+        if (!offer) continue;
+        let count = Math.floor(row.count);
+        if (count < 1) continue;
+        if (offer.limit > 0 && count > offer.limit) count = offer.limit;
+        this.limitedExBought[offer.id] = count;
+      }
+    }
+    if (typeof seed.limitedExDay === "number" && isFinite(seed.limitedExDay) && seed.limitedExDay >= 1) {
+      this.limitedExDay = Math.floor(seed.limitedExDay);
+      this.limitedExDaySeeded = true;
+    }
+    if (typeof seed.limitedStoneUsed === "number" && isFinite(seed.limitedStoneUsed)) {
+      let used = Math.floor(seed.limitedStoneUsed);
+      if (used < 0) used = 0;
+      if (used > LIMITED_STONE_LIMIT) used = LIMITED_STONE_LIMIT;
+      this.limitedStoneUsed = used;
+    }
+    if (typeof seed.limitedStoneDay === "number" && isFinite(seed.limitedStoneDay) && seed.limitedStoneDay >= 1) {
+      this.limitedStoneDay = Math.floor(seed.limitedStoneDay);
+      this.limitedStoneDaySeeded = true;
+    }
+    if (Array.isArray(seed.limitedPackBought)) {
+      for (let i = 0; i < seed.limitedPackBought.length; i++) {
+        const raw = seed.limitedPackBought[i];
+        if (typeof raw !== "number" || !isFinite(raw)) continue;
+        const id = Math.floor(raw);
+        if (findLimitedPack(id)) this.limitedPacks[id] = true;
+      }
+    }
     if (Array.isArray(seed.goalClaimed)) {
       for (let i = 0; i < seed.goalClaimed.length; i++) {
         const raw = seed.goalClaimed[i];
@@ -2132,6 +2326,108 @@ export class MockGameSession {
     this.firstChargeDone = false;
     this.totalRecharge = 0;
     this.giftAccClaimed = {};
+  }
+
+  /** 开服天变了就把兑换次数和点石次数清零。已经换到的道具和已购礼包留下。 */
+  private refreshLimitedDay(): void {
+    if (this.limitedExDay !== this.openDay) {
+      this.limitedExDay = this.openDay;
+      this.limitedExBought = {};
+    }
+    if (this.limitedStoneDay !== this.openDay) {
+      this.limitedStoneDay = this.openDay;
+      this.limitedStoneUsed = 0;
+    }
+  }
+
+  private resetLimited(): void {
+    this.limitedExBought = {};
+    this.limitedExDay = this.openDay;
+    this.limitedStoneUsed = 0;
+    this.limitedStoneDay = this.openDay;
+    this.limitedPacks = {};
+  }
+
+  private limitedExCount(id: number): number {
+    const value = this.limitedExBought[id];
+    return typeof value === "number" && isFinite(value) ? value : 0;
+  }
+
+  private limitedSnapshot(): LimitedViewResp {
+    const free = limitedStoneFree(this.limitedStoneUsed) && this.limitedStoneUsed < LIMITED_STONE_LIMIT;
+    return {
+      ok: true,
+      openDay: this.openDay,
+      gold: this.gold,
+      diamond: this.diamond,
+      beanOwned: this.itemCount(LIMITED_BEAN_ITEM_ID),
+      offers: listLimitedOffers(
+        (id) => this.limitedExCount(id),
+        (itemId) => this.itemCount(itemId)
+      ),
+      stoneUsed: this.limitedStoneUsed,
+      stoneLimit: LIMITED_STONE_LIMIT,
+      stoneFree: free,
+      stoneCost: limitedStoneCost(this.limitedStoneUsed),
+      stoneGold: LIMITED_STONE_GOLD,
+      packs: listLimitedPacks(this.openDay, (id) => this.limitedPacks[id] === true),
+      countdown: limitedCountdown(this.openDay, LIMITED_PACK_DAYS),
+    };
+  }
+
+  private limitedExchangeFail(id: number, code: number): LimitedExchangeResp {
+    const offer = findLimitedOffer(id);
+    return {
+      ok: false,
+      id,
+      pay: offer ? offer.pay : "",
+      costName: offer ? offer.costName : "",
+      costCount: offer ? offer.costCount : 0,
+      rewardName: offer ? offer.rewardName : "",
+      rewardItemId: offer ? offer.rewardItemId : 0,
+      rewardCount: offer ? offer.rewardCount : 0,
+      bought: this.limitedExCount(id),
+      limit: offer ? offer.limit : 0,
+      owned: offer && offer.pay === "item" ? this.itemCount(offer.costItemId) : 0,
+      gold: this.gold,
+      diamond: this.diamond,
+      code,
+    };
+  }
+
+  private limitedAlchemyFail(code: number): LimitedAlchemyResp {
+    const free = limitedStoneFree(this.limitedStoneUsed) && this.limitedStoneUsed < LIMITED_STONE_LIMIT;
+    return {
+      ok: false,
+      free,
+      cost: limitedStoneCost(this.limitedStoneUsed),
+      goldGain: 0,
+      used: this.limitedStoneUsed,
+      limit: LIMITED_STONE_LIMIT,
+      gold: this.gold,
+      diamond: this.diamond,
+      code,
+    };
+  }
+
+  private limitedBuyFail(id: number, code: number): LimitedBuyResp {
+    const pack = findLimitedPack(id);
+    return {
+      ok: false,
+      id,
+      name: pack ? pack.name : "",
+      pay: pack ? pack.pay : "",
+      price: pack ? pack.price : 0,
+      goldGain: 0,
+      diamondGain: 0,
+      itemId: 0,
+      itemName: pack ? pack.itemName : "",
+      itemGain: 0,
+      bought: this.limitedPacks[id] === true,
+      gold: this.gold,
+      diamond: this.diamond,
+      code,
+    };
   }
 
   private grantGiftBundle(bundle: { gold: number; diamond: number; itemId: number; itemCount: number }): void {

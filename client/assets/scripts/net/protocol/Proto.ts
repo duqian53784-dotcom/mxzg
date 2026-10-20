@@ -81,6 +81,14 @@ import {
   GiftRechargeResp,
   GiftViewReq,
   GiftViewResp,
+  LimitedAlchemyReq,
+  LimitedAlchemyResp,
+  LimitedBuyReq,
+  LimitedBuyResp,
+  LimitedExchangeReq,
+  LimitedExchangeResp,
+  LimitedViewReq,
+  LimitedViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -281,5 +289,21 @@ export const Proto = {
 
   giftClaimAcc(req: GiftClaimAccReq, net: NetClient = NetClient.shared): Promise<GiftClaimAccResp> {
     return call(net, Cmd.giftClaimAcc, req);
+  },
+
+  limitedView(req: LimitedViewReq, net: NetClient = NetClient.shared): Promise<LimitedViewResp> {
+    return call(net, Cmd.limitedView, req);
+  },
+
+  limitedExchange(req: LimitedExchangeReq, net: NetClient = NetClient.shared): Promise<LimitedExchangeResp> {
+    return call(net, Cmd.limitedExchange, req);
+  },
+
+  limitedAlchemy(req: LimitedAlchemyReq, net: NetClient = NetClient.shared): Promise<LimitedAlchemyResp> {
+    return call(net, Cmd.limitedAlchemy, req);
+  },
+
+  limitedBuy(req: LimitedBuyReq, net: NetClient = NetClient.shared): Promise<LimitedBuyResp> {
+    return call(net, Cmd.limitedBuy, req);
   },
 };

@@ -49,6 +49,10 @@ export const Cmd = {
   giftBuyDaily: "gift.buyDaily",
   giftRecharge: "gift.recharge",
   giftClaimAcc: "gift.claimAcc",
+  limitedView: "limited.view",
+  limitedExchange: "limited.exchange",
+  limitedAlchemy: "limited.alchemy",
+  limitedBuy: "limited.buy",
 } as const;
 
 export const CmdId = {
@@ -96,6 +100,10 @@ export const CmdId = {
   giftBuyDaily: 2703,
   giftRecharge: 2704,
   giftClaimAcc: 2705,
+  limitedView: 2801,
+  limitedExchange: 2802,
+  limitedAlchemy: 2803,
+  limitedBuy: 2804,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -151,4 +159,8 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.giftBuyDaily, cmd: Cmd.giftBuyDaily },
   { id: CmdId.giftRecharge, cmd: Cmd.giftRecharge },
   { id: CmdId.giftClaimAcc, cmd: Cmd.giftClaimAcc },
+  { id: CmdId.limitedView, cmd: Cmd.limitedView },
+  { id: CmdId.limitedExchange, cmd: Cmd.limitedExchange },
+  { id: CmdId.limitedAlchemy, cmd: Cmd.limitedAlchemy },
+  { id: CmdId.limitedBuy, cmd: Cmd.limitedBuy },
 ];
