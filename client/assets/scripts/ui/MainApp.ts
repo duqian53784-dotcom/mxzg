@@ -37,6 +37,7 @@ import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
 import { buildTowerPage, TowerPage } from "./TowerPage";
 import { buildDailyGoldPage, DailyGoldPage } from "./DailyGoldPage";
+import { buildLogin7Page, Login7Page } from "./Login7Page";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -54,6 +55,7 @@ const OPEN_FILL = new Color(46, 110, 190, 255);
 const IDLE_FILL = new Color(168, 116, 42, 255);
 const BAG_FILL = new Color(36, 128, 96, 255);
 const MAIL_FILL = new Color(110, 78, 168, 255);
+const LOGIN7_FILL = new Color(156, 52, 78, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -72,6 +74,7 @@ export class MainApp extends Component {
   private arena: ArenaPage | null = null;
   private tower: TowerPage | null = null;
   private daily: DailyGoldPage | null = null;
+  private login7: Login7Page | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -109,6 +112,8 @@ export class MainApp extends Component {
     this.tower = null;
     this.daily?.dispose();
     this.daily = null;
+    this.login7?.dispose();
+    this.login7 = null;
     this.shell?.dispose();
   }
 
@@ -158,7 +163,7 @@ export class MainApp extends Component {
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
     if (!this.allow(id)) return;
-    if ((id === "arena" || id === "tower" || id === "daily") && !this.ensureNet()) return;
+    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7") && !this.ensureNet()) return;
     this.panels?.openChild(id);
     this.refreshChrome();
   }
@@ -193,6 +198,7 @@ export class MainApp extends Component {
     if (id === "arena") return this.mountArena();
     if (id === "tower") return this.mountTower();
     if (id === "daily") return this.mountDaily();
+    if (id === "login7") return this.mountLogin7();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -211,6 +217,7 @@ export class MainApp extends Component {
     place(createButton("挂机", () => this.openIdle(), 420, 64, IDLE_FILL), page, 0, 200);
     place(createButton("背包", () => this.openBag(), 420, 64, BAG_FILL), page, 0, 120);
     place(createButton("邮件", () => this.openMail(), 420, 64, MAIL_FILL), page, 0, 40);
+    place(createButton("七日登录", () => this.openLogin7(), 420, 64, LOGIN7_FILL), page, 0, -120);
     place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, -40);
     place(
       createButton("公告", () => {
@@ -233,8 +240,7 @@ export class MainApp extends Component {
       190,
       -40
     );
-    place(createLabel("主城场景占位", 26, { color: MUTED }), page, 0, -110);
-    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -160);
+    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -190);
 
     this.gateNode = place(
       createLabel(this.gateText(), 20, { color: GATE_COLOR, width: 680, height: 72 }),
@@ -264,8 +270,8 @@ export class MainApp extends Component {
     const page = this.pageRoot("PlaysPage");
     place(createLabel("玩法", 40, { color: TITLE_COLOR }), page, 0, 460);
     place(createLabel("未开启的仍列在这里", 18, { color: MUTED }), page, 0, 410);
-    const top = 340;
-    const step = 52;
+    const top = 320;
+    const step = 46;
     for (let i = 0; i < PLAY_ENTRIES.length; i++) {
       const entry = PLAY_ENTRIES[i];
       const access = entryAccess(entry, this.level(), this.day(), ConfigDb.current);
@@ -279,7 +285,7 @@ export class MainApp extends Component {
       );
       place(button, page, 0, top - i * step);
     }
-    place(createButton("返回", () => this.back(), 220, 48), page, 0, -220);
+    place(createButton("返回", () => this.back(), 220, 48), page, 0, -250);
     return page;
   }
 
@@ -384,6 +390,37 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.arena = page;
+    return page.node;
+  }
+
+  /**
+   * 主城和玩法都能进。新号第 1 天可领，不看主线等级和开服天。
+   * 没连上时不压页面。
+   */
+  private openLogin7(): void {
+    GameLog.shared.info("MainApp", "click login7");
+    if (!this.allow("login7")) return;
+    if (!this.ensureNet()) return;
+    this.panels?.openChild("login7");
+    this.refreshChrome();
+  }
+
+  private mountLogin7(): Node {
+    this.login7?.dispose();
+    const page = buildLogin7Page({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.login7View({}, NetClient.shared),
+      claim: (day) => Proto.login7Claim({ day }, NetClient.shared),
+      advance: () => Proto.login7Advance({}, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.login7 = page;
     return page.node;
   }
 
@@ -698,6 +735,10 @@ export class MainApp extends Component {
     if (id === "daily") {
       this.daily?.dispose();
       this.daily = null;
+    }
+    if (id === "login7") {
+      this.login7?.dispose();
+      this.login7 = null;
     }
   }
 

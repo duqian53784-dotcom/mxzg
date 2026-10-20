@@ -647,3 +647,73 @@ export interface DailyChallengeResp {
    */
   code?: number;
 }
+
+/** 七日登录的一格奖励。id 1 金币、id 2 钻石，其余进背包。 */
+export interface Login7Reward {
+  id: number;
+  name: string;
+  count: number;
+}
+
+/** 格子状态。ready 含今天和以前没领的天。 */
+export type Login7DayState = "locked" | "claimed" | "ready";
+
+export interface Login7Day {
+  day: number;
+  state: Login7DayState;
+  rewards: Login7Reward[];
+}
+
+export interface Login7ViewReq {
+  /** 占位。Mock 不看请求体。 */
+  clientTime?: number;
+}
+
+export interface Login7ViewResp {
+  ok: boolean;
+  /** 角色登录天，1 到 7。跟创角后的登录天数走，不跟开服天。 */
+  loginDay: number;
+  /** 当前开服天，只供对照。领取和调试加天都不改它。 */
+  openDay: number;
+  days: Login7Day[];
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface Login7ClaimReq {
+  /** 要领的登录天，1 到 7。 */
+  day: number;
+}
+
+export interface Login7ClaimResp {
+  ok: boolean;
+  day: number;
+  rewards: Login7Reward[];
+  /** 这次加进钱包的金币。道具不在这里。 */
+  goldGain: number;
+  diamondGain: number;
+  gold: number;
+  diamond: number;
+  loginDay: number;
+  /**
+   * 没有这一天 LOGIN7_NOT_FOUND，尚未到达 LOGIN7_LOCKED，已经领过 LOGIN7_CLAIMED。
+   * 成功可以不带。失败不改钱包、背包和已领记录。
+   */
+  code?: number;
+}
+
+export interface Login7AdvanceReq {
+  /** 占位。只给 Mock 预览把角色登录天 +1。 */
+  clientTime?: number;
+}
+
+export interface Login7AdvanceResp {
+  ok: boolean;
+  loginDay: number;
+  /** 这次有没有真的 +1。已经是第 7 天时为 false。 */
+  advanced: boolean;
+  openDay: number;
+  /** 已经是第 7 天时 LOGIN7_MAX。不改开服天，也不自动领取。 */
+  code?: number;
+}

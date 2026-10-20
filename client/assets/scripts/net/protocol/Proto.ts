@@ -47,6 +47,12 @@ import {
   DailyChallengeResp,
   DailyViewReq,
   DailyViewResp,
+  Login7AdvanceReq,
+  Login7AdvanceResp,
+  Login7ClaimReq,
+  Login7ClaimResp,
+  Login7ViewReq,
+  Login7ViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -172,5 +178,17 @@ export const Proto = {
 
   dailyChallenge(req: DailyChallengeReq, net: NetClient = NetClient.shared): Promise<DailyChallengeResp> {
     return call(net, Cmd.dailyChallenge, req);
+  },
+
+  login7View(req: Login7ViewReq, net: NetClient = NetClient.shared): Promise<Login7ViewResp> {
+    return call(net, Cmd.login7View, req);
+  },
+
+  login7Claim(req: Login7ClaimReq, net: NetClient = NetClient.shared): Promise<Login7ClaimResp> {
+    return call(net, Cmd.login7Claim, req);
+  },
+
+  login7Advance(req: Login7AdvanceReq, net: NetClient = NetClient.shared): Promise<Login7AdvanceResp> {
+    return call(net, Cmd.login7Advance, req);
   },
 };

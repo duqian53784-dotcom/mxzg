@@ -31,6 +31,9 @@ export const Cmd = {
   towerChallenge: "tower.challenge",
   dailyView: "daily.view",
   dailyChallenge: "daily.challenge",
+  login7View: "login7.view",
+  login7Claim: "login7.claim",
+  login7Advance: "login7.advance",
 } as const;
 
 export const CmdId = {
@@ -60,6 +63,9 @@ export const CmdId = {
   towerChallenge: 2002,
   dailyView: 2101,
   dailyChallenge: 2102,
+  login7View: 2201,
+  login7Claim: 2202,
+  login7Advance: 2203,
 } as const;
 
 export type CmdName = (typeof Cmd)[keyof typeof Cmd];
@@ -97,4 +103,7 @@ export const P0_CMDS: readonly CmdSpec[] = [
   { id: CmdId.towerChallenge, cmd: Cmd.towerChallenge },
   { id: CmdId.dailyView, cmd: Cmd.dailyView },
   { id: CmdId.dailyChallenge, cmd: Cmd.dailyChallenge },
+  { id: CmdId.login7View, cmd: Cmd.login7View },
+  { id: CmdId.login7Claim, cmd: Cmd.login7Claim },
+  { id: CmdId.login7Advance, cmd: Cmd.login7Advance },
 ];

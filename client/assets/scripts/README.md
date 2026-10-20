@@ -3,7 +3,7 @@
 - `core/` 启动、会话（Boot、Session）
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
 - `config/` JSON 读表
-- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场，`tower/` 幻境之塔，`daily/` 日常金币副本）
+- `module/` 业务系统（`mainline/` 主线战报，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场，`tower/` 幻境之塔，`daily/` 日常金币副本，`login7/` 七日登录）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
 
 场景在 `assets/scenes/`。Boot / Main / Battle 已建好。Boot 的 Canvas 上已经挂了 Boot。其余界面由代码生成，不用再挂组件。
@@ -15,7 +15,7 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 1. Creator 3.8.8 打开 `client`。
 2. 启动场景保持 Boot，点预览。
 3. 屏幕上是 Mock 登录面板：账号、密码（可留空）、三个服务器（本地Mock / 提审 / 正式占位）。账号默认 `mock`（或上次记下的账号）。点一个服务器，再点 **进入游戏**。
-4. 应进入 Main。顶栏左侧是角色名、等级、所选服务器和开服天，右侧是金币、钻石，例如 `MockHero Lv1`、`本地Mock · 开服D1`、`金币 100`、`钻石 20`。底栏是主城 / 英雄 / 召唤 / 铁匠铺 / 玩法。画面中间是「主线 · 第N关」，下面是「挂机」，旁边有日志、公告、模拟断线。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会自己补上。
+4. 应进入 Main。顶栏左侧是角色名、等级、所选服务器和开服天，右侧是金币、钻石，例如 `MockHero Lv1`、`本地Mock · 开服D1`、`金币 100`、`钻石 20`。底栏是主城 / 英雄 / 召唤 / 铁匠铺 / 玩法。画面中间是「主线 · 第N关」，下面是「挂机」「背包」「邮件」，再下面有日志、公告、模拟断线和「七日登录」。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会自己补上。
 5. 控制台标记：`[Boot] stage=version` → `hot-update` → `config` → `login` → `enter-main`，以及 `[Net] connect mock://local`、`[Config] loaded`。这些行现在带 `[mxzg]` 前缀，例如 `[mxzg][info][Boot] stage=version`。
 
 可选：
@@ -33,7 +33,7 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 
 Boot 的登录不再手写 `request("login")`，改走 `Proto.login` / `Proto.roleEnter`。回包仍由 MockTransport 发出。
 
-P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`、`bag.list`、`bag.use`、`mail.list`、`mail.read`、`mail.claim`、`mail.claimAll`、`mail.delete`、`smith.view`、`smith.strengthen`、`arena.view`、`arena.challenge`、`tower.view`、`tower.challenge`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。背包会列出道具并使用。邮件会列出、领取和删除。铁匠铺会看武器并强化。竞技场会看积分并挑战。幻境之塔会看当前层并挑战。创角从登录面板进，见下面 C1。
+P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`、`stage.result`、`idle.query`、`idle.claim`、`hero.list`、`hero.upgrade`、`summon.pull`、`bag.list`、`bag.use`、`mail.list`、`mail.read`、`mail.claim`、`mail.claimAll`、`mail.delete`、`smith.view`、`smith.strengthen`、`arena.view`、`arena.challenge`、`tower.view`、`tower.challenge`、`daily.view`、`daily.challenge`、`login7.view`、`login7.claim`、`login7.advance`。名字和 Mock cmd 一致。主城「主线」会打进关和结算。挂机页会查收益并领取。英雄页会读名册并升级。召唤页会单抽或十连。背包会列出道具并使用。邮件会列出、领取和删除。铁匠铺会看武器并强化。竞技场会看积分并挑战。幻境之塔会看当前层并挑战。日常副本会看金币难度并挑战。七日登录会列出七天并领取。`login7.advance` 只给 Mock 预览把角色登录天 +1。创角从登录面板进，见下面 C1。
 
 同一局 Mock 会记住开服天、等级、主线进度和英雄等级。录包在 `assets/resources/mock/session-login-stage.json`，默认预览不用它。见 `docs/mock-replay.md`。
 
@@ -274,5 +274,38 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 5. **次数用完。** 再点挑战，Toast「今日金币副本次数已用完」。金币、强化石和已用次数都不变。
 6. **困难失败。** 次数还没用完时选困难。Toast「金币副本挑战失败：困难，奖励未发放」。这次仍占 1 次，金币和强化石不加。英雄升级或铁匠铺强化把战力抬到 240 之后，困难才会胜。
 7. 次数跟着 Mock 的开服天走。创角把次数清零，副本里拿到的强化石也清掉。挑战不改英雄等级、武器、钻石、幻境之塔层数、竞技场积分和主线关卡。
+
+不需要起 server，也不用改场景。
+
+## 七日登录（C13）
+
+不改 `.scene`，不用新挂组件。七日登录在主城页面栈里用代码生成。日常副本、幻境之塔、竞技场、铁匠铺、邮件、背包、英雄升级和挂机入口都还在。
+
+**入口。** 新号第 1 天就能进，不看主线等级，也不看开服天。两条路进同一页：
+
+1. 主城点 **七日登录**（在日志那一排下面）。
+2. 底栏 **玩法**，列表里的 **七日登录**（不带锁）。
+
+网络没连上时 Toast「网络未连接」，不进页面。
+
+页面标题是「七日登录」。上面写「角色登录第 N 天」，旁边一行开服天只供对照。七行奖励，点一行就领那一天。下面还有 **领取第N天** 和 **下一天（调试）**。
+
+| 天 | 奖励 | 新号第 1 天 |
+|----|------|-------------|
+| 1 | 金币 +80 | 今日可领 |
+| 2 | 钻石 +15 | 未到达 |
+| 3 | 强化石 ×3 | 未到达 |
+| 4 | 金币 +120、小金币袋 ×1 | 未到达 |
+| 5 | 钻石 +30、经验药水 ×1 | 未到达 |
+| 6 | 金币 +200、强化石 ×5 | 未到达 |
+| 7 | 金币 +300、钻石 +50、小金币袋 ×2 | 未到达 |
+
+1. **领第 1 天。** 点第 1 行，或点 **领取第1天**。Toast「领取成功：第1天，金币 +80」。顶栏金币从 100 变成 180。这一行变成「已领取」。再点，Toast「第1天奖励已经领取」，金币不变。
+2. **未到的天。** 点第 2 行。Toast「第2天尚未到达」。钻石和登录天都不变。
+3. **看到第 2–7 天。** 点 **下一天（调试）**。Toast「角色登录天来到第2天，奖励尚未自动领取」。开服天仍是 D1，顶栏开服天不变，第 1 天如果还没领也不会自动领上。第 2 行变成「今日可领」，按钮变成「领取第2天」。再点一次到第 3 天，一直可以点到第 7 天。已经是第 7 天再点，Toast「已经是第7天」。
+4. **补领。** 先点下一天、还没领第 1 天时，第 1 行是「可补领」。点它仍能领。已经到达的天都可以领，不要求按顺序。
+5. **钻石和道具。** 第 2 天钻石 +15，顶栏钻石增加。第 3 天强化石 ×3，回背包能看到，点使用仍提示不能直接使用。第 4 天再加金币和小金币袋。第 5 天钻石和经验药水。第 7 天金币、钻石和小金币袋一起给。
+6. **开服天不影响这里。** 主线打赢会让开服天增加（每 5 关 +1），角色登录天不动。日志里的 **开服D30** 只改界面上的开服天，用来看幻魔塔，七日登录格子不变。要测第 2–7 天，只用本页的「下一天（调试）」。
+7. 创角把登录天重置回第 1 天，已领记录清掉，钱包回到金币 100、钻石 20。领取不改英雄等级、武器、主线、竞技场、幻境之塔和金币副本次数。
 
 不需要起 server，也不用改场景。
