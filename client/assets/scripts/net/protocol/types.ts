@@ -282,3 +282,108 @@ export interface BagUseResp {
    */
   code?: number;
 }
+
+/** 邮件附件。id 1 金币、id 2 钻石，其它进背包。 */
+export interface MailAttachment {
+  id: number;
+  name: string;
+  count: number;
+}
+
+/** 一封邮件。列表和详情共用，邮箱很小。 */
+export interface MailEntry {
+  id: number;
+  title: string;
+  body: string;
+  from: string;
+  unread: boolean;
+  hasAttachment: boolean;
+  claimed: boolean;
+  attachments: MailAttachment[];
+}
+
+export interface MailListReq {
+  /** 占位。Mock 不看请求体，邮件在会话里。 */
+  clientTime?: number;
+}
+
+export interface MailListResp {
+  ok: boolean;
+  mails: MailEntry[];
+  unread: number;
+  claimable: number;
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface MailReadReq {
+  id: number;
+}
+
+export interface MailReadResp {
+  ok: boolean;
+  mail?: MailEntry;
+  gold: number;
+  diamond: number;
+  /** 没有这封邮件 MAIL_NOT_FOUND。成功可以不带。 */
+  code?: number;
+}
+
+export interface MailClaimReq {
+  id: number;
+}
+
+export interface MailClaimResp {
+  ok: boolean;
+  id: number;
+  title: string;
+  /** 本次领到的封数。失败为 0，成功为 1。 */
+  count: number;
+  rewards: MailAttachment[];
+  gold: number;
+  diamond: number;
+  goldGain: number;
+  diamondGain: number;
+  /**
+   * 没有这封邮件 MAIL_NOT_FOUND，没有附件 MAIL_NO_ATTACHMENT，
+   * 已经领过 MAIL_ALREADY_CLAIMED。成功可以不带。
+   */
+  code?: number;
+}
+
+export interface MailClaimAllReq {
+  clientTime?: number;
+}
+
+export interface MailClaimAllResp {
+  ok: boolean;
+  /** 本次领到的封数。没有可领时为 0。 */
+  count: number;
+  ids: number[];
+  /** 多封附件按道具 id 合并。 */
+  rewards: MailAttachment[];
+  gold: number;
+  diamond: number;
+  goldGain: number;
+  diamondGain: number;
+  /** 一封都领不了 MAIL_NOTHING。成功可以不带。 */
+  code?: number;
+}
+
+export interface MailDeleteReq {
+  id: number;
+}
+
+export interface MailDeleteResp {
+  ok: boolean;
+  id: number;
+  title: string;
+  gold: number;
+  diamond: number;
+  /**
+   * 没有这封邮件 MAIL_NOT_FOUND，还有未领附件 MAIL_DELETE_BLOCKED。
+   * 成功可以不带。
+   */
+  code?: number;
+}

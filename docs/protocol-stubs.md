@@ -11,7 +11,7 @@
 | `login` | `ok` / `account` / `token` | Boot |
 | `role.enter` | `roleId` / `name` / `level`（默认 MockHero） | Boot |
 | `heartbeat` | `serverTime` | NetClient 定时发送，不走 `request` |
-| 其它 cmd | `{ ok: true, echo }` | 自检里的 `mail.list` |
+| 其它 cmd | `{ ok: true, echo }` | 自检里的 `echo.ping` |
 
 B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `hasRole`。原字段还在。C1 登录面板会把选中的服务器放进 `serverId`。B6 起，主城「主线」会发 `stage.enter` / `stage.result`。
 
@@ -32,6 +32,11 @@ B5 给 login 补了 `serverId`（缺省 1），给 `role.enter` 补了 `ok` / `h
 | 1501 | `summon.pull` | `SummonPullReq` | `SummonPullResp` | 召唤（C6）。`count` 为 1 或 10。扣钻石。不足 `SUMMON_DIAMOND_SHORT`，次数不对 `SUMMON_COUNT_INVALID` |
 | 1601 | `bag.list` | `BagListReq` | `BagListResp` | 背包（C7）。只列数量大于 0 的道具。不改钱包 |
 | 1602 | `bag.use` | `BagUseReq` | `BagUseResp` | 使用道具（C7）。默认 1 个。金币袋加金币，经验药水给领队加经验。不可使用、数量不足、空背包会拒绝 |
+| 1701 | `mail.list` | `MailListReq` | `MailListResp` | 邮件列表（C8）。不改已读。新号三封：欢迎、开服补给、维护公告 |
+| 1702 | `mail.read` | `MailReadReq` | `MailReadResp` | 标成已读（C8）。没有这封是 `MAIL_NOT_FOUND`。不发附件 |
+| 1703 | `mail.claim` | `MailClaimReq` | `MailClaimResp` | 领取一封（C8）。金币钻石进钱包，道具进背包。没有附件 `MAIL_NO_ATTACHMENT`，领过 `MAIL_ALREADY_CLAIMED` |
+| 1704 | `mail.claimAll` | `MailClaimAllReq` | `MailClaimAllResp` | 领取全部未领附件（C8）。一封都没有是 `MAIL_NOTHING` |
+| 1705 | `mail.delete` | `MailDeleteReq` | `MailDeleteResp` | 删除（C8）。未领附件 `MAIL_DELETE_BLOCKED` |
 
 代码在 `client/assets/scripts/net/protocol/`：`cmds.ts`（名字和 ID）、`types.ts`（字段）、`codec.ts`（现在是明文对象）、`Proto.ts`（`Proto.login` 等）。
 
@@ -46,7 +51,7 @@ Mock 约定（给 C1 / C6 直接用，不用再改传输层）：
 
 - 每个 MockTransport 带一份 `MockGameSession`。一开始就有角色 `1001 / MockHero / Lv1`，属于账号 `mock`，下一关 1、开服第 1 天。还没 `login`，或登录的就是 `mock` 时，只 `role.enter` 也能进主城。登录别的账号则 `hasRole` 为 false，直到 `role.create`。同一局里进度会留下来。细节和录包见 `docs/mock-replay.md`。
 - `role.enter` 额外带 `openDay`、`stageId`、`gold`、`diamond`（真服可以不带）。Boot 写进 `Session`。没有角色时金币钻石回 0。
-- `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线、开服天、钱包（金币 100、钻石 20）、挂机（时长、强化石）、召唤碎片和英雄名册（回到起步三名 Lv1）。背包重新放上小金币袋 ×2、经验药水 ×2。
+- `role.create` 名字去空白后为空则 `ok: false`，不改当前角色；成功则改名，`roleId` 仍是 1001，并重置等级、主线、开服天、钱包（金币 100、钻石 20）、挂机（时长、强化石）、召唤碎片和英雄名册（回到起步三名 Lv1）。背包重新放上小金币袋 ×2、经验药水 ×2。邮箱回到起步三封。
 - `stage.enter` 的 `stageId < 1` 失败；成功回 `battleId`，形如 `mock-battle-<关卡>-<序号>`。Mock 允许跳关。主线列表只放行下一关，高于等级的战报判负。
 - `stage.result` 新通关后 `nextStageId = clearedStage + 1`，`level = 1 + clearedStage`，奖励占位 `{ id: 1, count: 10 }`（id 1 加金币，id 2 加钻石）。失败停在本关，奖励空，钱包不变。回包可带 `openDay` / `level` / `gold` / `diamond`。快速作战和主线战报共用这条，不另开消息。
 - `idle.query` 只读。时长 = 现在 − 起算时刻，上限 8 小时。金币、强化石（id 101）按当前已通关关数计算。回包带可领数量、挂满 8 小时的预览、已有强化石和钱包。
@@ -56,8 +61,13 @@ Mock 约定（给 C1 / C6 直接用，不用再改传输层）：
 - `summon.pull` 的 `count` 只能是 1（10 钻石）或 10（90 钻石）。不够时 `SUMMON_DIAMOND_SHORT`（「钻石不足，无法召唤」），并带 `needDiamond`；其它次数 `SUMMON_COUNT_INVALID`。失败不改钻石、名册和召唤游标。成功按固定卡池顺序抽出：不在名册里的英雄追加到末尾（Lv1，星级按卡池），已拥有的不改等级星级，改为该英雄碎片 +10。碎片道具 id = `40000 + heroId`。回包带本次掉落、新英雄人数、碎片次数和扣完后的钱包。不改金币、挂机计时和主线。创角把游标和碎片清掉。
 - `bag.list` 只读。数量大于 0 才出现。顺序是小金币袋（id 201）、经验药水（id 202）、强化石（id 101），然后英雄碎片和其它材料。金币 id 1、钻石 id 2 不进背包。新号没有另填道具时，自带小金币袋 ×2、经验药水 ×2。
 - `bag.use` 的 `count` 缺省 1，小于 1 为 `BAG_COUNT_INVALID`。小金币袋每个 +50 金币。经验药水每个给名册第一名 +100 经验，满 100 升 1 级；领队已满级为 `BAG_HERO_MAX`，不扣药水。强化石和碎片为 `BAG_NOT_USABLE`，数量不动。背包没有任何道具时 `BAG_EMPTY`；有别的道具但没有这一个时 `BAG_NOT_FOUND`；持有不够 `BAG_NOT_ENOUGH`。失败不改金币、英雄、挂机和主线。成功回包带剩余数量、扣完后的钱包，经验药水再带英雄名和等级。
+- `mail.list` 只读。新号三封：未读的「欢迎来到梦想之光」（无附件）、未读的「开服补给」（金币 80、强化石 ×3、小金币袋 ×1）、已读的「维护公告」（无附件）。不改已读和钱包。
+- `mail.read` 把指定信标成已读。已经读过也成功。没有这封是 `MAIL_NOT_FOUND`。不发附件，不改钱包。
+- `mail.claim` 领取一封附件。id 1 加金币，id 2 加钻石，其它 id 进背包。成功后标成已领取和已读。没有这封 `MAIL_NOT_FOUND`，没有附件 `MAIL_NO_ATTACHMENT`（「这封邮件没有附件」），已经领过 `MAIL_ALREADY_CLAIMED`（「附件已经领取过了」）。失败不改钱包、背包、英雄、挂机和主线。
+- `mail.claimAll` 把每封还没领的附件都领掉，奖励按道具 id 合并。没有可领的是 `MAIL_NOTHING`（「没有可领取的附件」）。没有附件的信保持原样，不会被标成已读。
+- `mail.delete` 删一封。还有未领附件时 `MAIL_DELETE_BLOCKED`（「请先领取附件再删除」）。没有附件或已经领过可以删。没有这封是 `MAIL_NOT_FOUND`。
 
-1301 / 1302 / 1401 / 1402 / 1501 / 1601 / 1602 仍是客户端占位号，不是旧服消息号。
+1301 / 1302 / 1401 / 1402 / 1501 / 1601 / 1602 / 1701–1705 仍是客户端占位号，不是旧服消息号。
 
 ## 以后换成真 Protobuf
 

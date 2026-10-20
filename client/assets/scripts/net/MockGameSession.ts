@@ -12,6 +12,15 @@ import {
 import { HeroRosterEntry, HeroSeed, normalizeRoster, starterRoster, toHeroCard, upgradeCost, HERO_MAX_LEVEL } from "../module/hero/growth";
 import { buildIdleView, elapsedSince, IDLE_ITEM_ID, IDLE_ITEM_NAME } from "../module/idle/rewards";
 import {
+  attachmentName,
+  MailSeed,
+  mergeAttachments,
+  normalizeMailList,
+  starterMails,
+  StoredMail,
+  toMailEntry,
+} from "../module/mail/inbox";
+import {
   isSummonCount,
   poolAt,
   shardItemId,
@@ -30,6 +39,12 @@ import {
   RoleEnterResp,
   StageEnterResp,
   StageResultResp,
+  MailAttachment,
+  MailClaimAllResp,
+  MailClaimResp,
+  MailDeleteResp,
+  MailListResp,
+  MailReadResp,
   SummonDrop,
   SummonPullResp,
 } from "./protocol/types";
@@ -69,6 +84,11 @@ export interface MockSessionSeed {
   heroes?: HeroSeed[];
   /** 召唤顺序下标。不填从 0 开始。创角会回到 0。 */
   summonCursor?: number;
+  /**
+   * 邮箱。不填则发起步三封：欢迎、开服补给、维护公告。
+   * 填了（含空数组）就只用这里的邮件。
+   */
+  mails?: MailSeed[];
 }
 
 /** 新号起步钱包。主线胜利的奖励 id 1 加金币，id 2 加钻石。 */
@@ -77,7 +97,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤和背包使用都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用和邮件领取都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -108,6 +128,10 @@ export class MockGameSession {
   itemCounts: { [id: number]: number } = {};
   /** 为 true 时构造函数不再补起步消耗品。创角会重新发一份。 */
   private itemsSeeded = false;
+  /** 邮箱。领取改钱包和背包，不改进度。 */
+  mails: StoredMail[] = [];
+  /** 为 true 时构造函数不再补起步三封。创角会重新发一份。 */
+  private mailsSeeded = false;
   /** 已拥有的英雄。空名册会在构造、创角和读列表时种下起步三名。 */
   heroes: HeroRosterEntry[] = [];
   /** 下一抽出 SUMMON_POOL 的下标。单抽走 1 格，十连走 10 格。不足时不动。 */
@@ -120,6 +144,7 @@ export class MockGameSession {
     this.applySeed(seed);
     this.ensureHeroes();
     if (!this.itemsSeeded) this.grantStarterItems();
+    if (!this.mailsSeeded) this.grantStarterMails();
   }
 
   login(data: unknown): LoginResp {
@@ -159,7 +184,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄和召唤游标重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、召唤游标和邮箱重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -177,6 +202,7 @@ export class MockGameSession {
     this.grantStarterItems();
     this.heroes = starterRoster();
     this.summonCursor = 0;
+    this.grantStarterMails();
     this.idleAnchorMs = this.clock();
     this.syncDerived(true);
     return { ok: true, roleId: this.role.roleId, name: this.role.name, level: this.role.level };
@@ -521,6 +547,125 @@ export class MockGameSession {
     return this.bagFail(id, ErrorCode.BAG_NOT_USABLE);
   }
 
+  /** 只读邮箱。不改已读，也不改钱包。 */
+  mailList(): MailListResp {
+    const mails = this.viewMails();
+    let unread = 0;
+    let claimable = 0;
+    for (let i = 0; i < mails.length; i++) {
+      if (mails[i].unread) unread += 1;
+      if (mails[i].hasAttachment && !mails[i].claimed) claimable += 1;
+    }
+    return {
+      ok: true,
+      mails,
+      unread,
+      claimable,
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /** 标成已读。已经读过也成功。不发附件。 */
+  mailRead(data: unknown): MailReadResp {
+    const id = readMailId(data);
+    const mail = this.findMail(id);
+    if (!mail) return { ok: false, gold: this.gold, diamond: this.diamond, code: ErrorCode.MAIL_NOT_FOUND };
+    mail.read = true;
+    return { ok: true, mail: this.viewMail(mail), gold: this.gold, diamond: this.diamond };
+  }
+
+  /**
+   * 领取一封附件。金币、钻石进钱包，其它进背包，然后标成已领取和已读。
+   * 没有这封、没有附件、已经领过都拒绝，钱包和背包不动。
+   * 不改英雄、挂机起算、主线和召唤游标。
+   */
+  mailClaim(data: unknown): MailClaimResp {
+    const id = readMailId(data);
+    const mail = this.findMail(id);
+    if (!mail) return this.mailClaimFail(id, ErrorCode.MAIL_NOT_FOUND);
+    const rewards = this.namedAttachments(mail);
+    if (rewards.length === 0) return this.mailClaimFail(id, ErrorCode.MAIL_NO_ATTACHMENT);
+    if (mail.claimed) return this.mailClaimFail(id, ErrorCode.MAIL_ALREADY_CLAIMED);
+    const gain = this.grantAttachments(rewards);
+    mail.claimed = true;
+    mail.read = true;
+    return {
+      ok: true,
+      id,
+      title: mail.title,
+      count: 1,
+      rewards,
+      gold: this.gold,
+      diamond: this.diamond,
+      goldGain: gain.goldGain,
+      diamondGain: gain.diamondGain,
+    };
+  }
+
+  /** 把每封还没领的附件都领掉。一封都没有时拒绝，状态不动。 */
+  mailClaimAll(): MailClaimAllResp {
+    const targets: StoredMail[] = [];
+    for (let i = 0; i < this.mails.length; i++) {
+      const mail = this.mails[i];
+      if (mail.claimed) continue;
+      if (this.namedAttachments(mail).length === 0) continue;
+      targets.push(mail);
+    }
+    if (targets.length === 0) return this.mailClaimAllFail(ErrorCode.MAIL_NOTHING);
+    const ids: number[] = [];
+    const pieces: MailAttachment[] = [];
+    let goldGain = 0;
+    let diamondGain = 0;
+    for (let i = 0; i < targets.length; i++) {
+      const mail = targets[i];
+      const rewards = this.namedAttachments(mail);
+      const gain = this.grantAttachments(rewards);
+      mail.claimed = true;
+      mail.read = true;
+      ids.push(mail.id);
+      goldGain += gain.goldGain;
+      diamondGain += gain.diamondGain;
+      for (let j = 0; j < rewards.length; j++) pieces.push(rewards[j]);
+    }
+    return {
+      ok: true,
+      count: ids.length,
+      ids,
+      rewards: mergeAttachments(pieces),
+      gold: this.gold,
+      diamond: this.diamond,
+      goldGain,
+      diamondGain,
+    };
+  }
+
+  /** 删一封。还有未领附件时拒绝。没有附件或已经领过可以删。 */
+  mailDelete(data: unknown): MailDeleteResp {
+    const id = readMailId(data);
+    const mail = this.findMail(id);
+    if (!mail) {
+      return { ok: false, id, title: "", gold: this.gold, diamond: this.diamond, code: ErrorCode.MAIL_NOT_FOUND };
+    }
+    if (!mail.claimed && this.namedAttachments(mail).length > 0) {
+      return {
+        ok: false,
+        id,
+        title: mail.title,
+        gold: this.gold,
+        diamond: this.diamond,
+        code: ErrorCode.MAIL_DELETE_BLOCKED,
+      };
+    }
+    const title = mail.title;
+    const next: StoredMail[] = [];
+    for (let i = 0; i < this.mails.length; i++) {
+      if (this.mails[i].id !== id) next.push(this.mails[i]);
+    }
+    this.mails = next;
+    return { ok: true, id, title, gold: this.gold, diamond: this.diamond };
+  }
+
   private applySeed(seed?: MockSessionSeed): void {
     if (!seed) return;
     if (typeof seed.account === "string") {
@@ -567,6 +712,10 @@ export class MockGameSession {
     if (typeof seed.summonCursor === "number" && isFinite(seed.summonCursor) && seed.summonCursor >= 0) {
       this.summonCursor = Math.floor(seed.summonCursor);
     }
+    if (Array.isArray(seed.mails)) {
+      this.mailsSeeded = true;
+      this.mails = normalizeMailList(seed.mails);
+    }
   }
 
   /** id 1 金币，id 2 钻石。其它 id 先忽略。 */
@@ -594,6 +743,91 @@ export class MockGameSession {
   private grantStarterItems(): void {
     this.addItem(ITEM_GOLD_BAG, STARTER_GOLD_BAG);
     this.addItem(ITEM_EXP_POTION, STARTER_EXP_POTION);
+  }
+
+  private grantStarterMails(): void {
+    this.mails = normalizeMailList(starterMails());
+  }
+
+  private viewMails() {
+    const out = [];
+    for (let i = 0; i < this.mails.length; i++) out.push(this.viewMail(this.mails[i]));
+    return out;
+  }
+
+  private viewMail(mail: StoredMail) {
+    return toMailEntry(mail, (heroId) => this.heroNameById(heroId));
+  }
+
+  private namedAttachments(mail: StoredMail): MailAttachment[] {
+    const named: MailAttachment[] = [];
+    for (let i = 0; i < mail.attachments.length; i++) {
+      const row = mail.attachments[i];
+      if (row.count <= 0 || row.id <= 0) continue;
+      named.push({
+        id: row.id,
+        name: attachmentName(row.id, (heroId) => this.heroNameById(heroId)),
+        count: row.count,
+      });
+    }
+    return named;
+  }
+
+  private grantAttachments(rows: MailAttachment[]): { goldGain: number; diamondGain: number } {
+    let goldGain = 0;
+    let diamondGain = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (row.count <= 0) continue;
+      if (row.id === 1) {
+        this.gold += row.count;
+        goldGain += row.count;
+      } else if (row.id === 2) {
+        this.diamond += row.count;
+        diamondGain += row.count;
+      } else {
+        this.addItem(row.id, row.count);
+      }
+    }
+    return { goldGain, diamondGain };
+  }
+
+  private findMail(id: number): StoredMail | null {
+    if (id < 1) return null;
+    for (let i = 0; i < this.mails.length; i++) {
+      if (this.mails[i].id === id) return this.mails[i];
+    }
+    return null;
+  }
+
+  private mailClaimFail(id: number, code: number): MailClaimResp {
+    const mail = this.findMail(id);
+    return {
+      ok: false,
+      id,
+      title: mail ? mail.title : "",
+      count: 0,
+      rewards: [],
+      gold: this.gold,
+      diamond: this.diamond,
+      goldGain: 0,
+      diamondGain: 0,
+      code,
+    };
+  }
+
+  private mailClaimAllFail(code: number): MailClaimAllResp {
+    return {
+      ok: false,
+      count: 0,
+      ids: [],
+      rewards: [],
+      gold: this.gold,
+      diamond: this.diamond,
+      goldGain: 0,
+      diamondGain: 0,
+      code,
+    };
   }
 
   private findBagView(id: number): ReturnType<typeof listBagItems>[number] | null {
@@ -677,6 +911,10 @@ function strField(body: Record<string, unknown>, key: string): string {
 function numField(body: Record<string, unknown>, key: string, fallback: number): number {
   const value = body[key];
   return typeof value === "number" && isFinite(value) ? value : fallback;
+}
+
+function readMailId(data: unknown): number {
+  return Math.floor(numField(asRecord(data), "id", 0));
 }
 
 /** 缺省 1。写了但小于 1、或不是数字，则整次无效。 */
