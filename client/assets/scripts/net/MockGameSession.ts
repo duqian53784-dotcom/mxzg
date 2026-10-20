@@ -9,7 +9,17 @@ import {
   STARTER_EXP_POTION,
   STARTER_GOLD_BAG,
 } from "../module/bag/items";
-import { HeroRosterEntry, HeroSeed, normalizeRoster, starterRoster, toHeroCard, upgradeCost, HERO_MAX_LEVEL } from "../module/hero/growth";
+import {
+  clampWeaponLevel,
+  HeroRosterEntry,
+  HeroSeed,
+  HERO_MAX_LEVEL,
+  normalizeRoster,
+  starterRoster,
+  toHeroCard,
+  upgradeCost,
+  WEAPON_MAX_LEVEL,
+} from "../module/hero/growth";
 import { buildIdleView, elapsedSince, IDLE_ITEM_ID, IDLE_ITEM_NAME } from "../module/idle/rewards";
 import {
   attachmentName,
@@ -20,6 +30,7 @@ import {
   StoredMail,
   toMailEntry,
 } from "../module/mail/inbox";
+import { strengthenGoldCost, STRENGTHEN_STONE_COST, toSmithGear } from "../module/smith/forge";
 import {
   isSummonCount,
   poolAt,
@@ -45,6 +56,8 @@ import {
   MailDeleteResp,
   MailListResp,
   MailReadResp,
+  SmithStrengthenResp,
+  SmithViewResp,
   SummonDrop,
   SummonPullResp,
 } from "./protocol/types";
@@ -97,7 +110,7 @@ export const MOCK_STARTER_DIAMOND = 20;
 
 /**
  * 进程内假服。不听端口。
- * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用和邮件领取都改这里的状态，编辑器预览不用另起进程。
+ * C1 登录/创角、主线连打、挂机领取、英雄升级、召唤、背包使用、邮件领取和铁匠铺强化都改这里的状态，编辑器预览不用另起进程。
  */
 export class MockGameSession {
   openDay = 1;
@@ -143,6 +156,7 @@ export class MockGameSession {
     this.idleAnchorMs = this.clock();
     this.applySeed(seed);
     this.ensureHeroes();
+    this.ensureStarterGear();
     if (!this.itemsSeeded) this.grantStarterItems();
     if (!this.mailsSeeded) this.grantStarterMails();
   }
@@ -184,7 +198,7 @@ export class MockGameSession {
     };
   }
 
-  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、召唤游标和邮箱重置到新号。 */
+  /** 空名字拒绝。成功则改名，并把主线、开服天、钱包、道具、英雄、武器、召唤游标和邮箱重置到新号。 */
   roleCreate(data: unknown): RoleCreateResp {
     const name = strField(asRecord(data), "name").trim();
     if (!name) {
@@ -201,6 +215,7 @@ export class MockGameSession {
     this.itemCounts = {};
     this.grantStarterItems();
     this.heroes = starterRoster();
+    this.ensureStarterGear();
     this.summonCursor = 0;
     this.grantStarterMails();
     this.idleAnchorMs = this.clock();
@@ -387,6 +402,61 @@ export class MockGameSession {
   }
 
   /**
+   * 只读铁匠铺。空名册会先种下起步英雄。
+   * 还没有武器的英雄补一把 Lv1 新手短剑，不扣金币，也不扣强化石。
+   */
+  smithView(): SmithViewResp {
+    this.ensureHeroes();
+    this.ensureStarterGear();
+    const gears: SmithViewResp["gears"] = [];
+    for (let i = 0; i < this.heroes.length; i++) gears.push(toSmithGear(this.heroes[i]));
+    const lead = this.heroes.length > 0 ? this.heroes[0].id : 0;
+    return {
+      ok: true,
+      leadId: lead,
+      gears,
+      stoneOwned: this.itemCount(IDLE_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
+   * 把指定英雄的新手短剑强化 1 级。
+   * 消耗金币和 1 个强化石。还没有武器时先免费补成 Lv1，再按这一级的花费往上强化。
+   * 没有这名英雄、金币不够、强化石不够、或已满级时拒绝：不扣金币和强化石，也不提升等级。
+   * 补武器本身不收费，所以失败时 Lv0 会变成 Lv1，已经有的等级保持原样。
+   * 不改英雄等级、星级、钻石、挂机起算和主线进度。
+   */
+  smithStrengthen(data: unknown): SmithStrengthenResp {
+    this.ensureHeroes();
+    this.ensureStarterGear();
+    const heroId = Math.floor(numField(asRecord(data), "heroId", 0));
+    const hero = this.findHero(heroId);
+    if (!hero) return this.smithFail(heroId, ErrorCode.HERO_NOT_FOUND);
+    const level = clampWeaponLevel(hero.weaponLevel);
+    if (level >= WEAPON_MAX_LEVEL) return this.smithFail(heroId, ErrorCode.SMITH_LEVEL_MAX);
+    const goldCost = strengthenGoldCost(level);
+    const stoneCost = STRENGTHEN_STONE_COST;
+    if (this.gold < goldCost) return this.smithFail(heroId, ErrorCode.SMITH_GOLD_SHORT, { needGold: goldCost });
+    const ownedStone = this.itemCount(IDLE_ITEM_ID);
+    if (ownedStone < stoneCost) return this.smithFail(heroId, ErrorCode.SMITH_STONE_SHORT, { needStone: stoneCost });
+    this.gold -= goldCost;
+    this.spendItem(IDLE_ITEM_ID, stoneCost);
+    hero.weaponLevel = level + 1;
+    return {
+      ok: true,
+      heroId,
+      gear: toSmithGear(hero),
+      goldCost,
+      stoneCost,
+      stoneOwned: this.itemCount(IDLE_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+    };
+  }
+
+  /**
    * 单抽或十连，只扣钻石。
    * 新英雄追加到名册末尾（Lv1，星级按卡池）。已拥有则加碎片，等级和星级不动。
    * 钻石不够或次数不是 1/10 时整次拒绝，游标、名册、钱包都不变。
@@ -444,7 +514,7 @@ export class MockGameSession {
           shardOwned: this.itemCount(shardId),
         });
       } else {
-        this.heroes.push({ id: candidate.id, name: candidate.name, level: 1, star: candidate.star });
+        this.heroes.push({ id: candidate.id, name: candidate.name, level: 1, star: candidate.star, weaponLevel: 1 });
         newCount += 1;
         drops.push({
           heroId: candidate.id,
@@ -869,6 +939,35 @@ export class MockGameSession {
 
   private ensureHeroes(): void {
     if (this.heroes.length === 0) this.heroes = starterRoster();
+  }
+
+  /** 缺武器的英雄补 Lv1 新手短剑。已有等级只取整，不扣费。 */
+  private ensureStarterGear(): void {
+    this.ensureHeroes();
+    for (let i = 0; i < this.heroes.length; i++) {
+      this.heroes[i].weaponLevel = clampWeaponLevel(this.heroes[i].weaponLevel);
+    }
+  }
+
+  private smithFail(
+    heroId: number,
+    code: number,
+    extra?: { needGold?: number; needStone?: number }
+  ): SmithStrengthenResp {
+    const hero = this.findHero(heroId);
+    return {
+      ok: false,
+      heroId,
+      gear: hero ? toSmithGear(hero) : null,
+      goldCost: 0,
+      stoneCost: 0,
+      stoneOwned: this.itemCount(IDLE_ITEM_ID),
+      gold: this.gold,
+      diamond: this.diamond,
+      needGold: extra && typeof extra.needGold === "number" ? extra.needGold : undefined,
+      needStone: extra && typeof extra.needStone === "number" ? extra.needStone : undefined,
+      code,
+    };
   }
 
   private findHero(id: number): HeroRosterEntry | null {

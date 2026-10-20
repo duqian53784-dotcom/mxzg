@@ -48,7 +48,7 @@ const CATALOG: readonly CatalogRow[] = [
     name: IDLE_ITEM_NAME,
     kind: "material",
     usable: false,
-    desc: "挂机获得的材料，不能直接使用",
+    desc: "挂机或邮件获得。在铁匠铺强化武器，不能直接使用",
   },
 ];
 

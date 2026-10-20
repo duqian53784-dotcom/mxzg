@@ -31,6 +31,10 @@ import {
   MailListResp,
   MailReadReq,
   MailReadResp,
+  SmithStrengthenReq,
+  SmithStrengthenResp,
+  SmithViewReq,
+  SmithViewResp,
   IdleClaimReq,
   IdleClaimResp,
   IdleQueryReq,
@@ -124,5 +128,13 @@ export const Proto = {
 
   mailDelete(req: MailDeleteReq, net: NetClient = NetClient.shared): Promise<MailDeleteResp> {
     return call(net, Cmd.mailDelete, req);
+  },
+
+  smithView(req: SmithViewReq, net: NetClient = NetClient.shared): Promise<SmithViewResp> {
+    return call(net, Cmd.smithView, req);
+  },
+
+  smithStrengthen(req: SmithStrengthenReq, net: NetClient = NetClient.shared): Promise<SmithStrengthenResp> {
+    return call(net, Cmd.smithStrengthen, req);
   },
 };

@@ -148,7 +148,7 @@ export interface HeroListReq {
   clientTime?: number;
 }
 
-/** 英雄卡。攻击、生命、防御是占位，由等级和星级算出。 */
+/** 英雄卡。攻击、生命、防御是占位，由等级、星级和武器强化算出。 */
 export interface HeroCard {
   id: number;
   name: string;
@@ -160,6 +160,11 @@ export interface HeroCard {
   /** 下一级消耗的金币。已满级为 0。 */
   upgradeCost: number;
   maxLevel: number;
+  /** 铁匠铺强化的武器。起步是新手短剑 Lv1，攻击加成为 0。 */
+  weaponName: string;
+  weaponLevel: number;
+  /** 武器额外攻击，已计入 atk。 */
+  weaponAtk: number;
 }
 
 export interface HeroListResp {
@@ -383,6 +388,69 @@ export interface MailDeleteResp {
   diamond: number;
   /**
    * 没有这封邮件 MAIL_NOT_FOUND，还有未领附件 MAIL_DELETE_BLOCKED。
+   * 成功可以不带。
+   */
+  code?: number;
+}
+
+/** 一名英雄身上的那一把新手短剑。铁匠铺只强化这一件。 */
+export interface SmithGear {
+  heroId: number;
+  heroName: string;
+  weaponName: string;
+  weaponLevel: number;
+  maxLevel: number;
+  /** 含武器加成的攻击。 */
+  atk: number;
+  /** 当前武器额外攻击。Lv1 为 0。 */
+  weaponAtk: number;
+  /** 再强化一级后的武器额外攻击。已满级时与 weaponAtk 相同。 */
+  nextWeaponAtk: number;
+  /** 下一次强化消耗的金币。已满级为 0。 */
+  goldCost: number;
+  /** 下一次强化消耗的强化石。已满级为 0。 */
+  stoneCost: number;
+}
+
+export interface SmithViewReq {
+  /** 占位。Mock 不看请求体。打开时给还没有武器的英雄补 Lv1。 */
+  clientTime?: number;
+}
+
+export interface SmithViewResp {
+  ok: boolean;
+  /** 名册第一名，界面默认选中。 */
+  leadId: number;
+  gears: SmithGear[];
+  /** 背包里的强化石。 */
+  stoneOwned: number;
+  gold: number;
+  diamond: number;
+  code?: number;
+}
+
+export interface SmithStrengthenReq {
+  heroId: number;
+}
+
+export interface SmithStrengthenResp {
+  ok: boolean;
+  heroId: number;
+  gear: SmithGear | null;
+  /** 本次扣掉的金币。失败为 0。 */
+  goldCost: number;
+  /** 本次扣掉的强化石。失败为 0。 */
+  stoneCost: number;
+  stoneOwned: number;
+  gold: number;
+  diamond: number;
+  /** 金币不足时，这次实际需要的金币。 */
+  needGold?: number;
+  /** 强化石不足时，这次实际需要的个数。 */
+  needStone?: number;
+  /**
+   * 没有这名英雄 HERO_NOT_FOUND，金币不足 SMITH_GOLD_SHORT，
+   * 强化石不足 SMITH_STONE_SHORT，武器已满级 SMITH_LEVEL_MAX。
    * 成功可以不带。
    */
   code?: number;

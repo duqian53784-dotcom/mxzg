@@ -33,6 +33,7 @@ import { CityChrome, mountCityChrome, TabState } from "./CityChrome";
 import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage } from "./HeroPage";
 import { buildSummonPage, SummonPage } from "./SummonPage";
 import { buildMailPage, MailPage } from "./MailPage";
+import { buildSmithPage, SmithPage } from "./SmithPage";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -64,6 +65,7 @@ export class MainApp extends Component {
   private summon: SummonPage | null = null;
   private bag: BagPage | null = null;
   private mail: MailPage | null = null;
+  private smith: SmithPage | null = null;
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -93,6 +95,8 @@ export class MainApp extends Component {
     this.bag = null;
     this.mail?.dispose();
     this.mail = null;
+    this.smith?.dispose();
+    this.smith = null;
     this.shell?.dispose();
   }
 
@@ -134,7 +138,7 @@ export class MainApp extends Component {
   private onTab(id: string): void {
     GameLog.shared.info("MainApp", "tab " + id);
     if (!this.allow(id)) return;
-    if ((id === "hero" || id === "summon") && !this.ensureNet()) return;
+    if ((id === "hero" || id === "summon" || id === "smith") && !this.ensureNet()) return;
     this.panels?.openRoot(id);
     this.refreshChrome();
   }
@@ -172,6 +176,7 @@ export class MainApp extends Component {
     if (id === "summon") return this.mountSummon();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
+    if (id === "smith") return this.mountSmith();
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -305,7 +310,7 @@ export class MainApp extends Component {
     this.openChild("mainline");
   }
 
-  /** 底栏「英雄」「召唤」没连上时不进页面。详情和召唤结果走页面栈。 */
+  /** 底栏「英雄」「召唤」「铁匠铺」没连上时不进页面。详情走页面栈。 */
   private ensureNet(): boolean {
     if (NetClient.shared.state === "connected") return true;
     this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -340,10 +345,32 @@ export class MainApp extends Component {
         if (!this.isValid) return;
         this.refreshChrome();
         this.heroList?.reload();
+        this.smith?.reload();
       },
       close: () => this.back(),
     });
     this.heroDetail = page;
+    return page.node;
+  }
+
+  /** 底栏「铁匠铺」。未到主线 Lv5 时 allow 已经 Toast，不会进到这里。 */
+  private mountSmith(): Node {
+    this.smith?.dispose();
+    const page = buildSmithPage({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
+      view: () => Proto.smithView({}, NetClient.shared),
+      strengthen: (heroId) => Proto.smithStrengthen({ heroId }, NetClient.shared),
+      onProgress: () => {
+        if (!this.isValid) return;
+        this.refreshChrome();
+        this.bag?.reload();
+        this.heroList?.reload();
+        this.heroDetail?.reload();
+      },
+      close: () => this.back(),
+    });
+    this.smith = page;
     return page.node;
   }
 
@@ -387,6 +414,7 @@ export class MainApp extends Component {
         if (!this.isValid) return;
         this.refreshChrome();
         this.heroList?.reload();
+        this.smith?.reload();
       },
       close: () => this.back(),
     });
@@ -420,6 +448,7 @@ export class MainApp extends Component {
         if (!this.isValid) return;
         this.refreshChrome();
         this.bag?.reload();
+        this.smith?.reload();
       },
       close: () => this.back(),
     });
@@ -581,6 +610,10 @@ export class MainApp extends Component {
     if (id === "mail") {
       this.mail?.dispose();
       this.mail = null;
+    }
+    if (id === "smith") {
+      this.smith?.dispose();
+      this.smith = null;
     }
   }
 
