@@ -26,14 +26,14 @@
 | server 进 Git | ⏸ 暂不 | 本机 **junction** → `F:\源码\mj\program\server` |
 | 旧仓 / 旧客户端 | 📦 归档参考 | 旧代码在 `F:\源码\mj\program`；GitHub 旧大体积内容勿再整仓硬推 |
 | 进度文档 | ✅ 本文 | `PROJECT_PLAN.md` |
-| P0 可玩闭环 | ❌ 未开始 | 见第 6 节 |
+| P0 可玩闭环 | ❌ 未开始 | 玩法未开始；技术骨架 B1–B4 已完成 |
 | 连真实服 | ❌ 未开始 | 协议 / 网关 / 登录 |
 | 微信小游戏 | ❌ 未开始 | H5 稳定后再做 |
 | App 包 | ❌ 未开始 | H5 之后 |
 
-**当前焦点（唯一）：** B1–B4 — 启动流、UI 壳、读表、网络 Mock（P0 技术骨架）。
+**当前焦点（唯一）：** B5 — 协议 stub（梳理旧 Protobuf；P0 会用到的消息先手写，仍可不连真服）。
 
-**上次更新：** 2026-10-20（Asia/Shanghai）— A9 完成：Boot/Main/Battle 场景已建、启动场景 Boot、Web 桌面端构建通过（移动端同属 H5，后续可再补）。
+**上次更新：** 2026-10-20（Asia/Shanghai）— B1–B4 完成：Boot 分阶段启动并 Mock 登录进 Main、UI 壳（页面栈 / 弹窗队列 / Toast）、JSON 读表样例、NetClient Mock。
 
 ---
 
@@ -175,7 +175,7 @@ flowchart TD
 
 ## 6. 执行清单（越细越好 · 打勾即进度）
 
-### 阶段 A · 工程基建（进行中）
+### 阶段 A · 工程基建（已完成）
 
 - [x] A1 安装 Creator 3.8.8
 - [x] A2 创建空 2D 项目并归位到 `F:\project\mxzg\client`
@@ -215,10 +215,10 @@ client/assets/
 
 ### 阶段 B · P0 技术骨架
 
-- [ ] B1 启动流程：Boot → 热更/版本检查占位 → 登录场景
-- [ ] B2 UI 框架：一层 Canvas、页面栈、弹窗队列、Toast
-- [ ] B3 配置加载：先支持 JSON（从 config 导出的精简表）；xlsx 导表流程文档化
-- [ ] B4 网络层占位：连接状态机、心跳、断线重连、消息派发（可先 Mock）
+- [x] B1 启动流程：Boot → 热更/版本检查占位 → 登录场景
+- [x] B2 UI 框架：一层 Canvas、页面栈、弹窗队列、Toast
+- [x] B3 配置加载：先支持 JSON（从 config 导出的精简表）；xlsx 导表流程文档化
+- [x] B4 网络层占位：连接状态机、心跳、断线重连、消息派发（可先 Mock）
 - [ ] B5 协议：梳理旧 Protobuf 列表；P0 只用到的先生成/手写 stub
 - [ ] B6 本地 Mock 服或录包回放（无真实服前可玩）
 - [ ] B7 日志与错误码展示
@@ -273,9 +273,9 @@ client/assets/
 4. **进包**：`client` 仅含当前分期需要的表；禁止一次拷全量  
 5. **何时进 Git**：导表脚本 + 导出产物策略定后，再决定 `config` 是否取消 junction 入库  
 
-- [ ] 写出 `docs/config-pipeline.md`  
-- [ ] 列出 P0 表文件名完整清单  
-- [ ] 打通第一条「表 → 客户端读到」样例  
+- [x] 写出 `docs/config-pipeline.md`  
+- [ ] 列出 P0 表文件名完整清单（起步名单已写在该文档，完整路径未对照本机表）  
+- [x] 打通第一条「表 → 客户端读到」样例  
 
 ---
 
@@ -332,11 +332,13 @@ client/assets/
 | 2026-10-20 | 首版：目标、目录、P0–P3、阶段 A–F、维护约定；记录仓库已推送 |
 | 2026-10-20 | A10：创建 scripts/scenes 目录与 Boot/NetClient/MainApp 占位；焦点改为 A9 |
 | 2026-10-20 | A9/A10.6：Boot/Main/Battle 场景 + 启动场景 Boot + Web 桌面端构建通过；焦点改为 B1–B4 |
+| 2026-10-20（Asia/Shanghai） | B1–B4：Boot 分阶段启动 + Mock 登录进 Main；UI 页面栈/弹窗队列/Toast；resources JSON 读表样例；NetClient 状态机与 MockTransport。焦点改为 B5 |
 
 ---
 
 ## 13. 下一步（写给下一回合的自己）
 
-1. 推进 **B1–B4**（启动、UI 壳、读表、网络 Mock）。  
-2. 每完成一项，更新第 1 节与本清单。  
-3. 有空时补一次 Web Mobile 构建（非阻塞）。  
+1. 推进 **B5**：梳理旧 Protobuf 列表，P0 会用到的消息先手写 stub（仍可不连真服）。  
+2. B1–B4 已可预览：Creator 打开 `client`，Boot 场景 Canvas 挂 `Boot` 后预览，Mock 登录进 Main。步骤见 `client/assets/scripts/README.md`。  
+3. 每完成一项，更新第 1 节与本清单。  
+4. 有空时补一次 Web Mobile 构建（非阻塞）。  
