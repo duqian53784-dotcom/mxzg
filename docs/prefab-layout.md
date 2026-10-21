@@ -1,6 +1,7 @@
 # Prefab / 资源目录约定（P0）
 
 - **素材**（图/音/字）：`client/assets/resources/`（`ui/`、`audio/`、`font/` 等）
+- 全屏 `map-bg` / `promotion-bg` 批次的文件对照见 [`asset-batch-map-bg.md`](asset-batch-map-bg.md)。本批只入库图片；Prefab `Bg` 换图后续再做。`battle-scene` 未纳入。
 - **界面 Prefab**：`client/assets/prefabs/ui/`（与素材分目录，勿把 Prefab 和 PNG 放同一层）
 - Prefab 内 SpriteFrame 仍通过 uuid 引用 `resources/` 下素材
 - **CreateRole 已合**入 `client/assets/prefabs/ui/login/CreateRolePanel.prefab`
