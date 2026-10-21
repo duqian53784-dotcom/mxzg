@@ -63,6 +63,12 @@ export const WireCmd = {
    * 18001 是竞技场战斗匹配，本刀不发，也不当成英雄。
    */
   heroList: 4001,
+  /**
+   * c2s 空体。进主城、c2s 4001 page=1 之后发。
+   * 整帧 `04 00 00 00 68 42 00 00`。仓库里没有这条 proto。
+   * s2c 按字段号只读。不是占位 login7.view（2201）。
+   */
+  activityProgress: 17000,
 } as const;
 
 /**
