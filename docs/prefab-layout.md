@@ -204,3 +204,66 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | `BtnBack` | (0, -430) | 240×48 | `返回` |
 
 行文案是 `bagRowText`（名字、数量、`可使用` / `材料`）。`Row_0` 带代码里的 `已选 ` 前缀，底图用橙色按钮，对应 `SELECT_FILL`。其余行用蓝色按钮。名字用目录里的 `小金币袋`，不是缩短的「金币袋」。数量 ×10 是预览占位，不是新号初始持有。`Count` 在 `list()` 返回前代码写的是 `读取背包…`；预制展示的是已经读到 3 行之后的句子。`Name` 是 `名字 ×数量`。`Desc` 顶对齐、可换行。`BtnUse` 因为这一行可用，文案是 `使用`（`useButtonText(true)`）；不可使用时代码会写成 `不可使用`。列表变长时 `detailAnchor()` 会把详情往下放到不盖住格子的位置，最低 -210。这份预制只放 3 行短列表。
+
+## Mail（未接线）
+
+真服只读页和 Mock 邮件页各一份 Prefab。`WireMailPage.ts` 只展示已同步的标题和有无附件，不领取、不删除、不写金币。`MailPage.ts` 是 Mock：列表加详情（领取 / 全部领取 / 删除）。两页没有可以共用的内容根。规格里 Mock 页可以后做，这一份一起带上。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| WireMailPage | `prefabs/ui/mail/WireMailPage` | **未接** |
+| MailPage | `prefabs/ui/mail/MailPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/mail/WireMailPage.prefab`、`client/assets/prefabs/ui/mail/MailPage.prefab`
+- **状态**：**未接** Boot、`MainApp`、`WireMailPage.ts`、`MailPage.ts`，以及任何 `USE_*_PREFAB`。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` 一致）。`ListHost`、`Rows`、`RowsHost`、`DetailHost`、`Detail` 都放在 (0, 0) 且铺满 720×1280，子节点的 y 就是代码里的页面坐标。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid。Prefab 目录里没有 PNG。没有邮件专用图集：页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；详情卡用 `win-bg_block-bg-5` 染成 `(16, 28, 48)`；返回和未选行用 `button_btn-blue-big`；已选行用 `button_btn-orange-big`；领取钮用 `button_btn-green-big`。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 运行时 `render()` 会拆掉并重建 `rows` / `detail`。Prefab 里的行和详情是编辑器预览，不是代码去克隆的模板。代码里的容器名是小写 `list-host` / `rows` / `rows-host` / `detail-host` / `detail`；预制用下面表里的 PascalCase，方便在编辑器里对位置。
+- 再生：`python3 client/tools/gen_mail_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对页面脚本和 `wireMail.ts` / `inbox.ts` 里的坐标和文案）
+
+### WireMailPage（真服只读）
+
+根 `WireMailPage`。对齐 `WireMailController.build()` / `render()` 和 `wireMail.ts` 的常量。默认只打开未同步占位，对应 `mailEntries == null`。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | — |
+| `Title` | (0, 470) | 680×56 | `邮件（真服只读）` |
+| `Note` | (0, 420) | 640×38 | `只读。不领取，不删除，不写金币` |
+| `Status` | (0, 380) | 640×36 | `已读未读未解。字段 3、字段 4 只记日志` |
+| `ListHost` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows/Empty` | (0, 280) | 640×44 | `空邮箱`（`_active: false`） |
+| `ListHost/Rows/Unsynced` | (0, 280) | 640×44 | `真服邮件未同步`（默认显示） |
+| `ListHost/Rows/Row_0` … `Row_9` | (0, 320 − i×44) | 640×38 | `Hadiah Reservasi Peristiwa · 有附件`，左对齐，`_active: false` |
+| `ListHost/Rows/More` | (0, -120) | 640×36 | `还有 3 封`（`_active: false`） |
+| `BtnBack` | (0, -460) | 240×48 | `返回` |
+
+`Title` / `Note` / `Status` / `Empty` / `Unsynced` 与 `WIRE_MAIL_READONLY_TITLE` / `WIRE_MAIL_READONLY_NOTE` / `WIRE_MAIL_STATUS_NOTE` / `WIRE_MAIL_EMPTY` / `WIRE_MAIL_UNSYNCED_TOAST` 相同。行文案是 `formatWireMailLine`：有标题时 `标题 · 有附件|无附件|附件未解`，没有标题时 `无标题 · id N · …` 或 `无标题 · …`。十行预览都用日志样本标题加上 ` · 有附件`。`Row_i` 共 10 行（`VISIBLE_ROWS`）。节点锚点在中心、放在 x=0，Label 水平对齐为左，宽 640，和 `align: "left"` 一致。`More` 的 y 是 `320 − 10×44`。运行时溢出文案是 `还有 N 封`；预制里的 `还有 3 封` 只是占位。`Empty` 与 `Unsynced` 同一位置，默认只显示未同步，避免和空邮箱叠字。
+
+### MailPage（Mock）
+
+根 `MailPage`。对齐 `MailController` 的列表和详情。短列表样例 2 封（选中的开服补给 + 已读的维护公告），`detailAnchor()` = `298 − 120 = 178`，所以详情按这个锚点摆。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | — |
+| `Title` | (0, 470) | 680×56 | `邮件` |
+| `Summary` | (0, 418) | 640×36 | `2 封 · 未读 1 · 可领 1` |
+| `RowsHost` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_0` | (0, 350) | 640×46 | `已选 未读 · 开服补给 · 有附件` |
+| `RowsHost/Rows/Row_1` | (0, 298) | 640×46 | `已读 · 维护公告` |
+| `DetailHost` | (0, 0) | 720×1280 | 容器 |
+| `DetailHost/Detail` | (0, 0) | 720×1280 | 容器 |
+| `DetailHost/Detail/Card` | (0, 162) | 640×168 | — |
+| `DetailHost/Detail/FromTitle` | (0, 214) | 600×38 | `系统 · 开服补给` |
+| `DetailHost/Detail/Body` | (0, 170) | 600×64 | 开服补给正文，左对齐、顶对齐 |
+| `DetailHost/Detail/Attach` | (0, 108) | 600×40 | `附件：金币 ×80、强化石 ×3、小金币袋 ×1` |
+| `DetailHost/Detail/BtnClaim` | (-160, 10) | 280×52 | `领取` |
+| `DetailHost/Detail/BtnClaimAll` | (160, 10) | 280×52 | `全部领取（1）` |
+| `DetailHost/Detail/BtnDelete` | (-160, -54) | 280×48 | `删除` |
+| `BtnBack` | (0, -430) | 240×48 | `返回` |
+
+行文案是 `mailRowText`（未读/已读、标题、有附件时才加后缀），再加代码里的 `已选 ` 前缀。行上没有发件人。`Row_0` 底图用橙色按钮，对应 `SELECT_FILL`。`Row_1` 用蓝色按钮。无附件不加后缀，所以维护公告只到标题。`Summary` 是 `mailSummaryText(2, 1, 1)`。`list()` 返回前代码写的是 `读取邮件…`；预制展示的是已经读到这 2 封之后的句子。`FromTitle` 是 `from + " · " + title`。正文是 `starterMails` 里开服补给那一段，左对齐。附件是 `attachmentText`：金币 ×80（`MAIL_REWARD_GOLD`）、强化石 ×3（`IDLE_ITEM_NAME` / `MAIL_REWARD_STONE`）、小金币袋 ×1（`MAIL_REWARD_GOLD_BAG`）。`BtnClaim` 因为这封可领，文案是 `领取`（`claimButtonText`），绿色按钮。`BtnClaimAll` 是 `claimAllButtonText(1)`，全角括号，也是绿色。`BtnDelete` 在附件还没领时不能删，贴蓝色按钮并染成 `LOCKED_FILL` `(78, 84, 98)`，同时开灰度。列表变长时 `detailAnchor()` 会把详情往下放到不盖住最后一行的位置，最低 -140。这份预制只放 2 行短列表。默认这些预览节点都是显示的；没有单独的空邮箱占位。
