@@ -454,7 +454,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 18001 时另走只读页。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。 */
   private blockWirePage(id: string): boolean {
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
@@ -485,7 +485,7 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 18001 就停在主城。空名册也算同步，放行后页面写「空名册」。 */
+  /** 没收到过 s2c 4001 就停在主城。空名册也算同步，放行后页面写「空名册」。 */
   private blockWireHero(): boolean {
     if (WireSession.hasHero()) return false;
     GameLog.shared.info("MainApp", "wire hero unsynced");
