@@ -950,6 +950,19 @@ import {
   WIRE_ROLE_SHENBIN_UNSYNCED_TOAST,
   wireRoleShenBinNote,
 } from "../assets/scripts/net/protocol/wireRoleShenBin";
+import {
+  decodeWireFetterContract,
+  formatWireFetterContractHead,
+  formatWireFetterContractLine,
+  WIRE_FETTER_CONTRACT_CMD,
+  WIRE_FETTER_CONTRACT_EMPTY,
+  WIRE_FETTER_CONTRACT_FIELD_NOTE,
+  WIRE_FETTER_CONTRACT_READONLY_NOTE,
+  WIRE_FETTER_CONTRACT_READONLY_TITLE,
+  WIRE_FETTER_CONTRACT_SIDE_EFFECT,
+  WIRE_FETTER_CONTRACT_UNSYNCED_TOAST,
+  wireFetterContractNote,
+} from "../assets/scripts/net/protocol/wireFetterContract";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1688,6 +1701,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("shenBin") === "city", "shen bin stays on the city tab");
   assert(rootTabFor("occupation") === "city", "occupation stays on the city tab");
   assert(rootTabFor("roleShenBin") === "city", "role shen bin stays on the city tab");
+  assert(rootTabFor("fetterContract") === "city", "fetter contract stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -7380,7 +7394,6 @@ async function checkWs(): Promise<void> {
     "wire.28104",
     "wire.28105",
     "wire.28106",
-    "wire.28107",
     "wire.28108",
     "wire.28109",
     "wire.28002",
@@ -8003,7 +8016,6 @@ async function checkWs(): Promise<void> {
     "wire.75607",
     "wire.75608",
     "wire.75609",
-    "wire.28107",
     "wire.20011",
     "wire.4601",
     "wire.29001",
@@ -8019,7 +8031,12 @@ async function checkWs(): Promise<void> {
   );
   assert(encodeWireMessage({ cmd: "wire.75607" }) === null, "75607 is not encoded as the role shen bin pull");
   assert(encodeWireMessage({ cmd: "wire.75608" }) === null, "75608 push is not encoded as the role shen bin c2s");
-  assert(encodeWireMessage({ cmd: "wire.28107" }) === null, "28107 is not encoded as a role shen bin alternative");
+  assert(
+    encodeWireMessage({ cmd: "wire.28107" }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: "wire.28107" })?.bytes || new Uint8Array(0)) === "04000000cb6d0000" &&
+      bytesToHex(encodeWireMessage({ cmd: "wire.28107" })?.bytes || new Uint8Array(0)) !== "040000005f270100",
+    "28107 encodes its own empty frame and is not merged into 75615"
+  );
   assert(WIRE_ROLE_SHENBIN_CMD === "wire.75615", "role shen bin wire cmd");
   assert(SHENBIN_ESSENCE === 902048, "shen bin essence item type");
   assert(WIRE_ROLE_SHENBIN_READONLY_TITLE === "神兵道具（真服只读）", "readonly role shen bin title");
@@ -8171,6 +8188,219 @@ async function checkWs(): Promise<void> {
       bytesToHex(encodeFrame(75615)).indexOf("57270100") < 0 &&
       bytesToHex(encodeFrame(75615)).indexOf("56270100") < 0,
     "75615 empty frame carries 5f 27 01 00 and not the 75606 or 75607 cmd byte"
+  );
+  assert(
+    WireCmd.fetterContract === 28107 &&
+      WireCmd.fetterContract !== WireCmd.roleShenBin &&
+      WireCmd.fetterContract !== WireCmd.fetterList &&
+      WireCmd.fetterContract !== WireCmd.fetterFashion,
+    "online 28107 stays off role shen bin 75615, fetter 28100 and fetter fashion 28200"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.fetterContract)) === "04000000cb6d0000", "empty c2s 28107");
+  assert(bytesToHex(encodeFrame(28107)) === "04000000cb6d0000", "empty c2s 28107 hex");
+  assert(bytesToHex(encodeFrame(28107)) !== "040000005f270100", "28107 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(28107)) !== "0400000056270100", "28107 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(28107)) !== "04000000c46d0000", "28107 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(28101)) !== "04000000cb6d0000", "28101 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28102)) !== "04000000cb6d0000", "28102 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28104)) !== "04000000cb6d0000", "28104 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28105)) !== "04000000cb6d0000", "28105 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28106)) !== "04000000cb6d0000", "28106 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28108)) !== "04000000cb6d0000", "28108 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28109)) !== "04000000cb6d0000", "28109 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28002)) !== "04000000cb6d0000", "28002 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28003)) !== "04000000cb6d0000", "28003 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28004)) !== "04000000cb6d0000", "28004 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28004)) === "04000000646d0000", "28004 empty frame is its own cmd");
+  assert(bytesToHex(encodeFrame(28201)) !== "04000000cb6d0000", "28201 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28202)) !== "04000000cb6d0000", "28202 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28203)) !== "04000000cb6d0000", "28203 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28204)) !== "04000000cb6d0000", "28204 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(28205)) !== "04000000cb6d0000", "28205 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(3099)) !== "04000000cb6d0000", "3099 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(3099)) === "040000001b0c0000", "3099 empty frame is its own cmd");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000cb6d0000", "20011 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "04000000cb6d0000", "4601 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "04000000cb6d0000", "29001 is not the 28107 frame");
+  const bannedFetterContractCmds = [
+    "wire.28101",
+    "wire.28102",
+    "wire.28104",
+    "wire.28105",
+    "wire.28106",
+    "wire.28108",
+    "wire.28109",
+    "wire.28002",
+    "wire.28003",
+    "wire.28004",
+    "wire.28201",
+    "wire.28202",
+    "wire.28203",
+    "wire.28204",
+    "wire.28205",
+    "wire.3099",
+    "wire.20011",
+    "wire.4601",
+    "wire.29001",
+  ];
+  for (let i = 0; i < bannedFetterContractCmds.length; i++) {
+    assert(encodeWireMessage({ cmd: bannedFetterContractCmds[i] }) === null, bannedFetterContractCmds[i] + " is not encoded");
+  }
+  assert(
+    encodeWireMessage({ cmd: WIRE_FETTER_CONTRACT_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_FETTER_CONTRACT_CMD })?.bytes || new Uint8Array(0)) === "04000000cb6d0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_FETTER_CONTRACT_CMD })?.bytes || new Uint8Array(0)) !== "040000005f270100",
+    "wire.28107 encodes the empty frame and is not the 75615 frame"
+  );
+  assert(WIRE_FETTER_CONTRACT_CMD === "wire.28107", "fetter contract wire cmd");
+  assert(WIRE_FETTER_CONTRACT_READONLY_TITLE === "查看契约（真服只读）", "readonly fetter contract title");
+  assert(WIRE_FETTER_CONTRACT_UNSYNCED_TOAST === "真服未同步", "unsynced fetter contract toast");
+  assert(WIRE_FETTER_CONTRACT_EMPTY === "空契约", "empty fetter contract label");
+  assert(
+    WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("getFetterTask") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("无解锁") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("75615") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("04000000cb6d0000") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28101") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28102") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28104") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28105") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28106") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28108") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28109") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28002") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28003") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28004") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28201") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("28205") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("3099") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("不重复拉 75615") >= 0 &&
+      WIRE_FETTER_CONTRACT_SIDE_EFFECT.indexOf("不重复拉 75606") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("contracts") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("不保证顺序") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("无解锁契约") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("28101") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("28108") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("28004") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("28201") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("3099") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("75615") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_FETTER_CONTRACT_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_FETTER_CONTRACT_FIELD_NOTE.indexOf("contracts") >= 0 &&
+      WIRE_FETTER_CONTRACT_FIELD_NOTE.indexOf("不保证顺序") >= 0 &&
+      WIRE_FETTER_CONTRACT_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_FETTER_CONTRACT_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "fetter contract page names contracts and refuses unlock upgrade and the banned cmds"
+  );
+  const contractUnpacked = concatBytes(
+    concatBytes(fieldVarint(1, 9), fieldVarint(1, 0)),
+    concatBytes(fieldVarint(1, 8), fieldVarint(8, 1))
+  );
+  const contractPacked = fieldBytes(1, new Uint8Array([9, 0, 8]));
+  const contractZero = fieldVarint(1, 0);
+  const contractNeg = fieldNeg1(1);
+  const contractWide = fieldVarint(1, 1099511627776);
+  const contractOuter = fieldVarint(9, 1);
+  const contractBadPacked = fieldBytes(1, new Uint8Array([0x80]));
+  assert(
+    decodeWireFetterContract(new Uint8Array(0)) !== null &&
+      decodeWireFetterContract(new Uint8Array(0))?.contracts.length === 0 &&
+      formatWireFetterContractHead(decodeWireFetterContract(new Uint8Array(0)) || { contracts: [], marks: [] }) ===
+        "contracts=" + WIRE_FETTER_CONTRACT_EMPTY,
+    "empty 28107 body is synced and does not invent zero"
+  );
+  assert(decodeWireFetterContract(null) === null, "null 28107 body is not a snapshot");
+  assert(decodeWireFetterContract(new Uint8Array([0x80])) === null, "bad 28107 ignored");
+  assert(decodeWireFetterContract(contractBadPacked) === null, "28107 packed blob that fails is not an empty list");
+  const contractOrder = decodeWireFetterContract(contractUnpacked);
+  assert(
+    contractOrder !== null &&
+      contractOrder.contracts.length === 3 &&
+      contractOrder.contracts[0] === 9 &&
+      contractOrder.contracts[1] === 0 &&
+      contractOrder.contracts[2] === 8 &&
+      contractOrder.marks.length === 1 &&
+      contractOrder.marks[0].field === 8 &&
+      formatWireFetterContractHead(contractOrder) === "contracts=9,0,8 / 字段8=1" &&
+      formatWireFetterContractLine(contractOrder.contracts[0]) === "id=9" &&
+      formatWireFetterContractLine(contractOrder.contracts[1]) === "id=0",
+    "28107 unpacked contracts keep arrival order and do not sort"
+  );
+  const contractPackedSnap = decodeWireFetterContract(contractPacked);
+  assert(
+    contractPackedSnap !== null &&
+      contractPackedSnap.contracts.length === 3 &&
+      contractPackedSnap.contracts[0] === 9 &&
+      contractPackedSnap.contracts[1] === 0 &&
+      contractPackedSnap.contracts[2] === 8 &&
+      formatWireFetterContractHead(contractPackedSnap) === "contracts=9,0,8",
+    "28107 packed contracts keep arrival order"
+  );
+  const contractZeroSnap = decodeWireFetterContract(contractZero);
+  assert(
+    contractZeroSnap !== null &&
+      contractZeroSnap.contracts.length === 1 &&
+      contractZeroSnap.contracts[0] === 0 &&
+      formatWireFetterContractHead(contractZeroSnap) === "contracts=0" &&
+      formatWireFetterContractLine(contractZeroSnap.contracts[0]) === "id=0",
+    "present 28107 zero stays zero"
+  );
+  const contractNegSnap = decodeWireFetterContract(contractNeg);
+  assert(
+    contractNegSnap !== null &&
+      contractNegSnap.contracts[0] === -1 &&
+      formatWireFetterContractLine(contractNegSnap.contracts[0]) === "id=-1",
+    "28107 contract -1 stays -1"
+  );
+  const contractWideSnap = decodeWireFetterContract(contractWide);
+  assert(
+    contractWideSnap !== null &&
+      contractWideSnap.contracts[0] === 1099511627776 &&
+      formatWireFetterContractLine(contractWideSnap.contracts[0]) === "id=1099511627776",
+    "28107 contract keeps the wide integer"
+  );
+  assert(
+    decodeWireFetterContract(contractOuter) !== null &&
+      decodeWireFetterContract(contractOuter)?.contracts.length === 0 &&
+      formatWireFetterContractHead(decodeWireFetterContract(contractOuter) || { contracts: [], marks: [] }) ===
+        "contracts=" + WIRE_FETTER_CONTRACT_EMPTY + " / 字段9=1",
+    "non-empty 28107 without contracts stays synced and does not invent zero"
+  );
+  const contractSticky = decodeFrames(
+    concatBytes(encodeFrame(WireCmd.fetterContract, contractUnpacked), encodeFrame(WireCmd.heartbeat))
+  );
+  assert(
+    contractSticky.frames.length === 2 &&
+      contractSticky.frames[0].cmdId === 28107 &&
+      contractSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireFetterContract(contractSticky.frames[0].body)?.contracts[0] === 9 &&
+      decodeWireFetterContract(contractSticky.frames[0].body)?.contracts[1] === 0,
+    "sticky 28107 frame stops at its length prefix"
+  );
+  assert(
+    wireFetterContractNote(contractOrder || { contracts: [], marks: [] }).indexOf(WIRE_FETTER_CONTRACT_SIDE_EFFECT) >= 0 &&
+      wireFetterContractNote(contractOrder || { contracts: [], marks: [] }).indexOf("不写金币") >= 0 &&
+      wireFetterContractNote(contractOrder || { contracts: [], marks: [] }).indexOf("不写钻石") >= 0,
+    "28107 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
+    bytesToHex(encodeFrame(28107)).indexOf("cb6d0000") >= 0 &&
+      bytesToHex(encodeFrame(28107)).indexOf("5f270100") < 0 &&
+      bytesToHex(encodeFrame(28107)).indexOf("c46d0000") < 0,
+    "28107 empty frame carries cb 6d 00 00 and not the 75615 or 28100 cmd byte"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -9282,7 +9512,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 36, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 37, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -9440,6 +9670,18 @@ async function checkWs(): Promise<void> {
         "pullIdle 75615 frame is not merged into 75606"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 36] as ArrayBuffer)) === "04000000cb6d0000",
+        "pullIdle sends empty c2s 28107 after 75615"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 36] as ArrayBuffer)) !== "040000005f270100",
+        "pullIdle 28107 frame is not merged into 75615"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 36] as ArrayBuffer)) !== "0400000056270100",
+        "pullIdle 28107 frame is not the 75606 cmd"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -9475,11 +9717,13 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 75601") &&
           sawLog(lines, "发送 c2s 75606") &&
           sawLog(lines, "发送 c2s 75615") &&
+          sawLog(lines, "发送 c2s 28107") &&
           sawLog(lines, "04000000c46d0000") &&
           sawLog(lines, "04000000286e0000") &&
           sawLog(lines, "0400000051270100") &&
           sawLog(lines, "0400000056270100") &&
           sawLog(lines, "040000005f270100") &&
+          sawLog(lines, "04000000cb6d0000") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -9547,7 +9791,8 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 28106") === false &&
           sawLog(lines, "发送 c2s 28108") === false &&
           sawLog(lines, "发送 c2s 28103") === false &&
-          sawLog(lines, "发送 c2s 28107") === false &&
+          sawLog(lines, "发送 c2s 28004") === false &&
+          sawLog(lines, "发送 c2s 3099") === false &&
           sawLog(lines, "发送 c2s 28109") === false &&
           sawLog(lines, "发送 c2s 28002") === false &&
           sawLog(lines, "发送 c2s 28003") === false &&
@@ -10191,7 +10436,6 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.28108");
       roleNet.send("wire.28109");
       roleNet.send("wire.28103");
-      roleNet.send("wire.28107");
       roleNet.send("wire.28002");
       roleNet.send("wire.28003");
       roleNet.send("wire.20011");
@@ -10199,7 +10443,7 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeFetterOther,
-        "28101 28102 28103 28104 28105 28106 28107 28108 28109 28002 28003 20011 4601 and 29001 stay off the fetter wire"
+        "28101 28102 28103 28104 28105 28106 28108 28109 28002 28003 20011 4601 and 29001 stay off the fetter wire"
       );
       assert(
         sawLog(lines, "未发送 wire.28101") &&
@@ -10208,7 +10452,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.28104") &&
           sawLog(lines, "未发送 wire.28105") &&
           sawLog(lines, "未发送 wire.28106") &&
-          sawLog(lines, "未发送 wire.28107") &&
           sawLog(lines, "未发送 wire.28108") &&
           sawLog(lines, "未发送 wire.28109") &&
           sawLog(lines, "未发送 wire.28002") &&
@@ -10248,7 +10491,6 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.28104");
       roleNet.send("wire.28105");
       roleNet.send("wire.28106");
-      roleNet.send("wire.28107");
       roleNet.send("wire.28108");
       roleNet.send("wire.28109");
       roleNet.send("wire.28002");
@@ -10268,7 +10510,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.28205") &&
           sawLog(lines, "未发送 wire.28101") &&
           sawLog(lines, "未发送 wire.28103") &&
-          sawLog(lines, "未发送 wire.28107") &&
           sawLog(lines, "未发送 wire.28109") &&
           sawLog(lines, "未发送 wire.28002") &&
           sawLog(lines, "未发送 wire.28003") &&
@@ -10400,13 +10641,12 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.75607");
       roleNet.send("wire.75608");
       roleNet.send("wire.75609");
-      roleNet.send("wire.28107");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeRoleShenBinOther,
-        "75602 75603 75604 75605 75619 75607 75608 75609 28107 20011 4601 and 29001 stay off the role shen bin wire"
+        "75602 75603 75604 75605 75619 75607 75608 75609 20011 4601 and 29001 stay off the role shen bin wire"
       );
       assert(
         sawLog(lines, "未发送 wire.75602") &&
@@ -10417,11 +10657,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.75607") &&
           sawLog(lines, "未发送 wire.75608") &&
           sawLog(lines, "未发送 wire.75609") &&
-          sawLog(lines, "未发送 wire.28107") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001"),
-        "role shen bin writes occupation writes 75608-as-c2s 28107 20011 4601 and 29001 are not encoded"
+        "role shen bin writes occupation writes 75608-as-c2s 20011 4601 and 29001 are not encoded"
       );
       roleNet.send(WIRE_OCCUPATION_CMD);
       assert(
@@ -10435,6 +10674,73 @@ async function checkWs(): Promise<void> {
         roleSockets[0].sent.length === sentAfterOccupationAlone + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "040000005f270100",
         "sending 75615 does not also send 75606 or 75607"
+      );
+      const sentBeforeFetterContract = roleSockets[0].sent.length;
+      roleNet.send(WIRE_FETTER_CONTRACT_CMD);
+      const contractSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(contractSent as ArrayBuffer)) === "04000000cb6d0000", "wire.28107 frame");
+      assert(bytesToHex(new Uint8Array(contractSent as ArrayBuffer)) !== "040000005f270100", "wire.28107 frame is not 75615");
+      assert(roleSockets[0].sent.length === sentBeforeFetterContract + 1, "28107 is its own frame and is not merged into 75615");
+      const sentBeforeFetterContractOther = roleSockets[0].sent.length;
+      roleNet.send("wire.28101");
+      roleNet.send("wire.28102");
+      roleNet.send("wire.28104");
+      roleNet.send("wire.28105");
+      roleNet.send("wire.28106");
+      roleNet.send("wire.28108");
+      roleNet.send("wire.28109");
+      roleNet.send("wire.28002");
+      roleNet.send("wire.28003");
+      roleNet.send("wire.28004");
+      roleNet.send("wire.28201");
+      roleNet.send("wire.28202");
+      roleNet.send("wire.28203");
+      roleNet.send("wire.28204");
+      roleNet.send("wire.28205");
+      roleNet.send("wire.3099");
+      roleNet.send("wire.20011");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.29001");
+      assert(
+        roleSockets[0].sent.length === sentBeforeFetterContractOther,
+        "28101 28102 28104 28105 28106 28108 28109 28002 28003 28004 28201-28205 3099 20011 4601 and 29001 stay off the fetter contract wire"
+      );
+      assert(
+        sawLog(lines, "未发送 wire.28101") &&
+          sawLog(lines, "未发送 wire.28102") &&
+          sawLog(lines, "未发送 wire.28104") &&
+          sawLog(lines, "未发送 wire.28105") &&
+          sawLog(lines, "未发送 wire.28106") &&
+          sawLog(lines, "未发送 wire.28108") &&
+          sawLog(lines, "未发送 wire.28109") &&
+          sawLog(lines, "未发送 wire.28002") &&
+          sawLog(lines, "未发送 wire.28003") &&
+          sawLog(lines, "未发送 wire.28004") &&
+          sawLog(lines, "未发送 wire.28201") &&
+          sawLog(lines, "未发送 wire.28202") &&
+          sawLog(lines, "未发送 wire.28203") &&
+          sawLog(lines, "未发送 wire.28204") &&
+          sawLog(lines, "未发送 wire.28205") &&
+          sawLog(lines, "未发送 wire.3099") &&
+          sawLog(lines, "未发送 wire.20011") &&
+          sawLog(lines, "未发送 wire.4601") &&
+          sawLog(lines, "未发送 wire.29001"),
+        "fetter contract writes 28004 3099 20011 4601 and 29001 are not encoded"
+      );
+      roleNet.send(WIRE_ROLE_SHENBIN_CMD);
+      assert(
+        roleSockets[0].sent.length === sentBeforeFetterContractOther + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "040000005f270100",
+        "sending 75615 does not also send 28107"
+      );
+      const sentAfterRoleShenAlone = roleSockets[0].sent.length;
+      roleNet.send(WIRE_FETTER_CONTRACT_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterRoleShenAlone + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000cb6d0000" &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "040000005f270100" &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "0400000056270100",
+        "sending 28107 does not also send 75615 or 75606"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -12513,6 +12819,17 @@ async function checkWs(): Promise<void> {
         "28201 28202 28203 28204 28205 28103 28107 75601 and 28100 do not replace the 28200 list"
       );
       assert(
+        WireSession.hasFetterContract() &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts.length === 1 &&
+          WireSession.fetterContract.contracts[0] === 3 &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.useType === 2 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "28107 field 1=3 fills contracts and does not replace the 28200 list"
+      );
+      assert(
         WireSession.hasShenBin() &&
           WireSession.shenBin !== null &&
           WireSession.shenBin.infos.length === 0 &&
@@ -12768,6 +13085,88 @@ async function checkWs(): Promise<void> {
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
         "75602 75603 75604 75605 75607 75608 75609 75619 28107 4601 29001 20011 75606 and 75601 do not replace the 75615 list"
+      );
+      assert(
+        WireSession.hasFetterContract() &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts.length === 1 &&
+          WireSession.fetterContract.contracts[0] === 5 &&
+          WireSession.roleShenBin !== null &&
+          WireSession.roleShenBin.items.length === 1 &&
+          WireSession.roleShenBin.items[0].itemType === 902048 &&
+          WireSession.roleShenBin.items[0].itemNum === 3 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "28107 field 1=5 fills contracts and does not replace the 75615 list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.fetterContract));
+      assert(
+        WireSession.hasFetterContract() &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts.length === 0 &&
+          formatWireFetterContractHead(WireSession.fetterContract) === "contracts=" + WIRE_FETTER_CONTRACT_EMPTY &&
+          WireSession.roleShenBin !== null &&
+          WireSession.roleShenBin.items[0].itemType === 902048 &&
+          WireSession.roleShenBin.items[0].itemNum === 3 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 28107 body clears contracts without writing zero and stays synced"
+      );
+      const contractSessionBody = concatBytes(fieldVarint(1, 9), concatBytes(fieldVarint(1, 0), concatBytes(fieldVarint(1, 8), fieldNeg1(1))));
+      roleSockets[0].push(encodeFrame(WireCmd.fetterContract, contractSessionBody));
+      assert(
+        WireSession.hasFetterContract() &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts.length === 4 &&
+          WireSession.fetterContract.contracts[0] === 9 &&
+          WireSession.fetterContract.contracts[1] === 0 &&
+          WireSession.fetterContract.contracts[2] === 8 &&
+          WireSession.fetterContract.contracts[3] === -1 &&
+          formatWireFetterContractHead(WireSession.fetterContract) === "contracts=9,0,8,-1" &&
+          formatWireFetterContractLine(WireSession.fetterContract.contracts[3]) === "id=-1" &&
+          wireFetterContractNote(WireSession.fetterContract).indexOf(WIRE_FETTER_CONTRACT_SIDE_EFFECT) >= 0 &&
+          wireFetterContractNote(WireSession.fetterContract).indexOf("不写金币") >= 0 &&
+          wireFetterContractNote(WireSession.fetterContract).indexOf("不写钻石") >= 0 &&
+          WireSession.roleShenBin !== null &&
+          WireSession.roleShenBin.items[0].itemNum === 3 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "28107 sample keeps arrival order including zero and -1 and leaves 75615"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.fetterContract, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasFetterContract() &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts.length === 4 &&
+          WireSession.fetterContract.contracts[0] === 9 &&
+          WireSession.roleShenBin !== null &&
+          WireSession.roleShenBin.items[0].itemType === 902048 &&
+          sawWire("28107 解不开"),
+        "bad 28107 keeps the contract list and the 75615 record"
+      );
+      roleSockets[0].push(encodeFrame(28101, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(28108, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(28002, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(28004, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(28201, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3099, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(WireCmd.roleShenBin, fieldBytes(1, roleSessionItem)));
+      assert(
+        WireSession.hasFetterContract() &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts.length === 4 &&
+          WireSession.fetterContract.contracts[0] === 9 &&
+          WireSession.fetterContract.contracts[1] === 0 &&
+          WireSession.fetterContract.contracts[3] === -1 &&
+          WireSession.roleShenBin !== null &&
+          WireSession.roleShenBin.items[0].itemType === 902048 &&
+          WireSession.roleShenBin.items[0].itemNum === 3 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "28101 28108 28002 28004 28201 3099 4601 29001 20011 and 75615 do not replace the 28107 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
