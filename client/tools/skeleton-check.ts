@@ -1021,6 +1021,19 @@ import {
   WIRE_TOWER_REWARD_UNSYNCED_TOAST,
   wireTowerRewardNote,
 } from "../assets/scripts/net/protocol/wireTowerReward";
+import {
+  decodeWireHeroLevelResetTimes,
+  formatWireHeroLevelResetTimesLine,
+  WIRE_HERO_LEVEL_RESET_TIMES_BANNED_CMDS,
+  WIRE_HERO_LEVEL_RESET_TIMES_CMD,
+  WIRE_HERO_LEVEL_RESET_TIMES_FIELD_NOTE,
+  WIRE_HERO_LEVEL_RESET_TIMES_FRAME,
+  WIRE_HERO_LEVEL_RESET_TIMES_READONLY_NOTE,
+  WIRE_HERO_LEVEL_RESET_TIMES_READONLY_TITLE,
+  WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT,
+  WIRE_HERO_LEVEL_RESET_TIMES_UNSYNCED_TOAST,
+  wireHeroLevelResetTimesNote,
+} from "../assets/scripts/net/protocol/wireHeroLevelResetTimes";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1762,6 +1775,9 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("fetterContract") === "city", "fetter contract stays on the city tab");
   assert(rootTabFor("formation") === "city", "formation stays on the city tab");
   assert(rootTabFor("lineUp") === "city", "lineup stays on the city tab");
+  assert(rootTabFor("runningPromotion") === "city", "running promotion stays on the city tab");
+  assert(rootTabFor("towerReward") === "city", "tower reward stays on the city tab");
+  assert(rootTabFor("heroLevelResetTimes") === "city", "hero level reset times stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -9191,6 +9207,156 @@ async function checkWs(): Promise<void> {
       bytesToHex(encodeFrame(3203)).indexOf("89130000") < 0,
     "3203 empty frame carries 83 0c 00 00 and not the 20101, 3101, 51001 or 5001 cmd byte"
   );
+  assert(
+    WireCmd.heroLevelResetTimes === 4044 &&
+      WireCmd.heroLevelResetTimes !== WireCmd.towerReward &&
+      WireCmd.heroLevelResetTimes !== WireCmd.runningPromotion &&
+      WireCmd.heroLevelResetTimes !== WireCmd.lineUp &&
+      WireCmd.heroLevelResetTimes !== WireCmd.formation &&
+      WireCmd.heroLevelResetTimes !== WireCmd.worldLevel &&
+      WireCmd.heroLevelResetTimes !== WireCmd.backpackList,
+    "online 4044 stays off tower 3203, running promotion 20101, lineup 3101, formation 3099, world 51001 and bag 5001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.heroLevelResetTimes)) === WIRE_HERO_LEVEL_RESET_TIMES_FRAME, "empty c2s 4044");
+  assert(bytesToHex(encodeFrame(4044)) === "04000000cc0f0000", "empty c2s 4044 hex");
+  assert(WIRE_HERO_LEVEL_RESET_TIMES_FRAME === "04000000cc0f0000", "4044 frame constant");
+  assert(bytesToHex(encodeFrame(4044)) !== "04000000830c0000", "4044 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(4044)) !== "04000000854e0000", "4044 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(4044)) !== "040000001d0c0000", "4044 is not the 3101 frame");
+  assert(bytesToHex(encodeFrame(4044)) !== "040000001b0c0000", "4044 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(4044)) !== "0400000039c70000", "4044 is not the 51001 frame");
+  assert(bytesToHex(encodeFrame(4044)) !== "0400000089130000", "4044 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(4043)) === "04000000cb0f0000" && bytesToHex(encodeFrame(4043)) !== "04000000cc0f0000", "4043 is not the 4044 frame");
+  assert(bytesToHex(encodeFrame(13010)) === "04000000d2320000" && bytesToHex(encodeFrame(13010)) !== "04000000cc0f0000", "13010 is not the 4044 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000cc0f0000", "20011 is not the 4044 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "04000000cc0f0000", "4601 is not the 4044 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "04000000cc0f0000", "29001 is not the 4044 frame");
+  for (let i = 0; i < WIRE_HERO_LEVEL_RESET_TIMES_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_BANNED_CMDS[i] }) === null, WIRE_HERO_LEVEL_RESET_TIMES_BANNED_CMDS[i] + " is not encoded");
+  }
+  assert(encodeWireMessage({ cmd: "wire.4043" }) === null, "4043 level reset write is not encoded");
+  assert(encodeWireMessage({ cmd: "wire.13010" }) === null, "13010 is not encoded");
+  assert(encodeWireMessage({ cmd: "wire.5001" }) !== null, "5001 stays encoded by its own module and is not reissued as 4044");
+  assert(encodeWireMessage({ cmd: "wire.51001" }) !== null, "51001 stays encoded by its own module and is not reissued as 4044");
+  assert(encodeWireMessage({ cmd: "wire.3203" }) !== null, "3203 stays encoded by its own module and is not reissued as 4044");
+  assert(encodeWireMessage({ cmd: "wire.20101" }) !== null, "20101 stays encoded by its own module and is not reissued as 4044");
+  assert(
+    encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_CMD })?.bytes || new Uint8Array(0)) === "04000000cc0f0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_CMD })?.bytes || new Uint8Array(0)) !== "04000000830c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_CMD })?.bytes || new Uint8Array(0)) !== "04000000854e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_CMD })?.bytes || new Uint8Array(0)) !== "040000001d0c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_CMD })?.bytes || new Uint8Array(0)) !== "040000001b0c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_CMD })?.bytes || new Uint8Array(0)) !== "0400000039c70000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_CMD })?.bytes || new Uint8Array(0)) !== "0400000089130000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_CMD })?.bytes || new Uint8Array(0)) !== "04000000cb0f0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_CMD })?.bytes || new Uint8Array(0)) !== "04000000d2320000",
+    "wire.4044 encodes the empty frame and is not 3203, 20101, 3101, 3099, 51001, 5001, 4043 or 13010"
+  );
+  assert(WIRE_HERO_LEVEL_RESET_TIMES_CMD === "wire.4044", "hero level reset times wire cmd");
+  assert(WIRE_HERO_LEVEL_RESET_TIMES_READONLY_TITLE === "英雄等级重生次数（真服只读）", "readonly hero level reset times title");
+  assert(WIRE_HERO_LEVEL_RESET_TIMES_UNSYNCED_TOAST === "真服未同步", "unsynced hero level reset times toast");
+  assert(
+    WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("getHeroSummon") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("跨日") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("无养成写") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("04000000cc0f0000") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("4043") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("13010") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("5001") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("51001") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("3203") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("20101") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("3101") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("3099") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("不重复拉 3203") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("不重复拉 20101") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("不重复拉 3101") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT.indexOf("不重复拉 3099") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_READONLY_NOTE.indexOf("times") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_READONLY_NOTE.indexOf("缺省") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_READONLY_NOTE.indexOf("不发 4043") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_READONLY_NOTE.indexOf("13010") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_FIELD_NOTE.indexOf("times") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_HERO_LEVEL_RESET_TIMES_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "hero level reset times page names times and refuses the write cmd and the banned cmds"
+  );
+  const resetTimesZero = fieldVarint(1, 0);
+  const resetTimesNeg = fieldNeg1(1);
+  const resetTimesWide = fieldVarint(1, 1099511627776);
+  const resetTimesOuter = fieldVarint(9, 1);
+  const resetTimesEmpty = decodeWireHeroLevelResetTimes(new Uint8Array(0));
+  assert(
+    resetTimesEmpty !== null &&
+      resetTimesEmpty.times === null &&
+      formatWireHeroLevelResetTimesLine(resetTimesEmpty) === "times=无",
+    "empty 4044 body is synced and does not invent zero"
+  );
+  assert(decodeWireHeroLevelResetTimes(null) === null, "null 4044 body is not a snapshot");
+  assert(decodeWireHeroLevelResetTimes(new Uint8Array([0x80])) === null, "bad 4044 ignored");
+  const resetTimesZeroSnap = decodeWireHeroLevelResetTimes(resetTimesZero);
+  assert(
+    resetTimesZeroSnap !== null &&
+      resetTimesZeroSnap.times === 0 &&
+      formatWireHeroLevelResetTimesLine(resetTimesZeroSnap) === "times=0",
+    "present 4044 zero stays zero"
+  );
+  const resetTimesNegSnap = decodeWireHeroLevelResetTimes(resetTimesNeg);
+  assert(
+    resetTimesNegSnap !== null &&
+      resetTimesNegSnap.times === -1 &&
+      formatWireHeroLevelResetTimesLine(resetTimesNegSnap) === "times=-1",
+    "4044 times -1 stays -1"
+  );
+  const resetTimesWideSnap = decodeWireHeroLevelResetTimes(resetTimesWide);
+  assert(
+    resetTimesWideSnap !== null &&
+      resetTimesWideSnap.times === 1099511627776 &&
+      formatWireHeroLevelResetTimesLine(resetTimesWideSnap) === "times=1099511627776",
+    "4044 times keeps the wide integer"
+  );
+  const resetTimesOuterSnap = decodeWireHeroLevelResetTimes(resetTimesOuter);
+  assert(
+    resetTimesOuterSnap !== null &&
+      resetTimesOuterSnap.times === null &&
+      formatWireHeroLevelResetTimesLine(resetTimesOuterSnap) === "times=无 / 字段9=1",
+    "non-empty 4044 without times stays synced and does not invent zero"
+  );
+  const resetTimesSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.heroLevelResetTimes, resetTimesZero), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    resetTimesSticky.frames.length === 2 &&
+      resetTimesSticky.frames[0].cmdId === 4044 &&
+      resetTimesSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireHeroLevelResetTimes(resetTimesSticky.frames[0].body)?.times === 0,
+    "sticky 4044 frame stops at its length prefix"
+  );
+  assert(
+    wireHeroLevelResetTimesNote(resetTimesZeroSnap || { times: null, marks: [] }).indexOf(WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT) >= 0 &&
+      wireHeroLevelResetTimesNote(resetTimesZeroSnap || { times: null, marks: [] }).indexOf("不写金币") >= 0 &&
+      wireHeroLevelResetTimesNote(resetTimesZeroSnap || { times: null, marks: [] }).indexOf("不写钻石") >= 0,
+    "4044 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
+    bytesToHex(encodeFrame(4044)).indexOf("cc0f0000") >= 0 &&
+      bytesToHex(encodeFrame(4044)).indexOf("830c0000") < 0 &&
+      bytesToHex(encodeFrame(4044)).indexOf("cb0f0000") < 0 &&
+      bytesToHex(encodeFrame(4044)).indexOf("39c70000") < 0 &&
+      bytesToHex(encodeFrame(4044)).indexOf("89130000") < 0,
+    "4044 empty frame carries cc 0f 00 00 and not the 3203, 4043, 51001 or 5001 cmd byte"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -10301,7 +10467,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 41, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 42, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -10546,6 +10712,42 @@ async function checkWs(): Promise<void> {
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 40] as ArrayBuffer)) !== "04000000800c0000",
         "pullIdle 3203 frame is not the 3200 cmd"
       );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 41] as ArrayBuffer)) === "04000000cc0f0000",
+        "pullIdle sends empty c2s 4044 after 3203"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 41] as ArrayBuffer)) !== "04000000830c0000",
+        "pullIdle 4044 frame is not merged into 3203"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 41] as ArrayBuffer)) !== "04000000854e0000",
+        "pullIdle 4044 frame is not the 20101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 41] as ArrayBuffer)) !== "040000001d0c0000",
+        "pullIdle 4044 frame is not the 3101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 41] as ArrayBuffer)) !== "040000001b0c0000",
+        "pullIdle 4044 frame is not the 3099 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 41] as ArrayBuffer)) !== "0400000089130000",
+        "pullIdle 4044 frame is not the 5001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 41] as ArrayBuffer)) !== "0400000039c70000",
+        "pullIdle 4044 frame is not the 51001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 41] as ArrayBuffer)) !== "04000000cb0f0000",
+        "pullIdle 4044 frame is not the 4043 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 41] as ArrayBuffer)) !== "04000000d2320000",
+        "pullIdle 4044 frame is not the 13010 cmd"
+      );
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -10553,17 +10755,22 @@ async function checkWs(): Promise<void> {
         let worldFrames = 0;
         let runningFrames = 0;
         let towerFrames = 0;
+        let resetTimesFrames = 0;
         let bannedFrames = 0;
-        const bannedHex = {
+        const bannedHex: Record<string, boolean> = {
           "04000000820c0000": true,
           "04000000840c0000": true,
           "04000000850c0000": true,
           "04000000860c0000": true,
           "04000000940c0000": true,
           "04000000800c0000": true,
-          "04000000cc0f0000": true,
+          "04000000cb0f0000": true,
+          "04000000d2320000": true,
+          "040000002b4e0000": true,
+          "04000000f9110000": true,
+          "0400000049710000": true,
         };
-        for (let i = 0; i < 41; i++) {
+        for (let i = 0; i < 42; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -10571,6 +10778,7 @@ async function checkWs(): Promise<void> {
           if (hex === "0400000039c70000") worldFrames += 1;
           if (hex === "04000000854e0000") runningFrames += 1;
           if (hex === "04000000830c0000") towerFrames += 1;
+          if (hex === "04000000cc0f0000") resetTimesFrames += 1;
           if (bannedHex[hex]) bannedFrames += 1;
         }
         assert(
@@ -10580,8 +10788,9 @@ async function checkWs(): Promise<void> {
             worldFrames === 1 &&
             runningFrames === 1 &&
             towerFrames === 1 &&
+            resetTimesFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once and 3203 once, keeps 51001 once, and does not repeat 5001 or encode 3202 3204 3205 3206 3220 3200 4044"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once and 4044 once, keeps 51001 once, and does not repeat 5001 or encode 3202 3204 3205 3206 3220 3200 4043 13010 20011 4601 29001"
         );
       }
       assert(
@@ -10659,13 +10868,18 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000854e0000") &&
           sawLog(lines, "发送 c2s 3203") &&
           sawLog(lines, "04000000830c0000") &&
+          sawLog(lines, "发送 c2s 4044") &&
+          sawLog(lines, "04000000cc0f0000") &&
+          sawLog(lines, "发送 c2s 4043") === false &&
+          sawLog(lines, "04000000cb0f0000") === false &&
+          sawLog(lines, "发送 c2s 13010") === false &&
+          sawLog(lines, "04000000d2320000") === false &&
           sawLog(lines, "发送 c2s 3202") === false &&
           sawLog(lines, "发送 c2s 3204") === false &&
           sawLog(lines, "发送 c2s 3205") === false &&
           sawLog(lines, "发送 c2s 3206") === false &&
           sawLog(lines, "发送 c2s 3220") === false &&
           sawLog(lines, "发送 c2s 3200 帧") === false &&
-          sawLog(lines, "发送 c2s 4044") === false &&
           sawLog(lines, "发送 c2s 3012") === false &&
           sawLog(lines, "发送 c2s 19001") === false &&
           sawLog(lines, "发送 c2s 20102") === false &&
@@ -14547,9 +14761,70 @@ async function checkWs(): Promise<void> {
           WireSession.towerReward.list[1] === 0 &&
           WireSession.towerReward.list[2] === -1 &&
           formatWireTowerRewardLine(WireSession.towerReward.list[0]) === "idx=4" &&
+          WireSession.hasHeroLevelResetTimes() &&
+          WireSession.heroLevelResetTimes !== null &&
+          WireSession.heroLevelResetTimes.times === 6 &&
+          formatWireHeroLevelResetTimesLine(WireSession.heroLevelResetTimes) === "times=6" &&
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
         "3202 3204 3205 3206 3220 3200 4044 20011 3012 3010 12020 19001 4601 29001 20101 5001 and 51001 do not replace the 3203 list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroLevelResetTimes));
+      assert(
+        WireSession.hasHeroLevelResetTimes() &&
+          WireSession.heroLevelResetTimes !== null &&
+          WireSession.heroLevelResetTimes.times === null &&
+          formatWireHeroLevelResetTimesLine(WireSession.heroLevelResetTimes) === "times=无" &&
+          WireSession.towerReward !== null &&
+          WireSession.towerReward.list.length === 3 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 4044 clears times to 无 and does not write gold or diamond"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroLevelResetTimes, fieldVarint(1, 0)));
+      assert(
+        WireSession.heroLevelResetTimes !== null &&
+          WireSession.heroLevelResetTimes.times === 0 &&
+          formatWireHeroLevelResetTimesLine(WireSession.heroLevelResetTimes) === "times=0",
+        "4044 present zero stays zero"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroLevelResetTimes, fieldNeg1(1)));
+      assert(
+        WireSession.heroLevelResetTimes !== null &&
+          WireSession.heroLevelResetTimes.times === -1 &&
+          formatWireHeroLevelResetTimesLine(WireSession.heroLevelResetTimes) === "times=-1" &&
+          wireHeroLevelResetTimesNote(WireSession.heroLevelResetTimes).indexOf(WIRE_HERO_LEVEL_RESET_TIMES_SIDE_EFFECT) >= 0 &&
+          wireHeroLevelResetTimesNote(WireSession.heroLevelResetTimes).indexOf("不写金币") >= 0 &&
+          WireSession.towerReward !== null &&
+          WireSession.towerReward.list[0] === 4,
+        "4044 times -1 stays -1 and leaves the 3203 list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroLevelResetTimes, new Uint8Array([0x80])));
+      assert(
+        WireSession.heroLevelResetTimes !== null &&
+          WireSession.heroLevelResetTimes.times === -1 &&
+          sawWire("4044 解不开"),
+        "bad 4044 keeps the previous times"
+      );
+      roleSockets[0].push(encodeFrame(4043, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(13010, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(5001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(51001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(3203, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(20101, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(3101, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(3099, fieldVarint(1, 9)));
+      assert(
+        WireSession.hasHeroLevelResetTimes() &&
+          WireSession.heroLevelResetTimes !== null &&
+          WireSession.heroLevelResetTimes.times === -1 &&
+          formatWireHeroLevelResetTimesLine(WireSession.heroLevelResetTimes) === "times=-1" &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "4043 13010 20011 5001 51001 4601 29001 3203 20101 3101 and 3099 do not replace the 4044 times"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
