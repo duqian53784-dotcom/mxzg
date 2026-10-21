@@ -135,7 +135,7 @@ export function tabLabel(title: string, open: boolean): string {
 /** 子页面高亮它所属的底栏。日志、主线和挂机从主城进时仍算主城。英雄详情仍算英雄。 */
 export function rootTabFor(pageId: string): string {
   if (BOTTOM_IDS[pageId]) return pageId;
-  if (pageId === "log" || pageId === "mainline" || pageId === "idle" || pageId === "buygold" || pageId === "achieve" || pageId === "prophet" || pageId === "jewel" || pageId === "illustrat" || pageId === "pet" || pageId === "world" || pageId === "promotion" || pageId === "firstRecharge" || pageId === "reiki" || pageId === "islands" || pageId === "totems" || pageId === "astrolabe" || pageId === "tweakCube" || pageId === "dragon" || pageId === "dragonCollection" || pageId === "titleList" || pageId === "headPortrait" || pageId === "borderData" || pageId === "fashionList" || pageId === "wornFashion" || pageId === "heroPrayer") return CITY_TAB;
+  if (pageId === "log" || pageId === "mainline" || pageId === "idle" || pageId === "buygold" || pageId === "achieve" || pageId === "prophet" || pageId === "jewel" || pageId === "illustrat" || pageId === "pet" || pageId === "world" || pageId === "promotion" || pageId === "firstRecharge" || pageId === "reiki" || pageId === "islands" || pageId === "totems" || pageId === "astrolabe" || pageId === "tweakCube" || pageId === "dragon" || pageId === "dragonCollection" || pageId === "titleList" || pageId === "headPortrait" || pageId === "borderData" || pageId === "fashionList" || pageId === "wornFashion" || pageId === "heroPrayer" || pageId === "petIllustrate") return CITY_TAB;
   if (pageId === "hero-detail") return "hero";
   return "plays";
 }
