@@ -167,6 +167,15 @@ export const WireCmd = {
    * 不夹在 2001 和 3007 中间。不是角色资料 2001。不是世界等级 51001。
    */
   promotionList: 20001,
+  /**
+   * c2s 空体。进主城、空 c2s 20001 之后发，只发一次。
+   * 整帧 `04 00 00 00 2c 4e 00 00`。20012 = 0x4E2C，小端 2c 4e 00 00。
+   * GReqFirstRecharge / GResFirstRecharge。recharge 是字段 1。
+   * list 是字段 2，已领 idx。can_reward 是字段 3，PSMapData 的 key 是档位，value 0 可领、1 不可。
+   * 不发 20013 领奖。不做 13260。
+   * 不夹在 2001 和 3007 中间。不是角色资料 2001。不是基金列表 20001。
+   */
+  firstRecharge: 20012,
 } as const;
 
 /**
