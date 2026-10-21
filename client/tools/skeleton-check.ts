@@ -7081,8 +7081,10 @@ async function checkWs(): Promise<void> {
     "sticky 74104 frame stops at its length prefix"
   );
   assert(
-    decodeWireHeroPrayer(petIllUnpacked)?.privilege === null && decodeWirePet(petIllUnpacked)?.rows.length === 0,
-    "74104 petTypes varints are not a 4201 privilege and are not 74100 rows"
+    decodeWirePet(petIllUnpacked)?.rows.length === 0 &&
+      decodeWireHeroPrayer(petIllUnpacked)?.privilege === 8 &&
+      decodeWireHeroPrayer(petIllUnpacked)?.endTime === null,
+    "74104 petTypes varints are not 74100 rows and do not fill a 4201 end_time"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
