@@ -1,7 +1,7 @@
 # 本机起服（D1）
 
 > **来源：** 本文按 2026-10-19《项目分析与启动指南》写成。端口、密码、路径和命令只取那份分析，不另补。  
-> **D1 仍未勾选。** 分析记录的是当天那台开发机：中心服和游戏服起来了，跨服因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败，大型跨服没有启动。本文没有在本机复验。倩确认本机进程在听之前，`PROJECT_PLAN.md` 里的 D1 保持 `[ ]`。  
+> **D1 仍未勾选。** 分析记录的是当天那台开发机：中心服和游戏服起来了，跨服因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败，大型跨服没有启动。本文和一键脚本都没有在本机复验。倩确认本机进程在听之前，`PROJECT_PLAN.md` 里的 D1 保持 `[ ]`。  
 > **客户端仍走 Mock。** 本仓库 H5 连服是 D2，用分析里的游戏服 WebSocket **13101**。D1 只写怎么把 Java 服拉起来。
 
 `server/`、`config/` 是本机 junction，不在 Git 里。不要把 junction 背后的内容推进这个仓库。
@@ -16,7 +16,8 @@
 | Java 服 junction | `F:\project\mxzg\server` → `F:\源码\mj\program\server` |
 | 旧工程参考 | `F:\源码\mj\program` |
 | 构建和启动的工作目录 | `F:\源码\mj\program\server`（与上面的 junction 是同一目录） |
-| 一键脚本 | `F:\源码\mj\program\start-services.bat`（在 `program` 目录，不在 `server` 里） |
+| 分析里的一键 bat | `F:\源码\mj\program\start-services.bat`（在 `program` 目录，不在 `server` 里） |
+| 本仓库一键启服 | `scripts/start-local-server.ps1`、`scripts/stop-local-server.ps1` |
 | JDK 1.8 | `C:\dev\jdk1.8`（Temurin 1.8.0_504） |
 | Maven 3.6.3 | `C:\dev\maven`（已配 `JAVA_HOME`、`MAVEN_HOME`、`PATH`） |
 | MySQL 8.0.29 | `C:\dev\mysql`（Windows 服务 `MySQL80`，开机自启） |
@@ -96,6 +97,40 @@ D2 才把本仓库 H5 接到游戏服 WebSocket `13101`。在那之前不要改�
 命令都在 `F:\源码\mj\program\server` 下执行。`F:\project\mxzg\server` 是指到这里的 junction，进哪一个都是同一目录。分析里的 `cd program/server` 就是这个目录。
 
 不要在本 Git 仓库里找 `mxzg-server` 源码，GitHub 上没有这份服。
+
+## 一键启服
+
+第 3、4 节的构建和配置仍要先做完一次。脚本只做第 5 节的 `mvn -o dependency:copy-dependencies` 和 classpath `java`，并做第 7 节的检查。它放在本仓库，不放进 junction。
+
+Windows PowerShell 的执行策略经常拦住脚本。下面这条只放宽这一次，不改系统策略：
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File F:\project\mxzg\scripts\start-local-server.ps1
+```
+
+脚本先看端口 `3306`（MySQL，`127.0.0.1:3306`）和 `11001`（Redis，`127.0.0.1:11001`）是否已在听。分析没有写出如何启动服务 `MySQL80`、`RedisDev`，脚本不启动它们；不在听就用中文退出。
+
+然后各开一个窗口，窗口标题是 `mxzg-center`、`mxzg-gameserver`。Java 固定用 `C:\dev\jdk1.8\bin\java.exe`，参数是分析里的 `-Xms512m -Xmx2048m -cp "target/classes;target/lib/*"`，启动类分别是 `com.ayjs.mxzg.center.CenterBootstrap` 和 `com.ayjs.mxzg.gameserver.Bootstrap`。先等 center 的 TCP `11122` 和 HTTP `9801`，再开 gameserver。cross 默认不启（2026-10-19 因讨伐团 `CRUSADE_GROUP_WORKER` 失败）。要启才加 `-IncludeCross`。large-cross 不启。
+
+起来之后脚本自己检查。PowerShell 里 `curl` 是别名，脚本调用 `curl.exe`，地址与第 7 节相同，并加上最多 10 秒，避免检查卡住：
+
+```
+curl.exe http://127.0.0.1:9801/actuator/health
+curl.exe http://127.0.0.1:9804/actuator/health
+netstat -ano | findstr "11122 9902 13101"
+```
+
+分析没有写启动要等多久。脚本最多轮询约 180 秒。
+
+停止仍是分析里的做法：在该窗口输入 `stop` 回车。顺序是先 gameserver，若开了 cross 再 cross，最后 center。分析没有写出从别的窗口代输入 `stop` 的命令，所以停止脚本不结束进程：
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File F:\project\mxzg\scripts\stop-local-server.ps1
+```
+
+`start-local-server.ps1 -Stop` 也是这段说明。窗口没了但端口还在，用 Q7。
+
+分析里的 `F:\源码\mj\program\start-services.bat` 仍会各开一个窗口。本仓库这份脚本把同一套 classpath 命令放进 Git。D1 仍未勾选：脚本还没有在开发机上跑过。
 
 ## 1. MySQL
 
@@ -298,7 +333,7 @@ java -Xms512m -Xmx2048m -cp "target/classes;target/lib/*" com.ayjs.mxzg.gameserv
 
 ### 5.4 一键脚本
 
-也可以双击 `F:\源码\mj\program\start-services.bat`。它会依次打开 center 和 gameserver，各一个窗口。不含 cross。
+分析里还可以双击 `F:\源码\mj\program\start-services.bat`。它会依次打开 center 和 gameserver，各一个窗口，不含 cross。本仓库的一键方式见上面「一键启服」，用的是第 5.1 节和第 5.3 节同一套 classpath 命令。
 
 ### 5.5 仓库里的 Linux 部署（不要拿来在本机跑）
 
@@ -350,7 +385,7 @@ cross 失败不挡住这张清单。单机不要求它在听。
 
 ## 8. 停止
 
-Windows：在该服务的命令行窗口输入 `stop` 然后回车。一键脚本也是在各自窗口里输入 `stop`。
+Windows：在该服务的命令行窗口输入 `stop` 然后回车。`scripts/start-local-server.ps1` 开出的窗口同样如此。`scripts/stop-local-server.ps1` 和 `start-local-server.ps1 -Stop` 只打印顺序，不结束进程。
 
 停止顺序与启动相反：gameserver → large-cross → cross → center。
 
