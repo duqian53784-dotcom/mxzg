@@ -868,6 +868,19 @@ import {
   WIRE_HERO_PRAYER_UNSYNCED_TOAST,
   wireHeroPrayerNote,
 } from "../assets/scripts/net/protocol/wireHeroPrayer";
+import {
+  decodeWirePetIllustrate,
+  formatWirePetIllustrateHead,
+  formatWirePetIllustrateLine,
+  WIRE_PET_ILLUSTRATE_CMD,
+  WIRE_PET_ILLUSTRATE_EMPTY,
+  WIRE_PET_ILLUSTRATE_FIELD_NOTE,
+  WIRE_PET_ILLUSTRATE_READONLY_NOTE,
+  WIRE_PET_ILLUSTRATE_READONLY_TITLE,
+  WIRE_PET_ILLUSTRATE_SIDE_EFFECT,
+  WIRE_PET_ILLUSTRATE_UNSYNCED_TOAST,
+  wirePetIllustrateNote,
+} from "../assets/scripts/net/protocol/wirePetIllustrate";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1600,6 +1613,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("fashionList") === "city", "fashion list stays on the city tab");
   assert(rootTabFor("wornFashion") === "city", "worn fashion list stays on the city tab");
   assert(rootTabFor("heroPrayer") === "city", "hero prayer stays on the city tab");
+  assert(rootTabFor("petIllustrate") === "city", "pet illustrate stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -6925,6 +6939,151 @@ async function checkWs(): Promise<void> {
     decodeWireFashion(portraitUnpacked)?.list.length === 0 && decodeWireFashion(fashionPerm)?.list[0].heroType === 3,
     "34001 idx varints are not fashion rows and a fashion row keeps hero_type"
   );
+  assert(
+    WireCmd.petIllustrate === 74104 &&
+      WireCmd.petIllustrate !== WireCmd.petInfoList &&
+      WireCmd.petIllustrate !== WireCmd.heroPrayerData,
+    "online 74104 stays off pet list 74100 and hero prayer 4201"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.petIllustrate)) === "0400000078210100", "empty c2s 74104");
+  assert(bytesToHex(encodeFrame(WireCmd.petIllustrate)) !== "0400000074210100", "74104 is not the 74100 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.petIllustrate)) !== "0400000069100000", "74104 is not the 4201 frame");
+  assert(bytesToHex(encodeFrame(74101)) !== "0400000078210100", "74101 is not the 74104 frame");
+  assert(bytesToHex(encodeFrame(74102)) !== "0400000078210100", "74102 is not the 74104 frame");
+  assert(bytesToHex(encodeFrame(74103)) !== "0400000078210100", "74103 is not the 74104 frame");
+  assert(bytesToHex(encodeFrame(74105)) !== "0400000078210100", "74105 is not the 74104 frame");
+  assert(bytesToHex(encodeFrame(74106)) !== "0400000078210100", "74106 is not the 74104 frame");
+  assert(bytesToHex(encodeFrame(28100)) !== "0400000078210100", "28100 is not the 74104 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "0400000078210100", "20011 is not the 74104 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "0400000078210100", "4601 is not the 74104 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "0400000078210100", "29001 is not the 74104 frame");
+  assert(WIRE_PET_ILLUSTRATE_CMD === "wire.74104", "pet illustrate wire cmd");
+  assert(WIRE_PET_ILLUSTRATE_READONLY_TITLE === "宠物图鉴（真服只读）", "readonly pet illustrate title");
+  assert(WIRE_PET_ILLUSTRATE_UNSYNCED_TOAST === "真服未同步", "unsynced pet illustrate toast");
+  assert(WIRE_PET_ILLUSTRATE_EMPTY === "空图鉴", "empty pet illustrate label");
+  assert(
+    WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("PetIllustrate") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("无发奖") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("4201") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("74101") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("74102") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("74103") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("74105") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("74106") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("28100") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("74100") >= 0 &&
+      WIRE_PET_ILLUSTRATE_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("petTypes") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("无升级") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("携带") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("卸下") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("74101") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("74102") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("74103") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("28100") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_PET_ILLUSTRATE_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_PET_ILLUSTRATE_FIELD_NOTE.indexOf("petTypes") >= 0 &&
+      WIRE_PET_ILLUSTRATE_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_PET_ILLUSTRATE_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "pet illustrate page names petTypes and refuses the write cmds"
+  );
+  const emptyPetIll = {
+    petTypes: [] as number[],
+    marks: [] as { field: number; text: string }[],
+  };
+  const petIllUnpacked = concatBytes(
+    concatBytes(fieldVarint(1, 8), fieldVarint(1, 0)),
+    concatBytes(fieldVarint(1, 9), fieldVarint(8, 1))
+  );
+  const petIllPacked = concatBytes(fieldBytes(1, Uint8Array.from([8, 0, 9])), fieldVarint(8, 2));
+  const petIllZero = fieldVarint(1, 0);
+  const petIllOuter = fieldVarint(8, 1);
+  const petIllWide = fieldVarint(1, 1099511627776);
+  assert(
+    decodeWirePetIllustrate(new Uint8Array(0)) !== null &&
+      decodeWirePetIllustrate(new Uint8Array(0))?.petTypes.length === 0 &&
+      formatWirePetIllustrateHead(decodeWirePetIllustrate(new Uint8Array(0)) || emptyPetIll) === "petTypes=空图鉴",
+    "empty 74104 body is synced and does not invent zero"
+  );
+  assert(decodeWirePetIllustrate(null) === null, "null 74104 body is not a snapshot");
+  assert(decodeWirePetIllustrate(new Uint8Array([0x80])) === null, "bad 74104 ignored");
+  assert(decodeWirePetIllustrate(fieldBytes(1, new Uint8Array([0x80]))) === null, "74104 packed blob that fails is not an empty table");
+  assert(
+    decodeWirePetIllustrate(petIllZero) !== null &&
+      decodeWirePetIllustrate(petIllZero)?.petTypes.length === 1 &&
+      decodeWirePetIllustrate(petIllZero)?.petTypes[0] === 0 &&
+      formatWirePetIllustrateHead(decodeWirePetIllustrate(petIllZero) || emptyPetIll) === "petTypes=0" &&
+      formatWirePetIllustrateLine(0) === "type=0",
+    "present 74104 zero stays zero"
+  );
+  const petIllWideSnap = decodeWirePetIllustrate(petIllWide);
+  assert(
+    petIllWideSnap !== null &&
+      petIllWideSnap.petTypes.length === 1 &&
+      petIllWideSnap.petTypes[0] === 1099511627776 &&
+      formatWirePetIllustrateLine(petIllWideSnap.petTypes[0]) === "type=1099511627776",
+    "74104 petTypes keeps the wide integer"
+  );
+  const loggedPetIll = decodeWirePetIllustrate(petIllUnpacked);
+  assert(
+    loggedPetIll !== null &&
+      loggedPetIll.petTypes.length === 3 &&
+      loggedPetIll.petTypes[0] === 8 &&
+      loggedPetIll.petTypes[1] === 0 &&
+      loggedPetIll.petTypes[2] === 9 &&
+      loggedPetIll.marks.length === 1 &&
+      loggedPetIll.marks[0].field === 8 &&
+      formatWirePetIllustrateHead(loggedPetIll) === "petTypes=8,0,9 / 字段8=1" &&
+      formatWirePetIllustrateLine(loggedPetIll.petTypes[0]) === "type=8" &&
+      formatWirePetIllustrateLine(loggedPetIll.petTypes[1]) === "type=0" &&
+      wirePetIllustrateNote(loggedPetIll).indexOf(WIRE_PET_ILLUSTRATE_SIDE_EFFECT) >= 0 &&
+      wirePetIllustrateNote(loggedPetIll).indexOf("不写金币") >= 0 &&
+      wirePetIllustrateNote(loggedPetIll).indexOf("不写钻石") >= 0,
+    "74104 unpacked sample keeps petTypes including zero and does not fill a missing list with 0"
+  );
+  const loggedPetIllPacked = decodeWirePetIllustrate(petIllPacked);
+  assert(
+    loggedPetIllPacked !== null &&
+      loggedPetIllPacked.petTypes.length === 3 &&
+      loggedPetIllPacked.petTypes[0] === 8 &&
+      loggedPetIllPacked.petTypes[1] === 0 &&
+      loggedPetIllPacked.petTypes[2] === 9 &&
+      loggedPetIllPacked.marks.length === 1 &&
+      loggedPetIllPacked.marks[0].field === 8 &&
+      formatWirePetIllustrateHead(loggedPetIllPacked) === "petTypes=8,0,9 / 字段8=2",
+    "74104 packed sample keeps petTypes including zero"
+  );
+  assert(
+    decodeWirePetIllustrate(petIllOuter) !== null &&
+      decodeWirePetIllustrate(petIllOuter)?.petTypes.length === 0 &&
+      formatWirePetIllustrateHead(decodeWirePetIllustrate(petIllOuter) || emptyPetIll) === "petTypes=空图鉴 / 字段8=1",
+    "non-empty 74104 without petTypes stays synced and does not invent zero"
+  );
+  const petIllSticky = decodeFrames(
+    concatBytes(encodeFrame(WireCmd.petIllustrate, petIllUnpacked), encodeFrame(WireCmd.heartbeat))
+  );
+  assert(
+    petIllSticky.frames.length === 2 &&
+      petIllSticky.frames[0].cmdId === 74104 &&
+      petIllSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWirePetIllustrate(petIllSticky.frames[0].body)?.petTypes.length === 3,
+    "sticky 74104 frame stops at its length prefix"
+  );
+  assert(
+    decodeWireHeroPrayer(petIllUnpacked)?.privilege === null && decodeWirePet(petIllUnpacked)?.rows.length === 0,
+    "74104 petTypes varints are not a 4201 privilege and are not 74100 rows"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -8035,7 +8194,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 30, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 31, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -8157,6 +8316,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 4201 after 4401"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 30] as ArrayBuffer)) === "0400000078210100",
+        "pullIdle sends empty c2s 74104 after 4201"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -8186,6 +8349,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 4402") &&
           sawLog(lines, "发送 c2s 4401") &&
           sawLog(lines, "发送 c2s 4201") &&
+          sawLog(lines, "发送 c2s 74104") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -8209,6 +8373,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000032110000") &&
           sawLog(lines, "0400000031110000") &&
           sawLog(lines, "0400000069100000") &&
+          sawLog(lines, "0400000078210100") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -8227,7 +8392,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 27003") === false &&
           sawLog(lines, "发送 c2s 27004") === false &&
           sawLog(lines, "发送 c2s 4202") === false &&
-          sawLog(lines, "发送 c2s 74104") === false &&
           sawLog(lines, "发送 c2s 4002") === false &&
           sawLog(lines, "发送 c2s 4005") === false &&
           sawLog(lines, "发送 c2s 58001") === false &&
@@ -8246,6 +8410,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 74101") === false &&
           sawLog(lines, "发送 c2s 74102") === false &&
           sawLog(lines, "发送 c2s 74103") === false &&
+          sawLog(lines, "发送 c2s 28100") === false &&
           sawLog(lines, "发送 c2s 74105") === false &&
           sawLog(lines, "发送 c2s 74106") === false &&
           sawLog(lines, "发送 c2s 70002") === false &&
@@ -8765,12 +8930,11 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.4406");
       roleNet.send("wire.4601");
       roleNet.send("wire.4202");
-      roleNet.send("wire.74104");
       roleNet.send("wire.29001");
       roleNet.send("wire.20011");
       assert(
         roleSockets[0].sent.length === sentAfterPrayer,
-        "4403 4404 4405 4406 4601 4202 74104 29001 and 20011 stay off the hero prayer wire"
+        "4403 4404 4405 4406 4601 4202 29001 and 20011 stay off the hero prayer wire"
       );
       assert(
         sawLog(lines, "未发送 wire.4403") &&
@@ -8779,7 +8943,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.4406") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.4202") &&
-          sawLog(lines, "未发送 wire.74104") &&
           sawLog(lines, "未发送 wire.29001") &&
           sawLog(lines, "未发送 wire.20011"),
         "hero prayer write and the paged cmds are not encoded"
@@ -8810,6 +8973,57 @@ async function checkWs(): Promise<void> {
         roleSockets[0].sent.length === sentAfterBorderAgain + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000d1840000",
         "sending 34001 does not also send 32001"
+      );
+      const sentBeforePetIllustrate = roleSockets[0].sent.length;
+      roleNet.send(WIRE_PET_ILLUSTRATE_CMD);
+      const petIllustrateSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(petIllustrateSent as ArrayBuffer)) === "0400000078210100", "wire.74104 frame");
+      assert(roleSockets[0].sent.length === sentBeforePetIllustrate + 1, "74104 is its own frame and is not merged into 4201");
+      const sentBeforePetIllustrateOther = roleSockets[0].sent.length;
+      roleNet.send("wire.74101");
+      roleNet.send("wire.74102");
+      roleNet.send("wire.74103");
+      roleNet.send("wire.74105");
+      roleNet.send("wire.74106");
+      roleNet.send("wire.28100");
+      roleNet.send("wire.20011");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.29001");
+      assert(
+        roleSockets[0].sent.length === sentBeforePetIllustrateOther,
+        "74101 74102 74103 74105 74106 28100 20011 4601 and 29001 stay off the pet illustrate wire"
+      );
+      assert(
+        sawLog(lines, "未发送 wire.74101") &&
+          sawLog(lines, "未发送 wire.74102") &&
+          sawLog(lines, "未发送 wire.74103") &&
+          sawLog(lines, "未发送 wire.74105") &&
+          sawLog(lines, "未发送 wire.74106") &&
+          sawLog(lines, "未发送 wire.28100") &&
+          sawLog(lines, "未发送 wire.20011") &&
+          sawLog(lines, "未发送 wire.4601") &&
+          sawLog(lines, "未发送 wire.29001"),
+        "pet illustrate upgrade carry unequip pushes and the banned cmds are not encoded"
+      );
+      roleNet.send(WIRE_HERO_PRAYER_CMD);
+      assert(
+        roleSockets[0].sent.length === sentBeforePetIllustrateOther + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000069100000",
+        "sending 4201 does not also send 74104"
+      );
+      const sentAfterPrayerAlone = roleSockets[0].sent.length;
+      roleNet.send(WIRE_PET_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterPrayerAlone + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000074210100",
+        "sending 74100 does not also send 74104"
+      );
+      const sentAfterPetAlone = roleSockets[0].sent.length;
+      roleNet.send(WIRE_PET_ILLUSTRATE_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterPetAlone + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000078210100",
+        "sending 74104 does not also send 74100 or 4201"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -10644,8 +10858,14 @@ async function checkWs(): Promise<void> {
           WireSession.heroPrayer.marks[0].field === 8 &&
           WireSession.wornFashion !== null &&
           WireSession.wornFashion.list.length === 0 &&
-          formatWireWornFashionHead(WireSession.wornFashion) === "list=空穿戴 / 字段8=1",
-        "4202 74104 4601 29001 20011 and 4401 do not replace the 4201 record"
+          formatWireWornFashionHead(WireSession.wornFashion) === "list=空穿戴 / 字段8=1" &&
+          WireSession.hasPetIllustrate() &&
+          WireSession.petIllustrate !== null &&
+          WireSession.petIllustrate.petTypes.length === 1 &&
+          WireSession.petIllustrate.petTypes[0] === 1 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "4202 4601 29001 20011 and 4401 do not replace the 4201 record and 74104 writes its own petTypes"
       );
       roleSockets[0].push(encodeFrame(WireCmd.heroFashion, wornBody));
       assert(
@@ -10664,8 +10884,73 @@ async function checkWs(): Promise<void> {
           WireSession.heroPrayer.endTime === null &&
           formatWireHeroPrayerLine(WireSession.heroPrayer) === "privilege=无 / end_time=无 / 字段8=1" &&
           WireSession.wornFashion !== null &&
-          WireSession.wornFashion.list.length === 6,
-        "non-empty 4201 without the two fields stays synced and leaves 4401"
+          WireSession.wornFashion.list.length === 6 &&
+          WireSession.petIllustrate !== null &&
+          WireSession.petIllustrate.petTypes.length === 1 &&
+          WireSession.petIllustrate.petTypes[0] === 1,
+        "non-empty 4201 without the two fields stays synced and leaves 4401 and 74104"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.petIllustrate));
+      assert(
+        WireSession.hasPetIllustrate() &&
+          WireSession.petIllustrate !== null &&
+          WireSession.petIllustrate.petTypes.length === 0 &&
+          formatWirePetIllustrateHead(WireSession.petIllustrate) === "petTypes=空图鉴" &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === null &&
+          WireSession.heroPrayer.endTime === null,
+        "empty 74104 body clears petTypes without writing zero and stays synced"
+      );
+      assert(
+        Session.gold === goldBeforeBadPrayer && Session.diamond === diamondBeforeBadPrayer,
+        "empty 74104 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.petIllustrate, petIllPacked));
+      assert(
+        WireSession.hasPetIllustrate() &&
+          WireSession.petIllustrate !== null &&
+          WireSession.petIllustrate.petTypes.length === 3 &&
+          WireSession.petIllustrate.petTypes[0] === 8 &&
+          WireSession.petIllustrate.petTypes[1] === 0 &&
+          WireSession.petIllustrate.petTypes[2] === 9 &&
+          formatWirePetIllustrateHead(WireSession.petIllustrate) === "petTypes=8,0,9 / 字段8=2" &&
+          formatWirePetIllustrateLine(WireSession.petIllustrate.petTypes[1]) === "type=0" &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === null,
+        "74104 packed petTypes replaces the list and leaves 4201"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.petIllustrate, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasPetIllustrate() &&
+          WireSession.petIllustrate !== null &&
+          WireSession.petIllustrate.petTypes.length === 3 &&
+          WireSession.petIllustrate.petTypes[2] === 9 &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.endTime === null &&
+          sawWire("74104 解不开"),
+        "bad 74104 keeps the pet illustrate list and the 4201 record"
+      );
+      roleSockets[0].push(encodeFrame(74101, fieldVarint(1, 2)));
+      roleSockets[0].push(encodeFrame(74102, fieldVarint(1, 2)));
+      roleSockets[0].push(encodeFrame(74103, fieldVarint(1, 2)));
+      roleSockets[0].push(encodeFrame(28100, fieldVarint(1, 2)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 2)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 2)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 2)));
+      roleSockets[0].push(encodeFrame(WireCmd.heroPrayerData, prayerBody));
+      assert(
+        WireSession.hasPetIllustrate() &&
+          WireSession.petIllustrate !== null &&
+          WireSession.petIllustrate.petTypes.length === 3 &&
+          WireSession.petIllustrate.petTypes[0] === 8 &&
+          WireSession.petIllustrate.petTypes[1] === 0 &&
+          WireSession.hasHeroPrayer() &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === 1 &&
+          WireSession.heroPrayer.endTime === 1792464848 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "74101 74102 74103 28100 4601 29001 20011 and 4201 do not replace the 74104 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
