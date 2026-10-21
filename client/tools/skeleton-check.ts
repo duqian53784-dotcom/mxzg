@@ -990,6 +990,22 @@ import {
   WIRE_LINEUP_UNSYNCED_TOAST,
   wireLineUpNote,
 } from "../assets/scripts/net/protocol/wireLineUp";
+import {
+  decodeWireRunningPromotion,
+  formatWireRunningPromotionHead,
+  formatWireRunningPromotionLine,
+  WIRE_RUNNING_PROMOTION_BANNED_CMDS,
+  WIRE_RUNNING_PROMOTION_CMD,
+  WIRE_RUNNING_PROMOTION_EMPTY,
+  WIRE_RUNNING_PROMOTION_FIELD_NOTE,
+  WIRE_RUNNING_PROMOTION_FRAME,
+  WIRE_RUNNING_PROMOTION_READONLY_NOTE,
+  WIRE_RUNNING_PROMOTION_READONLY_TITLE,
+  WIRE_RUNNING_PROMOTION_ROW_EMPTY,
+  WIRE_RUNNING_PROMOTION_SIDE_EFFECT,
+  WIRE_RUNNING_PROMOTION_UNSYNCED_TOAST,
+  wireRunningPromotionNote,
+} from "../assets/scripts/net/protocol/wireRunningPromotion";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -8805,6 +8821,163 @@ async function checkWs(): Promise<void> {
       bytesToHex(encodeFrame(3101)).indexOf("89130000") < 0,
     "3101 empty frame carries 1d 0c 00 00 and not the 3099 or 5001 cmd byte"
   );
+  assert(
+    WireCmd.runningPromotion === 20101 &&
+      WireCmd.runningPromotion !== WireCmd.lineUp &&
+      WireCmd.runningPromotion !== WireCmd.worldLevel &&
+      WireCmd.runningPromotion !== WireCmd.backpackList &&
+      WireCmd.runningPromotion !== WireCmd.promotionList,
+    "online 20101 stays off lineup 3101, world 51001, bag 5001 and fund list 20001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.runningPromotion)) === WIRE_RUNNING_PROMOTION_FRAME, "empty c2s 20101");
+  assert(bytesToHex(encodeFrame(20101)) === "04000000854e0000", "empty c2s 20101 hex");
+  assert(bytesToHex(encodeFrame(20101)) !== "040000001d0c0000", "20101 is not the 3101 frame");
+  assert(bytesToHex(encodeFrame(20101)) !== "040000001b0c0000", "20101 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(20101)) !== "0400000039c70000", "20101 is not the 51001 frame again");
+  assert(bytesToHex(encodeFrame(20101)) !== "0400000089130000", "20101 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(20102)) === "04000000864e0000" && bytesToHex(encodeFrame(20102)) !== "04000000854e0000", "20102 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(20018)) !== "04000000854e0000", "20018 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(20013)) !== "04000000854e0000", "20013 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(20004)) !== "04000000854e0000", "20004 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(20010)) !== "04000000854e0000", "20010 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000854e0000", "20011 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "04000000854e0000", "4601 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "04000000854e0000", "29001 is not the 20101 frame");
+  for (let i = 0; i < WIRE_RUNNING_PROMOTION_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_RUNNING_PROMOTION_BANNED_CMDS[i] }) === null, WIRE_RUNNING_PROMOTION_BANNED_CMDS[i] + " is not encoded");
+  }
+  assert(encodeWireMessage({ cmd: "wire.5001" }) !== null, "5001 stays encoded by its own module");
+  assert(encodeWireMessage({ cmd: "wire.51001" }) !== null, "51001 stays encoded by its own module");
+  assert(
+    encodeWireMessage({ cmd: WIRE_RUNNING_PROMOTION_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_RUNNING_PROMOTION_CMD })?.bytes || new Uint8Array(0)) === "04000000854e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_RUNNING_PROMOTION_CMD })?.bytes || new Uint8Array(0)) !== "040000001d0c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_RUNNING_PROMOTION_CMD })?.bytes || new Uint8Array(0)) !== "0400000039c70000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_RUNNING_PROMOTION_CMD })?.bytes || new Uint8Array(0)) !== "0400000089130000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_RUNNING_PROMOTION_CMD })?.bytes || new Uint8Array(0)) !== "04000000864e0000",
+    "wire.20101 encodes the empty frame and is not 3101, 51001, 5001 or 20102"
+  );
+  assert(WIRE_RUNNING_PROMOTION_CMD === "wire.20101", "running promotion wire cmd");
+  assert(WIRE_RUNNING_PROMOTION_READONLY_TITLE === "进行中活动（真服只读）", "readonly running promotion title");
+  assert(WIRE_RUNNING_PROMOTION_UNSYNCED_TOAST === "真服未同步", "unsynced running promotion toast");
+  assert(WIRE_RUNNING_PROMOTION_EMPTY === "空进行中活动", "empty running promotion label");
+  assert(WIRE_RUNNING_PROMOTION_ROW_EMPTY === "（缺省）", "empty running promotion row label");
+  assert(
+    WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("getAllWillRun") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("纯读") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("不写养成") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("04000000854e0000") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("3101") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("20102") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("20018") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("20013") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("20004") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("20010") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("51001") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("5001") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("3099") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_RUNNING_PROMOTION_SIDE_EFFECT.indexOf("不重复拉 3101") >= 0 &&
+      WIRE_RUNNING_PROMOTION_READONLY_NOTE.indexOf("promotions") >= 0 &&
+      WIRE_RUNNING_PROMOTION_READONLY_NOTE.indexOf("缺省") >= 0 &&
+      WIRE_RUNNING_PROMOTION_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_RUNNING_PROMOTION_READONLY_NOTE.indexOf("无领奖入口") >= 0 &&
+      WIRE_RUNNING_PROMOTION_READONLY_NOTE.indexOf("20102") >= 0 &&
+      WIRE_RUNNING_PROMOTION_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_RUNNING_PROMOTION_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_RUNNING_PROMOTION_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_RUNNING_PROMOTION_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_RUNNING_PROMOTION_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_RUNNING_PROMOTION_FIELD_NOTE.indexOf("PbPromotionData") >= 0 &&
+      WIRE_RUNNING_PROMOTION_FIELD_NOTE.indexOf("start_time") >= 0 &&
+      WIRE_RUNNING_PROMOTION_FIELD_NOTE.indexOf("end_time") >= 0 &&
+      WIRE_RUNNING_PROMOTION_FIELD_NOTE.indexOf("clear_time") >= 0 &&
+      WIRE_RUNNING_PROMOTION_FIELD_NOTE.indexOf("turns") >= 0 &&
+      WIRE_RUNNING_PROMOTION_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_RUNNING_PROMOTION_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "running promotion page names promotions and refuses claim writes and the banned cmds"
+  );
+  const runningRow = fieldBytes(
+    1,
+    concatBytes(fieldVarint(1, 7), concatBytes(fieldVarint(2, 0), concatBytes(fieldNeg1(3), fieldVarint(5, 2))))
+  );
+  const runningZeroTurns = fieldBytes(1, fieldVarint(5, 0));
+  const runningOuter = fieldVarint(1, 6);
+  const runningBadRow = fieldBytes(1, new Uint8Array([0x80]));
+  assert(
+    decodeWireRunningPromotion(new Uint8Array(0)) !== null &&
+      decodeWireRunningPromotion(new Uint8Array(0))?.rows.length === 0 &&
+      formatWireRunningPromotionHead(decodeWireRunningPromotion(new Uint8Array(0)) || { rows: [], marks: [] }) ===
+        WIRE_RUNNING_PROMOTION_EMPTY,
+    "empty 20101 body is synced and does not invent a promotion"
+  );
+  assert(decodeWireRunningPromotion(null) === null, "null 20101 body is not a snapshot");
+  assert(decodeWireRunningPromotion(new Uint8Array([0x80])) === null, "bad 20101 ignored");
+  assert(decodeWireRunningPromotion(runningBadRow) === null, "20101 promotion blob that fails is not an empty list");
+  const runningSnap = decodeWireRunningPromotion(runningRow);
+  assert(
+    runningSnap !== null &&
+      runningSnap.rows.length === 1 &&
+      runningSnap.rows[0].id === 7 &&
+      runningSnap.rows[0].startTime === 0 &&
+      runningSnap.rows[0].endTime === -1 &&
+      runningSnap.rows[0].clearTime === null &&
+      runningSnap.rows[0].turns === 2 &&
+      formatWireRunningPromotionLine(runningSnap.rows[0]) === "id=7 / start_time=0 / end_time=-1 / turns=2" &&
+      formatWireRunningPromotionLine(runningSnap.rows[0]).indexOf("clear_time") < 0 &&
+      formatWireRunningPromotionHead(runningSnap) === "1 条",
+    "20101 keeps present zero and -1 and leaves missing clear_time absent"
+  );
+  const runningZeroSnap = decodeWireRunningPromotion(runningZeroTurns);
+  assert(
+    runningZeroSnap !== null &&
+      runningZeroSnap.rows.length === 1 &&
+      runningZeroSnap.rows[0].turns === 0 &&
+      runningZeroSnap.rows[0].id === null &&
+      formatWireRunningPromotionLine(runningZeroSnap.rows[0]) === "turns=0",
+    "present 20101 turns 0 stays 0 and missing id stays absent"
+  );
+  assert(
+    decodeWireRunningPromotion(runningOuter) !== null &&
+      decodeWireRunningPromotion(runningOuter)?.rows.length === 0 &&
+      formatWireRunningPromotionHead(decodeWireRunningPromotion(runningOuter) || { rows: [], marks: [] }) ===
+        WIRE_RUNNING_PROMOTION_EMPTY + " / 字段1=6",
+    "20101 field 1 varint is a mark and does not invent a row"
+  );
+  const runningEmptyRow = decodeWireRunningPromotion(fieldBytes(1, new Uint8Array(0)));
+  assert(
+    runningEmptyRow !== null &&
+      runningEmptyRow.rows.length === 1 &&
+      formatWireRunningPromotionLine(runningEmptyRow.rows[0]) === WIRE_RUNNING_PROMOTION_ROW_EMPTY,
+    "20101 row with no fields stays default"
+  );
+  const runningSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.runningPromotion, runningRow), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    runningSticky.frames.length === 2 &&
+      runningSticky.frames[0].cmdId === 20101 &&
+      runningSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireRunningPromotion(runningSticky.frames[0].body)?.rows[0].startTime === 0 &&
+      decodeWireRunningPromotion(runningSticky.frames[0].body)?.rows[0].endTime === -1,
+    "sticky 20101 frame stops at its length prefix"
+  );
+  assert(
+    wireRunningPromotionNote(runningSnap || { rows: [], marks: [] }).indexOf(WIRE_RUNNING_PROMOTION_SIDE_EFFECT) >= 0 &&
+      wireRunningPromotionNote(runningSnap || { rows: [], marks: [] }).indexOf("不写金币") >= 0 &&
+      wireRunningPromotionNote(runningSnap || { rows: [], marks: [] }).indexOf("不写钻石") >= 0,
+    "20101 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
+    bytesToHex(encodeFrame(20101)).indexOf("854e0000") >= 0 &&
+      bytesToHex(encodeFrame(20101)).indexOf("1d0c0000") < 0 &&
+      bytesToHex(encodeFrame(20101)).indexOf("39c70000") < 0 &&
+      bytesToHex(encodeFrame(20101)).indexOf("89130000") < 0,
+    "20101 empty frame carries 85 4e 00 00 and not the 3101, 51001 or 5001 cmd byte"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -9915,7 +10088,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 39, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 40, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -10108,19 +10281,43 @@ async function checkWs(): Promise<void> {
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 38] as ArrayBuffer)) !== "0400000089130000",
         "pullIdle 3101 frame is not the 5001 cmd"
       );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 39] as ArrayBuffer)) === "04000000854e0000",
+        "pullIdle sends empty c2s 20101 after 3101"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 39] as ArrayBuffer)) !== "040000001d0c0000",
+        "pullIdle 20101 frame is not merged into 3101"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 39] as ArrayBuffer)) !== "0400000089130000",
+        "pullIdle 20101 frame is not the 5001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 39] as ArrayBuffer)) !== "0400000039c70000",
+        "pullIdle 20101 frame is not the 51001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 39] as ArrayBuffer)) !== "04000000864e0000",
+        "pullIdle 20101 frame is not the 20102 cmd"
+      );
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
         let bagFrames = 0;
-        for (let i = 0; i < 39; i++) {
+        let worldFrames = 0;
+        let runningFrames = 0;
+        for (let i = 0; i < 40; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
           if (hex === "0400000089130000") bagFrames += 1;
+          if (hex === "0400000039c70000") worldFrames += 1;
+          if (hex === "04000000854e0000") runningFrames += 1;
         }
         assert(
-          formationFrames === 1 && lineUpFrames === 1 && bagFrames === 0,
-          "pullIdle sends 3099 once and 3101 once and does not repeat 5001"
+          formationFrames === 1 && lineUpFrames === 1 && bagFrames === 0 && worldFrames === 1 && runningFrames === 1,
+          "pullIdle sends 3099 once, 3101 once and 20101 once, keeps 51001 once, and does not repeat 5001"
         );
       }
       assert(
@@ -10194,7 +10391,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000031110000") &&
           sawLog(lines, "0400000069100000") &&
           sawLog(lines, "0400000078210100") &&
-          sawLog(lines, "发送 c2s 20101") === false &&
+          sawLog(lines, "发送 c2s 20101") &&
+          sawLog(lines, "04000000854e0000") &&
+          sawLog(lines, "发送 c2s 20102") === false &&
+          sawLog(lines, "04000000864e0000") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
           sawLog(lines, "发送 c2s 20010") === false &&
@@ -10527,10 +10727,7 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_WORLD_CMD);
       const worldSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(worldSent as ArrayBuffer)) === "0400000039c70000", "wire.51001 frame");
-      const sentBeforeWorldOther = roleSockets[0].sent.length;
-      roleNet.send("wire.20101");
-      assert(roleSockets[0].sent.length === sentBeforeWorldOther, "20101 stays off the world wire");
-      assert(sawLog(lines, "未发送 wire.20101"), "alternate 20101 is not encoded");
+      assert(bytesToHex(new Uint8Array(worldSent as ArrayBuffer)) !== "04000000854e0000", "51001 frame is not the 20101 frame");
       roleNet.send(WIRE_PROMOTION_CMD);
       const promotionSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(promotionSent as ArrayBuffer)) === "04000000214e0000", "wire.20001 frame");
@@ -11279,6 +11476,48 @@ async function checkWs(): Promise<void> {
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "040000001b0c0000" &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "0400000089130000",
         "sending 3101 does not also send 3099 or 5001"
+      );
+      const sentBeforeRunning = roleSockets[0].sent.length;
+      roleNet.send(WIRE_RUNNING_PROMOTION_CMD);
+      const runningSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(runningSent as ArrayBuffer)) === "04000000854e0000", "wire.20101 frame");
+      assert(bytesToHex(new Uint8Array(runningSent as ArrayBuffer)) !== "040000001d0c0000", "wire.20101 frame is not 3101");
+      assert(bytesToHex(new Uint8Array(runningSent as ArrayBuffer)) !== "0400000039c70000", "wire.20101 frame is not 51001");
+      assert(bytesToHex(new Uint8Array(runningSent as ArrayBuffer)) !== "0400000089130000", "wire.20101 frame is not 5001");
+      assert(roleSockets[0].sent.length === sentBeforeRunning + 1, "20101 is its own frame and is not merged into 3101");
+      const sentBeforeRunningOther = roleSockets[0].sent.length;
+      roleNet.send("wire.20102");
+      roleNet.send("wire.20011");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.29001");
+      roleNet.send("wire.20018");
+      roleNet.send("wire.20013");
+      roleNet.send("wire.20004");
+      roleNet.send("wire.20010");
+      assert(
+        roleSockets[0].sent.length === sentBeforeRunningOther,
+        "20102 20011 4601 29001 20018 20013 20004 and 20010 stay off the running promotion wire"
+      );
+      assert(
+        sawLog(lines, "未发送 wire.20102") &&
+          sawLog(lines, "未发送 wire.20011") &&
+          sawLog(lines, "未发送 wire.4601") &&
+          sawLog(lines, "未发送 wire.29001") &&
+          sawLog(lines, "未发送 wire.20018") &&
+          sawLog(lines, "未发送 wire.20013") &&
+          sawLog(lines, "未发送 wire.20004") &&
+          sawLog(lines, "未发送 wire.20010"),
+        "running promotion claim writes 20102 20011 4601 29001 20018 20013 20004 and 20010 are not encoded"
+      );
+      const sentAfterLineUpAlone = roleSockets[0].sent.length;
+      roleNet.send(WIRE_RUNNING_PROMOTION_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterLineUpAlone + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000854e0000" &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "040000001d0c0000" &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "0400000039c70000" &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "0400000089130000",
+        "sending 20101 does not also send 3101, 51001 or 5001"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -13857,6 +14096,90 @@ async function checkWs(): Promise<void> {
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
         "3100 3098 3097 3030 3102 3103 20011 4601 29001 and 3099 do not replace the 3101 list"
+      );
+      roleSockets[0].push(encodeFrame(20101, fieldVarint(1, 6)));
+      assert(
+        WireSession.hasRunningPromotion() &&
+          WireSession.runningPromotion !== null &&
+          WireSession.runningPromotion.rows.length === 0 &&
+          formatWireRunningPromotionHead(WireSession.runningPromotion).indexOf(WIRE_RUNNING_PROMOTION_EMPTY) >= 0 &&
+          formatWireRunningPromotionHead(WireSession.runningPromotion).indexOf("字段1=6") >= 0 &&
+          WireSession.lineUp !== null &&
+          WireSession.lineUp.rows.length === 1 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "20101 outer varint does not invent a row and leaves 3101"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.runningPromotion));
+      assert(
+        WireSession.hasRunningPromotion() &&
+          WireSession.runningPromotion !== null &&
+          WireSession.runningPromotion.rows.length === 0 &&
+          formatWireRunningPromotionHead(WireSession.runningPromotion) === WIRE_RUNNING_PROMOTION_EMPTY &&
+          WireSession.lineUp !== null &&
+          WireSession.lineUp.rows.length === 1 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 20101 clears to 空进行中活动 and does not write gold or diamond"
+      );
+      const runningSample = fieldBytes(
+        1,
+        concatBytes(fieldVarint(1, 7), concatBytes(fieldVarint(2, 0), concatBytes(fieldNeg1(3), fieldVarint(5, 2))))
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.runningPromotion, runningSample));
+      assert(
+        WireSession.hasRunningPromotion() &&
+          WireSession.runningPromotion !== null &&
+          WireSession.runningPromotion.rows.length === 1 &&
+          WireSession.runningPromotion.rows[0].id === 7 &&
+          WireSession.runningPromotion.rows[0].startTime === 0 &&
+          WireSession.runningPromotion.rows[0].endTime === -1 &&
+          WireSession.runningPromotion.rows[0].clearTime === null &&
+          WireSession.runningPromotion.rows[0].turns === 2 &&
+          formatWireRunningPromotionLine(WireSession.runningPromotion.rows[0]) === "id=7 / start_time=0 / end_time=-1 / turns=2" &&
+          wireRunningPromotionNote(WireSession.runningPromotion).indexOf(WIRE_RUNNING_PROMOTION_SIDE_EFFECT) >= 0 &&
+          wireRunningPromotionNote(WireSession.runningPromotion).indexOf("不写金币") >= 0 &&
+          wireRunningPromotionNote(WireSession.runningPromotion).indexOf("不写钻石") >= 0 &&
+          WireSession.lineUp !== null &&
+          WireSession.lineUp.rows.length === 1 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "20101 sample keeps present zero and -1 and leaves 3101"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.runningPromotion, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasRunningPromotion() &&
+          WireSession.runningPromotion !== null &&
+          WireSession.runningPromotion.rows.length === 1 &&
+          WireSession.runningPromotion.rows[0].startTime === 0 &&
+          WireSession.lineUp !== null &&
+          WireSession.lineUp.rows.length === 1 &&
+          sawWire("20101 解不开"),
+        "bad 20101 keeps the running promotion list and the 3101 list"
+      );
+      roleSockets[0].push(encodeFrame(20102, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(20018, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(20013, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(20004, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(20010, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3101, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(5001, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(51001, fieldVarint(1, 6)));
+      assert(
+        WireSession.hasRunningPromotion() &&
+          WireSession.runningPromotion !== null &&
+          WireSession.runningPromotion.rows.length === 1 &&
+          WireSession.runningPromotion.rows[0].id === 7 &&
+          WireSession.runningPromotion.rows[0].startTime === 0 &&
+          WireSession.runningPromotion.rows[0].endTime === -1 &&
+          WireSession.runningPromotion.rows[0].turns === 2 &&
+          formatWireRunningPromotionLine(WireSession.runningPromotion.rows[0]) === "id=7 / start_time=0 / end_time=-1 / turns=2" &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "20102 20018 20013 20004 20010 20011 4601 29001 3101 5001 and 51001 do not replace the 20101 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
