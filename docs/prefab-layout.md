@@ -272,7 +272,7 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 
 真服只读页和 Mock 英雄页各一份 Prefab。`HeroPage.ts` 是 Mock：列表加详情。`WireHeroPage.ts` 是只读页。两页没有可以共用的内容根。
 
-**Prefab 按 4001 / GResHeroList，不跟 #50 的 s2c 18001 名字方案。** 仓内 `wireHero.ts` / `WireHeroPage.ts` 目前仍解 18001（名字、`字段10`、`等级星级未解。只展示解开的字段号`）。这份预制不抄那些句子。样本只有 `hero_id`、`hero_type`、`level`、`star`、`fighting`，类型写成 `类型 101`，没有名字字段。协议脚本和页面 TS 都不改，所以运行时仍是代码 UI。
+**Prefab 按 4001 / GResHeroList，不跟 #50 的 s2c 18001 名字方案。** `wireHero.ts` 已是 4001。只读页文案跟 `WIRE_HERO_FIELD_NOTE`、`formatWireHeroLine`、`formatWireHeroDetail`。没有名字字段：类型对不上表就写类型号。详情用中文标签（类型、id、等级、阶段、星级、元素、职业、锁定、战力），不写 `hero_id` / `hero_type` 这种原始键。协议脚本和页面 TS 都不改，所以运行时仍是代码 UI。
 
 | Prefab | 路径（相对 assets） | 状态 |
 |--------|---------------------|------|
@@ -285,7 +285,7 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 - 素材只引用 `client/assets/resources/` 的 spriteFrame uuid（`@f9941`）。Prefab 目录里没有 PNG。页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；详情卡用 `win-bg_block-bg-5` 染成 `(16, 28, 48)`；返回和列表行用 `button_btn-blue-big`；升级钮用 `button_btn-orange-big`。生成器的素材表与背包/邮件相同，也读了 `button_btn-green-big`，本页没有绿色按钮。
 - 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
 - 运行时 `render()` 会拆掉并重建 `rows`。Prefab 里的行和详情是编辑器预览，不是代码去克隆的模板。代码里的容器名是小写 `list-host` / `rows` / `rows-host`；预制用下面表里的 PascalCase。
-- 再生：`python3 client/tools/gen_hero_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `WireHeroPage.ts` / `HeroPage.ts` 的坐标。4001 文案在 `wireHero.ts` 仍是 18001 时用规格常量；文件改成 4001 后改读仓内常量）
+- 再生：`python3 client/tools/gen_hero_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `WireHeroPage.ts` / `HeroPage.ts` 的坐标，以及 `wireHero.ts` 的 4001 常量和 `formatWireHeroLine` / `formatWireHeroDetail`）
 
 ### WireHeroPage（真服只读）
 
@@ -296,7 +296,7 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | `Bg` | (0, 0) | 720×1280 | — |
 | `Title` | (0, 470) | 680×56 | `英雄（真服只读）` |
 | `Note` | (0, 420) | 640×38 | `只读。不升级，不写金币` |
-| `Status` | (0, 380) | 640×36 | `4001 名册。无名字字段，类型号对表` |
+| `Status` | (0, 380) | 640×36 | `没有名字。类型对不上就写类型号` |
 | `ListHost` | (0, 0) | 720×1280 | 容器 |
 | `ListHost/Rows` | (0, 0) | 720×1280 | 容器 |
 | `ListHost/Rows/Unsynced` | (0, 280) | 640×44 | `真服英雄未同步`（默认显示） |
@@ -304,11 +304,11 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | `ListHost/Rows/Row_0` … `Row_7` | (0, 300 − i×52) | 640×44 | `类型 101 · id 10001 · Lv1 · 3星 · 战力 1200`（蓝底按钮，`_active: false`） |
 | `ListHost/Rows/More` | (0, -116) | 640×36 | `还有 2 名`（`_active: false`） |
 | `ListHost/Rows/Detail` | (0, 0) | 720×1280 | 详情容器（默认 **inactive**） |
-| `Detail/Line_0` … `Line_4` | (0, 300 − i×40) | 640×40 | `hero_id 10001`、`hero_type 101`、`level 1`、`star 3`、`fighting 1200`（左对齐） |
-| `Detail/BtnBackList` | (0, 76) | 240×48 | `返回列表` |
+| `Detail/Line_0` … `Line_8` | (0, 300 − i×40) | 640×40 | `类型 101`、`id 10001`、`等级 1`、`阶段 2`、`星级 3`、`元素 1`、`职业 2`、`锁定 0`、`战力 1200`（左对齐） |
+| `Detail/BtnBackList` | (0, -84) | 240×48 | `返回列表` |
 | `BtnBack` | (0, -460) | 240×48 | `返回` |
 
-`Title` / `Note` / `Empty` / `Unsynced` 与 `WIRE_HERO_READONLY_TITLE` / `WIRE_HERO_READONLY_NOTE` / `WIRE_HERO_EMPTY` / `WIRE_HERO_UNSYNCED_TOAST` 相同。`Status` **不是** `WIRE_HERO_FIELD_NOTE`（那句仍是 18001 的「等级星级未解」）。行不是 `formatWireHeroLine` 的「名字 · id · 字段10」。八行用同一句 4001 占位。`More` 的 y 是 `300 − 8×52`。`BtnBackList` 的 y 是 `300 − 5×40 − 24`（五行详情之下，与 `renderDetail` 的算法一致）。`Empty` 与 `Unsynced` 同一位置，默认只显示未同步。
+`Title` / `Note` / `Status` / `Empty` / `Unsynced` 与 `WIRE_HERO_READONLY_TITLE` / `WIRE_HERO_READONLY_NOTE` / `WIRE_HERO_FIELD_NOTE` / `WIRE_HERO_EMPTY` / `WIRE_HERO_UNSYNCED_TOAST` 相同。行文案是 `formatWireHeroLine` 在没有类型备注时的句子：`类型 101 · id 10001 · Lv1 · 3星 · 战力 1200`。阶段、元素、职业、锁定不进列表行。八行用同一句占位，默认隐藏。详情九行是 `formatWireHeroDetail` 对同一条样本（阶段 2、元素 1、职业 2、锁定 0）的输出，左对齐。`More` 的 y 是 `300 − 8×52`。`BtnBackList` 的 y 是 `300 − 9×40 − 24`（九行详情之下，与 `renderDetail` 的算法一致）。`Detail` 默认 inactive。`Empty` 与 `Unsynced` 同一位置，默认只显示未同步。
 
 ### HeroPage（Mock）
 

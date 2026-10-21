@@ -6,15 +6,13 @@ Writes:
   client/assets/prefabs/ui/hero/HeroPage.prefab
 and their .meta files, plus ui/hero.meta if it is missing.
 
-WireHeroPage is a readonly real-server preview. main's WireHeroPage.ts /
-wireHero.ts still decode s2c 18001 (name strings and 字段N). This prefab does
-not copy that. Sample text is 4001 / GResHeroList: hero_id, hero_type, level,
-star, fighting. No name field.
+WireHeroPage is a readonly real-server preview. Sample text follows
+wireHero.ts for s2c 4001 / GResHeroList: formatWireHeroLine on the list and
+formatWireHeroDetail on the detail (Chinese labels, including stage, elem,
+occupation, and is_lock). No name field. Status is WIRE_HERO_FIELD_NOTE.
 
-If wireHero.ts has already moved to 4001, title / note / status / empty /
-unsynced are read from that file. Otherwise those strings are the spec
-constants (the four chrome strings match the current file; the 18001 field
-note is not used).
+Title, note, status, empty, and unsynced are read from wireHero.ts when that
+file is the 4001 decoder. The 18001 name / 字段号 note is not used.
 
 HeroPage is the Mock page (HeroPage.ts list + detail). Upgrade button is
 present and unwired.
@@ -59,20 +57,26 @@ PAGE_W = 720
 PAGE_H = 1280
 VISIBLE_ROWS = 8
 
-# Spec sample. Not an 18001 name line and not 字段10.
+# Preview entry. List text is formatWireHeroLine (type, id, level, star, fighting).
+# Detail also shows stage, elem, occupation, and is_lock. No CHeroType note is loaded,
+# so the type label stays "类型 N".
 SAMPLE_HERO = {
     "hero_id": 10001,
     "hero_type": 101,
     "level": 1,
+    "stage": 2,
     "star": 3,
+    "elem": 1,
+    "occupation": 2,
+    "is_lock": 0,
     "fighting": 1200,
 }
 
-# Used only while wireHero.ts is still the 18001 decoder.
+# Fallback chrome if wireHero.ts is not the 4001 file yet. Status matches the merged note.
 SPEC_WIRE = {
     "title": "英雄（真服只读）",
     "note": "只读。不升级，不写金币",
-    "status": "4001 名册。无名字字段，类型号对表",
+    "status": "没有名字。类型对不上就写类型号",
     "empty": "空名册",
     "unsynced": "真服英雄未同步",
 }
@@ -193,26 +197,57 @@ def protocol_is_gres_4001(proto):
     return "GResHeroList" in proto or "hero_type" in proto
 
 
+def wire_type_label(hero_type):
+    """wireHeroTypeLabel with an empty CHeroType note map."""
+    if hero_type is None:
+        return "类型未解"
+    return "类型 %d" % hero_type
+
+
 def format_wire_row(sample):
-    """4001 list line. Type number, not a name. No 字段N."""
-    return "类型 %d · id %d · Lv%d · %d星 · 战力 %d" % (
-        sample["hero_type"],
-        sample["hero_id"],
-        sample["level"],
-        sample["star"],
-        sample["fighting"],
-    )
+    """Same concatenation as formatWireHeroLine. Stage and lock stay off the row."""
+    text = wire_type_label(sample.get("hero_type"))
+    hero_id = sample.get("hero_id")
+    level = sample.get("level")
+    star = sample.get("star")
+    fighting = sample.get("fighting")
+    if hero_id is not None:
+        text += " · id %d" % hero_id
+    if level is not None:
+        text += " · Lv%d" % level
+    if star is not None:
+        text += " · %d星" % star
+    if fighting is not None:
+        text += " · 战力 %d" % fighting
+    return text
 
 
 def format_wire_detail(sample):
-    """4001 detail lines, left aligned. Field names, not 字段号."""
-    return [
-        "hero_id %d" % sample["hero_id"],
-        "hero_type %d" % sample["hero_type"],
-        "level %d" % sample["level"],
-        "star %d" % sample["star"],
-        "fighting %d" % sample["fighting"],
-    ]
+    """Same lines as formatWireHeroDetail. Chinese labels, not raw proto keys."""
+    lines = []
+    hero_type = sample.get("hero_type")
+    if hero_type is None:
+        lines.append("类型未解")
+    else:
+        label = wire_type_label(hero_type)
+        type_number = "类型 %d" % hero_type
+        lines.append(label if label == type_number else "%s · %s" % (label, type_number))
+    hero_id = sample.get("hero_id")
+    lines.append(("id %d" % hero_id) if hero_id is not None else "id 未解")
+    for label, key in (
+        ("等级", "level"),
+        ("阶段", "stage"),
+        ("星级", "star"),
+        ("元素", "elem"),
+        ("职业", "occupation"),
+        ("锁定", "is_lock"),
+        ("战力", "fighting"),
+    ):
+        value = sample.get(key)
+        if value is None:
+            continue
+        lines.append("%s %d" % (label, value))
+    return lines
 
 
 def hero_stats(level, star):
@@ -341,6 +376,25 @@ def load_copy():
         WIRE_TS,
         "place(createLabel(WIRE_HERO_FIELD_NOTE, 20, { color: MUTED, width: 640 }), this.body, 0, 380);",
     )
+    require_snippet(WIRE_PROTO, 'export const WIRE_HERO_FIELD_NOTE = "没有名字。类型对不上就写类型号";')
+    require_snippet(WIRE_PROTO, "let text = wireHeroTypeLabel(entry.heroType);")
+    require_snippet(WIRE_PROTO, 'if (entry.heroId !== null) text += " · id " + entry.heroId;')
+    require_snippet(WIRE_PROTO, 'if (entry.level !== null) text += " · Lv" + entry.level;')
+    require_snippet(WIRE_PROTO, 'if (entry.star !== null) text += " · " + entry.star + "星";')
+    require_snippet(WIRE_PROTO, 'if (entry.fighting !== null) text += " · 战力 " + entry.fighting;')
+    require_snippet(WIRE_PROTO, 'return "类型 " + heroType;')
+    require_snippet(
+        WIRE_PROTO,
+        'lines.push(label === "类型 " + entry.heroType ? label : label + " · 类型 " + entry.heroType);',
+    )
+    require_snippet(WIRE_PROTO, 'lines.push(entry.heroId !== null ? "id " + entry.heroId : "id 未解");')
+    require_snippet(WIRE_PROTO, 'pushNamed(lines, "等级", entry.level);')
+    require_snippet(WIRE_PROTO, 'pushNamed(lines, "阶段", entry.stage);')
+    require_snippet(WIRE_PROTO, 'pushNamed(lines, "星级", entry.star);')
+    require_snippet(WIRE_PROTO, 'pushNamed(lines, "元素", entry.elem);')
+    require_snippet(WIRE_PROTO, 'pushNamed(lines, "职业", entry.occupation);')
+    require_snippet(WIRE_PROTO, 'pushNamed(lines, "锁定", entry.isLock);')
+    require_snippet(WIRE_PROTO, 'pushNamed(lines, "战力", entry.fighting);')
     require_snippet(
         WIRE_TS,
         'place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -460);',
@@ -443,14 +497,27 @@ def load_copy():
     detail_lines = format_wire_detail(SAMPLE_HERO)
     if row_text != "类型 101 · id 10001 · Lv1 · 3星 · 战力 1200":
         raise SystemExit("wire row sample drifted: " + row_text)
-    if detail_lines != ["hero_id 10001", "hero_type 101", "level 1", "star 3", "fighting 1200"]:
+    if detail_lines != [
+        "类型 101",
+        "id 10001",
+        "等级 1",
+        "阶段 2",
+        "星级 3",
+        "元素 1",
+        "职业 2",
+        "锁定 0",
+        "战力 1200",
+    ]:
         raise SystemExit("wire detail sample drifted: %r" % (detail_lines,))
+    for raw_key in ("hero_id", "hero_type", "fighting"):
+        if any(raw_key in line for line in detail_lines):
+            raise SystemExit("detail still uses a raw proto key: %r" % (detail_lines,))
     for text in [row_text, wire["status"], wire["title"], wire["note"]] + detail_lines:
         hit = banned_18001(text)
         if hit:
             raise SystemExit("4001 sample contains %r in %r" % (hit, text))
     back_list_y = 300 - len(detail_lines) * 40 - 24
-    if back_list_y != 76:
+    if back_list_y != -84:
         raise SystemExit("detail back y drifted: %s" % back_list_y)
     more_y = 300 - VISIBLE_ROWS * 52
     if more_y != -116:
@@ -994,9 +1061,12 @@ def check_wire(b, copy):
         if hit:
             raise SystemExit("wire prefab label has 18001 copy %r in %r" % (hit, text))
     joined = "\n".join(b.label_strings())
-    for required in ("hero_id", "hero_type", "level", "star", "fighting", "类型 101"):
+    for required in ("类型 101", "id 10001", "等级 1", "阶段 2", "星级 3", "元素 1", "职业 2", "锁定 0", "战力 1200"):
         if required not in joined:
-            raise SystemExit("wire prefab missing 4001 field %s" % required)
+            raise SystemExit("wire prefab missing 4001 detail %s" % required)
+    for raw_key in ("hero_id", "hero_type"):
+        if raw_key in joined:
+            raise SystemExit("wire prefab still uses raw key " + raw_key)
     check_common(b)
 
 
@@ -1153,18 +1223,15 @@ def write_dir_meta():
 def main():
     copy = load_copy()
     proto = read_text(WIRE_PROTO)
-    if not protocol_is_gres_4001(proto):
-        # Still the 18001 decoder. Prefab chrome is the spec, not WIRE_HERO_FIELD_NOTE.
-        if copy["wire_title"] != SPEC_WIRE["title"]:
-            raise SystemExit("wire title drifted: " + copy["wire_title"])
-        if copy["wire_note"] != SPEC_WIRE["note"]:
-            raise SystemExit("wire note drifted: " + copy["wire_note"])
-        if copy["wire_status"] != SPEC_WIRE["status"]:
+    if protocol_is_gres_4001(proto):
+        if copy["wire_status"] != ts_string(WIRE_PROTO, "WIRE_HERO_FIELD_NOTE"):
+            raise SystemExit("status is not WIRE_HERO_FIELD_NOTE")
+        if copy["wire_status"] != "没有名字。类型对不上就写类型号":
             raise SystemExit("wire status drifted: " + copy["wire_status"])
-        if copy["wire_empty"] != SPEC_WIRE["empty"]:
-            raise SystemExit("wire empty drifted: " + copy["wire_empty"])
-        if copy["wire_unsynced"] != SPEC_WIRE["unsynced"]:
-            raise SystemExit("wire unsynced drifted: " + copy["wire_unsynced"])
+        if copy["wire_title"] != ts_string(WIRE_PROTO, "WIRE_HERO_READONLY_TITLE"):
+            raise SystemExit("title is not the protocol constant")
+    elif copy["wire_status"] != SPEC_WIRE["status"]:
+        raise SystemExit("wire status drifted: " + copy["wire_status"])
     if len(copy["wire_rows"]) != VISIBLE_ROWS:
         raise SystemExit("wire row count drifted")
     wire = build_wire(copy)
