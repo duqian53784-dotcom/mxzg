@@ -262,8 +262,19 @@ export const WireCmd = {
    * Title.proto 仅 55001 读写对，同模块无写号。不做 34001。不做 20011。
    * 服侧轻懒建：TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。
    * 不夹在 2001 和 3007 中间。不是圣物图鉴 59010。不是圣龙数据 59001。
+   * 34001 是另只读，单独在 55001 之后拉包，勿与 55001 合并成一个请求，勿当写号。
    */
   scanTitleList: 55001,
+  /**
+   * c2s 空体。进主城、空 c2s 55001 之后发，只发一次。无 page。
+   * 整帧 `04 00 00 00 d1 84 00 00`。34001 = 0x84D1，小端 d1 84 00 00。
+   * GReqHeadPortraitList / GResHeadPortraitList。空体，无 page。
+   * idx_list 是字段 1，repeated int32，已解锁头像 id。
+   * 不发 34002 更换头像。34003 是解锁推送 s2c，无 c2s，勿发、勿当拉包。不做 32001。不做 20011。
+   * 服侧轻懒建：RoleHeadPortraitService.select 无记录则 dao.add 默认解锁头。无扣费，无领奖，不改当前头像。
+   * 不夹在 2001 和 3007 中间。不是称号列表 55001。不是圣物图鉴 59010。
+   */
+  headPortraitList: 34001,
 } as const;
 
 /**
