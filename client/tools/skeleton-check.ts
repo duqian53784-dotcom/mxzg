@@ -963,6 +963,19 @@ import {
   WIRE_FETTER_CONTRACT_UNSYNCED_TOAST,
   wireFetterContractNote,
 } from "../assets/scripts/net/protocol/wireFetterContract";
+import {
+  decodeWireFormation,
+  formatWireFormationHead,
+  formatWireFormationLine,
+  WIRE_FORMATION_CMD,
+  WIRE_FORMATION_EMPTY,
+  WIRE_FORMATION_FIELD_NOTE,
+  WIRE_FORMATION_READONLY_NOTE,
+  WIRE_FORMATION_READONLY_TITLE,
+  WIRE_FORMATION_SIDE_EFFECT,
+  WIRE_FORMATION_UNSYNCED_TOAST,
+  wireFormationNote,
+} from "../assets/scripts/net/protocol/wireFormation";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1702,6 +1715,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("occupation") === "city", "occupation stays on the city tab");
   assert(rootTabFor("roleShenBin") === "city", "role shen bin stays on the city tab");
   assert(rootTabFor("fetterContract") === "city", "fetter contract stays on the city tab");
+  assert(rootTabFor("formation") === "city", "formation stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -8238,7 +8252,6 @@ async function checkWs(): Promise<void> {
     "wire.28203",
     "wire.28204",
     "wire.28205",
-    "wire.3099",
     "wire.20011",
     "wire.4601",
     "wire.29001",
@@ -8401,6 +8414,194 @@ async function checkWs(): Promise<void> {
       bytesToHex(encodeFrame(28107)).indexOf("5f270100") < 0 &&
       bytesToHex(encodeFrame(28107)).indexOf("c46d0000") < 0,
     "28107 empty frame carries cb 6d 00 00 and not the 75615 or 28100 cmd byte"
+  );
+  assert(
+    WireCmd.formation === 3099 &&
+      WireCmd.formation !== WireCmd.fetterContract &&
+      WireCmd.formation !== WireCmd.roleShenBin,
+    "online 3099 stays off fetter contract 28107 and role shen bin 75615"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.formation)) === "040000001b0c0000", "empty c2s 3099");
+  assert(bytesToHex(encodeFrame(3099)) === "040000001b0c0000", "empty c2s 3099 hex");
+  assert(bytesToHex(encodeFrame(3099)) !== "04000000cb6d0000", "3099 is not the 28107 frame");
+  assert(bytesToHex(encodeFrame(3099)) !== "040000005f270100", "3099 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(3097)) === "04000000190c0000" && bytesToHex(encodeFrame(3097)) !== "040000001b0c0000", "3097 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(3098)) === "040000001a0c0000" && bytesToHex(encodeFrame(3098)) !== "040000001b0c0000", "3098 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(3100)) === "040000001c0c0000" && bytesToHex(encodeFrame(3100)) !== "040000001b0c0000", "3100 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(3101)) === "040000001d0c0000" && bytesToHex(encodeFrame(3101)) !== "040000001b0c0000", "3101 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(3102)) === "040000001e0c0000" && bytesToHex(encodeFrame(3102)) !== "040000001b0c0000", "3102 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(3030)) === "04000000d60b0000" && bytesToHex(encodeFrame(3030)) !== "040000001b0c0000", "3030 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "040000001b0c0000", "20011 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "040000001b0c0000", "4601 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "040000001b0c0000", "29001 is not the 3099 frame");
+  const bannedFormationCmds = [
+    "wire.3097",
+    "wire.3098",
+    "wire.3100",
+    "wire.3102",
+    "wire.3030",
+    "wire.3101",
+    "wire.20011",
+    "wire.4601",
+    "wire.29001",
+  ];
+  for (let i = 0; i < bannedFormationCmds.length; i++) {
+    assert(encodeWireMessage({ cmd: bannedFormationCmds[i] }) === null, bannedFormationCmds[i] + " is not encoded");
+  }
+  assert(
+    encodeWireMessage({ cmd: WIRE_FORMATION_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_FORMATION_CMD })?.bytes || new Uint8Array(0)) === "040000001b0c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_FORMATION_CMD })?.bytes || new Uint8Array(0)) !== "04000000cb6d0000",
+    "wire.3099 encodes the empty frame and is not the 28107 frame"
+  );
+  assert(WIRE_FORMATION_CMD === "wire.3099", "formation wire cmd");
+  assert(WIRE_FORMATION_READONLY_TITLE === "查询阵法（真服只读）", "readonly formation title");
+  assert(WIRE_FORMATION_UNSYNCED_TOAST === "真服未同步", "unsynced formation toast");
+  assert(WIRE_FORMATION_EMPTY === "空阵法", "empty formation label");
+  assert(
+    WIRE_FORMATION_SIDE_EFFECT.indexOf("getFormation") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("无记录则 add") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("unlock(1)") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("不写养成") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("28107") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("75615") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("040000001b0c0000") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("3097") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("3098") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("3100") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("3102") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("3030") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("3101") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("不重复拉 28107") >= 0 &&
+      WIRE_FORMATION_SIDE_EFFECT.indexOf("不重复拉 75615") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("unlockIds") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("已解锁") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("不保证顺序") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("无解锁阵法") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("保存战斗队列") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("3097") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("3098") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("3100") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("3102") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("3030") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("3101") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("28107") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_FORMATION_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_FORMATION_FIELD_NOTE.indexOf("unlockIds") >= 0 &&
+      WIRE_FORMATION_FIELD_NOTE.indexOf("不保证顺序") >= 0 &&
+      WIRE_FORMATION_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_FORMATION_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "formation page names unlockIds and refuses unlock save and the banned cmds"
+  );
+  const formationUnpacked = concatBytes(
+    concatBytes(fieldVarint(1, 9), fieldVarint(1, 0)),
+    concatBytes(fieldVarint(1, 8), fieldVarint(8, 1))
+  );
+  const formationPacked = fieldBytes(1, new Uint8Array([9, 0, 8]));
+  const formationZero = fieldVarint(1, 0);
+  const formationNeg = fieldNeg1(1);
+  const formationWide = fieldVarint(1, 1099511627776);
+  const formationOuter = fieldVarint(9, 1);
+  const formationBadPacked = fieldBytes(1, new Uint8Array([0x80]));
+  assert(
+    decodeWireFormation(new Uint8Array(0)) !== null &&
+      decodeWireFormation(new Uint8Array(0))?.unlockIds.length === 0 &&
+      formatWireFormationHead(decodeWireFormation(new Uint8Array(0)) || { unlockIds: [], marks: [] }) ===
+        "unlockIds=" + WIRE_FORMATION_EMPTY,
+    "empty 3099 body is synced and does not invent zero"
+  );
+  assert(decodeWireFormation(null) === null, "null 3099 body is not a snapshot");
+  assert(decodeWireFormation(new Uint8Array([0x80])) === null, "bad 3099 ignored");
+  assert(decodeWireFormation(formationBadPacked) === null, "3099 packed blob that fails is not an empty list");
+  const formationOrder = decodeWireFormation(formationUnpacked);
+  assert(
+    formationOrder !== null &&
+      formationOrder.unlockIds.length === 3 &&
+      formationOrder.unlockIds[0] === 9 &&
+      formationOrder.unlockIds[1] === 0 &&
+      formationOrder.unlockIds[2] === 8 &&
+      formationOrder.marks.length === 1 &&
+      formationOrder.marks[0].field === 8 &&
+      formatWireFormationHead(formationOrder) === "unlockIds=9,0,8 / 字段8=1" &&
+      formatWireFormationLine(formationOrder.unlockIds[0]) === "id=9" &&
+      formatWireFormationLine(formationOrder.unlockIds[1]) === "id=0",
+    "3099 unpacked unlockIds keep arrival order and do not sort"
+  );
+  const formationPackedSnap = decodeWireFormation(formationPacked);
+  assert(
+    formationPackedSnap !== null &&
+      formationPackedSnap.unlockIds.length === 3 &&
+      formationPackedSnap.unlockIds[0] === 9 &&
+      formationPackedSnap.unlockIds[1] === 0 &&
+      formationPackedSnap.unlockIds[2] === 8 &&
+      formatWireFormationHead(formationPackedSnap) === "unlockIds=9,0,8",
+    "3099 packed unlockIds keep arrival order"
+  );
+  const formationZeroSnap = decodeWireFormation(formationZero);
+  assert(
+    formationZeroSnap !== null &&
+      formationZeroSnap.unlockIds.length === 1 &&
+      formationZeroSnap.unlockIds[0] === 0 &&
+      formatWireFormationHead(formationZeroSnap) === "unlockIds=0" &&
+      formatWireFormationLine(formationZeroSnap.unlockIds[0]) === "id=0",
+    "present 3099 zero stays zero"
+  );
+  const formationNegSnap = decodeWireFormation(formationNeg);
+  assert(
+    formationNegSnap !== null &&
+      formationNegSnap.unlockIds[0] === -1 &&
+      formatWireFormationLine(formationNegSnap.unlockIds[0]) === "id=-1",
+    "3099 unlock id -1 stays -1"
+  );
+  const formationWideSnap = decodeWireFormation(formationWide);
+  assert(
+    formationWideSnap !== null &&
+      formationWideSnap.unlockIds[0] === 1099511627776 &&
+      formatWireFormationLine(formationWideSnap.unlockIds[0]) === "id=1099511627776",
+    "3099 unlock id keeps the wide integer"
+  );
+  assert(
+    decodeWireFormation(formationOuter) !== null &&
+      decodeWireFormation(formationOuter)?.unlockIds.length === 0 &&
+      formatWireFormationHead(decodeWireFormation(formationOuter) || { unlockIds: [], marks: [] }) ===
+        "unlockIds=" + WIRE_FORMATION_EMPTY + " / 字段9=1",
+    "non-empty 3099 without unlockIds stays synced and does not invent zero"
+  );
+  const formationSticky = decodeFrames(
+    concatBytes(encodeFrame(WireCmd.formation, formationUnpacked), encodeFrame(WireCmd.heartbeat))
+  );
+  assert(
+    formationSticky.frames.length === 2 &&
+      formationSticky.frames[0].cmdId === 3099 &&
+      formationSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireFormation(formationSticky.frames[0].body)?.unlockIds[0] === 9 &&
+      decodeWireFormation(formationSticky.frames[0].body)?.unlockIds[1] === 0,
+    "sticky 3099 frame stops at its length prefix"
+  );
+  assert(
+    wireFormationNote(formationOrder || { unlockIds: [], marks: [] }).indexOf(WIRE_FORMATION_SIDE_EFFECT) >= 0 &&
+      wireFormationNote(formationOrder || { unlockIds: [], marks: [] }).indexOf("不写金币") >= 0 &&
+      wireFormationNote(formationOrder || { unlockIds: [], marks: [] }).indexOf("不写钻石") >= 0,
+    "3099 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
+    bytesToHex(encodeFrame(3099)).indexOf("1b0c0000") >= 0 &&
+      bytesToHex(encodeFrame(3099)).indexOf("cb6d0000") < 0 &&
+      bytesToHex(encodeFrame(3099)).indexOf("5f270100") < 0,
+    "3099 empty frame carries 1b 0c 00 00 and not the 28107 or 75615 cmd byte"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -9512,7 +9713,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 37, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 38, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -9682,6 +9883,18 @@ async function checkWs(): Promise<void> {
         "pullIdle 28107 frame is not the 75606 cmd"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 37] as ArrayBuffer)) === "040000001b0c0000",
+        "pullIdle sends empty c2s 3099 after 28107"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 37] as ArrayBuffer)) !== "04000000cb6d0000",
+        "pullIdle 3099 frame is not merged into 28107"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 37] as ArrayBuffer)) !== "040000005f270100",
+        "pullIdle 3099 frame is not the 75615 cmd"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -9718,12 +9931,14 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 75606") &&
           sawLog(lines, "发送 c2s 75615") &&
           sawLog(lines, "发送 c2s 28107") &&
+          sawLog(lines, "发送 c2s 3099") &&
           sawLog(lines, "04000000c46d0000") &&
           sawLog(lines, "04000000286e0000") &&
           sawLog(lines, "0400000051270100") &&
           sawLog(lines, "0400000056270100") &&
           sawLog(lines, "040000005f270100") &&
           sawLog(lines, "04000000cb6d0000") &&
+          sawLog(lines, "040000001b0c0000") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -9792,7 +10007,12 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 28108") === false &&
           sawLog(lines, "发送 c2s 28103") === false &&
           sawLog(lines, "发送 c2s 28004") === false &&
-          sawLog(lines, "发送 c2s 3099") === false &&
+          sawLog(lines, "发送 c2s 3097") === false &&
+          sawLog(lines, "发送 c2s 3098") === false &&
+          sawLog(lines, "发送 c2s 3100") === false &&
+          sawLog(lines, "发送 c2s 3101") === false &&
+          sawLog(lines, "发送 c2s 3102") === false &&
+          sawLog(lines, "发送 c2s 3030") === false &&
           sawLog(lines, "发送 c2s 28109") === false &&
           sawLog(lines, "发送 c2s 28002") === false &&
           sawLog(lines, "发送 c2s 28003") === false &&
@@ -10697,13 +10917,12 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.28203");
       roleNet.send("wire.28204");
       roleNet.send("wire.28205");
-      roleNet.send("wire.3099");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeFetterContractOther,
-        "28101 28102 28104 28105 28106 28108 28109 28002 28003 28004 28201-28205 3099 20011 4601 and 29001 stay off the fetter contract wire"
+        "28101 28102 28104 28105 28106 28108 28109 28002 28003 28004 28201-28205 20011 4601 and 29001 stay off the fetter contract wire"
       );
       assert(
         sawLog(lines, "未发送 wire.28101") &&
@@ -10721,11 +10940,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.28203") &&
           sawLog(lines, "未发送 wire.28204") &&
           sawLog(lines, "未发送 wire.28205") &&
-          sawLog(lines, "未发送 wire.3099") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001"),
-        "fetter contract writes 28004 3099 20011 4601 and 29001 are not encoded"
+        "fetter contract writes 28004 20011 4601 and 29001 are not encoded"
       );
       roleNet.send(WIRE_ROLE_SHENBIN_CMD);
       assert(
@@ -10741,6 +10959,54 @@ async function checkWs(): Promise<void> {
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "040000005f270100" &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "0400000056270100",
         "sending 28107 does not also send 75615 or 75606"
+      );
+      const sentBeforeFormation = roleSockets[0].sent.length;
+      roleNet.send(WIRE_FORMATION_CMD);
+      const formationSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(formationSent as ArrayBuffer)) === "040000001b0c0000", "wire.3099 frame");
+      assert(bytesToHex(new Uint8Array(formationSent as ArrayBuffer)) !== "04000000cb6d0000", "wire.3099 frame is not 28107");
+      assert(roleSockets[0].sent.length === sentBeforeFormation + 1, "3099 is its own frame and is not merged into 28107");
+      const sentBeforeFormationOther = roleSockets[0].sent.length;
+      roleNet.send("wire.3097");
+      roleNet.send("wire.3098");
+      roleNet.send("wire.3100");
+      roleNet.send("wire.3102");
+      roleNet.send("wire.3030");
+      roleNet.send("wire.3101");
+      roleNet.send("wire.20011");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.29001");
+      assert(
+        roleSockets[0].sent.length === sentBeforeFormationOther,
+        "3097 3098 3100 3102 3030 3101 20011 4601 and 29001 stay off the formation wire"
+      );
+      assert(
+        sawLog(lines, "未发送 wire.3097") &&
+          sawLog(lines, "未发送 wire.3098") &&
+          sawLog(lines, "未发送 wire.3100") &&
+          sawLog(lines, "未发送 wire.3102") &&
+          sawLog(lines, "未发送 wire.3030") &&
+          sawLog(lines, "未发送 wire.3101") &&
+          sawLog(lines, "未发送 wire.20011") &&
+          sawLog(lines, "未发送 wire.4601") &&
+          sawLog(lines, "未发送 wire.29001"),
+        "formation writes 3097 3098 3100 3102 3030 3101 20011 4601 and 29001 are not encoded"
+      );
+      roleNet.send(WIRE_FETTER_CONTRACT_CMD);
+      assert(
+        roleSockets[0].sent.length === sentBeforeFormationOther + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000cb6d0000" &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "040000001b0c0000",
+        "sending 28107 does not also send 3099"
+      );
+      const sentAfterContractAlone = roleSockets[0].sent.length;
+      roleNet.send(WIRE_FORMATION_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterContractAlone + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "040000001b0c0000" &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "04000000cb6d0000" &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) !== "040000005f270100",
+        "sending 3099 does not also send 28107 or 75615"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -13167,6 +13433,80 @@ async function checkWs(): Promise<void> {
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
         "28101 28108 28002 28004 28201 3099 4601 29001 20011 and 75615 do not replace the 28107 list"
+      );
+      assert(
+        WireSession.hasFormation() &&
+          WireSession.formation !== null &&
+          WireSession.formation.unlockIds.length === 1 &&
+          WireSession.formation.unlockIds[0] === 6 &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts[0] === 9 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "3099 field 1=6 fills unlockIds and does not replace the 28107 list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.formation));
+      assert(
+        WireSession.hasFormation() &&
+          WireSession.formation !== null &&
+          WireSession.formation.unlockIds.length === 0 &&
+          formatWireFormationHead(WireSession.formation) === "unlockIds=" + WIRE_FORMATION_EMPTY &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts[0] === 9 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 3099 body clears unlockIds without writing zero and stays synced"
+      );
+      const formationSessionBody = concatBytes(fieldVarint(1, 9), concatBytes(fieldVarint(1, 0), concatBytes(fieldVarint(1, 8), fieldNeg1(1))));
+      roleSockets[0].push(encodeFrame(WireCmd.formation, formationSessionBody));
+      assert(
+        WireSession.hasFormation() &&
+          WireSession.formation !== null &&
+          WireSession.formation.unlockIds.length === 4 &&
+          WireSession.formation.unlockIds[0] === 9 &&
+          WireSession.formation.unlockIds[1] === 0 &&
+          WireSession.formation.unlockIds[2] === 8 &&
+          WireSession.formation.unlockIds[3] === -1 &&
+          formatWireFormationHead(WireSession.formation) === "unlockIds=9,0,8,-1" &&
+          formatWireFormationLine(WireSession.formation.unlockIds[3]) === "id=-1" &&
+          wireFormationNote(WireSession.formation).indexOf(WIRE_FORMATION_SIDE_EFFECT) >= 0 &&
+          wireFormationNote(WireSession.formation).indexOf("不写金币") >= 0 &&
+          wireFormationNote(WireSession.formation).indexOf("不写钻石") >= 0 &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts.length === 4 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "3099 sample keeps arrival order including zero and -1 and leaves 28107"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.formation, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasFormation() &&
+          WireSession.formation !== null &&
+          WireSession.formation.unlockIds.length === 4 &&
+          WireSession.formation.unlockIds[0] === 9 &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts[0] === 9 &&
+          sawWire("3099 解不开"),
+        "bad 3099 keeps the formation list and the 28107 record"
+      );
+      roleSockets[0].push(encodeFrame(3097, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3098, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3100, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3102, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3030, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3101, fieldVarint(1, 6)));
+      assert(
+        WireSession.hasFormation() &&
+          WireSession.formation !== null &&
+          WireSession.formation.unlockIds.length === 4 &&
+          WireSession.formation.unlockIds[0] === 9 &&
+          WireSession.formation.unlockIds[1] === 0 &&
+          WireSession.formation.unlockIds[3] === -1 &&
+          WireSession.fetterContract !== null &&
+          WireSession.fetterContract.contracts[0] === 9 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "3097 3098 3100 3102 3030 and 3101 do not replace the 3099 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
