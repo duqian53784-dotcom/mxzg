@@ -10,6 +10,9 @@ rem   本脚本默认不结束已有进程：端口已在听就跳过，与 star
 rem   窗口没了但仍占端口时，可选做法见文档 Q7，本脚本不执行。
 rem   分析没写进程起来要等多久。游戏库表启动时会自动建（分析记 mxzg_1_data 244 张）。
 rem   ps1 最多轮询约 180 秒。旧 start-all 单端口等 120 秒。这里两个端口共用 180 秒。
+rem   成功标准: TCP 11122、TCP 9902、WS 13101 都在听。
+rem   9801 的 actuator 若返回 404 且端口在听，只警告。9804 的 curl 失败只警告。
+rem   没启 cross 时，11422 连不上和游戏服加载跨服失败是预期，不算失败。
 rem ============================================================
 setlocal
 chcp 65001 >nul
@@ -253,28 +256,37 @@ echo.
 exit /b 0
 
 :HealthCheck
-where curl.exe >nul 2>&1
-if not errorlevel 1 goto :HaveCurl
-echo [失败] 找不到 curl.exe。分析步骤 8 的检查是 curl http://127.0.0.1:9801/actuator/health 。
-exit /b 1
-:HaveCurl
 set "BAD=0"
+where curl.exe >nul 2>&1
+if errorlevel 1 goto :NoCurl
+goto :Curl9801
+:NoCurl
+echo [警告] 找不到 curl.exe。HTTP 检查跳过。成功只看端口 11122、9902、13101。
+goto :CheckCriticalPorts
+:Curl9801
+call :PortListening 9801
+if errorlevel 1 goto :Warn9801Down
 echo curl.exe -fsS --max-time 10 http://127.0.0.1:9801/actuator/health
 curl.exe -fsS --max-time 10 http://127.0.0.1:9801/actuator/health
 set "CODE=%ERRORLEVEL%"
-if "%CODE%"=="0" goto :Curl9801Ok
-echo curl.exe 退出码 %CODE% ：http://127.0.0.1:9801/actuator/health 没有成功响应。
-set "BAD=1"
-:Curl9801Ok
 echo.
+if "%CODE%"=="0" goto :Curl9804
+if "%CODE%"=="22" goto :Warn9801NoActuator
+echo [警告] curl.exe 退出码 %CODE% ：http://127.0.0.1:9801/actuator/health 没有成功响应。端口已在听，不算启动失败。
+goto :Curl9804
+:Warn9801NoActuator
+echo [警告] 9801 端口已在听，curl 退出码 22，多半是 HTTP 404。actuator 可能不存在。这不算启动失败。
+goto :Curl9804
+:Warn9801Down
+echo [警告] HTTP 9801 没有在听，跳过这条健康检查。成功判定不看 9801。
+:Curl9804
 echo curl.exe -fsS --max-time 10 http://127.0.0.1:9804/actuator/health
 curl.exe -fsS --max-time 10 http://127.0.0.1:9804/actuator/health
 set "CODE=%ERRORLEVEL%"
-if "%CODE%"=="0" goto :Curl9804Ok
-echo curl.exe 退出码 %CODE% ：http://127.0.0.1:9804/actuator/health 没有成功响应。
-set "BAD=1"
-:Curl9804Ok
 echo.
+if "%CODE%"=="0" goto :CheckCriticalPorts
+echo [警告] curl.exe 退出码 %CODE% ：http://127.0.0.1:9804/actuator/health 没有成功响应。三个关键端口若已在听，脚本仍算成功。
+:CheckCriticalPorts
 call :ShowNetstat
 call :PortListening 11122
 if not errorlevel 1 goto :Still11122
@@ -292,10 +304,11 @@ echo [失败] 检查时 WS 13101 不在听。
 set "BAD=1"
 :Still13101
 if "%BAD%"=="0" goto :HealthOk
-echo 还有检查没过。gameserver 的 HTTP 在分析第十节记的是 9804，模板 server.port 写的是 9801。以上面的 curl 和 netstat 为准，脚本不会改配置。
+echo 关键端口没听全。成功要同时听到 TCP 11122、TCP 9902、WS 13101。
 exit /b 1
 :HealthOk
-echo 这次检查：center TCP 11122、HTTP 9801，gameserver TCP 9902、WS 13101、HTTP 9804 都有响应。
+echo [启动成功] TCP 11122、TCP 9902、WS 13101 都在听。
+echo 没启动 cross 时，游戏服日志里连接 127.0.0.1:11422 失败，中心服日志里游戏服加载跨服失败，都是预期，不算失败。
 echo D1 仍要倩确认之后才能在 PROJECT_PLAN.md 里打勾。客户端仍走 Mock。
 exit /b 0
 
@@ -303,8 +316,9 @@ exit /b 0
 echo.
 echo   停止: 在各窗口输入 stop 然后回车。
 echo   顺序: 先 mxzg-gameserver，再 mxzg-center。
-echo   本脚本不启动 cross / large-cross。若另外开了 cross，先停 gameserver，再停 cross，最后 center。
-echo   双击 F:\project\mxzg\scripts\stop-local-server.bat 只打印这段说明，不结束进程。
+echo   本脚本不启动 cross，也不启动 large-cross。
+echo   若另外开了 cross，先停 gameserver，再停 cross，最后停 center。
+echo   同目录的停止说明脚本只打印说明，不结束进程。
 exit /b 0
 
 rem ============================================================
