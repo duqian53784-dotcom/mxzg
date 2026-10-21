@@ -627,3 +627,43 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 `Title` / `SideEffect` / `SeasonNote` / `Note` / `FieldNote` / `Empty` / `Unsynced` 与 `WIRE_PVP_READONLY_TITLE` / `WIRE_PVP_SIDE_EFFECT` / `WIRE_PVP_SEASON_NOTE` / `WIRE_PVP_READONLY_NOTE` / `WIRE_PVP_FIELD_NOTE` / `WIRE_PVP_EMPTY` / `WIRE_PVP_UNSYNCED_TOAST` 相同。自身六行是 `formatWirePvpSelfLines` 在字段都缺时的句子（`无`，不补 0）：`free_count=无`、`score=无`、`season_end_time=无`、`like_rids=无`、`season_count=无`、`season_reward=无`。对手行是 `formatWirePvpLine` 的样例，不是真服数据：`样例甲 · player_id=1001` 到 `样例辛 · player_id=1008`。节点锚点在中心、放在 x=0，自身行和对手行的 Label 水平对齐为左，宽 640，和 `align: "left"` 一致。
 
 未同步时 `render()` 只放 `Unsynced`（y=340）就返回，不画自身行。已同步时自身行从 `top = 350` 起，step 28，六行占到 y=210。`listTop = 350 − 6×28 − 8 = 174`。空表在 `listTop − 20 = 154`。对手从 `listTop` 起，step 36，最多 8 行（`Opp_7` 在 y=−78）。`More` 的 y 是 `174 − 8×36 = -114`，落在第 8 行下面。运行时溢出文案是 `还有 N 名`；预制里的 `还有 1 名` 只是占位。`BtnBack` 用蓝色按钮，字号走 `createButton` 默认 24。字号：标题 36，侧效 22，赛季说明 20，只读说明 20，字段说明 18，未同步和空表 28，自身行 22，对手行 18，溢出 18。`FieldNote` 比一行宽，在 48px 高的框里换行。
+
+## Wish / 许愿（未接线）
+
+只有 Mock 低级许愿池一份 Prefab。对齐 `WishPage.ts` 的 `WishController` 构造器，以及 `module/wish/pool.ts` 的 `wishAttemptsLine` / `wishWalletLine` / `wishNextLine` / `wishPoolLine` / `wishPayButton`。仓内没有 `WireWish`，不造真服只读 Prefab，也不改页面脚本。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| WishPage | `prefabs/ui/wish/WishPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/wish/WishPage.prefab`（目录 `wish/`）
+- **状态**：**未接** Boot、`MainApp`、`WishPage.ts`，以及任何 `USE_*_PREFAB`。不改协议。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` 一致）。代码把紫深蓝底画在页面根上，其余放进 `body`。Prefab 里 `Bg` 与内容同级，不放 `body`。子节点坐标就是 `place()` 的页面坐标。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid（`@f9941`）。Prefab 目录里没有 PNG。没有许愿专用图集：页面底用 `win-bg_win-bg-12` 染成 `PAGE_BG` `(18, 16, 36)`。四个按钮都用 `button_btn-blue-big`，再按 `WishPage.ts` 的 fill 染色。没有紫色按钮图，许愿符钮靠 `ITEM_FILL` `(96, 72, 168)` 染出来。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。代码里的按钮是 `createButton` 的 Graphics 色块；预制改成按钮图加 tint，色值仍是那四个 fill。
+- 再生：`python3 client/tools/gen_wish_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `WishPage.ts` 的坐标、`pool.ts` 的五句文案，以及 `items.ts` 的 `WISH_TOKEN_NAME`）。再跑一次会覆写同一份 Prefab，并保留已有 `.meta` uuid。
+
+### WishPage（Mock 低级许愿池）
+
+根 `WishPage`，与 `uiNode("WishPage")` 一致。默认文案按还没许过的样例：`used = 0`、`limit = WISH_DAILY_LIMIT`（5）、金币 0、钻石 0、许愿符 0、游标 0。这是 `view()` 读到之后 `render()` 会写上的句子，不是构造瞬间的 `读取中…`、空钱包和短按钮（`金币许愿` / `许愿符许愿` / `钻石许愿`）。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | 紫深蓝 `(18, 16, 36)` |
+| `Title` | (0, 460) | 680×56 | `许愿池 · 低级` |
+| `Subtitle` | (0, 408) | 640×32 | `主线 Lv10 开启。每天 5 次，三种方式任选` |
+| `Attempts` | (0, 352) | 640×36 | `今日剩余 5/5` |
+| `Wallet` | (0, 304) | 640×32 | `持有金币 0 · 钻石 0 · 许愿符 ×0` |
+| `Next` | (0, 256) | 640×32 | `下一次：金币 40` |
+| `Pool` | (0, 208) | 640×36 | `奖池固定循环 10 次：金币、强化石、经验药水，第 10 次是钻石` |
+| `BtnGold` | (0, 120) | 560×56 | `金币许愿（30）`（金 `(168, 112, 36)`） |
+| `BtnItem` | (0, 48) | 560×56 | `许愿符许愿（×1）`（紫 `(96, 72, 168)`） |
+| `BtnDiamond` | (0, -24) | 560×56 | `钻石许愿（5）`（蓝 `(46, 110, 190)`） |
+| `Result` | (0, -120) | 640×72 | `选一种方式许愿一次。次数用完、货币或许愿符不够都会提示` |
+| `BtnBack` | (0, -210) | 240×48 | `返回`（`(36, 72, 120)`） |
+
+`Title` 字号 40，颜色 `TITLE` `(220, 196, 255)`。代码没传宽，`createLabel` 默认宽 680、高 40 + 16 = 56，和规格一致。`Subtitle` 字号 18，颜色 `MUTED` `(196, 186, 220)`。`Attempts` 是 `wishAttemptsLine(0, 5)`，字号 26，颜色 `STAT` `(255, 228, 170)`。`Wallet` 是 `wishWalletLine(0, 0, 0)`，字号 22，颜色 `MUTED`。道具名读 `items.ts` 的 `WISH_TOKEN_NAME`（`pool.ts` 从这里引入，当前是 `许愿符`），不是另起的名字。样例钱包是 0，不是 `MOCK_STARTER_GOLD` / `MOCK_STARTER_DIAMOND`，也不把 `STARTER_WISH_TOKEN` 写进去。`Next` 是 `wishNextLine(0)`，字号 22，颜色 `STAT`。游标 0 取 `WISH_DROPS` 首格（金币 40），`wishDropText` 写成 `金币 40`。`Pool` 是 `wishPoolLine()`，字号 18，颜色 `MUTED`。句子里的强化石与 `IDLE_ITEM_NAME` 相同。
+
+`Subtitle` / `Attempts` / `Wallet` / `Next` / `Pool` 的框高是规格表里的 32 / 36 / 32 / 32 / 36。`createLabel` 在没传 height 时会用字号 + 16，那五格没有跟这个默认值。`Result` 例外：代码传了高 72，所以顶对齐、可换行，字号 18，颜色 `MUTED`，宽 640。它是构造时的 `lastReport`。
+
+`BtnGold` / `BtnItem` / `BtnDiamond` 是 `wishPayButton("gold" | "item" | "diamond", 0, 5)`，字号 22。次数还没用完，所以不是 `今日已用完`。金币花费是 `WISH_GOLD_COST` 30，钻石是 `WISH_DIAMOND_COST` 5，许愿符是 `WISH_ITEM_COST` 1，钮上的道具名同样来自 `WISH_TOKEN_NAME`。三钮和 `BtnBack` 的 Sprite 都是 `button_btn-blue-big`，tint 分别是 `GOLD_FILL`、`ITEM_FILL`、`DIAMOND_FILL`、`BACK_FILL`。`BtnBack` 文案是 `返回`，没传字号，走 `createButton` 默认 24。四个按钮的 `clickEvents` 都是空的，子节点只有 `Label`。
