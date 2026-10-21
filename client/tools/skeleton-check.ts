@@ -664,6 +664,17 @@ import {
   WIRE_PET_UNSYNCED_TOAST,
   wirePetNote,
 } from "../assets/scripts/net/protocol/wirePet";
+import {
+  decodeWireWorld,
+  formatWireWorldLine,
+  WIRE_WORLD_CMD,
+  WIRE_WORLD_FIELD_NOTE,
+  WIRE_WORLD_READONLY_NOTE,
+  WIRE_WORLD_READONLY_TITLE,
+  WIRE_WORLD_SIDE_EFFECT,
+  WIRE_WORLD_UNSYNCED_TOAST,
+  wireWorldNote,
+} from "../assets/scripts/net/protocol/wireWorld";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1380,6 +1391,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("jewel") === "city", "jewel stays on the city tab");
   assert(rootTabFor("illustrat") === "city", "illustrat stays on the city tab");
   assert(rootTabFor("pet") === "city", "pet stays on the city tab");
+  assert(rootTabFor("world") === "city", "world level stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -3897,6 +3909,10 @@ async function checkWs(): Promise<void> {
   const petBody = concatBytes(concatBytes(fieldBytes(1, petRowA), fieldBytes(1, petRowB)), fieldVarint(5, 9));
   const petMissing = fieldBytes(1, fieldVarint(1, 8));
   const petOuterOnly = fieldVarint(5, 1);
+  const worldBody = concatBytes(fieldVarint(1, 1), fieldVarint(4, 6));
+  const worldMissing = fieldVarint(2, 7);
+  const worldZero = fieldVarint(1, 0);
+  const worldWide = fieldVarint(1, 1099511627776);
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -4374,6 +4390,66 @@ async function checkWs(): Promise<void> {
       decodeWirePet(petSticky.frames[0].body)?.marks.length === 1,
     "sticky 74100 frame stops at its length prefix"
   );
+  const loggedWorld = decodeWireWorld(worldBody);
+  assert(WireCmd.worldLevel === 51001 && WireCmd.roleProfile === 2001, "online 51001 stays off role profile 2001");
+  assert(bytesToHex(encodeFrame(WireCmd.worldLevel)) === "0400000039c70000", "empty c2s 51001");
+  assert(bytesToHex(encodeFrame(20101)) !== "0400000039c70000", "20101 is not the 51001 frame");
+  assert(WIRE_WORLD_READONLY_TITLE === "世界等级（真服只读）", "readonly world title");
+  assert(WIRE_WORLD_UNSYNCED_TOAST === "真服未同步", "unsynced world toast");
+  assert(
+    WIRE_WORLD_SIDE_EFFECT.indexOf("无写库") >= 0 &&
+      WIRE_WORLD_SIDE_EFFECT.indexOf("空体安全") >= 0 &&
+      WIRE_WORLD_SIDE_EFFECT.indexOf("74100") >= 0 &&
+      WIRE_WORLD_READONLY_NOTE.indexOf("20101") >= 0 &&
+      WIRE_WORLD_READONLY_NOTE.indexOf("无写操作号") >= 0 &&
+      WIRE_WORLD_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_WORLD_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_WORLD_FIELD_NOTE.indexOf("level") >= 0 &&
+      WIRE_WORLD_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "world page names level and refuses 20101"
+  );
+  assert(
+    decodeWireWorld(new Uint8Array(0)) !== null &&
+      decodeWireWorld(new Uint8Array(0))?.level === null &&
+      formatWireWorldLine(decodeWireWorld(new Uint8Array(0)) || { level: null, marks: [] }) === "level=无",
+    "empty 51001 body is synced and does not invent zero"
+  );
+  assert(decodeWireWorld(new Uint8Array([0x80])) === null, "bad 51001 ignored");
+  const worldMissingSnap = decodeWireWorld(worldMissing);
+  assert(
+    worldMissingSnap !== null &&
+      worldMissingSnap.level === null &&
+      worldMissingSnap.marks.length === 1 &&
+      worldMissingSnap.marks[0].field === 2 &&
+      formatWireWorldLine(worldMissingSnap) === "level=无 / 字段2=7",
+    "missing 51001 level stays blank"
+  );
+  assert(
+    decodeWireWorld(worldZero) !== null &&
+      decodeWireWorld(worldZero)?.level === 0 &&
+      formatWireWorldLine(decodeWireWorld(worldZero) || { level: null, marks: [] }) === "level=0",
+    "present 51001 zero stays zero"
+  );
+  assert(decodeWireWorld(worldWide)?.level === 1099511627776, "51001 int64 stays the wide value");
+  assert(
+    loggedWorld !== null &&
+      loggedWorld.level === 1 &&
+      loggedWorld.marks.length === 1 &&
+      loggedWorld.marks[0].field === 4 &&
+      formatWireWorldLine(loggedWorld) === "level=1 / 字段4=6" &&
+      wireWorldNote(loggedWorld).indexOf(WIRE_WORLD_SIDE_EFFECT) >= 0 &&
+      wireWorldNote(loggedWorld).indexOf("不写金币") >= 0 &&
+      wireWorldNote(loggedWorld).indexOf("不写钻石") >= 0,
+    "51001 sample keeps level 1 and does not fill a missing level with 0"
+  );
+  const worldSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.worldLevel, worldBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    worldSticky.frames.length === 2 &&
+      worldSticky.frames[0].cmdId === 51001 &&
+      worldSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireWorld(worldSticky.frames[0].body)?.level === 1,
+    "sticky 51001 frame stops at its length prefix"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -4832,6 +4908,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.heroJewel, jewelBody));
       roleSockets[0].push(encodeFrame(WireCmd.illustratReward, illustratBody));
       roleSockets[0].push(encodeFrame(WireCmd.petInfoList, petBody));
+      roleSockets[0].push(encodeFrame(WireCmd.worldLevel, worldBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -4851,6 +4928,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasJewel() && WireSession.jewel === null, "jewel stays unsynced before the city role");
       assert(!WireSession.hasIllustrat() && WireSession.illustrat === null, "illustrat stays unsynced before the city role");
       assert(!WireSession.hasPet() && WireSession.pet === null, "pet stays unsynced before the city role");
+      assert(!WireSession.hasWorld() && WireSession.world === null, "world level stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -5040,6 +5118,16 @@ async function checkWs(): Promise<void> {
         "flush writes the 74100 rows and leaves the 4013 rows"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "74100 stays off the wallet");
+      assert(
+        WireSession.hasWorld() &&
+          WireSession.world !== null &&
+          WireSession.world.level === 1 &&
+          formatWireWorldLine(WireSession.world) === "level=1 / 字段4=6" &&
+          WireSession.pet !== null &&
+          WireSession.pet.rows.length === 2,
+        "flush writes the 51001 level and leaves the 74100 rows"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "51001 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -5285,7 +5373,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 14, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 15, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -5343,6 +5431,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 74100 after 4013"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 14] as ArrayBuffer)) === "0400000039c70000",
+        "pullIdle sends empty c2s 51001 after 74100"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -5356,6 +5448,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 4101") &&
           sawLog(lines, "发送 c2s 4013") &&
           sawLog(lines, "发送 c2s 74100") &&
+          sawLog(lines, "发送 c2s 51001") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -5363,6 +5456,8 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000005100000") &&
           sawLog(lines, "04000000ad0f0000") &&
           sawLog(lines, "0400000074210100") &&
+          sawLog(lines, "0400000039c70000") &&
+          sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "0400000002520000") === false &&
           sawLog(lines, "发送 c2s 12020") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
@@ -5394,7 +5489,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 74103") === false &&
           sawLog(lines, "发送 c2s 74105") === false &&
           sawLog(lines, "发送 c2s 74106") === false,
-        "mail hero buy gold achievement arena seven day goal wish summon prophet jewel illustrat and pet pulls are logged"
+        "mail hero buy gold achievement arena seven day goal wish summon prophet jewel illustrat pet and world pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -5615,6 +5710,13 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.74106"),
         "pet upgrade carry unequip and pushes are not encoded"
       );
+      roleNet.send(WIRE_WORLD_CMD);
+      const worldSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(worldSent as ArrayBuffer)) === "0400000039c70000", "wire.51001 frame");
+      const sentBeforeWorldOther = roleSockets[0].sent.length;
+      roleNet.send("wire.20101");
+      assert(roleSockets[0].sent.length === sentBeforeWorldOther, "20101 stays off the world wire");
+      assert(sawLog(lines, "未发送 wire.20101"), "alternate 20101 is not encoded");
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
       assert(
@@ -5960,6 +6062,42 @@ async function checkWs(): Promise<void> {
         "non-empty 74100 without rows stays synced and leaves 4013 and 4001"
       );
       assert(Session.gold === goldBeforeBadPet && Session.diamond === diamondBeforeBadPet, "outer-only 74100 does not write gold or diamonds");
+      const goldBeforeBadWorld = Session.gold;
+      const diamondBeforeBadWorld = Session.diamond;
+      roleSockets[0].push(encodeFrame(WireCmd.worldLevel, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasWorld() &&
+          WireSession.world !== null &&
+          WireSession.world.level === 1 &&
+          WireSession.pet !== null &&
+          WireSession.pet.rows.length === 0 &&
+          sawWire("51001 解不开"),
+        "bad 51001 keeps the level and the 74100 rows"
+      );
+      assert(Session.gold === goldBeforeBadWorld && Session.diamond === diamondBeforeBadWorld, "bad 51001 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.worldLevel));
+      assert(
+        WireSession.hasWorld() &&
+          WireSession.world !== null &&
+          WireSession.world.level === null &&
+          formatWireWorldLine(WireSession.world) === "level=无" &&
+          WireSession.pet !== null &&
+          WireSession.pet.marks.length === 1,
+        "empty 51001 body clears level without writing zero and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadWorld && Session.diamond === diamondBeforeBadWorld, "empty 51001 does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.worldLevel, worldMissing));
+      assert(
+        WireSession.hasWorld() &&
+          WireSession.world !== null &&
+          WireSession.world.level === null &&
+          WireSession.world.marks.length === 1 &&
+          WireSession.world.marks[0].field === 2 &&
+          WireSession.pet !== null &&
+          WireSession.pet.marks[0].field === 5,
+        "51001 without level stays blank and leaves 74100"
+      );
+      assert(Session.gold === goldBeforeBadWorld && Session.diamond === diamondBeforeBadWorld, "missing 51001 level does not write gold or diamonds");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {

@@ -150,6 +150,14 @@ export const WireCmd = {
    * 不是英雄列表 4001。不是英雄图鉴 4013。
    */
   petInfoList: 74100,
+  /**
+   * c2s 空体。进主城、空 c2s 74100 之后发，只发一次。
+   * 整帧 `04 00 00 00 39 c7 00 00`。51001 = 0xC739，小端 39 c7 00 00。
+   * GReqWorldLevel / GResWorldLevel。level 是字段 1，int64。空体安全。无写库。
+   * 不夹在 2001 和 3007 中间。本模块无写操作号。不做 20101。
+   * 不是角色资料 2001。
+   */
+  worldLevel: 51001,
 } as const;
 
 /**
