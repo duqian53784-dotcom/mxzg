@@ -688,6 +688,19 @@ import {
   WIRE_PROMOTION_UNSYNCED_TOAST,
   wirePromotionNote,
 } from "../assets/scripts/net/protocol/wirePromotion";
+import {
+  decodeWireFirstRecharge,
+  formatWireFirstHead,
+  formatWireFirstLine,
+  WIRE_FIRST_CMD,
+  WIRE_FIRST_EMPTY,
+  WIRE_FIRST_FIELD_NOTE,
+  WIRE_FIRST_READONLY_NOTE,
+  WIRE_FIRST_READONLY_TITLE,
+  WIRE_FIRST_SIDE_EFFECT,
+  WIRE_FIRST_UNSYNCED_TOAST,
+  wireFirstNote,
+} from "../assets/scripts/net/protocol/wireFirstRecharge";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1406,6 +1419,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("pet") === "city", "pet stays on the city tab");
   assert(rootTabFor("world") === "city", "world level stays on the city tab");
   assert(rootTabFor("promotion") === "city", "promotion list stays on the city tab");
+  assert(rootTabFor("firstRecharge") === "city", "first recharge stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -3937,6 +3951,21 @@ async function checkWs(): Promise<void> {
   const promoZero = fieldVarint(1, 0);
   const promoWide = fieldBytes(2, fieldVarint(2, 1099511627776));
   const promoOuterOnly = fieldVarint(7, 2);
+  const firstRewardA = concatBytes(fieldVarint(1, 1), fieldVarint(2, 0));
+  const firstRewardB = concatBytes(fieldVarint(2, 1), fieldVarint(6, 4));
+  const firstBody = concatBytes(
+    concatBytes(
+      concatBytes(fieldVarint(1, 6), fieldVarint(2, 1)),
+      fieldBytes(2, new Uint8Array([3]))
+    ),
+    concatBytes(concatBytes(fieldBytes(3, firstRewardA), fieldBytes(3, firstRewardB)), fieldVarint(5, 9))
+  );
+  const firstMissing = fieldVarint(4, 7);
+  const firstZero = fieldVarint(1, 0);
+  const firstClaimedZero = fieldVarint(2, 0);
+  const firstValueMissing = fieldBytes(3, fieldVarint(1, 2));
+  const firstWide = fieldBytes(3, fieldVarint(2, 1099511627776));
+  const firstOuterOnly = fieldVarint(7, 2);
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -4565,6 +4594,122 @@ async function checkWs(): Promise<void> {
     "sticky 20001 frame stops at its length prefix"
   );
   assert(decodeWirePromotion(fieldBytes(2, new Uint8Array([0x80]))) === null, "20001 record blob that will not decode is ignored");
+  const loggedFirst = decodeWireFirstRecharge(firstBody);
+  assert(WireCmd.firstRecharge === 20012 && WireCmd.promotionList === 20001 && WireCmd.roleProfile === 2001, "online 20012 stays off 20001 and role profile 2001");
+  assert(WireCmd.firstRecharge !== WireCmd.worldLevel, "20012 stays off world level 51001");
+  assert(bytesToHex(encodeFrame(WireCmd.firstRecharge)) === "040000002c4e0000", "empty c2s 20012");
+  assert(bytesToHex(encodeFrame(20013)) === "040000002d4e0000", "20013 claim frame stays distinct");
+  assert(bytesToHex(encodeFrame(13260)) === "04000000cc330000", "13260 stays off the 20012 frame");
+  assert(bytesToHex(encodeFrame(20013)) !== "040000002c4e0000", "20013 is not the 20012 frame");
+  assert(bytesToHex(encodeFrame(13260)) !== "040000002c4e0000", "13260 is not the 20012 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.promotionList)) !== "040000002c4e0000", "20001 is not the 20012 frame");
+  assert(WIRE_FIRST_READONLY_TITLE === "超值首充（真服只读）", "readonly first recharge title");
+  assert(WIRE_FIRST_UNSYNCED_TOAST === "真服未同步", "unsynced first recharge toast");
+  assert(WIRE_FIRST_EMPTY === "空记录", "empty first recharge record label");
+  assert(
+    WIRE_FIRST_SIDE_EFFECT.indexOf("20001") >= 0 &&
+      WIRE_FIRST_SIDE_EFFECT.indexOf("20013") >= 0 &&
+      WIRE_FIRST_SIDE_EFFECT.indexOf("13260") >= 0 &&
+      WIRE_FIRST_READONLY_NOTE.indexOf("不发 20013") >= 0 &&
+      WIRE_FIRST_READONLY_NOTE.indexOf("13260") >= 0 &&
+      WIRE_FIRST_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_FIRST_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_FIRST_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_FIRST_FIELD_NOTE.indexOf("recharge") >= 0 &&
+      WIRE_FIRST_FIELD_NOTE.indexOf("list") >= 0 &&
+      WIRE_FIRST_FIELD_NOTE.indexOf("key") >= 0 &&
+      WIRE_FIRST_FIELD_NOTE.indexOf("value") >= 0 &&
+      WIRE_FIRST_FIELD_NOTE.indexOf("档位") >= 0 &&
+      WIRE_FIRST_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "first recharge page names recharge list and can_reward and refuses 20013 and 13260"
+  );
+  assert(
+    decodeWireFirstRecharge(new Uint8Array(0)) !== null &&
+      decodeWireFirstRecharge(new Uint8Array(0))?.recharge === null &&
+      decodeWireFirstRecharge(new Uint8Array(0))?.claimed.length === 0 &&
+      decodeWireFirstRecharge(new Uint8Array(0))?.rewards.length === 0 &&
+      formatWireFirstHead(decodeWireFirstRecharge(new Uint8Array(0)) || { recharge: null, claimed: [], rewards: [], marks: [] }) ===
+        "recharge=无 / 已领=无 / 空记录",
+    "empty 20012 body is synced and does not invent zero"
+  );
+  assert(decodeWireFirstRecharge(new Uint8Array([0x80])) === null, "bad 20012 ignored");
+  const firstMissingSnap = decodeWireFirstRecharge(firstMissing);
+  assert(
+    firstMissingSnap !== null &&
+      firstMissingSnap.recharge === null &&
+      firstMissingSnap.claimed.length === 0 &&
+      firstMissingSnap.rewards.length === 0 &&
+      firstMissingSnap.marks.length === 1 &&
+      firstMissingSnap.marks[0].field === 4 &&
+      formatWireFirstHead(firstMissingSnap) === "recharge=无 / 已领=无 / 空记录 / 字段4=7",
+    "missing 20012 recharge stays blank"
+  );
+  assert(
+    decodeWireFirstRecharge(firstZero) !== null &&
+      decodeWireFirstRecharge(firstZero)?.recharge === 0 &&
+      formatWireFirstHead(decodeWireFirstRecharge(firstZero) || { recharge: null, claimed: [], rewards: [], marks: [] }) ===
+        "recharge=0 / 已领=无 / 空记录",
+    "present 20012 zero stays zero"
+  );
+  assert(
+    decodeWireFirstRecharge(firstClaimedZero) !== null &&
+      decodeWireFirstRecharge(firstClaimedZero)?.recharge === null &&
+      decodeWireFirstRecharge(firstClaimedZero)?.claimed.length === 1 &&
+      decodeWireFirstRecharge(firstClaimedZero)?.claimed[0] === 0 &&
+      formatWireFirstHead(decodeWireFirstRecharge(firstClaimedZero) || { recharge: null, claimed: [], rewards: [], marks: [] }) ===
+        "recharge=无 / 已领=0 / 空记录",
+    "present 20012 claimed zero stays zero and does not invent recharge"
+  );
+  const firstValueMissingSnap = decodeWireFirstRecharge(firstValueMissing);
+  assert(
+    firstValueMissingSnap !== null &&
+      firstValueMissingSnap.rewards.length === 1 &&
+      firstValueMissingSnap.rewards[0].key === 2 &&
+      firstValueMissingSnap.rewards[0].value === null &&
+      formatWireFirstLine(firstValueMissingSnap.rewards[0]) === "档位=2 / value=无",
+    "missing 20012 can_reward value stays blank"
+  );
+  const firstWideSnap = decodeWireFirstRecharge(firstWide);
+  assert(
+    firstWideSnap !== null &&
+      firstWideSnap.recharge === null &&
+      firstWideSnap.claimed.length === 0 &&
+      firstWideSnap.rewards.length === 1 &&
+      firstWideSnap.rewards[0].key === null &&
+      firstWideSnap.rewards[0].value === 1099511627776,
+    "20012 map value keeps the wide int64 and does not invent a tier"
+  );
+  assert(
+    loggedFirst !== null &&
+      loggedFirst.recharge === 6 &&
+      loggedFirst.claimed.length === 2 &&
+      loggedFirst.claimed[0] === 1 &&
+      loggedFirst.claimed[1] === 3 &&
+      loggedFirst.rewards.length === 2 &&
+      loggedFirst.rewards[0].key === 1 &&
+      loggedFirst.rewards[0].value === 0 &&
+      loggedFirst.rewards[1].key === null &&
+      loggedFirst.rewards[1].value === 1 &&
+      loggedFirst.marks.length === 1 &&
+      loggedFirst.marks[0].field === 5 &&
+      formatWireFirstHead(loggedFirst) === "recharge=6 / 已领=1,3 / 2 条 / 字段5=9" &&
+      formatWireFirstLine(loggedFirst.rewards[0]) === "档位=1 / value=0 · 可领" &&
+      formatWireFirstLine(loggedFirst.rewards[1]) === "档位=无 / value=1 · 不可 / 字段6=4" &&
+      wireFirstNote(loggedFirst).indexOf(WIRE_FIRST_SIDE_EFFECT) >= 0 &&
+      wireFirstNote(loggedFirst).indexOf("不写金币") >= 0 &&
+      wireFirstNote(loggedFirst).indexOf("不写钻石") >= 0,
+    "20012 sample keeps recharge claimed idx and can_reward and does not fill missing numbers with 0"
+  );
+  const firstSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.firstRecharge, firstBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    firstSticky.frames.length === 2 &&
+      firstSticky.frames[0].cmdId === 20012 &&
+      firstSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireFirstRecharge(firstSticky.frames[0].body)?.recharge === 6,
+    "sticky 20012 frame stops at its length prefix"
+  );
+  assert(decodeWireFirstRecharge(fieldBytes(2, new Uint8Array([0x80]))) === null, "20012 claimed blob that will not decode is ignored");
+  assert(decodeWireFirstRecharge(fieldBytes(3, new Uint8Array([0x80]))) === null, "20012 reward blob that will not decode is ignored");
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -5025,6 +5170,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.petInfoList, petBody));
       roleSockets[0].push(encodeFrame(WireCmd.worldLevel, worldBody));
       roleSockets[0].push(encodeFrame(WireCmd.promotionList, promoBody));
+      roleSockets[0].push(encodeFrame(WireCmd.firstRecharge, firstBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -5046,6 +5192,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasPet() && WireSession.pet === null, "pet stays unsynced before the city role");
       assert(!WireSession.hasWorld() && WireSession.world === null, "world level stays unsynced before the city role");
       assert(!WireSession.hasPromotion() && WireSession.promotion === null, "promotion stays unsynced before the city role");
+      assert(!WireSession.hasFirstRecharge() && WireSession.firstRecharge === null, "first recharge stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -5261,6 +5408,26 @@ async function checkWs(): Promise<void> {
         "flush writes the 20001 foundation list and leaves the 51001 level"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "20001 stays off the wallet");
+      assert(
+        WireSession.hasFirstRecharge() &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.recharge === 6 &&
+          WireSession.firstRecharge.claimed.length === 2 &&
+          WireSession.firstRecharge.claimed[0] === 1 &&
+          WireSession.firstRecharge.claimed[1] === 3 &&
+          WireSession.firstRecharge.rewards.length === 2 &&
+          WireSession.firstRecharge.rewards[0].key === 1 &&
+          WireSession.firstRecharge.rewards[0].value === 0 &&
+          WireSession.firstRecharge.rewards[1].key === null &&
+          WireSession.firstRecharge.rewards[1].value === 1 &&
+          formatWireFirstLine(WireSession.firstRecharge.rewards[0]) === "档位=1 / value=0 · 可领" &&
+          formatWireFirstLine(WireSession.firstRecharge.rewards[1]) === "档位=无 / value=1 · 不可 / 字段6=4" &&
+          formatWireFirstHead(WireSession.firstRecharge) === "recharge=6 / 已领=1,3 / 2 条 / 字段5=9" &&
+          WireSession.promotion !== null &&
+          WireSession.promotion.isBuyFoundation === 1,
+        "flush writes the 20012 first recharge record and leaves the 20001 foundation list"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "20012 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -5506,7 +5673,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 16, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 17, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -5572,6 +5739,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 20001 after 51001"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 16] as ArrayBuffer)) === "040000002c4e0000",
+        "pullIdle sends empty c2s 20012 after 20001"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -5587,6 +5758,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 74100") &&
           sawLog(lines, "发送 c2s 51001") &&
           sawLog(lines, "发送 c2s 20001") &&
+          sawLog(lines, "发送 c2s 20012") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -5596,10 +5768,13 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000074210100") &&
           sawLog(lines, "0400000039c70000") &&
           sawLog(lines, "04000000214e0000") &&
+          sawLog(lines, "040000002c4e0000") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
           sawLog(lines, "发送 c2s 20010") === false &&
+          sawLog(lines, "发送 c2s 20013") === false &&
+          sawLog(lines, "发送 c2s 13260") === false &&
           sawLog(lines, "发送 c2s 3007") === false &&
           sawLog(lines, "0400000002520000") === false &&
           sawLog(lines, "发送 c2s 12020") === false &&
@@ -5873,6 +6048,17 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.20004") &&
           sawLog(lines, "未发送 wire.20010"),
         "promotion claim and bypass cmds are not encoded"
+      );
+      roleNet.send(WIRE_FIRST_CMD);
+      const firstSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(firstSent as ArrayBuffer)) === "040000002c4e0000", "wire.20012 frame");
+      const sentBeforeFirstOther = roleSockets[0].sent.length;
+      roleNet.send("wire.20013");
+      roleNet.send("wire.13260");
+      assert(roleSockets[0].sent.length === sentBeforeFirstOther, "20013 and 13260 stay off the first recharge wire");
+      assert(
+        sawLog(lines, "未发送 wire.20013") && sawLog(lines, "未发送 wire.13260"),
+        "first recharge claim and the alternate cmd are not encoded"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -6304,6 +6490,60 @@ async function checkWs(): Promise<void> {
           WireSession.world !== null &&
           WireSession.world.marks[0].field === 2,
         "non-empty 20001 without records stays synced and leaves 51001"
+      );
+      const goldBeforeBadFirst = Session.gold;
+      const diamondBeforeBadFirst = Session.diamond;
+      roleSockets[0].push(encodeFrame(WireCmd.firstRecharge, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasFirstRecharge() &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.recharge === 6 &&
+          WireSession.firstRecharge.claimed.length === 2 &&
+          WireSession.firstRecharge.rewards.length === 2 &&
+          WireSession.promotion !== null &&
+          WireSession.promotion.marks.length === 1 &&
+          sawWire("20012 解不开"),
+        "bad 20012 keeps the first recharge record and the 20001 list"
+      );
+      assert(Session.gold === goldBeforeBadFirst && Session.diamond === diamondBeforeBadFirst, "bad 20012 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.firstRecharge));
+      assert(
+        WireSession.hasFirstRecharge() &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.recharge === null &&
+          WireSession.firstRecharge.claimed.length === 0 &&
+          WireSession.firstRecharge.rewards.length === 0 &&
+          formatWireFirstHead(WireSession.firstRecharge) === "recharge=无 / 已领=无 / 空记录" &&
+          WireSession.promotion !== null &&
+          WireSession.promotion.marks[0].field === 7,
+        "empty 20012 body clears recharge without writing zero and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadFirst && Session.diamond === diamondBeforeBadFirst, "empty 20012 does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.firstRecharge, firstMissing));
+      assert(
+        WireSession.hasFirstRecharge() &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.recharge === null &&
+          WireSession.firstRecharge.claimed.length === 0 &&
+          WireSession.firstRecharge.rewards.length === 0 &&
+          WireSession.firstRecharge.marks.length === 1 &&
+          WireSession.firstRecharge.marks[0].field === 4 &&
+          WireSession.promotion !== null &&
+          WireSession.promotion.marks[0].field === 7,
+        "20012 without recharge stays blank and leaves 20001"
+      );
+      assert(Session.gold === goldBeforeBadFirst && Session.diamond === diamondBeforeBadFirst, "missing 20012 field does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.firstRecharge, firstOuterOnly));
+      assert(
+        WireSession.hasFirstRecharge() &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.rewards.length === 0 &&
+          WireSession.firstRecharge.claimed.length === 0 &&
+          WireSession.firstRecharge.marks.length === 1 &&
+          WireSession.firstRecharge.marks[0].field === 7 &&
+          WireSession.promotion !== null &&
+          WireSession.promotion.marks[0].field === 7,
+        "non-empty 20012 without rewards stays synced and leaves 20001"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
