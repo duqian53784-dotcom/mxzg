@@ -35,6 +35,7 @@ import { CityChrome, mountCityChrome, mountCityChromePrefab, TabState } from "./
 import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
 import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage } from "./HeroPage";
 import { buildSummonPage, SummonPage } from "./SummonPage";
+import { buildWireSummonPage, WireSummonPage } from "./WireSummonPage";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -69,6 +70,7 @@ import { WIRE_PVP_UNSYNCED_TOAST } from "../net/protocol/wirePvp";
 import { WIRE_SEVEN_UNSYNCED_TOAST } from "../net/protocol/wireSevenDay";
 import { WIRE_GOAL7_UNSYNCED_TOAST } from "../net/protocol/wireGoal7";
 import { WIRE_WISH_UNSYNCED_TOAST } from "../net/protocol/wireWish";
+import { WIRE_SUMMON_UNSYNCED_TOAST } from "../net/protocol/wireSummon";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
@@ -106,7 +108,7 @@ export class MainApp extends Component {
   private idle: IdlePage | WireIdlePage | null = null;
   private heroList: HeroListPage | WireHeroPage | null = null;
   private heroDetail: HeroDetailPage | null = null;
-  private summon: SummonPage | null = null;
+  private summon: SummonPage | WireSummonPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -247,7 +249,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "tab " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
-    if (id === "hero" && Session.source === "wire") {
+    if ((id === "hero" || id === "summon") && Session.source === "wire") {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -486,7 +488,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
   private blockWirePage(id: string): boolean {
     if (id === "achieve") return this.blockWireAchievement();
     if (id === "buygold") return this.blockWireBuyGold();
@@ -494,6 +496,7 @@ export class MainApp extends Component {
     if (id === "login7") return this.blockWireSevenDay();
     if (id === "goal7") return this.blockWireGoal7();
     if (id === "wish") return this.blockWireWish();
+    if (id === "summon") return this.blockWireSummon();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -554,6 +557,15 @@ export class MainApp extends Component {
     if (WireSession.hasGoal7()) return false;
     GameLog.shared.info("MainApp", "wire goal7 unsynced");
     this.shell?.showToast(WIRE_GOAL7_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 4004 就停在底栏。空次数也算同步。不打开 Mock 召唤，也不召唤、领奖。 */
+  private blockWireSummon(): boolean {
+    if (Session.source !== "wire") return false;
+    if (WireSession.hasSummon()) return false;
+    GameLog.shared.info("MainApp", "wire summon unsynced");
+    this.shell?.showToast(WIRE_SUMMON_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -1024,6 +1036,17 @@ export class MainApp extends Component {
       this.refreshChrome();
       return;
     }
+    if (jump === "summon" && Session.source === "wire") {
+      if (!this.allow("summon")) return;
+      const net = this.cityNet();
+      if (net.state !== "connected") {
+        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+        return;
+      }
+      this.panels?.openChild("summon");
+      this.refreshChrome();
+      return;
+    }
     if (jump === "hero" || jump === "summon") {
       if (!this.allow(jump)) return;
       if (!this.ensureNet()) return;
@@ -1093,7 +1116,12 @@ export class MainApp extends Component {
     return page.node;
   }
 
+  /**
+   * 底栏「召唤」。Mock 仍单抽和十连。
+   * 真服收到 4004 后走只读页。没同步时 Toast，不回落 Mock。不发 4002、4005。
+   */
   private mountSummon(): Node {
+    if (Session.source === "wire") return this.mountWireSummon();
     this.summon?.dispose();
     const page = buildSummonPage({
       diamond: () => Session.diamond,
@@ -1104,6 +1132,16 @@ export class MainApp extends Component {
         if (!this.isValid) return;
         this.refreshChrome();
       },
+      close: () => this.back(),
+    });
+    this.summon = page;
+    return page.node;
+  }
+
+  private mountWireSummon(): Node {
+    this.summon?.dispose();
+    const page = buildWireSummonPage({
+      alive: () => this.isValid,
       close: () => this.back(),
     });
     this.summon = page;

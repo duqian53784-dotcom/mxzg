@@ -19,7 +19,8 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 空的 c2s 18001 拉竞技场。s2c 18001 由 WireSession 按 GResPvpData 读，不写顶栏，不开战。不发 18002、18003、18005、18007、18008。
  * 空的 c2s 22000 拉七日登录。s2c 22000 由 WireSession 按 GResSevenDayLoginData 读，不写顶栏，不领奖。不发 22001。s2c 22002 只改 cur_day。
  * 空的 c2s 21010 拉七日目标。s2c 21010 由 WireSession 按 GResSevenDayTargetList 读，不写顶栏，不发奖。不发 21011、21012。s2c 21013 只收，不改表。不是 22000，也不是 17000。
- * 空的 c2s 27001 拉许愿池。s2c 27001 由 WireSession 按 GResBlessingPoolList 读，不写顶栏。不发 27002、27003、27004。不发 4201。别的号不猜。
+ * 空的 c2s 27001 拉许愿池。s2c 27001 由 WireSession 按 GResBlessingPoolList 读，不写顶栏。不发 27002、27003、27004。不发 4201。
+ * 空的 c2s 4004 拉召唤次数。s2c 4004 由 WireSession 按 GResHeroSummonCount 读 free_time、senior_free_time，不写顶栏。不发 4002、4005。不做 58001、58007。不是英雄列表 4001。别的号不猜。
  * 单条处理失败也不丢掉后面的帧。
  */
 

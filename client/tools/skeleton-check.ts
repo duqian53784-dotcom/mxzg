@@ -580,6 +580,17 @@ import {
   WIRE_WISH_UNSYNCED_TOAST,
   wireWishNote,
 } from "../assets/scripts/net/protocol/wireWish";
+import {
+  decodeWireSummon,
+  formatWireSummonLine,
+  WIRE_SUMMON_CMD,
+  WIRE_SUMMON_FIELD_NOTE,
+  WIRE_SUMMON_READONLY_NOTE,
+  WIRE_SUMMON_READONLY_TITLE,
+  WIRE_SUMMON_SIDE_EFFECT,
+  WIRE_SUMMON_UNSYNCED_TOAST,
+  wireSummonNote,
+} from "../assets/scripts/net/protocol/wireSummon";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -3619,6 +3630,9 @@ async function checkWs(): Promise<void> {
   );
   const wishBody = fieldBytes(1, wishPool);
   const wishOuterOnly = fieldVarint(8, 1);
+  const summonBody = concatBytes(concatBytes(fieldVarint(1, 2), fieldVarint(2, 5)), fieldVarint(6, 8));
+  const summonZero = fieldVarint(1, 0);
+  const summonOuterOnly = fieldVarint(4, 1);
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -3700,6 +3714,76 @@ async function checkWs(): Promise<void> {
       decodeWireWish(wishSticky.frames[0].body)?.pools.length === 0 &&
       decodeWireWish(wishSticky.frames[0].body)?.marks.length === 1,
     "sticky 27001 frame stops at its length prefix"
+  );
+  const loggedSummon = decodeWireSummon(summonBody);
+  assert(
+    WireCmd.heroSummonCount === 4004 &&
+      WireCmd.heroList === 4001 &&
+      CmdId.summonPull === 1501 &&
+      CmdId.heroList === 1401,
+    "online 4004 stays off the placeholder summon id and off hero list 4001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.heroSummonCount)) === "04000000a40f0000", "empty c2s 4004");
+  assert(bytesToHex(encodeFrame(WireCmd.heroList)) === "04000000a10f0000", "bare 4001 is not the 4004 frame");
+  assert(bytesToHex(encodeFrame(4002)) !== "04000000a40f0000", "4002 is not the 4004 frame");
+  assert(bytesToHex(encodeFrame(4005)) !== "04000000a40f0000", "4005 is not the 4004 frame");
+  assert(bytesToHex(encodeFrame(58001)) !== "04000000a40f0000", "58001 is not the 4004 frame");
+  assert(bytesToHex(encodeFrame(58007)) !== "04000000a40f0000", "58007 is not the 4004 frame");
+  assert(bytesToHex(encodeFrame(4201)) !== "04000000a40f0000", "4201 is not the 4004 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.blessingPool)) !== "04000000a40f0000", "27001 is not the 4004 frame");
+  assert(WIRE_SUMMON_READONLY_TITLE === "召唤（真服只读）", "readonly summon title");
+  assert(WIRE_SUMMON_UNSYNCED_TOAST === "真服未同步", "unsynced summon toast");
+  assert(
+    WIRE_SUMMON_SIDE_EFFECT.indexOf("懒建") >= 0 &&
+      WIRE_SUMMON_SIDE_EFFECT.indexOf("HeroSummon") >= 0 &&
+      WIRE_SUMMON_SIDE_EFFECT.indexOf("page") >= 0 &&
+      WIRE_SUMMON_READONLY_NOTE.indexOf("不召唤") >= 0 &&
+      WIRE_SUMMON_READONLY_NOTE.indexOf("不领累积奖") >= 0 &&
+      WIRE_SUMMON_READONLY_NOTE.indexOf("4002") >= 0 &&
+      WIRE_SUMMON_READONLY_NOTE.indexOf("4005") >= 0 &&
+      WIRE_SUMMON_READONLY_NOTE.indexOf("58001") >= 0 &&
+      WIRE_SUMMON_READONLY_NOTE.indexOf("58007") >= 0 &&
+      WIRE_SUMMON_READONLY_NOTE.indexOf("4201") >= 0 &&
+      WIRE_SUMMON_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_SUMMON_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_SUMMON_READONLY_NOTE.indexOf("4001") >= 0 &&
+      WIRE_SUMMON_FIELD_NOTE.indexOf("free_time") >= 0 &&
+      WIRE_SUMMON_FIELD_NOTE.indexOf("senior_free_time") >= 0 &&
+      WIRE_SUMMON_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "summon page names the count fields and refuses the paid cmds"
+  );
+  assert(
+    decodeWireSummon(new Uint8Array(0)) !== null &&
+      decodeWireSummon(new Uint8Array(0))?.freeTime === null &&
+      decodeWireSummon(new Uint8Array(0))?.seniorFreeTime === null,
+    "empty 4004 body is synced and does not invent zeros"
+  );
+  assert(decodeWireSummon(new Uint8Array([0x80])) === null, "bad 4004 ignored");
+  const summonZeroSnap = decodeWireSummon(summonZero);
+  assert(
+    summonZeroSnap !== null && formatWireSummonLine(summonZeroSnap) === "free_time=0 / senior_free_time=无",
+    "present zero stays zero and a missing count stays blank"
+  );
+  assert(
+    loggedSummon !== null &&
+      loggedSummon.freeTime === 2 &&
+      loggedSummon.seniorFreeTime === 5 &&
+      loggedSummon.marks.length === 1 &&
+      loggedSummon.marks[0].field === 6 &&
+      formatWireSummonLine(loggedSummon) === "free_time=2 / senior_free_time=5 / 字段6=8" &&
+      wireSummonNote(loggedSummon).indexOf(WIRE_SUMMON_SIDE_EFFECT) >= 0 &&
+      wireSummonNote(loggedSummon).indexOf("不写金币") >= 0 &&
+      wireSummonNote(loggedSummon).indexOf("不写钻石") >= 0,
+    "4004 sample keeps free_time and senior_free_time"
+  );
+  const summonSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.heroSummonCount, summonOuterOnly), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    summonSticky.frames.length === 2 &&
+      summonSticky.frames[0].cmdId === 4004 &&
+      summonSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireSummon(summonSticky.frames[0].body)?.freeTime === null &&
+      decodeWireSummon(summonSticky.frames[0].body)?.marks.length === 1,
+    "sticky 4004 frame stops at its length prefix"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -4154,6 +4238,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(21013, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(WireCmd.sevenDayTarget, goalBody));
       roleSockets[0].push(encodeFrame(WireCmd.blessingPool, wishBody));
+      roleSockets[0].push(encodeFrame(WireCmd.heroSummonCount, summonBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -4284,6 +4369,19 @@ async function checkWs(): Promise<void> {
         "flush writes the 27001 list and leaves the 21010 table"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "27001 stays off the wallet");
+      assert(
+        WireSession.hasSummon() &&
+          WireSession.summon !== null &&
+          WireSession.summon.freeTime === 2 &&
+          WireSession.summon.seniorFreeTime === 5 &&
+          formatWireSummonLine(WireSession.summon) === "free_time=2 / senior_free_time=5 / 字段6=8" &&
+          WireSession.wish !== null &&
+          WireSession.wish.pools.length === 1 &&
+          WireSession.heroes !== null &&
+          WireSession.heroes.length === 2,
+        "flush writes the 4004 counts and leaves the 27001 pool and the 4001 roster"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "4004 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -4506,7 +4604,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 9, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 10, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -4544,6 +4642,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 27001 after 21010"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 9] as ArrayBuffer)) === "04000000a40f0000",
+        "pullIdle sends empty c2s 4004 after 27001"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -4552,8 +4654,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 22000") &&
           sawLog(lines, "发送 c2s 21010") &&
           sawLog(lines, "发送 c2s 27001") &&
+          sawLog(lines, "发送 c2s 4004") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
+          sawLog(lines, "04000000a40f0000") &&
           sawLog(lines, "0400000002520000") === false &&
           sawLog(lines, "发送 c2s 12020") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
@@ -4564,8 +4668,12 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 27002") === false &&
           sawLog(lines, "发送 c2s 27003") === false &&
           sawLog(lines, "发送 c2s 27004") === false &&
-          sawLog(lines, "发送 c2s 4201") === false,
-        "mail hero buy gold achievement arena seven day goal and wish pulls are logged"
+          sawLog(lines, "发送 c2s 4201") === false &&
+          sawLog(lines, "发送 c2s 4002") === false &&
+          sawLog(lines, "发送 c2s 4005") === false &&
+          sawLog(lines, "发送 c2s 58001") === false &&
+          sawLog(lines, "发送 c2s 58007") === false,
+        "mail hero buy gold achievement arena seven day goal wish and summon pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -4700,6 +4808,25 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wish.draw"),
         "wish refresh draw and lucky claim are not encoded"
       );
+      roleNet.send(WIRE_SUMMON_CMD);
+      const summonSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(summonSent as ArrayBuffer)) === "04000000a40f0000", "wire.4004 frame");
+      const sentBeforeSummonOther = roleSockets[0].sent.length;
+      roleNet.send("wire.4002");
+      roleNet.send("wire.4005");
+      roleNet.send("wire.58001");
+      roleNet.send("wire.58007");
+      roleNet.send("wire.4201");
+      roleNet.send(Cmd.summonPull);
+      assert(roleSockets[0].sent.length === sentBeforeSummonOther, "4002 4005 58001 58007 4201 and summon.pull stay off the wire");
+      assert(
+        sawLog(lines, "未发送 wire.4002") &&
+          sawLog(lines, "未发送 wire.4005") &&
+          sawLog(lines, "未发送 wire.58001") &&
+          sawLog(lines, "未发送 wire.58007") &&
+          sawLog(lines, "未发送 summon.pull"),
+        "summon pull and cumulative reward are not encoded"
+      );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
       assert(
@@ -4823,6 +4950,44 @@ async function checkWs(): Promise<void> {
         "non-empty 27001 without pools stays synced and leaves 21010"
       );
       assert(Session.gold === goldBeforeBadWish && Session.diamond === diamondBeforeBadWish, "outer-only 27001 does not write gold or diamonds");
+      const goldBeforeBadSummon = Session.gold;
+      const diamondBeforeBadSummon = Session.diamond;
+      roleSockets[0].push(encodeFrame(WireCmd.heroSummonCount, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasSummon() &&
+          WireSession.summon !== null &&
+          WireSession.summon.freeTime === 2 &&
+          WireSession.summon.seniorFreeTime === 5 &&
+          WireSession.heroes !== null &&
+          WireSession.heroes.length === 0 &&
+          sawWire("4004 解不开"),
+        "bad 4004 keeps the counts and the 4001 roster"
+      );
+      assert(Session.gold === goldBeforeBadSummon && Session.diamond === diamondBeforeBadSummon, "bad 4004 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.heroSummonCount));
+      assert(
+        WireSession.hasSummon() &&
+          WireSession.summon !== null &&
+          WireSession.summon.freeTime === null &&
+          WireSession.summon.seniorFreeTime === null &&
+          WireSession.heroes !== null &&
+          WireSession.heroes.length === 0,
+        "empty 4004 body replaces the counts and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadSummon && Session.diamond === diamondBeforeBadSummon, "empty 4004 does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.heroSummonCount, summonOuterOnly));
+      assert(
+        WireSession.hasSummon() &&
+          WireSession.summon !== null &&
+          WireSession.summon.freeTime === null &&
+          WireSession.summon.seniorFreeTime === null &&
+          WireSession.summon.marks.length === 1 &&
+          WireSession.summon.marks[0].field === 4 &&
+          WireSession.wish !== null &&
+          WireSession.wish.pools.length === 0,
+        "non-empty 4004 without counts stays synced and leaves 27001"
+      );
+      assert(Session.gold === goldBeforeBadSummon && Session.diamond === diamondBeforeBadSummon, "outer-only 4004 does not write gold or diamonds");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {
