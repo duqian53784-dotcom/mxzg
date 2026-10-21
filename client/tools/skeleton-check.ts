@@ -1048,6 +1048,20 @@ import {
   WIRE_SIGN_IN_LIST_UNSYNCED_TOAST,
   wireSignInListNote,
 } from "../assets/scripts/net/protocol/wireSignInList";
+import {
+  decodeWireDailyTaskList,
+  formatWireDailyTaskListLine,
+  WIRE_DAILY_TASK_LIST_BANNED_CMDS,
+  WIRE_DAILY_TASK_LIST_CMD,
+  WIRE_DAILY_TASK_LIST_EMPTY,
+  WIRE_DAILY_TASK_LIST_FIELD_NOTE,
+  WIRE_DAILY_TASK_LIST_FRAME,
+  WIRE_DAILY_TASK_LIST_READONLY_NOTE,
+  WIRE_DAILY_TASK_LIST_READONLY_TITLE,
+  WIRE_DAILY_TASK_LIST_SIDE_EFFECT,
+  WIRE_DAILY_TASK_LIST_UNSYNCED_TOAST,
+  wireDailyTaskListNote,
+} from "../assets/scripts/net/protocol/wireDailyTaskList";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1793,6 +1807,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("towerReward") === "city", "tower reward stays on the city tab");
   assert(rootTabFor("heroLevelResetTimes") === "city", "hero level reset times stays on the city tab");
   assert(rootTabFor("signInList") === "city", "sign in list stays on the city tab");
+  assert(rootTabFor("dailyTaskList") === "city", "daily task list stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -9252,7 +9267,14 @@ async function checkWs(): Promise<void> {
   assert(encodeWireMessage({ cmd: "wire.4043" }) === null, "4043 level reset write is not encoded");
   assert(encodeWireMessage({ cmd: "wire.13010" }) !== null, "13010 stays encoded by its own module and is not reissued as 4044");
   assert(encodeWireMessage({ cmd: "wire.13011" }) === null, "13011 sign-in claim is not encoded");
-  assert(encodeWireMessage({ cmd: "wire.12020" }) === null, "12020 is not encoded");
+  assert(
+    encodeWireMessage({ cmd: "wire.12020" }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: "wire.12020" })?.bytes || new Uint8Array(0)) === "04000000f42e0000",
+    "12020 encodes the empty daily task frame and is not reissued as 4044"
+  );
+  assert(encodeWireMessage({ cmd: "wire.12021" }) === null, "12021 is not encoded");
+  assert(encodeWireMessage({ cmd: "wire.12022" }) === null, "12022 is not encoded");
+  assert(encodeWireMessage({ cmd: "wire.26002" }) === null, "26002 is not encoded");
   assert(encodeWireMessage({ cmd: "wire.5001" }) !== null, "5001 stays encoded by its own module and is not reissued as 4044");
   assert(encodeWireMessage({ cmd: "wire.51001" }) !== null, "51001 stays encoded by its own module and is not reissued as 4044");
   assert(encodeWireMessage({ cmd: "wire.3203" }) !== null, "3203 stays encoded by its own module and is not reissued as 4044");
@@ -9412,6 +9434,7 @@ async function checkWs(): Promise<void> {
   assert(encodeWireMessage({ cmd: "wire.3203" }) !== null, "3203 stays encoded by its own module and is not reissued as 13010");
   assert(encodeWireMessage({ cmd: "wire.20101" }) !== null, "20101 stays encoded by its own module and is not reissued as 13010");
   assert(encodeWireMessage({ cmd: "wire.12010" }) !== null, "12010 stays encoded by its own module and is not reissued as 13010");
+  assert(encodeWireMessage({ cmd: "wire.12020" }) !== null, "12020 stays encoded by its own module and is not reissued as 13010");
   assert(
     encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD }) !== null &&
       bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) === "04000000d2320000" &&
@@ -9562,6 +9585,231 @@ async function checkWs(): Promise<void> {
       wireSignInListNote(signInZero || { days: null, isSignIn: null, month: null, charged: null, newServer: null, marks: [] }).indexOf("不写金币") >= 0 &&
       wireSignInListNote(signInZero || { days: null, isSignIn: null, month: null, charged: null, newServer: null, marks: [] }).indexOf("不写钻石") >= 0,
     "13010 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
+    WireCmd.dailyTaskList === 12020 &&
+      WireCmd.dailyTaskList !== WireCmd.signInList &&
+      WireCmd.dailyTaskList !== WireCmd.achievementList &&
+      WireCmd.dailyTaskList !== WireCmd.heroLevelResetTimes &&
+      WireCmd.dailyTaskList !== WireCmd.towerReward &&
+      WireCmd.dailyTaskList !== WireCmd.runningPromotion &&
+      WireCmd.dailyTaskList !== WireCmd.lineUp &&
+      WireCmd.dailyTaskList !== WireCmd.formation &&
+      WireCmd.dailyTaskList !== WireCmd.worldLevel &&
+      WireCmd.dailyTaskList !== WireCmd.backpackList,
+    "online 12020 stays off 13010, boot 12010, 4044, tower 3203, running promotion 20101, lineup 3101, formation 3099, world 51001 and bag 5001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.dailyTaskList)) === WIRE_DAILY_TASK_LIST_FRAME, "empty c2s 12020");
+  assert(bytesToHex(encodeFrame(12020)) === "04000000f42e0000", "empty c2s 12020 hex");
+  assert(WIRE_DAILY_TASK_LIST_FRAME === "04000000f42e0000", "12020 frame constant");
+  assert(bytesToHex(encodeFrame(12020)) !== "04000000ea2e0000", "12020 is not the boot 12010 frame");
+  assert(bytesToHex(encodeFrame(12020)) !== "04000000d2320000", "12020 is not the 13010 frame");
+  assert(bytesToHex(encodeFrame(12020)) !== "04000000cc0f0000", "12020 is not the 4044 frame");
+  assert(bytesToHex(encodeFrame(12020)) !== "04000000830c0000", "12020 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(12020)) !== "04000000854e0000", "12020 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(12020)) !== "040000001d0c0000", "12020 is not the 3101 frame");
+  assert(bytesToHex(encodeFrame(12020)) !== "040000001b0c0000", "12020 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(12020)) !== "0400000039c70000", "12020 is not the 51001 frame");
+  assert(bytesToHex(encodeFrame(12020)) !== "0400000089130000", "12020 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(12021)) === "04000000f52e0000" && bytesToHex(encodeFrame(12021)) !== "04000000f42e0000", "12021 is not the 12020 frame");
+  assert(bytesToHex(encodeFrame(12022)) === "04000000f62e0000" && bytesToHex(encodeFrame(12022)) !== "04000000f42e0000", "12022 is not the 12020 frame");
+  assert(bytesToHex(encodeFrame(26002)) === "0400000092650000" && bytesToHex(encodeFrame(26002)) !== "04000000f42e0000", "26002 is not the 12020 frame");
+  assert(bytesToHex(encodeFrame(12010)) === "04000000ea2e0000" && bytesToHex(encodeFrame(12010)) !== "04000000f42e0000", "12010 is not the 12020 frame");
+  for (let i = 0; i < WIRE_DAILY_TASK_LIST_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_BANNED_CMDS[i] }) === null, WIRE_DAILY_TASK_LIST_BANNED_CMDS[i] + " is not encoded");
+  }
+  assert(encodeWireMessage({ cmd: "wire.5001" }) !== null, "5001 stays encoded by its own module and is not reissued as 12020");
+  assert(encodeWireMessage({ cmd: "wire.51001" }) !== null, "51001 stays encoded by its own module and is not reissued as 12020");
+  assert(encodeWireMessage({ cmd: "wire.13010" }) !== null, "13010 stays encoded by its own module and is not reissued as 12020");
+  assert(encodeWireMessage({ cmd: "wire.4044" }) !== null, "4044 stays encoded by its own module and is not reissued as 12020");
+  assert(encodeWireMessage({ cmd: "wire.3203" }) !== null, "3203 stays encoded by its own module and is not reissued as 12020");
+  assert(encodeWireMessage({ cmd: "wire.20101" }) !== null, "20101 stays encoded by its own module and is not reissued as 12020");
+  assert(encodeWireMessage({ cmd: "wire.12010" }) !== null, "12010 stays encoded by its own module and is not reissued as 12020");
+  assert(
+    encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) === "04000000f42e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000d2320000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000ea2e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000f52e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000f62e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "0400000092650000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000cc0f0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000830c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000854e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "040000001d0c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "040000001b0c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "0400000039c70000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "0400000089130000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "040000002b4e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000f9110000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_DAILY_TASK_LIST_CMD })?.bytes || new Uint8Array(0)) !== "0400000049710000",
+    "wire.12020 encodes the empty frame and is not 13010, 12010, 12021, 12022, 26002, 4044, 3203, 20101, 3101, 3099, 51001, 5001, 20011, 4601 or 29001"
+  );
+  assert(WIRE_DAILY_TASK_LIST_CMD === "wire.12020", "daily task list wire cmd");
+  assert(WIRE_DAILY_TASK_LIST_READONLY_TITLE === "每日任务列表（真服只读）", "readonly daily task list title");
+  assert(WIRE_DAILY_TASK_LIST_UNSYNCED_TOAST === "真服未同步", "unsynced daily task list toast");
+  assert(WIRE_DAILY_TASK_LIST_EMPTY === "已同步空表", "empty daily task list label");
+  assert(
+    WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("getDailyTasks") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("reset") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("checkNew") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("loadRoleDailyTask") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("轻日刷") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("04000000f42e0000") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("12021") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("12022") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("26002") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("12010") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("5001") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("51001") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("13010") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("4044") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("3203") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("20101") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("3101") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("3099") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("不重复拉 13010") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("不重复拉 4044") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("不重复拉 3203") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("不重复拉 20101") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("不重复拉 3101") >= 0 &&
+      WIRE_DAILY_TASK_LIST_SIDE_EFFECT.indexOf("不重复拉 3099") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("Task") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("RewardBoxIdx") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("DailyValue") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("不发 12021") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("不发 12022") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("12010") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_DAILY_TASK_LIST_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_DAILY_TASK_LIST_FIELD_NOTE.indexOf("Task") >= 0 &&
+      WIRE_DAILY_TASK_LIST_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_DAILY_TASK_LIST_FIELD_NOTE.indexOf("只展示实际出现的字段") >= 0,
+    "daily task list page names the present fields and refuses the claim cmds and the banned cmds"
+  );
+  const dailyEmpty = decodeWireDailyTaskList(new Uint8Array(0));
+  assert(
+    dailyEmpty !== null &&
+      dailyEmpty.tasks === null &&
+      dailyEmpty.rewardBoxIdx === null &&
+      dailyEmpty.dailyValue === null &&
+      formatWireDailyTaskListLine(dailyEmpty) === WIRE_DAILY_TASK_LIST_EMPTY,
+    "empty 12020 body is synced and does not invent zero"
+  );
+  assert(decodeWireDailyTaskList(null) === null, "null 12020 body is not a snapshot");
+  assert(decodeWireDailyTaskList(new Uint8Array([0x80])) === null, "bad 12020 ignored");
+  const dailyZero = decodeWireDailyTaskList(fieldVarint(3, 0));
+  assert(
+    dailyZero !== null &&
+      dailyZero.tasks === null &&
+      dailyZero.rewardBoxIdx === null &&
+      dailyZero.dailyValue === 0 &&
+      formatWireDailyTaskListLine(dailyZero) === "DailyValue=0",
+    "present 12020 zero stays zero and omits absent fields"
+  );
+  const dailyNeg = decodeWireDailyTaskList(fieldNeg1(3));
+  assert(
+    dailyNeg !== null &&
+      dailyNeg.dailyValue === -1 &&
+      dailyNeg.tasks === null &&
+      formatWireDailyTaskListLine(dailyNeg) === "DailyValue=-1",
+    "12020 DailyValue -1 stays -1"
+  );
+  const dailyTask = Uint8Array.from([0x08, 0x01, 0x10, 0x02, 0x18, 0x00]);
+  const dailySample = decodeWireDailyTaskList(
+    concatBytes(concatBytes(fieldBytes(1, dailyTask), fieldVarint(2, 1)), concatBytes(fieldVarint(2, 0), fieldVarint(3, 5)))
+  );
+  assert(
+    dailySample !== null &&
+      dailySample.tasks !== null &&
+      dailySample.tasks.length === 1 &&
+      dailySample.tasks[0].idx === 1 &&
+      dailySample.tasks[0].process === 2 &&
+      dailySample.tasks[0].state === 0 &&
+      dailySample.rewardBoxIdx !== null &&
+      dailySample.rewardBoxIdx[0] === 1 &&
+      dailySample.rewardBoxIdx[1] === 0 &&
+      dailySample.dailyValue === 5 &&
+      formatWireDailyTaskListLine(dailySample) === "Task=idx=1,process=2,state=0 / RewardBoxIdx=1,0 / DailyValue=5",
+    "12020 keeps present task zero and omits nothing that arrived"
+  );
+  const dailyPacked = decodeWireDailyTaskList(fieldBytes(2, Uint8Array.from([1, 0])));
+  assert(
+    dailyPacked !== null &&
+      dailyPacked.rewardBoxIdx !== null &&
+      dailyPacked.rewardBoxIdx[0] === 1 &&
+      dailyPacked.rewardBoxIdx[1] === 0 &&
+      dailyPacked.tasks === null &&
+      formatWireDailyTaskListLine(dailyPacked) === "RewardBoxIdx=1,0",
+    "12020 packed RewardBoxIdx keeps 1 and 0"
+  );
+  const dailyPackedEmpty = decodeWireDailyTaskList(fieldBytes(2, new Uint8Array(0)));
+  assert(
+    dailyPackedEmpty !== null &&
+      dailyPackedEmpty.rewardBoxIdx !== null &&
+      dailyPackedEmpty.rewardBoxIdx.length === 0 &&
+      formatWireDailyTaskListLine(dailyPackedEmpty) === "RewardBoxIdx=空",
+    "12020 empty packed RewardBoxIdx stays an empty list"
+  );
+  const dailyTaskEmpty = decodeWireDailyTaskList(fieldBytes(1, new Uint8Array(0)));
+  assert(
+    dailyTaskEmpty !== null &&
+      dailyTaskEmpty.tasks !== null &&
+      dailyTaskEmpty.tasks.length === 1 &&
+      dailyTaskEmpty.tasks[0].idx === null &&
+      formatWireDailyTaskListLine(dailyTaskEmpty) === "Task=空",
+    "12020 empty task row stays 空"
+  );
+  assert(decodeWireDailyTaskList(fieldBytes(1, new Uint8Array([0x80]))) === null, "12020 task blob that will not decode is ignored");
+  assert(decodeWireDailyTaskList(fieldBytes(2, new Uint8Array([0x80]))) === null, "12020 packed RewardBoxIdx that will not decode is ignored");
+  const dailyMark = decodeWireDailyTaskList(fieldVarint(1, 8));
+  assert(
+    dailyMark !== null &&
+      dailyMark.tasks === null &&
+      dailyMark.dailyValue === null &&
+      formatWireDailyTaskListLine(dailyMark) === "字段1=8",
+    "12020 field 1 varint is a mark and not a task"
+  );
+  const dailyOuter = decodeWireDailyTaskList(fieldVarint(9, 1));
+  assert(
+    dailyOuter !== null &&
+      dailyOuter.tasks === null &&
+      dailyOuter.rewardBoxIdx === null &&
+      dailyOuter.dailyValue === null &&
+      formatWireDailyTaskListLine(dailyOuter) === "字段9=1",
+    "non-empty 12020 without known fields stays synced and does not invent zero"
+  );
+  const dailySticky = decodeFrames(concatBytes(encodeFrame(WireCmd.dailyTaskList, fieldVarint(3, 0)), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    dailySticky.frames.length === 2 &&
+      dailySticky.frames[0].cmdId === 12020 &&
+      dailySticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireDailyTaskList(dailySticky.frames[0].body)?.dailyValue === 0,
+    "sticky 12020 frame stops at its length prefix"
+  );
+  assert(
+    wireDailyTaskListNote(dailyZero || { tasks: null, rewardBoxIdx: null, dailyValue: null, marks: [] }).indexOf(WIRE_DAILY_TASK_LIST_SIDE_EFFECT) >= 0 &&
+      wireDailyTaskListNote(dailyZero || { tasks: null, rewardBoxIdx: null, dailyValue: null, marks: [] }).indexOf("不写金币") >= 0 &&
+      wireDailyTaskListNote(dailyZero || { tasks: null, rewardBoxIdx: null, dailyValue: null, marks: [] }).indexOf("不写钻石") >= 0,
+    "12020 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
+    bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
+      bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
+      bytesToHex(encodeFrame(12020)).indexOf("f52e0000") < 0 &&
+      bytesToHex(encodeFrame(12020)).indexOf("d2320000") < 0,
+    "12020 empty frame carries f4 2e 00 00 and not the 12010, 12021 or 13010 cmd byte"
   );
   assert(
     bytesToHex(encodeFrame(13010)).indexOf("d2320000") >= 0 &&
@@ -10682,7 +10930,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 43, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 44, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -11007,6 +11255,58 @@ async function checkWs(): Promise<void> {
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "04000000ea2e0000",
         "pullIdle 13010 frame is not the boot 12010 cmd"
       );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) === "04000000f42e0000",
+        "pullIdle sends empty c2s 12020 after 13010"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "04000000d2320000",
+        "pullIdle 12020 frame is not merged into 13010"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "04000000ea2e0000",
+        "pullIdle 12020 frame is not the boot 12010 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "04000000f52e0000",
+        "pullIdle 12020 frame is not the 12021 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "04000000f62e0000",
+        "pullIdle 12020 frame is not the 12022 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "0400000092650000",
+        "pullIdle 12020 frame is not the 26002 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "04000000cc0f0000",
+        "pullIdle 12020 frame is not the 4044 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "04000000830c0000",
+        "pullIdle 12020 frame is not the 3203 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "04000000854e0000",
+        "pullIdle 12020 frame is not the 20101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "040000001d0c0000",
+        "pullIdle 12020 frame is not the 3101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "040000001b0c0000",
+        "pullIdle 12020 frame is not the 3099 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "0400000089130000",
+        "pullIdle 12020 frame is not the 5001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 43] as ArrayBuffer)) !== "0400000039c70000",
+        "pullIdle 12020 frame is not the 51001 cmd"
+      );
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -11016,6 +11316,7 @@ async function checkWs(): Promise<void> {
         let towerFrames = 0;
         let resetTimesFrames = 0;
         let signInFrames = 0;
+        let dailyFrames = 0;
         let bootAchieveFrames = 0;
         let bannedFrames = 0;
         const bannedHex: Record<string, boolean> = {
@@ -11027,12 +11328,14 @@ async function checkWs(): Promise<void> {
           "04000000800c0000": true,
           "04000000cb0f0000": true,
           "04000000d3320000": true,
-          "04000000f42e0000": true,
+          "04000000f52e0000": true,
+          "04000000f62e0000": true,
+          "0400000092650000": true,
           "040000002b4e0000": true,
           "04000000f9110000": true,
           "0400000049710000": true,
         };
-        for (let i = 0; i < 43; i++) {
+        for (let i = 0; i < 44; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -11042,6 +11345,7 @@ async function checkWs(): Promise<void> {
           if (hex === "04000000830c0000") towerFrames += 1;
           if (hex === "04000000cc0f0000") resetTimesFrames += 1;
           if (hex === "04000000d2320000") signInFrames += 1;
+          if (hex === "04000000f42e0000") dailyFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
           if (bannedHex[hex]) bannedFrames += 1;
         }
@@ -11054,9 +11358,10 @@ async function checkWs(): Promise<void> {
             towerFrames === 1 &&
             resetTimesFrames === 1 &&
             signInFrames === 1 &&
+            dailyFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once and 13010 once, keeps 12010 once and 51001 once, and does not repeat 5001 or encode 3202 3204 3205 3206 3220 3200 4043 13011 12020 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once and 12020 once, keeps 12010 once and 51001 once, and does not repeat 5001 or encode 3202 3204 3205 3206 3220 3200 4043 13011 12021 12022 26002 20011 4601 29001"
         );
       }
       assert(
@@ -11138,6 +11443,8 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000cc0f0000") &&
           sawLog(lines, "发送 c2s 13010") &&
           sawLog(lines, "04000000d2320000") &&
+          sawLog(lines, "发送 c2s 12020") &&
+          sawLog(lines, "04000000f42e0000") &&
           sawLog(lines, "发送 c2s 4043") === false &&
           sawLog(lines, "04000000cb0f0000") === false &&
           sawLog(lines, "发送 c2s 13011") === false &&
@@ -11159,7 +11466,12 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 13260") === false &&
           sawLog(lines, "发送 c2s 3007") === false &&
           sawLog(lines, "0400000002520000") === false &&
-          sawLog(lines, "发送 c2s 12020") === false &&
+          sawLog(lines, "发送 c2s 12021") === false &&
+          sawLog(lines, "04000000f52e0000") === false &&
+          sawLog(lines, "发送 c2s 12022") === false &&
+          sawLog(lines, "04000000f62e0000") === false &&
+          sawLog(lines, "发送 c2s 26002") === false &&
+          sawLog(lines, "0400000092650000") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
           sawLog(lines, "发送 c2s 22001") === false &&
           sawLog(lines, "发送 c2s 21011") === false &&
@@ -11312,11 +11624,22 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_ACHIEVEMENT_CMD);
       const achievementSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(achievementSent as ArrayBuffer)) === "04000000ea2e0000", "wire.12010 frame");
-      const sentBeforeAchievementOther = roleSockets[0].sent.length;
       roleNet.send("wire.12020");
+      const dailySent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(dailySent as ArrayBuffer)) === "04000000f42e0000", "wire.12020 frame");
+      const sentBeforeDailyOther = roleSockets[0].sent.length;
+      roleNet.send("wire.12021");
+      roleNet.send("wire.12022");
+      roleNet.send("wire.26002");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeAchievementOther, "12020 and goal claim stay off the wire");
-      assert(sawLog(lines, "未发送 wire.12020") && sawLog(lines, "未发送 goal7.claim"), "daily task and goal claim are not encoded");
+      assert(roleSockets[0].sent.length === sentBeforeDailyOther, "12021 12022 26002 and goal claim stay off the wire");
+      assert(
+        sawLog(lines, "未发送 wire.12021") &&
+          sawLog(lines, "未发送 wire.12022") &&
+          sawLog(lines, "未发送 wire.26002") &&
+          sawLog(lines, "未发送 goal7.claim"),
+        "daily task claim cmds and goal claim are not encoded"
+      );
       roleNet.send(WIRE_PVP_CMD);
       const pvpSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(pvpSent as ArrayBuffer)) === "0400000051460000", "wire.18001 frame");
@@ -15170,6 +15493,74 @@ async function checkWs(): Promise<void> {
           sawWire("13010 解不开"),
         "bad 13010 keeps the previous sign in list"
       );
+      roleSockets[0].push(encodeFrame(WireCmd.dailyTaskList));
+      assert(
+        WireSession.hasDailyTaskList() &&
+          WireSession.dailyTaskList !== null &&
+          WireSession.dailyTaskList.tasks === null &&
+          WireSession.dailyTaskList.rewardBoxIdx === null &&
+          WireSession.dailyTaskList.dailyValue === null &&
+          formatWireDailyTaskListLine(WireSession.dailyTaskList) === WIRE_DAILY_TASK_LIST_EMPTY &&
+          wireDailyTaskListNote(WireSession.dailyTaskList).indexOf(WIRE_DAILY_TASK_LIST_SIDE_EFFECT) >= 0 &&
+          wireDailyTaskListNote(WireSession.dailyTaskList).indexOf("不写金币") >= 0 &&
+          WireSession.signInList !== null &&
+          WireSession.signInList.days !== null &&
+          WireSession.signInList.days[0] === 1 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 12020 clears to 已同步空表 and does not write gold or diamond"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dailyTaskList, fieldVarint(3, 0)));
+      assert(
+        WireSession.dailyTaskList !== null &&
+          WireSession.dailyTaskList.dailyValue === 0 &&
+          WireSession.dailyTaskList.tasks === null &&
+          formatWireDailyTaskListLine(WireSession.dailyTaskList) === "DailyValue=0" &&
+          WireSession.signInList !== null &&
+          WireSession.signInList.charged === 1,
+        "12020 present zero stays zero and leaves the 13010 list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dailyTaskList, fieldNeg1(3)));
+      assert(
+        WireSession.dailyTaskList !== null &&
+          WireSession.dailyTaskList.dailyValue === -1 &&
+          formatWireDailyTaskListLine(WireSession.dailyTaskList) === "DailyValue=-1" &&
+          WireSession.heroLevelResetTimes !== null &&
+          WireSession.heroLevelResetTimes.times === -1,
+        "12020 DailyValue -1 stays -1 and leaves the 4044 times"
+      );
+      roleSockets[0].push(
+        encodeFrame(
+          WireCmd.dailyTaskList,
+          concatBytes(
+            concatBytes(fieldBytes(1, Uint8Array.from([0x08, 0x01, 0x10, 0x00, 0x18, 0x01])), fieldVarint(2, 1)),
+            fieldVarint(3, 4)
+          )
+        )
+      );
+      assert(
+        WireSession.dailyTaskList !== null &&
+          WireSession.dailyTaskList.tasks !== null &&
+          WireSession.dailyTaskList.tasks[0].idx === 1 &&
+          WireSession.dailyTaskList.tasks[0].process === 0 &&
+          WireSession.dailyTaskList.tasks[0].state === 1 &&
+          WireSession.dailyTaskList.rewardBoxIdx !== null &&
+          WireSession.dailyTaskList.rewardBoxIdx[0] === 1 &&
+          WireSession.dailyTaskList.dailyValue === 4 &&
+          formatWireDailyTaskListLine(WireSession.dailyTaskList) === "Task=idx=1,process=0,state=1 / RewardBoxIdx=1 / DailyValue=4" &&
+          WireSession.signInList !== null &&
+          formatWireSignInListLine(WireSession.signInList) === "days=1,0 / charged=1 / newServer=0",
+        "12020 sample keeps present zero and leaves the 13010 list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dailyTaskList, new Uint8Array([0x80])));
+      assert(
+        WireSession.dailyTaskList !== null &&
+          WireSession.dailyTaskList.dailyValue === 4 &&
+          WireSession.signInList !== null &&
+          WireSession.signInList.charged === 1 &&
+          sawWire("12020 解不开"),
+        "bad 12020 keeps the previous daily task list and the 13010 list"
+      );
       roleSockets[0].push(encodeFrame(13011, fieldVarint(1, 8)));
       roleSockets[0].push(encodeFrame(12020, fieldVarint(1, 8)));
       roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 8)));
@@ -15195,6 +15586,17 @@ async function checkWs(): Promise<void> {
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
         "13011 12020 20011 5001 51001 4601 29001 4044 3203 20101 3101 3099 and 12010 do not replace the 13010 list"
+      );
+      assert(
+        WireSession.hasDailyTaskList() &&
+          WireSession.dailyTaskList !== null &&
+          WireSession.dailyTaskList.tasks === null &&
+          formatWireDailyTaskListLine(WireSession.dailyTaskList) === "字段1=8" &&
+          WireSession.signInList !== null &&
+          formatWireSignInListLine(WireSession.signInList) === "days=1,0 / charged=1 / newServer=0" &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "12020 field 1 varint is a mark and does not replace the 13010 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
