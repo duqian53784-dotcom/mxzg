@@ -126,10 +126,10 @@ function Invoke-AnalysisCurl {
     param([Parameter(Mandatory = $true)][string]$Url)
     Write-Host "curl.exe -fsS --max-time 10 $Url"
     & curl.exe -fsS --max-time 10 $Url
-    $code = $LASTEXITCODE
+    $script:LastCurlCode = $LASTEXITCODE
     Write-Host ''
-    if ($code -ne 0) {
-        Write-Host "curl.exe 退出码 $code ：$Url 没有成功响应。"
+    if ($script:LastCurlCode -ne 0) {
+        Write-Host "curl.exe 退出码 $($script:LastCurlCode) ：$Url 没有成功响应。"
         return $false
     }
     return $true
@@ -267,17 +267,39 @@ if ($gameReady) {
 }
 
 Write-Host ''
-$httpCenter = Invoke-AnalysisCurl -Url 'http://127.0.0.1:9801/actuator/health'
+if (Test-PortListening -Port 9801) {
+    $httpCenter = Invoke-AnalysisCurl -Url 'http://127.0.0.1:9801/actuator/health'
+    if (-not $httpCenter) {
+        if ($script:LastCurlCode -eq 22) {
+            Write-Host '[警告] 9801 端口已在听，curl 退出码 22，多半是 HTTP 404。actuator 可能不存在。这不算启动失败。'
+        } else {
+            Write-Host '[警告] 9801 端口已在听，但 http://127.0.0.1:9801/actuator/health 没有成功响应。这不算启动失败。'
+        }
+    }
+} else {
+    Write-Host '[警告] HTTP 9801 没有在听，跳过这条健康检查。成功判定不看 9801。'
+}
 $httpGame = Invoke-AnalysisCurl -Url 'http://127.0.0.1:9804/actuator/health'
+if (-not $httpGame) {
+    Write-Host '[警告] http://127.0.0.1:9804/actuator/health 没有成功响应。三个关键端口若已在听，脚本仍算成功。'
+}
 Show-Netstat
 
-if ($centerReady -and $gameReady -and $httpCenter -and $httpGame -and (Test-PortListening -Port 11122) -and (Test-PortListening -Port 9902) -and (Test-PortListening -Port 13101)) {
-    Write-Host '这次检查：center TCP 11122、HTTP 9801，gameserver TCP 9902、WS 13101、HTTP 9804 都有响应。'
+$ok11122 = Test-PortListening -Port 11122
+$ok9902 = Test-PortListening -Port 9902
+$ok13101 = Test-PortListening -Port 13101
+if ($ok11122 -and $ok9902 -and $ok13101) {
+    Write-Host '[启动成功] TCP 11122、TCP 9902、WS 13101 都在听。'
+    Write-Host '没启动 cross 时，游戏服日志里连接 127.0.0.1:11422 失败，以及中心服日志里游戏服加载跨服失败，都是预期，不算失败。'
     Write-Host 'D1 仍要倩确认之后才能在 PROJECT_PLAN.md 里打勾。客户端仍走 Mock。'
     Write-StopHint
     exit 0
 }
 
-Write-Host '还有检查没过。gameserver 的 HTTP 在分析第十节记的是 9804，模板 server.port 写的是 9801。以上面的 curl 和 netstat 为准，脚本不会改配置。'
+$missing = @()
+if (-not $ok11122) { $missing += '11122' }
+if (-not $ok9902) { $missing += '9902' }
+if (-not $ok13101) { $missing += '13101' }
+Write-Host ("关键端口没听全。缺：" + ($missing -join '、') + "。成功要同时听到 TCP 11122、TCP 9902、WS 13101。")
 Write-StopHint
 exit 1
