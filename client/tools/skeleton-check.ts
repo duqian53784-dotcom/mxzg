@@ -476,6 +476,15 @@ import {
   WIRE_BAG_READONLY_TITLE,
   WIRE_BAG_UNSYNCED_TOAST,
 } from "../assets/scripts/net/protocol/wireBag";
+import {
+  decodeWireMailList,
+  formatWireMailLine,
+  WIRE_MAIL_CMD,
+  WIRE_MAIL_EMPTY,
+  WIRE_MAIL_READONLY_TITLE,
+  WIRE_MAIL_UNSYNCED_TOAST,
+  wireMailNote,
+} from "../assets/scripts/net/protocol/wireMail";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -2934,6 +2943,56 @@ async function checkWs(): Promise<void> {
   assert(bagOtherType.length === 2 && bagOtherType[0].num === 7 && bagOtherType[1].itemType === 8, "same id with another type stays");
   assert(decodeWireBagGain(new Uint8Array(0)) !== null && decodeWireBagGain(new Uint8Array(0))?.items.length === 0, "empty 5002 changes nothing");
   assert(decodeWireBagGain(new Uint8Array([0x80])) === null, "bad 5002 ignored");
+  assert(
+    WireCmd.mailList === 15000 && CmdId.mailList === 1701 && CmdId.mailRead === 1702 && CmdId.mailClaim === 1703 && CmdId.mailDelete === 1705,
+    "online 15000 stays off the placeholder mail ids"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.mailList)) === "04000000983a0000", "empty c2s 15000");
+  assert(WIRE_MAIL_READONLY_TITLE === "邮件（真服只读）", "readonly mail title");
+  assert(WIRE_MAIL_EMPTY === "空邮箱" && WIRE_MAIL_UNSYNCED_TOAST === "真服邮件未同步", "mail empty is not the unsynced toast");
+  assert(decodeWireMailList(new Uint8Array(0)) !== null && decodeWireMailList(new Uint8Array(0))?.entries.length === 0, "empty 15000 is a synced empty mailbox");
+  assert(decodeWireMailList(new Uint8Array([0x80])) === null, "bad 15000 ignored");
+  assert(decodeWireMailList(fieldVarint(2, 1)) === null, "non-empty 15000 without a mail stays unsynced");
+  assert(decodeWireMailList(fieldBytes(1, new Uint8Array([0x80]))) === null, "bad nested mail does not become an empty mailbox");
+  const mailSample = hexToBytes(
+    "0aa1020881c8afa02510b297d8d606180020002a1a486164696168205265736572766173692050657269737469776132bd014265726b61742064756b756e67616e20706172612070657475616c616e672c206576656e74207265736572766173692049646c6520476f64646573732074656c6168206d656e63617061692070656e6361706169616e20726573657276617369203230302e303030206f72616e67212053696c616b616e20706572696b73612068616469616820646920626177616820696e692064616e2073656d6f67612070657475616c616e67616e20416e6461206d656e79656e616e676b616e213a0710a2f73618f4033a0810a1f7361880b5183a0610e9f836180a3a0610ddfc3618033a071086f83618ac023a0710b18ecb091832"
+  );
+  const loggedMail = decodeWireMailList(mailSample);
+  assert(
+    loggedMail !== null &&
+      loggedMail.entries.length === 1 &&
+      loggedMail.entries[0].id === 10000000001 &&
+      loggedMail.entries[0].mark3 === 0 &&
+      loggedMail.entries[0].mark4 === 0 &&
+      loggedMail.entries[0].title === "Hadiah Reservasi Peristiwa" &&
+      loggedMail.entries[0].attachment === "yes" &&
+      loggedMail.entries[0].attachments.length === 6 &&
+      loggedMail.entries[0].attachments[0].itemId === 900002 &&
+      loggedMail.entries[0].attachments[0].count === 500,
+    "15000 sample has a title and attachments"
+  );
+  assert(
+    loggedMail !== null && formatWireMailLine(loggedMail.entries[0]) === "Hadiah Reservasi Peristiwa · 有附件",
+    "mail line shows title and attachment, not read state"
+  );
+  assert(
+    loggedMail !== null && wireMailNote(loggedMail.entries).indexOf("字段3=0") >= 0 && wireMailNote(loggedMail.entries).indexOf("不写金币") >= 0,
+    "mail marks stay in the log note"
+  );
+  const titleOnly = decodeWireMailList(fieldBytes(1, fieldBytes(5, new TextEncoder().encode("欢迎"))));
+  assert(
+    titleOnly !== null && titleOnly.entries.length === 1 && titleOnly.entries[0].attachment === "no" && formatWireMailLine(titleOnly.entries[0]) === "欢迎 · 无附件",
+    "title without field 7 is no attachment"
+  );
+  const idOnly = decodeWireMailList(fieldBytes(1, fieldVarint(1, 9)));
+  assert(idOnly !== null && formatWireMailLine(idOnly.entries[0]) === "无标题 · id 9 · 无附件", "mail without a title keeps the id");
+  const unknownAtt = decodeWireMailList(
+    fieldBytes(1, concatBytes(fieldBytes(5, new TextEncoder().encode("欢迎")), fieldBytes(7, new Uint8Array([0x80]))))
+  );
+  assert(
+    unknownAtt !== null && unknownAtt.entries[0].attachment === "unknown" && formatWireMailLine(unknownAtt.entries[0]) === "欢迎 · 附件未解",
+    "unparsed attachment is not called empty"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -3372,12 +3431,14 @@ async function checkWs(): Promise<void> {
       );
       roleSockets[0].push(encodeFrame(WireCmd.backpackGain, earlyGain));
       roleSockets[0].push(encodeFrame(WireCmd.backpackList));
+      roleSockets[0].push(encodeFrame(WireCmd.mailList, mailSample));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
       assert(WireSession.rewardTime === null && WireSession.maxRewardTime === null, "3004 waits until the city role exists");
       assert(!WireSession.hasIdle(), "idle entry stays unsynced before the city role");
       assert(!WireSession.hasBag() && WireSession.bagItems === null, "bag stays unsynced before the city role");
+      assert(!WireSession.hasMail() && WireSession.mailEntries === null, "mail stays unsynced before the city role");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
       Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
@@ -3395,6 +3456,15 @@ async function checkWs(): Promise<void> {
         WireSession.hasBag() && WireSession.bagItems !== null && WireSession.bagItems.length === 0,
         "empty 5001 flushes as a synced empty bag"
       );
+      assert(
+        WireSession.hasMail() &&
+          WireSession.mailEntries !== null &&
+          WireSession.mailEntries.length === 1 &&
+          WireSession.mailEntries[0].title === "Hadiah Reservasi Peristiwa" &&
+          WireSession.mailEntries[0].attachment === "yes",
+        "flush writes the logged mail"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "15000 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -3497,6 +3567,18 @@ async function checkWs(): Promise<void> {
       );
       assert(WireSession.hasBag() && WireSession.bagItems !== null && WireSession.bagItems.length === 0, "5002 num 0 deletes and stays synced");
       assert(Session.gold === 40, "5002 does not write gold");
+      roleSockets[0].push(encodeFrame(WireCmd.mailList, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasMail() && WireSession.mailEntries !== null && WireSession.mailEntries.length === 1 && sawWire("15000 解不开"),
+        "bad 15000 keeps the list"
+      );
+      assert(Session.gold === 40 && Session.diamond === 0, "bad 15000 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.mailList));
+      assert(
+        WireSession.hasMail() && WireSession.mailEntries !== null && WireSession.mailEntries.length === 0,
+        "empty 15000 replaces the list and stays synced"
+      );
+      assert(Session.gold === 40, "empty 15000 does not write gold");
       lines.length = 0;
       const sentBeforePull = roleSockets[0].sent.length;
       WireSession.pullRoleProfile();
@@ -3524,6 +3606,29 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.3010");
       assert(roleSockets[0].sent.length === sentBeforeOther, "3002 and 3010 stay off the wire");
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
+      const sentBeforeMailPull = roleSockets[0].sent.length;
+      WireSession.pullIdle();
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 2, "idle pull sends 3004 then 15000");
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
+        "pullIdle still sends empty c2s 3004 first"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 1] as ArrayBuffer)) === "04000000983a0000",
+        "pullIdle sends empty c2s 15000 after 3004"
+      );
+      assert(sawLog(lines, "发送 c2s 15000"), "mail pull is logged");
+      roleNet.send(WIRE_MAIL_CMD);
+      const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(mailSent as ArrayBuffer)) === "04000000983a0000", "wire.15000 frame");
+      const sentBeforeMailOther = roleSockets[0].sent.length;
+      roleNet.send("wire.15001");
+      roleNet.send(Cmd.mailRead);
+      roleNet.send(Cmd.mailClaim);
+      roleNet.send(Cmd.mailClaimAll);
+      roleNet.send(Cmd.mailDelete);
+      assert(roleSockets[0].sent.length === sentBeforeMailOther, "mail read claim and delete stay off the wire");
+      assert(sawLog(lines, "未发送 wire.15001") && sawLog(lines, "未发送 mail.claim") && sawLog(lines, "未发送 mail.delete"), "mail mutations are not encoded");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {

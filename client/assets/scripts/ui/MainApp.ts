@@ -51,8 +51,10 @@ import { goal7BadJumpToast } from "../module/goal7/tasks";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildWireIdlePage, WireIdlePage } from "./WireIdlePage";
 import { buildWireBagPage, WireBagPage } from "./WireBagPage";
+import { buildWireMailPage, WireMailPage } from "./WireMailPage";
 import { buildWireMainlinePage, WireMainlinePage } from "./WireMainlinePage";
 import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
+import { WIRE_MAIL_UNSYNCED_TOAST } from "../net/protocol/wireMail";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
@@ -90,7 +92,7 @@ export class MainApp extends Component {
   private heroDetail: HeroDetailPage | null = null;
   private summon: SummonPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
-  private mail: MailPage | null = null;
+  private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
   private arena: ArenaPage | null = null;
   private tower: TowerPage | null = null;
@@ -232,7 +234,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
-    if (Session.source === "wire" && id === "bag") {
+    if (Session.source === "wire" && (id === "bag" || id === "mail")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -444,13 +446,14 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。 */
   private blockWirePage(id: string): boolean {
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
     if (id === "mainline") return this.blockWireMainline();
     if (id === "bag") return this.blockWireBag();
+    if (id === "mail") return this.blockWireMail();
     GameLog.shared.info("MainApp", "wire skip " + id);
     this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
     return true;
@@ -461,6 +464,14 @@ export class MainApp extends Component {
     if (WireSession.hasBag()) return false;
     GameLog.shared.info("MainApp", "wire bag unsynced");
     this.shell?.showToast(WIRE_BAG_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 15000 就停在主城。空列表也算同步，放行后页面写「空邮箱」。 */
+  private blockWireMail(): boolean {
+    if (WireSession.hasMail()) return false;
+    GameLog.shared.info("MainApp", "wire mail unsynced");
+    this.shell?.showToast(WIRE_MAIL_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -907,10 +918,14 @@ export class MainApp extends Component {
 
   /**
    * 主城和玩法都能进。opencondition 未开时只 Toast，和背包一样。
-   * 没连上时不压页面。
+   * 没连上时不压页面。真服按 15000 是否到过，打开只读页或 Toast，不进 Mock 邮件。
    */
   private openMail(): void {
     GameLog.shared.info("MainApp", "click mail");
+    if (Session.source === "wire") {
+      this.openWireMail();
+      return;
+    }
     if (this.blockWirePage("mail")) return;
     if (!this.allow("mail")) return;
     if (!this.ensureNet()) return;
@@ -918,7 +933,20 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
+  /** 未同步 Toast。已同步（含空邮箱）压入只读页，不走 mail.list，不领取。 */
+  private openWireMail(): void {
+    if (this.blockWirePage("mail")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("mail");
+    this.refreshChrome();
+  }
+
   private mountMail(): Node {
+    if (Session.source === "wire") return this.mountWireMail();
     this.mail?.dispose();
     const page = buildMailPage({
       showToast: (text) => this.shell?.showToast(text, 2200),
@@ -934,6 +962,16 @@ export class MainApp extends Component {
         this.bag?.reload();
         this.smith?.reload();
       },
+      close: () => this.back(),
+    });
+    this.mail = page;
+    return page.node;
+  }
+
+  private mountWireMail(): Node {
+    this.mail?.dispose();
+    const page = buildWireMailPage({
+      alive: () => this.isValid,
       close: () => this.back(),
     });
     this.mail = page;

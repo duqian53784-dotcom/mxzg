@@ -50,6 +50,12 @@ export const WireCmd = {
    * 合并进本地背包。type 只记日志。不写顶栏。不是占位 bag.use（1602）。
    */
   backpackGain: 5002,
+  /**
+   * c2s 空体。进主城、空 c2s 3004 之后发。
+   * s2c 带回标题和附件。空包体是已同步的空邮箱。不是占位 mail.list（1701）。
+   * 仓库里没有 Mail.proto。字段见 wireMail.ts。
+   */
+  mailList: 15000,
 } as const;
 
 /**
