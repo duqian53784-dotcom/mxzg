@@ -1,17 +1,21 @@
 /**
- * 真服背包只读页。只展示 s2c 5001 / 5002 合并后的格子。
- * 不使用，不合成，不写顶栏。Mock 背包页仍是 BagPage。
+ * 真服背包只读页。展示 s2c 5001 的 list：item_id、item_type、num。
+ * 5002 只在已经同步之后合并数量，本页不发它。
+ * 不合成，不开箱，不自选碎片，不分解，不用充值卡。不写顶栏。
+ * 进主城的空 c2s 5001 已在 2001 之后发出，打开本页不再发。
+ * Mock 背包页仍是 BagPage。
  */
 import { Color, Node } from "cc";
 import { GameLog } from "../core/GameLog";
 import { WireSession } from "../net/WireSession";
 import {
+  formatWireBagHead,
   formatWireBagLine,
-  WIRE_BAG_EMPTY,
+  WIRE_BAG_FIELD_NOTE,
   WIRE_BAG_READONLY_NOTE,
   WIRE_BAG_READONLY_TITLE,
+  WIRE_BAG_SIDE_EFFECT,
   WIRE_BAG_UNSYNCED_TOAST,
-  wireBagItemName,
 } from "../net/protocol/wireBag";
 import { createButton, createLabel, createRect, place, uiNode } from "./UiKit";
 
@@ -19,7 +23,7 @@ const PAGE_BG = new Color(8, 16, 32, 255);
 const TITLE = new Color(255, 228, 170, 255);
 const MUTED = new Color(190, 205, 225, 255);
 const BACK_FILL = new Color(36, 72, 120, 255);
-const VISIBLE_ROWS = 11;
+const VISIBLE_ROWS = 8;
 
 export interface WireBagHost {
   alive(): boolean;
@@ -71,9 +75,11 @@ class WireBagController implements WireBagPage {
   }
 
   private build(): void {
-    place(createLabel(WIRE_BAG_READONLY_TITLE, 40, { color: TITLE }), this.body, 0, 470);
-    place(createLabel(WIRE_BAG_READONLY_NOTE, 22, { color: MUTED, width: 640 }), this.body, 0, 410);
-    place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -460);
+    place(createLabel(WIRE_BAG_READONLY_TITLE, 34, { color: TITLE }), this.body, 0, 520);
+    place(createLabel(WIRE_BAG_SIDE_EFFECT, 18, { color: TITLE, width: 640, height: 48 }), this.body, 0, 460);
+    place(createLabel(WIRE_BAG_READONLY_NOTE, 18, { color: MUTED, width: 640, height: 72 }), this.body, 0, 390);
+    place(createLabel(WIRE_BAG_FIELD_NOTE, 18, { color: MUTED, width: 640, height: 48 }), this.body, 0, 310);
+    place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -520);
   }
 
   private onSync(): void {
@@ -92,33 +98,30 @@ class WireBagController implements WireBagPage {
     rows.parent = this.listHost;
     const items = WireSession.bagItems;
     if (!items) {
-      place(createLabel(WIRE_BAG_UNSYNCED_TOAST, 28, { color: TITLE, width: 640 }), rows, 0, 280);
+      place(createLabel(WIRE_BAG_UNSYNCED_TOAST, 28, { color: TITLE, width: 640 }), rows, 0, 220);
       return;
     }
-    if (items.length === 0) {
-      place(createLabel(WIRE_BAG_EMPTY, 28, { color: TITLE, width: 640 }), rows, 0, 280);
-      return;
-    }
+    place(
+      createLabel(formatWireBagHead({ items, marks: WireSession.bagMarks }), 24, { color: TITLE, width: 640 }),
+      rows,
+      0,
+      220
+    );
     const visible = Math.min(items.length, VISIBLE_ROWS);
     for (let i = 0; i < visible; i++) {
-      const item = items[i];
       place(
-        createLabel(formatWireBagLine(item, wireBagItemName(item)), 22, {
-          color: TITLE,
-          width: 640,
-          align: "left",
-        }),
+        createLabel(formatWireBagLine(items[i]), 22, { color: TITLE, width: 640, align: "left" }),
         rows,
         0,
-        340 - i * 44
+        170 - i * 36
       );
     }
     if (items.length > visible) {
       place(
-        createLabel("还有 " + (items.length - visible) + " 件", 20, { color: MUTED, width: 640 }),
+        createLabel("还有 " + (items.length - visible) + " 件", 18, { color: MUTED, width: 640 }),
         rows,
         0,
-        340 - visible * 44
+        170 - visible * 36
       );
     }
   }

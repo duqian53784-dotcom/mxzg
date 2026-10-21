@@ -37,6 +37,7 @@ import {
   wireBagNote,
   WireBagGain,
   WireBagItem,
+  WireBagMark,
 } from "./protocol/wireBag";
 import {
   decodeWireMailList,
@@ -235,8 +236,11 @@ export class WireSession {
   /**
    * s2c 5001 的整表。null 表示这次进主城还没收到 5001。
    * 空数组是已同步的空背包，不是未同步。
+   * 缺的 item_id / item_type / num 留 null，不写成 0。
    */
   static bagItems: WireBagItem[] | null = null;
+  /** 对不上 list 的外层字段。未同步时是空数组。 */
+  static bagMarks: WireBagMark[] = [];
   /**
    * s2c 15000 的列表。null 表示这次进主城还没收到 15000。
    * 空数组是已同步的空邮箱，不是未同步。
@@ -330,6 +334,7 @@ export class WireSession {
   private static pendingIdle: WireIdleSnapshot | null = null;
   /** null 表示登录过程里还没看到 5001。空数组是空背包。 */
   private static pendingBag: WireBagItem[] | null = null;
+  private static pendingBagMarks: WireBagMark[] = [];
   /** 快照之后、进主城之前到达的 5002。新的 5001 会清掉。 */
   private static pendingGains: WireBagGain[] = [];
   /** null 表示登录过程里还没看到 15000。空数组是空邮箱。 */
@@ -435,6 +440,7 @@ export class WireSession {
     this.claimNote = "";
     this.claimSerial = 0;
     this.bagItems = null;
+    this.bagMarks = [];
     this.mailEntries = null;
     this.heroes = null;
     this.activity = null;
@@ -460,6 +466,7 @@ export class WireSession {
       this.pendingChapter = null;
       this.pendingIdle = null;
       this.pendingBag = null;
+      this.pendingBagMarks = [];
       this.pendingGains = [];
       this.pendingMail = null;
       this.pendingHero = null;
@@ -482,6 +489,7 @@ export class WireSession {
       this.claimNote = "";
       this.claimSerial = 0;
       this.bagItems = null;
+      this.bagMarks = [];
       this.mailEntries = null;
       this.heroes = null;
       this.activity = null;
@@ -507,6 +515,7 @@ export class WireSession {
     this.pendingChapter = null;
     this.pendingIdle = null;
     this.pendingBag = null;
+    this.pendingBagMarks = [];
     this.pendingGains = [];
     this.pendingMail = null;
     this.pendingHero = null;
@@ -529,6 +538,7 @@ export class WireSession {
     this.claimNote = "";
     this.claimSerial = 0;
     this.bagItems = null;
+    this.bagMarks = [];
     this.mailEntries = null;
     this.heroes = null;
     this.activity = null;
@@ -926,7 +936,7 @@ export class WireSession {
   }
 
   private static onBag(data: unknown): void {
-    let list: { items: WireBagItem[] } | null = null;
+    let list: ReturnType<typeof decodeWireBagList> = null;
     try {
       list = decodeWireBagList(wireBody(data));
     } catch (err) {
@@ -938,9 +948,10 @@ export class WireSession {
       return;
     }
     this.pendingBag = list.items.map(copyBagItem);
+    this.pendingBagMarks = list.marks.map(copyBagMark);
     this.pendingGains = [];
     if (Session.source !== "wire" || !Session.role) {
-      GameLog.shared.info("Wire", "s2c 5001 先记下：" + wireBagNote(list.items));
+      GameLog.shared.info("Wire", "s2c 5001 先记下：" + wireBagNote(list));
       return;
     }
     this.commitBag();
@@ -1381,10 +1392,13 @@ export class WireSession {
     for (let i = 0; i < this.pendingGains.length; i++) {
       items = applyWireBagGain(items, this.pendingGains[i]);
     }
+    const marks = this.pendingBagMarks.map(copyBagMark);
     this.pendingBag = null;
+    this.pendingBagMarks = [];
     this.pendingGains = [];
     this.bagItems = items;
-    GameLog.shared.info("Wire", "s2c 5001 " + wireBagNote(items));
+    this.bagMarks = marks;
+    GameLog.shared.info("Wire", "s2c 5001 " + wireBagNote({ items, marks }));
     this.emit();
   }
 
@@ -1646,7 +1660,12 @@ export class WireSession {
 }
 
 function copyBagItem(item: WireBagItem): WireBagItem {
-  return { itemId: item.itemId, itemType: item.itemType, num: item.num };
+  const marks = item.marks ? item.marks.map(copyBagMark) : [];
+  return { itemId: item.itemId, itemType: item.itemType, num: item.num, marks };
+}
+
+function copyBagMark(mark: WireBagMark): WireBagMark {
+  return { field: mark.field, text: mark.text };
 }
 
 function copyMail(entry: WireMailEntry): WireMailEntry {
