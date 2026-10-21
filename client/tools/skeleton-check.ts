@@ -1006,6 +1006,21 @@ import {
   WIRE_RUNNING_PROMOTION_UNSYNCED_TOAST,
   wireRunningPromotionNote,
 } from "../assets/scripts/net/protocol/wireRunningPromotion";
+import {
+  decodeWireTowerReward,
+  formatWireTowerRewardHead,
+  formatWireTowerRewardLine,
+  WIRE_TOWER_REWARD_BANNED_CMDS,
+  WIRE_TOWER_REWARD_CMD,
+  WIRE_TOWER_REWARD_EMPTY,
+  WIRE_TOWER_REWARD_FIELD_NOTE,
+  WIRE_TOWER_REWARD_FRAME,
+  WIRE_TOWER_REWARD_READONLY_NOTE,
+  WIRE_TOWER_REWARD_READONLY_TITLE,
+  WIRE_TOWER_REWARD_SIDE_EFFECT,
+  WIRE_TOWER_REWARD_UNSYNCED_TOAST,
+  wireTowerRewardNote,
+} from "../assets/scripts/net/protocol/wireTowerReward";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -8978,6 +8993,204 @@ async function checkWs(): Promise<void> {
       bytesToHex(encodeFrame(20101)).indexOf("89130000") < 0,
     "20101 empty frame carries 85 4e 00 00 and not the 3101, 51001 or 5001 cmd byte"
   );
+  assert(
+    WireCmd.towerReward === 3203 &&
+      WireCmd.towerReward !== WireCmd.runningPromotion &&
+      WireCmd.towerReward !== WireCmd.lineUp &&
+      WireCmd.towerReward !== WireCmd.formation &&
+      WireCmd.towerReward !== WireCmd.worldLevel &&
+      WireCmd.towerReward !== WireCmd.backpackList,
+    "online 3203 stays off running promotion 20101, lineup 3101, formation 3099, world 51001 and bag 5001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.towerReward)) === WIRE_TOWER_REWARD_FRAME, "empty c2s 3203");
+  assert(bytesToHex(encodeFrame(3203)) === "04000000830c0000", "empty c2s 3203 hex");
+  assert(bytesToHex(encodeFrame(3203)) !== "04000000854e0000", "3203 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(3203)) !== "040000001d0c0000", "3203 is not the 3101 frame");
+  assert(bytesToHex(encodeFrame(3203)) !== "040000001b0c0000", "3203 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(3203)) !== "0400000039c70000", "3203 is not the 51001 frame");
+  assert(bytesToHex(encodeFrame(3203)) !== "0400000089130000", "3203 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(3202)) === "04000000820c0000" && bytesToHex(encodeFrame(3202)) !== "04000000830c0000", "3202 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(3204)) === "04000000840c0000" && bytesToHex(encodeFrame(3204)) !== "04000000830c0000", "3204 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(3205)) === "04000000850c0000" && bytesToHex(encodeFrame(3205)) !== "04000000830c0000", "3205 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(3206)) === "04000000860c0000" && bytesToHex(encodeFrame(3206)) !== "04000000830c0000", "3206 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(3220)) === "04000000940c0000" && bytesToHex(encodeFrame(3220)) !== "04000000830c0000", "3220 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(3200)) === "04000000800c0000" && bytesToHex(encodeFrame(3200)) !== "04000000830c0000", "3200 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(4044)) !== "04000000830c0000", "4044 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000830c0000", "20011 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(3012)) !== "04000000830c0000", "3012 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(3010)) !== "04000000830c0000", "3010 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(12020)) !== "04000000830c0000", "12020 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(19001)) !== "04000000830c0000", "19001 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "04000000830c0000", "4601 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "04000000830c0000", "29001 is not the 3203 frame");
+  for (let i = 0; i < WIRE_TOWER_REWARD_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_TOWER_REWARD_BANNED_CMDS[i] }) === null, WIRE_TOWER_REWARD_BANNED_CMDS[i] + " is not encoded");
+  }
+  assert(encodeWireMessage({ cmd: "wire.5001" }) !== null, "5001 stays encoded by its own module for the tower slice");
+  assert(encodeWireMessage({ cmd: "wire.51001" }) !== null, "51001 stays encoded by its own module for the tower slice");
+  assert(encodeWireMessage({ cmd: "wire.20101" }) !== null, "20101 stays encoded by its own module and is not reissued as 3203");
+  assert(
+    encodeWireMessage({ cmd: WIRE_TOWER_REWARD_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_TOWER_REWARD_CMD })?.bytes || new Uint8Array(0)) === "04000000830c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_TOWER_REWARD_CMD })?.bytes || new Uint8Array(0)) !== "04000000854e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_TOWER_REWARD_CMD })?.bytes || new Uint8Array(0)) !== "040000001d0c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_TOWER_REWARD_CMD })?.bytes || new Uint8Array(0)) !== "040000001b0c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_TOWER_REWARD_CMD })?.bytes || new Uint8Array(0)) !== "0400000039c70000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_TOWER_REWARD_CMD })?.bytes || new Uint8Array(0)) !== "0400000089130000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_TOWER_REWARD_CMD })?.bytes || new Uint8Array(0)) !== "04000000820c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_TOWER_REWARD_CMD })?.bytes || new Uint8Array(0)) !== "04000000800c0000",
+    "wire.3203 encodes the empty frame and is not 20101, 3101, 3099, 51001, 5001, 3202 or 3200"
+  );
+  assert(WIRE_TOWER_REWARD_CMD === "wire.3203", "tower reward wire cmd");
+  assert(WIRE_TOWER_REWARD_READONLY_TITLE === "爬塔首通已领（真服只读）", "readonly tower reward title");
+  assert(WIRE_TOWER_REWARD_UNSYNCED_TOAST === "真服未同步", "unsynced tower reward toast");
+  assert(WIRE_TOWER_REWARD_EMPTY === "空已领首通", "empty tower reward label");
+  assert(
+    WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("towerDao.add") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("不走门票回复") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("不 updateTower") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("无养成写") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("04000000830c0000") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("20101") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("3202") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("3204") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("3205") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("3206") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("3220") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("3200") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("4044") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("5001") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("51001") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("3099") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("3101") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("3012") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("3010") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("12020") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("19001") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("不重复拉 20101") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("不重复拉 3101") >= 0 &&
+      WIRE_TOWER_REWARD_SIDE_EFFECT.indexOf("不重复拉 3099") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("已领爬塔首通") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("缺省") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("无买票") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("3200") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("4044") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_TOWER_REWARD_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_TOWER_REWARD_FIELD_NOTE.indexOf("list") >= 0 &&
+      WIRE_TOWER_REWARD_FIELD_NOTE.indexOf("idx") >= 0 &&
+      WIRE_TOWER_REWARD_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_TOWER_REWARD_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "tower reward page names claimed idx and refuses ticket claim sweep and the banned cmds"
+  );
+  const towerUnpacked = concatBytes(
+    concatBytes(fieldVarint(1, 9), fieldVarint(1, 0)),
+    concatBytes(fieldVarint(1, 8), fieldVarint(8, 1))
+  );
+  const towerPacked = fieldBytes(1, new Uint8Array([9, 0, 8]));
+  const towerZero = fieldVarint(1, 0);
+  const towerNeg = fieldNeg1(1);
+  const towerWide = fieldVarint(1, 1099511627776);
+  const towerOuter = fieldVarint(9, 1);
+  const towerBadPacked = fieldBytes(1, new Uint8Array([0x80]));
+  assert(
+    decodeWireTowerReward(new Uint8Array(0)) !== null &&
+      decodeWireTowerReward(new Uint8Array(0))?.list.length === 0 &&
+      formatWireTowerRewardHead(decodeWireTowerReward(new Uint8Array(0)) || { list: [], marks: [] }) ===
+        "list=" + WIRE_TOWER_REWARD_EMPTY,
+    "empty 3203 body is synced and does not invent zero"
+  );
+  assert(decodeWireTowerReward(null) === null, "null 3203 body is not a snapshot");
+  assert(decodeWireTowerReward(new Uint8Array([0x80])) === null, "bad 3203 ignored");
+  assert(decodeWireTowerReward(towerBadPacked) === null, "3203 packed blob that fails is not an empty list");
+  const towerOrder = decodeWireTowerReward(towerUnpacked);
+  assert(
+    towerOrder !== null &&
+      towerOrder.list.length === 3 &&
+      towerOrder.list[0] === 9 &&
+      towerOrder.list[1] === 0 &&
+      towerOrder.list[2] === 8 &&
+      towerOrder.marks.length === 1 &&
+      towerOrder.marks[0].field === 8 &&
+      formatWireTowerRewardHead(towerOrder) === "list=9,0,8 / 字段8=1" &&
+      formatWireTowerRewardLine(towerOrder.list[0]) === "idx=9" &&
+      formatWireTowerRewardLine(towerOrder.list[1]) === "idx=0",
+    "3203 unpacked list keeps arrival order and does not sort"
+  );
+  const towerPackedSnap = decodeWireTowerReward(towerPacked);
+  assert(
+    towerPackedSnap !== null &&
+      towerPackedSnap.list.length === 3 &&
+      towerPackedSnap.list[0] === 9 &&
+      towerPackedSnap.list[1] === 0 &&
+      towerPackedSnap.list[2] === 8 &&
+      formatWireTowerRewardHead(towerPackedSnap) === "list=9,0,8",
+    "3203 packed list keeps arrival order"
+  );
+  const towerZeroSnap = decodeWireTowerReward(towerZero);
+  assert(
+    towerZeroSnap !== null &&
+      towerZeroSnap.list.length === 1 &&
+      towerZeroSnap.list[0] === 0 &&
+      formatWireTowerRewardHead(towerZeroSnap) === "list=0" &&
+      formatWireTowerRewardLine(towerZeroSnap.list[0]) === "idx=0",
+    "present 3203 zero stays zero"
+  );
+  const towerNegSnap = decodeWireTowerReward(towerNeg);
+  assert(
+    towerNegSnap !== null &&
+      towerNegSnap.list[0] === -1 &&
+      formatWireTowerRewardLine(towerNegSnap.list[0]) === "idx=-1",
+    "3203 idx -1 stays -1"
+  );
+  const towerWideSnap = decodeWireTowerReward(towerWide);
+  assert(
+    towerWideSnap !== null &&
+      towerWideSnap.list[0] === 1099511627776 &&
+      formatWireTowerRewardLine(towerWideSnap.list[0]) === "idx=1099511627776",
+    "3203 idx keeps the wide integer"
+  );
+  assert(
+    decodeWireTowerReward(towerOuter) !== null &&
+      decodeWireTowerReward(towerOuter)?.list.length === 0 &&
+      formatWireTowerRewardHead(decodeWireTowerReward(towerOuter) || { list: [], marks: [] }) ===
+        "list=" + WIRE_TOWER_REWARD_EMPTY + " / 字段9=1",
+    "non-empty 3203 without list stays synced and does not invent zero"
+  );
+  const towerSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.towerReward, towerUnpacked), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    towerSticky.frames.length === 2 &&
+      towerSticky.frames[0].cmdId === 3203 &&
+      towerSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireTowerReward(towerSticky.frames[0].body)?.list[0] === 9 &&
+      decodeWireTowerReward(towerSticky.frames[0].body)?.list[1] === 0,
+    "sticky 3203 frame stops at its length prefix"
+  );
+  assert(
+    wireTowerRewardNote(towerOrder || { list: [], marks: [] }).indexOf(WIRE_TOWER_REWARD_SIDE_EFFECT) >= 0 &&
+      wireTowerRewardNote(towerOrder || { list: [], marks: [] }).indexOf("不写金币") >= 0 &&
+      wireTowerRewardNote(towerOrder || { list: [], marks: [] }).indexOf("不写钻石") >= 0,
+    "3203 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
+    bytesToHex(encodeFrame(3203)).indexOf("830c0000") >= 0 &&
+      bytesToHex(encodeFrame(3203)).indexOf("854e0000") < 0 &&
+      bytesToHex(encodeFrame(3203)).indexOf("1d0c0000") < 0 &&
+      bytesToHex(encodeFrame(3203)).indexOf("39c70000") < 0 &&
+      bytesToHex(encodeFrame(3203)).indexOf("89130000") < 0,
+    "3203 empty frame carries 83 0c 00 00 and not the 20101, 3101, 51001 or 5001 cmd byte"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -10088,7 +10301,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 40, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 41, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -10301,23 +10514,74 @@ async function checkWs(): Promise<void> {
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 39] as ArrayBuffer)) !== "04000000864e0000",
         "pullIdle 20101 frame is not the 20102 cmd"
       );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 40] as ArrayBuffer)) === "04000000830c0000",
+        "pullIdle sends empty c2s 3203 after 20101"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 40] as ArrayBuffer)) !== "04000000854e0000",
+        "pullIdle 3203 frame is not merged into 20101"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 40] as ArrayBuffer)) !== "040000001d0c0000",
+        "pullIdle 3203 frame is not the 3101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 40] as ArrayBuffer)) !== "040000001b0c0000",
+        "pullIdle 3203 frame is not the 3099 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 40] as ArrayBuffer)) !== "0400000089130000",
+        "pullIdle 3203 frame is not the 5001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 40] as ArrayBuffer)) !== "0400000039c70000",
+        "pullIdle 3203 frame is not the 51001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 40] as ArrayBuffer)) !== "04000000820c0000",
+        "pullIdle 3203 frame is not the 3202 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 40] as ArrayBuffer)) !== "04000000800c0000",
+        "pullIdle 3203 frame is not the 3200 cmd"
+      );
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
         let bagFrames = 0;
         let worldFrames = 0;
         let runningFrames = 0;
-        for (let i = 0; i < 40; i++) {
+        let towerFrames = 0;
+        let bannedFrames = 0;
+        const bannedHex = {
+          "04000000820c0000": true,
+          "04000000840c0000": true,
+          "04000000850c0000": true,
+          "04000000860c0000": true,
+          "04000000940c0000": true,
+          "04000000800c0000": true,
+          "04000000cc0f0000": true,
+        };
+        for (let i = 0; i < 41; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
           if (hex === "0400000089130000") bagFrames += 1;
           if (hex === "0400000039c70000") worldFrames += 1;
           if (hex === "04000000854e0000") runningFrames += 1;
+          if (hex === "04000000830c0000") towerFrames += 1;
+          if (bannedHex[hex]) bannedFrames += 1;
         }
         assert(
-          formationFrames === 1 && lineUpFrames === 1 && bagFrames === 0 && worldFrames === 1 && runningFrames === 1,
-          "pullIdle sends 3099 once, 3101 once and 20101 once, keeps 51001 once, and does not repeat 5001"
+          formationFrames === 1 &&
+            lineUpFrames === 1 &&
+            bagFrames === 0 &&
+            worldFrames === 1 &&
+            runningFrames === 1 &&
+            towerFrames === 1 &&
+            bannedFrames === 0,
+          "pullIdle sends 3099 once, 3101 once, 20101 once and 3203 once, keeps 51001 once, and does not repeat 5001 or encode 3202 3204 3205 3206 3220 3200 4044"
         );
       }
       assert(
@@ -10393,6 +10657,17 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000078210100") &&
           sawLog(lines, "发送 c2s 20101") &&
           sawLog(lines, "04000000854e0000") &&
+          sawLog(lines, "发送 c2s 3203") &&
+          sawLog(lines, "04000000830c0000") &&
+          sawLog(lines, "发送 c2s 3202") === false &&
+          sawLog(lines, "发送 c2s 3204") === false &&
+          sawLog(lines, "发送 c2s 3205") === false &&
+          sawLog(lines, "发送 c2s 3206") === false &&
+          sawLog(lines, "发送 c2s 3220") === false &&
+          sawLog(lines, "发送 c2s 3200") === false &&
+          sawLog(lines, "发送 c2s 4044") === false &&
+          sawLog(lines, "发送 c2s 3012") === false &&
+          sawLog(lines, "发送 c2s 19001") === false &&
           sawLog(lines, "发送 c2s 20102") === false &&
           sawLog(lines, "04000000864e0000") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
@@ -14180,6 +14455,101 @@ async function checkWs(): Promise<void> {
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
         "20102 20018 20013 20004 20010 20011 4601 29001 3101 5001 and 51001 do not replace the 20101 list"
+      );
+      roleSockets[0].push(encodeFrame(3202, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3200, fieldVarint(1, 1)));
+      assert(
+        WireSession.hasTowerReward() === false &&
+          WireSession.runningPromotion !== null &&
+          WireSession.runningPromotion.rows.length === 1 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "3202 and 3200 do not sync the tower reward list"
+      );
+      roleSockets[0].push(encodeFrame(3203, fieldVarint(9, 1)));
+      assert(
+        WireSession.hasTowerReward() &&
+          WireSession.towerReward !== null &&
+          WireSession.towerReward.list.length === 0 &&
+          formatWireTowerRewardHead(WireSession.towerReward).indexOf(WIRE_TOWER_REWARD_EMPTY) >= 0 &&
+          formatWireTowerRewardHead(WireSession.towerReward).indexOf("字段9=1") >= 0 &&
+          WireSession.runningPromotion !== null &&
+          WireSession.runningPromotion.rows[0].id === 7 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "3203 outer varint does not invent an idx and leaves 20101"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.towerReward));
+      assert(
+        WireSession.hasTowerReward() &&
+          WireSession.towerReward !== null &&
+          WireSession.towerReward.list.length === 0 &&
+          formatWireTowerRewardHead(WireSession.towerReward) === "list=" + WIRE_TOWER_REWARD_EMPTY &&
+          WireSession.runningPromotion !== null &&
+          WireSession.runningPromotion.rows.length === 1 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 3203 clears to 空已领首通 and does not write gold or diamond"
+      );
+      const towerSample = concatBytes(concatBytes(fieldVarint(1, 4), fieldVarint(1, 0)), fieldNeg1(1));
+      roleSockets[0].push(encodeFrame(WireCmd.towerReward, towerSample));
+      assert(
+        WireSession.hasTowerReward() &&
+          WireSession.towerReward !== null &&
+          WireSession.towerReward.list.length === 3 &&
+          WireSession.towerReward.list[0] === 4 &&
+          WireSession.towerReward.list[1] === 0 &&
+          WireSession.towerReward.list[2] === -1 &&
+          formatWireTowerRewardLine(WireSession.towerReward.list[1]) === "idx=0" &&
+          formatWireTowerRewardLine(WireSession.towerReward.list[2]) === "idx=-1" &&
+          wireTowerRewardNote(WireSession.towerReward).indexOf(WIRE_TOWER_REWARD_SIDE_EFFECT) >= 0 &&
+          wireTowerRewardNote(WireSession.towerReward).indexOf("不写金币") >= 0 &&
+          wireTowerRewardNote(WireSession.towerReward).indexOf("不写钻石") >= 0 &&
+          WireSession.runningPromotion !== null &&
+          WireSession.runningPromotion.rows[0].id === 7 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "3203 sample keeps present zero and -1 and leaves 20101"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.towerReward, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasTowerReward() &&
+          WireSession.towerReward !== null &&
+          WireSession.towerReward.list[0] === 4 &&
+          WireSession.towerReward.list[1] === 0 &&
+          WireSession.runningPromotion !== null &&
+          WireSession.runningPromotion.rows[0].id === 7 &&
+          sawWire("3203 解不开"),
+        "bad 3203 keeps the claimed idx list and the 20101 list"
+      );
+      roleSockets[0].push(encodeFrame(3202, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3204, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3205, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3206, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3220, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3200, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(4044, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3012, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3010, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(12020, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(19001, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(20101, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(5001, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(51001, fieldVarint(1, 6)));
+      assert(
+        WireSession.hasTowerReward() &&
+          WireSession.towerReward !== null &&
+          WireSession.towerReward.list.length === 3 &&
+          WireSession.towerReward.list[0] === 4 &&
+          WireSession.towerReward.list[1] === 0 &&
+          WireSession.towerReward.list[2] === -1 &&
+          formatWireTowerRewardLine(WireSession.towerReward.list[0]) === "idx=4" &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "3202 3204 3205 3206 3220 3200 4044 20011 3012 3010 12020 19001 4601 29001 20101 5001 and 51001 do not replace the 3203 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
