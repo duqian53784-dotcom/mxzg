@@ -75,6 +75,7 @@ import { buildWireDailyWelfareListPage, WireDailyWelfareListPage } from "./WireD
 import { buildWireMouthWelfareListPage, WireMouthWelfareListPage } from "./WireMouthWelfareListPage";
 import { buildWireWeekendGiftPage, WireWeekendGiftPage } from "./WireWeekendGiftPage";
 import { buildWireGodRelicPage, WireGodRelicPage } from "./WireGodRelicPage";
+import { buildWireHeroPalacePage, WireHeroPalacePage } from "./WireHeroPalacePage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -111,6 +112,7 @@ import { WIRE_DAILY_WELFARE_LIST_UNSYNCED_TOAST } from "../net/protocol/wireDail
 import { WIRE_MOUTH_WELFARE_LIST_UNSYNCED_TOAST } from "../net/protocol/wireMouthWelfareList";
 import { WIRE_WEEKEND_GIFT_UNSYNCED_TOAST } from "../net/protocol/wireWeekendGift";
 import { WIRE_GOD_RELIC_UNSYNCED_TOAST } from "../net/protocol/wireGodRelic";
+import { WIRE_HERO_PALACE_UNSYNCED_TOAST } from "../net/protocol/wireHeroPalace";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -214,6 +216,7 @@ const DAILY_WELFARE_LIST_FILL = new Color(140, 84, 48, 255);
 const MOUTH_WELFARE_LIST_FILL = new Color(96, 64, 128, 255);
 const WEEKEND_GIFT_FILL = new Color(128, 72, 48, 255);
 const GOD_RELIC_FILL = new Color(72, 96, 140, 255);
+const HERO_PALACE_FILL = new Color(96, 72, 120, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -264,6 +267,7 @@ export class MainApp extends Component {
   private mouthWelfareList: WireMouthWelfareListPage | null = null;
   private weekendGift: WireWeekendGiftPage | null = null;
   private godRelic: WireGodRelicPage | null = null;
+  private heroPalace: WireHeroPalacePage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -387,6 +391,8 @@ export class MainApp extends Component {
     this.weekendGift = null;
     this.godRelic?.dispose();
     this.godRelic = null;
+    this.heroPalace?.dispose();
+    this.heroPalace = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -500,7 +506,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -582,6 +588,7 @@ export class MainApp extends Component {
     if (id === "mouthWelfareList") return this.mountMouthWelfareList();
     if (id === "weekendGift") return this.mountWeekendGift();
     if (id === "godRelic") return this.mountGodRelic();
+    if (id === "heroPalace") return this.mountHeroPalace();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -699,6 +706,7 @@ export class MainApp extends Component {
     place(createButton("每月福利列表", () => this.openMouthWelfareList(), 180, 32, MOUTH_WELFARE_LIST_FILL, 14), page, 0, 308);
     place(createButton("周末礼包", () => this.openWeekendGift(), 160, 32, WEEKEND_GIFT_FILL, 14), page, 0, 354);
     place(createButton("神迹遗物", () => this.openGodRelic(), 160, 32, GOD_RELIC_FILL, 14), page, -200, 354);
+    place(createButton("英雄殿堂", () => this.openHeroPalace(), 160, 32, HERO_PALACE_FILL, 14), page, 200, 308);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -915,6 +923,7 @@ export class MainApp extends Component {
     if (id === "mouthWelfareList") return this.blockWireMouthWelfareList();
     if (id === "weekendGift") return this.blockWireWeekendGift();
     if (id === "godRelic") return this.blockWireGodRelic();
+    if (id === "heroPalace") return this.blockWireHeroPalace();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -1279,6 +1288,14 @@ export class MainApp extends Component {
     if (Session.source === "wire" && WireSession.hasGodRelic()) return false;
     GameLog.shared.info("MainApp", "wire god relic unsynced");
     this.shell?.showToast(WIRE_GOD_RELIC_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 63001 就停在主城。空包体也算同步。不重复拉 62001。不发 63002。不发 63003。不做 69001。不做 20011。不是神迹遗物 62001。不是周末礼包 61001。5001、51001 已有，勿重复。62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。62001 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireHeroPalace(): boolean {
+    if (Session.source === "wire" && WireSession.hasHeroPalace()) return false;
+    GameLog.shared.info("MainApp", "wire hero palace unsynced");
+    this.shell?.showToast(WIRE_HERO_PALACE_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -2358,6 +2375,29 @@ export class MainApp extends Component {
     return page.node;
   }
 
+  /** 真服英雄殿堂。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 type、rankRole、isReward、isWorship、serverRankRole。无膜拜、领排名奖入口。不重复拉 62001。不发 63002。不发 63003。不做 69001。不做 20011。不是神迹遗物 62001。不是周末礼包 61001。5001、51001 已有，勿重复。62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 62001 分开发，勿合并。本刀不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  private openHeroPalace(): void {
+    GameLog.shared.info("MainApp", "click hero palace");
+    if (this.blockWirePage("heroPalace")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("heroPalace");
+    this.refreshChrome();
+  }
+
+  private mountHeroPalace(): Node {
+    this.heroPalace?.dispose();
+    const page = buildWireHeroPalacePage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.heroPalace = page;
+    return page.node;
+  }
+
   /** 真服点金。未同步 Toast。已同步压入只读页，不点金，不写金币。不走七日登录。 */
   private openBuyGold(): void {
     GameLog.shared.info("MainApp", "click buygold");
@@ -3205,6 +3245,10 @@ export class MainApp extends Component {
     if (id === "godRelic") {
       this.godRelic?.dispose();
       this.godRelic = null;
+    }
+    if (id === "heroPalace") {
+      this.heroPalace?.dispose();
+      this.heroPalace = null;
     }
     if (id === "bag") {
       this.bag?.dispose();
