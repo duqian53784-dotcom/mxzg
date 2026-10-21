@@ -578,3 +578,52 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 `Title` / `SideEffect` / `Note` / `FieldNote` / `Empty` / `Unsynced` 与 `WIRE_ACHIEVEMENT_READONLY_TITLE` / `WIRE_ACHIEVEMENT_SIDE_EFFECT` / `WIRE_ACHIEVEMENT_READONLY_NOTE` / `WIRE_ACHIEVEMENT_FIELD_NOTE` / `WIRE_ACHIEVEMENT_EMPTY` / `WIRE_ACHIEVEMENT_UNSYNCED_TOAST` 相同。行文案是 `formatWireAchievementLine`。预览从 `idx=1 / process=0 / state=0` 续到 `idx=22 / process=0 / state=0`，把 `VISIBLE_ROWS` 的窗口填满。缺字段时 `numText` 写 `无`，不补 0；这二十二行是有数的样例。节点锚点在中心、放在 x=0，行 Label 水平对齐为左，宽 640，和 `align: "left"` 一致。
 
 未同步时 `render()` 只放 `Unsynced`（y=320）就返回，不画空表和行。已同步且任务表为空时，在同一位置放 `空成就表`。有任务时 `top = 340`、`step = 28`，行在 `340 − i×28`，最多 22 行。`More` 的 y 是 `340 − 22×28 = -276`。运行时溢出文案是 `还有 N 条`；预制里的 `还有 3 条` 只是占位。`BtnBack` 用蓝色按钮，字号走 `createButton` 默认 24。字号：标题 36，侧效 22，说明 20，字段说明 18，未同步和空表 28，行 20，溢出 18。
+
+## Arena / 竞技场（未接线）
+
+只有真服只读页一份 Prefab。对齐 `WirePvpPage.ts` 的 `WirePvpController.build()` / `render()`，以及 `wirePvp.ts` 的 s2c **18001** / `GResPvpData`（`WIRE_PVP_CMD = "wire.18001"`）。竞技场只读：不挑战，不匹配，不扣次，不写积分，不写金币。不接开战 18002，不接刷新 18003。
+
+代码根节点名是 `WirePvpPage`。预制根叫 `WireArenaPage`（manager 点名），目录 `arena/`。`ArenaPage.ts` 是另一份 Mock 挑战页，这一刀不造它的 Prefab，也不改那份脚本。
+
+同步时若对手名单为空，服可能补名单。日切或赛季切时服也可能写库。页上必须带着这两句，默认都显示：
+
+- `SideEffect`：`WIRE_PVP_SIDE_EFFECT`（`同步时若对手为空服可能补名单`），位置 (0, 510)
+- `SeasonNote`：`WIRE_PVP_SEASON_NOTE`（`日切或赛季切时服可能写库`），位置 (0, 476)
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| WireArenaPage | `prefabs/ui/arena/WireArenaPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/arena/WireArenaPage.prefab`（目录 `arena/`）
+- **状态**：**未接** Boot、`MainApp`、`WirePvpPage.ts`，以及任何 `USE_*_PREFAB`。不改协议，不接 18002 / 18003。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` / `render()` 一致）。`ListHost`、`Rows` 都放在 (0, 0) 且铺满 720×1280，子节点的 y 就是代码里的页面坐标。
+- 代码根节点名是 `WirePvpPage`，容器是小写 `list-host` / `rows`。预制根是 `WireArenaPage`，容器用下面表里的 PascalCase，方便在编辑器里对位置。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid（`@f9941`）。Prefab 目录里没有 PNG。没有竞技场专用图集：页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；返回用 `button_btn-blue-big`。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 运行时 `render()` 会拆掉并重建 `rows`。Prefab 里的自身行、空表、对手行和溢出是编辑器预览，不是代码去克隆的模板。`SideEffect`、`SeasonNote`、`Title`、`Note`、`FieldNote` 是 `build()` 层，不随列表隐藏。
+- 再生：`python3 client/tools/gen_arena_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `WirePvpPage.ts` 的坐标和 `wirePvp.ts` 的文案、`formatWirePvpSelfLines`、`formatWirePvpLine`）
+
+### WireArenaPage（真服只读，18001）
+
+根 `WireArenaPage`。`VISIBLE_ROWS = 8`。默认是未同步占位，对应 `WireSession.pvp == null`：只显示 `Unsynced`，自身六行、空表、八名对手和溢出都是 `_active: false`。`SideEffect` 和 `SeasonNote` 始终显示。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | 深蓝 `(8, 16, 32)` |
+| `Title` | (0, 560) | 680×48 | `竞技场（真服只读）` |
+| `SideEffect` | (0, 510) | 640×36 | `同步时若对手为空服可能补名单`（默认显示，TITLE 色） |
+| `SeasonNote` | (0, 476) | 640×32 | `日切或赛季切时服可能写库`（默认显示，MUTED） |
+| `Note` | (0, 442) | 640×32 | `只读。不挑战，不匹配，不扣次，不写积分，不写金币` |
+| `FieldNote` | (0, 400) | 640×48 | `free_count、score、season_end_time、like_rids、season_count、season_reward。对手写 player_id、name` |
+| `ListHost` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows/Unsynced` | (0, 340) | 640×44 | `真服未同步`（默认显示） |
+| `ListHost/Rows/Self_0` … `Self_5` | (0, 350 − i×28) | 640×26 | `free_count=无` 起，左对齐，`_active: false` |
+| `ListHost/Rows/Empty` | (0, 154) | 640×44 | `空对手表`（`_active: false`） |
+| `ListHost/Rows/Opp_0` … `Opp_7` | (0, 174 − i×36) | 640×32 | `样例甲 · player_id=1001` 起，左对齐，`_active: false` |
+| `ListHost/Rows/More` | (0, -114) | 640×28 | `还有 1 名`（`_active: false`） |
+| `BtnBack` | (0, -560) | 240×48 | `返回`（蓝） |
+
+`Title` / `SideEffect` / `SeasonNote` / `Note` / `FieldNote` / `Empty` / `Unsynced` 与 `WIRE_PVP_READONLY_TITLE` / `WIRE_PVP_SIDE_EFFECT` / `WIRE_PVP_SEASON_NOTE` / `WIRE_PVP_READONLY_NOTE` / `WIRE_PVP_FIELD_NOTE` / `WIRE_PVP_EMPTY` / `WIRE_PVP_UNSYNCED_TOAST` 相同。自身六行是 `formatWirePvpSelfLines` 在字段都缺时的句子（`无`，不补 0）：`free_count=无`、`score=无`、`season_end_time=无`、`like_rids=无`、`season_count=无`、`season_reward=无`。对手行是 `formatWirePvpLine` 的样例，不是真服数据：`样例甲 · player_id=1001` 到 `样例辛 · player_id=1008`。节点锚点在中心、放在 x=0，自身行和对手行的 Label 水平对齐为左，宽 640，和 `align: "left"` 一致。
+
+未同步时 `render()` 只放 `Unsynced`（y=340）就返回，不画自身行。已同步时自身行从 `top = 350` 起，step 28，六行占到 y=210。`listTop = 350 − 6×28 − 8 = 174`。空表在 `listTop − 20 = 154`。对手从 `listTop` 起，step 36，最多 8 行（`Opp_7` 在 y=−78）。`More` 的 y 是 `174 − 8×36 = -114`，落在第 8 行下面。运行时溢出文案是 `还有 N 名`；预制里的 `还有 1 名` 只是占位。`BtnBack` 用蓝色按钮，字号走 `createButton` 默认 24。字号：标题 36，侧效 22，赛季说明 20，只读说明 20，字段说明 18，未同步和空表 28，自身行 22，对手行 18，溢出 18。`FieldNote` 比一行宽，在 48px 高的框里换行。
