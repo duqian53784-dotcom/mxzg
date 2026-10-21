@@ -567,6 +567,19 @@ import {
   WIRE_GOAL7_UNSYNCED_TOAST,
   wireGoalNote,
 } from "../assets/scripts/net/protocol/wireGoal7";
+import {
+  decodeWireWish,
+  formatWireWishHead,
+  formatWireWishSlot,
+  WIRE_WISH_CMD,
+  WIRE_WISH_EMPTY,
+  WIRE_WISH_FIELD_NOTE,
+  WIRE_WISH_READONLY_NOTE,
+  WIRE_WISH_READONLY_TITLE,
+  WIRE_WISH_SIDE_EFFECT,
+  WIRE_WISH_UNSYNCED_TOAST,
+  wireWishNote,
+} from "../assets/scripts/net/protocol/wireWish";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -3594,6 +3607,100 @@ async function checkWs(): Promise<void> {
       decodeWireGoal7(goalSticky.frames[0].body)?.sevenDayValue === 0,
     "sticky 21010 frame stops at its length prefix"
   );
+  const wishItem = concatBytes(fieldVarint(1, 101), fieldVarint(2, 3));
+  const wishSlot = concatBytes(concatBytes(fieldVarint(1, 1), fieldVarint(2, 2)), fieldBytes(3, wishItem));
+  const wishSlotBadItem = concatBytes(concatBytes(fieldVarint(1, 2), fieldVarint(2, 0)), fieldBytes(3, new Uint8Array([0x80])));
+  const wishPool = concatBytes(
+    concatBytes(concatBytes(fieldVarint(1, 1), fieldVarint(2, 4)), fieldBytes(3, wishSlot)),
+    concatBytes(
+      concatBytes(fieldBytes(3, wishSlotBadItem), fieldVarint(4, 7)),
+      concatBytes(concatBytes(fieldVarint(5, 9), fieldVarint(6, 1792400000)), fieldVarint(7, 5))
+    )
+  );
+  const wishBody = fieldBytes(1, wishPool);
+  const wishOuterOnly = fieldVarint(8, 1);
+  const loggedWish = decodeWireWish(wishBody);
+  const wishEmptyOuter = decodeWireWish(wishOuterOnly);
+  assert(
+    WireCmd.blessingPool === 27001 &&
+      CmdId.wishView === 2501 &&
+      CmdId.wishDraw === 2502 &&
+      CmdId.goal7View === 2301,
+    "online 27001 stays off the placeholder wish ids and off goal7"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.blessingPool)) === "0400000079690000", "empty c2s 27001");
+  assert(bytesToHex(encodeFrame(27002)) !== "0400000079690000", "27002 is not the 27001 frame");
+  assert(bytesToHex(encodeFrame(27003)) !== "0400000079690000", "27003 is not the 27001 frame");
+  assert(bytesToHex(encodeFrame(27004)) !== "0400000079690000", "27004 is not the 27001 frame");
+  assert(bytesToHex(encodeFrame(4201)) !== "0400000079690000", "4201 is not the 27001 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.sevenDayTarget)) !== "0400000079690000", "21010 is not the 27001 frame");
+  assert(WIRE_WISH_READONLY_TITLE === "许愿池（真服只读）", "readonly wish title");
+  assert(WIRE_WISH_EMPTY === "空表" && WIRE_WISH_UNSYNCED_TOAST === "真服未同步", "empty wish table is not the unsynced toast");
+  assert(
+    WIRE_WISH_SIDE_EFFECT.indexOf("懒建") >= 0 &&
+      WIRE_WISH_SIDE_EFFECT.indexOf("跨日") >= 0 &&
+      WIRE_WISH_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_WISH_READONLY_NOTE.indexOf("不刷新") >= 0 &&
+      WIRE_WISH_READONLY_NOTE.indexOf("不抽奖") >= 0 &&
+      WIRE_WISH_READONLY_NOTE.indexOf("27002") >= 0 &&
+      WIRE_WISH_READONLY_NOTE.indexOf("27003") >= 0 &&
+      WIRE_WISH_READONLY_NOTE.indexOf("27004") >= 0 &&
+      WIRE_WISH_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_WISH_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_WISH_FIELD_NOTE.indexOf("type") >= 0 &&
+      WIRE_WISH_FIELD_NOTE.indexOf("refresh_times") >= 0 &&
+      WIRE_WISH_FIELD_NOTE.indexOf("position") >= 0 &&
+      WIRE_WISH_FIELD_NOTE.indexOf("lucky_value") >= 0 &&
+      WIRE_WISH_FIELD_NOTE.indexOf("lucky_reward_id") >= 0 &&
+      WIRE_WISH_FIELD_NOTE.indexOf("refresh_time") >= 0 &&
+      WIRE_WISH_FIELD_NOTE.indexOf("字段号") >= 0 &&
+      WIRE_WISH_READONLY_TITLE.indexOf("七日") < 0,
+    "wish page names the pool fields and refuses the paid cmds"
+  );
+  assert(decodeWireWish(new Uint8Array(0)) !== null && decodeWireWish(new Uint8Array(0))?.pools.length === 0, "empty 27001 body is a synced empty table");
+  assert(
+    wishEmptyOuter !== null && wishEmptyOuter.pools.length === 0 && wishEmptyOuter.marks.length === 1 && wishEmptyOuter.marks[0].field === 8,
+    "non-empty outer with no blessing_data stays synced and keeps the unnamed field"
+  );
+  assert(decodeWireWish(new Uint8Array([0x80])) === null, "bad 27001 ignored");
+  assert(decodeWireWish(fieldBytes(1, new Uint8Array([0x80]))) === null, "bad nested blessing_data does not become an empty table");
+  assert(
+    loggedWish !== null &&
+      loggedWish.pools.length === 1 &&
+      loggedWish.pools[0].type === 1 &&
+      loggedWish.pools[0].refreshTimes === 4 &&
+      loggedWish.pools[0].luckyValue === 7 &&
+      loggedWish.pools[0].luckyRewardId === 9 &&
+      loggedWish.pools[0].refreshTime === 1792400000 &&
+      loggedWish.pools[0].marks.length === 1 &&
+      loggedWish.pools[0].marks[0].field === 7 &&
+      loggedWish.pools[0].marks[0].text === "5" &&
+      loggedWish.pools[0].slots.length === 2 &&
+      formatWireWishHead(loggedWish.pools[0]) ===
+        "type=1 / refresh_times=4 / lucky_value=7 / lucky_reward_id=9 / refresh_time=1792400000 / 字段7=5" &&
+      formatWireWishSlot(loggedWish.pools[0].slots[0]) === "position=1 / times=2 / item=字段1=101,字段2=3" &&
+      formatWireWishSlot(loggedWish.pools[0].slots[1]) === "position=2 / times=0 / item=未解" &&
+      wireWishNote(loggedWish).indexOf(WIRE_WISH_SIDE_EFFECT) >= 0 &&
+      wireWishNote(loggedWish).indexOf("不写金币") >= 0 &&
+      wireWishNote(loggedWish).indexOf("不写钻石") >= 0 &&
+      wireWishNote(loggedWish).indexOf("item_id") < 0,
+    "27001 sample keeps named pool fields and writes unknown item numbers"
+  );
+  const wishMissing = decodeWireWish(fieldBytes(1, fieldVarint(1, 2)));
+  assert(
+    wishMissing !== null &&
+      formatWireWishHead(wishMissing.pools[0]) === "type=2 / refresh_times=无 / lucky_value=无 / lucky_reward_id=无 / refresh_time=无",
+    "missing wish numbers stay blank"
+  );
+  const wishSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.blessingPool, wishOuterOnly), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    wishSticky.frames.length === 2 &&
+      wishSticky.frames[0].cmdId === 27001 &&
+      wishSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireWish(wishSticky.frames[0].body)?.pools.length === 0 &&
+      decodeWireWish(wishSticky.frames[0].body)?.marks.length === 1,
+    "sticky 27001 frame stops at its length prefix"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -4046,6 +4153,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(22002, fieldVarint(1, 2)));
       roleSockets[0].push(encodeFrame(21013, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(WireCmd.sevenDayTarget, goalBody));
+      roleSockets[0].push(encodeFrame(WireCmd.blessingPool, wishBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -4059,6 +4167,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasPvp() && WireSession.pvp === null, "arena stays unsynced before the city role");
       assert(!WireSession.hasSevenDay() && WireSession.sevenDay === null, "seven day stays unsynced before the city role");
       assert(!WireSession.hasGoal7() && WireSession.goal7 === null, "goal7 stays unsynced before the city role");
+      assert(!WireSession.hasWish() && WireSession.wish === null, "wish stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -4158,6 +4267,23 @@ async function checkWs(): Promise<void> {
         "flush writes the 21010 list and leaves the 22000 login table"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "21010 stays off the wallet");
+      assert(
+        WireSession.hasWish() &&
+          WireSession.wish !== null &&
+          WireSession.wish.pools.length === 1 &&
+          WireSession.wish.pools[0].type === 1 &&
+          WireSession.wish.pools[0].refreshTimes === 4 &&
+          WireSession.wish.pools[0].luckyValue === 7 &&
+          WireSession.wish.pools[0].luckyRewardId === 9 &&
+          WireSession.wish.pools[0].refreshTime === 1792400000 &&
+          WireSession.wish.pools[0].slots.length === 2 &&
+          formatWireWishSlot(WireSession.wish.pools[0].slots[0]) === "position=1 / times=2 / item=字段1=101,字段2=3" &&
+          formatWireWishSlot(WireSession.wish.pools[0].slots[1]).indexOf("未解") >= 0 &&
+          WireSession.goal7 !== null &&
+          WireSession.goal7.tasks.length === 2,
+        "flush writes the 27001 list and leaves the 21010 table"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "27001 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -4380,7 +4506,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 8, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 9, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -4414,6 +4540,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 21010 after 22000"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 8] as ArrayBuffer)) === "0400000079690000",
+        "pullIdle sends empty c2s 27001 after 21010"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -4421,15 +4551,21 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 18001") &&
           sawLog(lines, "发送 c2s 22000") &&
           sawLog(lines, "发送 c2s 21010") &&
+          sawLog(lines, "发送 c2s 27001") &&
           sawLog(lines, "0400000012520000") &&
+          sawLog(lines, "0400000079690000") &&
           sawLog(lines, "0400000002520000") === false &&
           sawLog(lines, "发送 c2s 12020") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
           sawLog(lines, "发送 c2s 22001") === false &&
           sawLog(lines, "发送 c2s 21011") === false &&
           sawLog(lines, "发送 c2s 21012") === false &&
-          sawLog(lines, "发送 c2s 21013") === false,
-        "mail hero buy gold achievement arena seven day and goal pulls are logged"
+          sawLog(lines, "发送 c2s 21013") === false &&
+          sawLog(lines, "发送 c2s 27002") === false &&
+          sawLog(lines, "发送 c2s 27003") === false &&
+          sawLog(lines, "发送 c2s 27004") === false &&
+          sawLog(lines, "发送 c2s 4201") === false,
+        "mail hero buy gold achievement arena seven day goal and wish pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -4544,6 +4680,26 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 goal7.claim"),
         "goal claim and the target push are not encoded"
       );
+      roleNet.send(WIRE_WISH_CMD);
+      const wishSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(wishSent as ArrayBuffer)) === "0400000079690000", "wire.27001 frame");
+      const sentBeforeWishOther = roleSockets[0].sent.length;
+      roleNet.send("wire.27002");
+      roleNet.send("wire.27003");
+      roleNet.send("wire.27004");
+      roleNet.send("wire.4201");
+      roleNet.send(Cmd.wishView);
+      roleNet.send(Cmd.wishDraw);
+      assert(roleSockets[0].sent.length === sentBeforeWishOther, "27002 27003 27004 4201 and wish placeholders stay off the wire");
+      assert(
+        sawLog(lines, "未发送 wire.27002") &&
+          sawLog(lines, "未发送 wire.27003") &&
+          sawLog(lines, "未发送 wire.27004") &&
+          sawLog(lines, "未发送 wire.4201") &&
+          sawLog(lines, "未发送 wish.view") &&
+          sawLog(lines, "未发送 wish.draw"),
+        "wish refresh draw and lucky claim are not encoded"
+      );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
       assert(
@@ -4637,6 +4793,36 @@ async function checkWs(): Promise<void> {
         "non-empty 21010 without tasks stays synced and leaves 22000"
       );
       assert(Session.gold === goldBeforeBadGoal, "outer-only 21010 does not write gold");
+      const goldBeforeBadWish = Session.gold;
+      const diamondBeforeBadWish = Session.diamond;
+      roleSockets[0].push(encodeFrame(WireCmd.blessingPool, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasWish() &&
+          WireSession.wish !== null &&
+          WireSession.wish.pools.length === 1 &&
+          WireSession.wish.pools[0].type === 1 &&
+          sawWire("27001 解不开"),
+        "bad 27001 keeps the pool"
+      );
+      assert(Session.gold === goldBeforeBadWish && Session.diamond === diamondBeforeBadWish, "bad 27001 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.blessingPool));
+      assert(
+        WireSession.hasWish() && WireSession.wish !== null && WireSession.wish.pools.length === 0,
+        "empty 27001 body replaces the pool and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadWish && Session.diamond === diamondBeforeBadWish, "empty 27001 does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.blessingPool, wishOuterOnly));
+      assert(
+        WireSession.hasWish() &&
+          WireSession.wish !== null &&
+          WireSession.wish.pools.length === 0 &&
+          WireSession.wish.marks.length === 1 &&
+          WireSession.wish.marks[0].field === 8 &&
+          WireSession.goal7 !== null &&
+          WireSession.goal7.currDay === 1,
+        "non-empty 27001 without pools stays synced and leaves 21010"
+      );
+      assert(Session.gold === goldBeforeBadWish && Session.diamond === diamondBeforeBadWish, "outer-only 27001 does not write gold or diamonds");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {
