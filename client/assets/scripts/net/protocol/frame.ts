@@ -91,6 +91,15 @@ export const WireCmd = {
    * 不是占位 login7.view（2201）。不是点金 17000，也不是七日目标。
    */
   sevenDayLogin: 22000,
+  /**
+   * c2s 空体。进主城、空 c2s 22000 之后发。
+   * 整帧 `04 00 00 00 12 52 00 00`。21010 = 0x5212，小端 12 52 00 00。不要写成 02 52。
+   * GReqSevenDayTargetList，没有字段。s2c 是 GResSevenDayTargetList。
+   * 不发 21011、21012。21013 只收。旧号 21000 / 21001 不用。
+   * 首次拉取可能建档并懒填计数，不发奖。不是七日登录 22000，也不是点金 17000。
+   * 不是占位 goal7.view（2301）。
+   */
+  sevenDayTarget: 21010,
 } as const;
 
 /**

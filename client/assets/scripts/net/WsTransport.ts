@@ -17,7 +17,8 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 空的 c2s 17000 拉点金记录。s2c 17000 由 WireSession 按 GResBuyGoldLog 读，不写顶栏，不点金。
  * 空的 c2s 12010 拉成就记录。s2c 12010 由 WireSession 按 GResAchievementList 读，不写顶栏，不领奖。不发 12020。
  * 空的 c2s 18001 拉竞技场。s2c 18001 由 WireSession 按 GResPvpData 读，不写顶栏，不开战。不发 18002、18003、18005、18007、18008。
- * 空的 c2s 22000 拉七日登录。s2c 22000 由 WireSession 按 GResSevenDayLoginData 读，不写顶栏，不领奖。不发 22001。s2c 22002 只改 cur_day。别的号不猜。
+ * 空的 c2s 22000 拉七日登录。s2c 22000 由 WireSession 按 GResSevenDayLoginData 读，不写顶栏，不领奖。不发 22001。s2c 22002 只改 cur_day。
+ * 空的 c2s 21010 拉七日目标。s2c 21010 由 WireSession 按 GResSevenDayTargetList 读，不写顶栏，不发奖。不发 21011、21012。s2c 21013 只收，不改表。不是 22000，也不是 17000。别的号不猜。
  * 单条处理失败也不丢掉后面的帧。
  */
 
