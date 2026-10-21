@@ -38,8 +38,9 @@
  * 空的 c2s 73001（wire.73001，浮空岛时间 GReqFloatingIslandsTime / GResFloatingIslandsTime。next_time 是字段 2，stage 是字段 3。不编 73002、73003、73004。73002 有懒建和日刷写库。本号无写库。不做 20011。挂在 70001 之后）。
  * 空的 c2s 74300（wire.74300，图腾信息 GReqTotemsInfoList / GResTotemsInfoList。list 是字段 1，PSTotemsInfo 的 t_id、sys_id、hero_id、level、quality。不编 74301、74302、74303。不编 74304。74304 是推送，勿当拉包。本号无写库。不做 20011。挂在 73001 之后。与 74100 同城养成段）。
  * 空的 c2s 68001（wire.68001，星盘数据 GReqAstrolabeData / GResAstrolabeData。无 page。maxStar 是字段 1，active 是字段 2 的 PSMapData key、value，activeElem 是字段 3 的 int 列表，activeAstrolabe 是字段 4。不编 68002、68003、68004、68006。不编 68005。68005 是更新星数常量，勿当拉包。轻懒建，首次 load 可能 astrolabeDao.add 空行。无扣费，无领奖，无日刷写库。管理员认定可接受。不做 20011。挂在 74300 之后）。
+ * 空的 c2s 75501（wire.75501，魔方数据 GReqTweakCube / GResTweakCube。无 page。handler getData 不读 req。rank_hero 是字段 1 的 int64 列表，open_count 是字段 2，trench 是字段 3 的 PSTrench index、hero_id、last_change_time。不编 75502、75503、75504、75505。不编 75506。75506 是等级推送，勿当拉包。轻懒建，首次 get 可能 doCreate + tweakCubeDao.add，建免费槽并按战力塞供奉。无扣费，无领奖。管理员认定可接受，同星盘。不做 34001。不做 20011。挂在 68001 之后）。
  * 挂机页领取再编空的 c2s 3005（wire.3005）。
- * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。4004 见 wireSummon.ts。13044 见 wireProphet.ts。4101 见 wireJewel.ts。4013 见 wireIllustrat.ts。74100 见 wirePet.ts。51001 见 wireWorld.ts。20001 见 wirePromotion.ts。20012 见 wireFirstRecharge.ts。70001 见 wireReiki.ts。73001 见 wireFloatingIslands.ts。74300 见 wireTotems.ts。68001 见 wireAstrolabe.ts。
+ * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。4004 见 wireSummon.ts。13044 见 wireProphet.ts。4101 见 wireJewel.ts。4013 见 wireIllustrat.ts。74100 见 wirePet.ts。51001 见 wireWorld.ts。20001 见 wirePromotion.ts。20012 见 wireFirstRecharge.ts。70001 见 wireReiki.ts。73001 见 wireFloatingIslands.ts。74300 见 wireTotems.ts。68001 见 wireAstrolabe.ts。75501 见 wireTweakCube.ts。
  * 不编 12020。不编 22001，也不编 22002。不编 21011、21012。不编 21013。旧号 21000 / 21001 不编。
  * 3002 不编。5002 只收不发。5004–5009、5010、5011–5013 不编。
  * 邮件领取、已读、删除不编。占位 mail.* 仍是 1701–1705。
@@ -61,6 +62,7 @@
  * 空的 73001 要编。不编 73002、73003、73004。73002 有懒建和日刷写库，不当纯只读。本号无写库。不做 20011。挂在 70001 之后。不是灵器数据 70001。
  * 空的 74300 要编。不编 74301、74302、74303。不编 74304。74304 是 s2c 推送，勿发、勿当拉包。本号无写库。不做 20011。挂在 73001 之后。与 74100 同城养成段。不是浮空岛时间 73001。不是宠物信息 74100。
  * 空的 68001 要编。无 page。不编 68002、68003、68004、68006。不编 68005。68005 是更新星数常量，勿发、勿当拉包。轻懒建可接受。不做 20011。挂在 74300 之后。不是图腾信息 74300。
+ * 空的 75501 要编。无 page。不编 75502、75503、75504、75505。不编 75506。75506 是等级推送，勿发、勿当拉包。轻懒建可接受，同星盘。不做 34001。不做 20011。挂在 68001 之后。不是星盘数据 68001。
  */
 import { NetMessage } from "../NetTypes";
 import { Cmd } from "./cmds";
@@ -83,6 +85,7 @@ import { WIRE_REIKI_CMD } from "./wireReiki";
 import { WIRE_ISLANDS_CMD } from "./wireFloatingIslands";
 import { WIRE_TOTEMS_CMD } from "./wireTotems";
 import { WIRE_ASTROLABE_CMD } from "./wireAstrolabe";
+import { WIRE_CUBE_CMD } from "./wireTweakCube";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
 const LOGIN_FIELD1 = 7;
@@ -184,6 +187,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.73001 → 空的 c2s 73001（浮空岛时间 GReqFloatingIslandsTime / GResFloatingIslandsTime）。不编 73002、73003、73004。不做 20011。不是灵器数据 70001。
  * wire.74300 → 空的 c2s 74300（图腾信息 GReqTotemsInfoList / GResTotemsInfoList）。不编 74301、74302、74303、74304。不做 20011。不是浮空岛时间 73001。不是宠物信息 74100。
  * wire.68001 → 空的 c2s 68001（星盘数据 GReqAstrolabeData / GResAstrolabeData）。无 page。不编 68002、68003、68004、68005、68006。不做 20011。不是图腾信息 74300。
+ * wire.75501 → 空的 c2s 75501（魔方数据 GReqTweakCube / GResTweakCube）。无 page。不编 75502、75503、75504、75505、75506。不做 34001。不做 20011。不是星盘数据 68001。
  * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
  * 占位 idle.query / idle.claim 仍是 1301 / 1302，和这两帧不是一回事。
  * 占位 bag.list / bag.use 仍是 1601 / 1602。3002 / 3010 不编码。
@@ -209,6 +213,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.73002、wire.73003、wire.73004、wire.20011 不编码。73001 只编码空体。73002 有懒建和日刷写库。不做 20011。
  * wire.74301、wire.74302、wire.74303、wire.74304、wire.20011 不编码。74300 只编码空体。74304 是 s2c 推送，勿当拉包。不做 20011。
  * wire.68002、wire.68003、wire.68004、wire.68005、wire.68006、wire.20011 不编码。68001 只编码空体。68005 是更新星数常量，勿当拉包。不做 20011。
+ * wire.75502、wire.75503、wire.75504、wire.75505、wire.75506、wire.34001、wire.20011 不编码。75501 只编码空体。75506 是等级推送，勿当拉包。不做 34001。不做 20011。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -415,6 +420,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.astrolabeData,
       bytes: encodeFrame(WireCmd.astrolabeData),
+      note: "空体",
+    };
+  }
+  if (cmd === WIRE_CUBE_CMD) {
+    return {
+      cmdId: WireCmd.tweakCubeData,
+      bytes: encodeFrame(WireCmd.tweakCubeData),
       note: "空体",
     };
   }
