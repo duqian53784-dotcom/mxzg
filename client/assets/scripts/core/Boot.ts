@@ -276,7 +276,7 @@ export class Boot extends Component {
     }
     if (!this.alive || epoch !== this.wsEpoch) return false;
     this.wsLive = true;
-    // 登录回包可能和 2001 粘在同一条消息里。先听着，进主城再写进 Session。
+    // 登录回包可能和 2001、3007 粘在同一条消息里。先听着，进主城再写。
     WireSession.watch(net);
     return true;
   }
@@ -624,8 +624,10 @@ export class Boot extends Component {
     Session.applyWireRole({ account, serverId, roleId, name });
     if (this.wsNet) {
       WireSession.hold(this.wsNet);
+      WireSession.prepareCity();
       WireSession.flush();
       WireSession.pullRoleProfile();
+      WireSession.pullChapter();
     }
     if (this.loginPanel) {
       this.loginPanel.setStatus("进入主城…");

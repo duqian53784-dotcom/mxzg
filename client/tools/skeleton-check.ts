@@ -448,6 +448,7 @@ import {
   wireBody,
   wireRoleReady,
 } from "../assets/scripts/net/protocol/wireLogin";
+import { decodeWireChapter, formatWireMainline, WIRE_CHAPTER_CMD } from "../assets/scripts/net/protocol/wireChapter";
 import { decodeWireRole, WIRE_ROLE_CMD } from "../assets/scripts/net/protocol/wireProfile";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
@@ -2845,8 +2846,14 @@ async function checkWs(): Promise<void> {
   assert(WIRE_HEARTBEAT_MS === 25000, "heartbeat interval from the net log");
   assert(WireCmd.login === 1001 && WireCmd.heartbeat === 1004 && WireCmd.roleCreate === 1002, "wire ids");
   assert(WireCmd.roleProfile === 2001 && CmdId.towerView === 2001, "online 2001 stays off the placeholder table");
+  assert(WireCmd.chapterData === 3007 && CmdId.stageEnter === 1201, "online 3007 stays off the placeholder stage ids");
   assert(bytesToHex(encodeFrame(WireCmd.heartbeat)) === "04000000ec030000", "heartbeat frame");
   assert(bytesToHex(encodeFrame(WireCmd.roleProfile)) === "04000000d1070000", "empty c2s 2001 from the log");
+  assert(bytesToHex(encodeFrame(WireCmd.chapterData)) === "04000000bf0b0000", "empty c2s 3007 from the log");
+  assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
+  assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
+  assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
+  assert(formatWireMainline(4, 9) === "主线 · 当前 4 / 最高 9", "both idx on the label");
   const loginBody = encodeObservedLoginBody(960011, 1792466798);
   assert(
     bytesToHex(loginBody) === "2a0a31373932343636373938108bcc3a080718023a0d6d787a672d7765622d3130303132086c6f63616c646576",
@@ -3139,6 +3146,34 @@ async function checkWs(): Promise<void> {
     assert(decodeWireRole(roleNew.subarray(0, 8)) === null, "truncated 2001 ignored");
     assert(decodeWireRole(new Uint8Array([0xff, 0xff, 0xff])) === null, "bad 2001 ignored");
 
+    // net-20261020 三例 s2c 3007。字段 1 是领资源时间，字段 2 now_idx 都没有，字段 3 max_idx = 0。
+    const chapterSamples = [
+      hexToBytes("08f796d8d6061800"),
+      hexToBytes("08d0afdbd6061800"),
+      hexToBytes("08b6bedbd6061800"),
+    ];
+    for (let i = 0; i < chapterSamples.length; i++) {
+      const chapter = decodeWireChapter(chapterSamples[i]);
+      assert(
+        chapter !== null && chapter.nowIdx === null && chapter.maxIdx === 0,
+        "s2c 3007 sample " + i + " is max_idx 0 without now_idx"
+      );
+    }
+    const chapterBoth = decodeWireChapter(concatBytes(fieldVarint(2, 4), fieldVarint(3, 9)));
+    assert(chapterBoth !== null && chapterBoth.nowIdx === 4 && chapterBoth.maxIdx === 9, "3007 fields 2 and 3");
+    const chapterNow = decodeWireChapter(fieldVarint(2, 0));
+    assert(chapterNow !== null && chapterNow.nowIdx === 0 && chapterNow.maxIdx === null, "now_idx 0 is present");
+    const chapterTimeOnly = decodeWireChapter(fieldVarint(1, 1792464848));
+    assert(
+      chapterTimeOnly !== null && chapterTimeOnly.nowIdx === null && chapterTimeOnly.maxIdx === null,
+      "res_reward_time alone is not an idx"
+    );
+    const chapterExtra = decodeWireChapter(concatBytes(fieldVarint(3, 2), fieldVarint(4, 11)));
+    assert(chapterExtra !== null && chapterExtra.nowIdx === null && chapterExtra.maxIdx === 2, "extra_reward_id is not an idx");
+    assert(decodeWireChapter(new Uint8Array(0)) === null, "empty 3007 ignored");
+    assert(decodeWireChapter(chapterSamples[1].subarray(0, 3)) === null, "truncated 3007 ignored");
+    assert(decodeWireChapter(new Uint8Array([0xff, 0xff, 0xff])) === null, "bad 3007 ignored");
+
     const snapAccount2 = Session.account;
     const snapToken2 = Session.token;
     const snapServerId2 = Session.serverId;
@@ -3206,9 +3241,17 @@ async function checkWs(): Promise<void> {
       Session.applyEnter({ roleId: 9, name: kept || "甲", level: 2, gold: 3, diamond: 4 });
       WireSession.watch(roleNet);
       roleSockets[0].push(encodeFrame(WireCmd.roleProfile, roleNew));
+      roleSockets[0].push(encodeFrame(WireCmd.chapterData, chapterSamples[1]));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
+      assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
+      assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
+      assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
       Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
+      WireSession.prepareCity();
       WireSession.flush();
+      assert(WireSession.nowIdx === null && WireSession.maxIdx === 0, "flush writes max_idx 0 from the log");
+      assert(WireSession.mainlineLabel() === "主线 · 最高 0", "city label leaves 未同步");
+      assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
       assert(Session.wireSync.level && Session.role?.level === 1 && formatNameLine() === "见习冒险家 Lv1", "flush writes field 6");
       assert(Session.wireSync.gold && Session.gold === 0 && formatGoldLine() === "金币 0", "flush writes field 2 zero");
@@ -3236,6 +3279,25 @@ async function checkWs(): Promise<void> {
       assert(Session.gold === 0 && Session.diamond === 0 && sawWire("没有可写入"), "cup frame does not replace gold");
       roleSockets[0].push(encodeFrame(WireCmd.roleProfile, fieldVarint(2, 40)));
       assert(Session.gold === 40 && Session.diamond === 0 && Session.role?.level === 1, "later field 2 updates gold only");
+      assert(WireSession.mainlineLabel() === "主线 · 最高 0", "gold packet does not clear the chapter label");
+      roleSockets[0].push(encodeFrame(WireCmd.chapterData, new Uint8Array([0x80])));
+      assert(WireSession.maxIdx === 0 && WireSession.nowIdx === null && sawWire("3007 解不开"), "bad 3007 keeps the label");
+      roleSockets[0].push(encodeFrame(WireCmd.chapterData, fieldVarint(1, 1792464848)));
+      assert(WireSession.maxIdx === 0 && WireSession.nowIdx === null && sawWire("没有 now_idx"), "reward time does not clear idx");
+      roleSockets[0].push(encodeFrame(WireCmd.chapterData, fieldVarint(2, 7)));
+      assert(WireSession.nowIdx === 7 && WireSession.maxIdx === 0, "later now_idx keeps max_idx");
+      assert(WireSession.mainlineLabel() === "主线 · 当前 7 / 最高 0", "label shows both idx");
+      assert(Session.stageId === 1 && Session.gold === 40, "idx stays off the mock stage and wallet");
+      lines.length = 0;
+      roleNet.send(WIRE_CHAPTER_CMD);
+      const chapterSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(chapterSent as ArrayBuffer)) === "04000000bf0b0000", "pull sends empty c2s 3007");
+      assert(sawLog(lines, "发送 c2s 3007"), "chapter pull is logged");
+      const sentBeforeIdle = roleSockets[0].sent.length;
+      roleNet.send("wire.3004");
+      roleNet.send("wire.3002");
+      assert(roleSockets[0].sent.length === sentBeforeIdle, "3002 and 3004 stay off the wire");
+      assert(sawLog(lines, "未发送 wire.3004") && sawLog(lines, "未发送 wire.3002"), "other battle cmds are not encoded");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {
