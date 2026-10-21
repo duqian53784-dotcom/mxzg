@@ -101,7 +101,7 @@ echo.
 echo [1/2] 启动 mxzg-center ...
 call :CheckCenterFiles
 if errorlevel 1 goto :Fatal
-echo   java -Xms512m -Xmx2048m -cp "target/classes;target/lib/*" com.ayjs.mxzg.center.CenterBootstrap
+echo   java -Xms512m -Xmx2048m -cp ^"target/classes;target/lib/*^" com.ayjs.mxzg.center.CenterBootstrap
 start "mxzg-center" cmd /k "cd /d %ROOT%\mxzg-center && java -Xms512m -Xmx2048m -cp ""target/classes;target/lib/*"" com.ayjs.mxzg.center.CenterBootstrap"
 call :WaitTwoPorts 11122 9801 180 "中心服"
 if errorlevel 1 goto :CenterWaitFail
@@ -141,7 +141,7 @@ echo.
 echo [2/2] 启动 mxzg-gameserver ...
 call :CheckGameFiles
 if errorlevel 1 goto :Fatal
-echo   java -Xms512m -Xmx2048m -cp "target/classes;target/lib/*" com.ayjs.mxzg.gameserver.Bootstrap
+echo   java -Xms512m -Xmx2048m -cp ^"target/classes;target/lib/*^" com.ayjs.mxzg.gameserver.Bootstrap
 start "mxzg-gameserver" cmd /k "cd /d %ROOT%\mxzg-gameserver && java -Xms512m -Xmx2048m -cp ""target/classes;target/lib/*"" com.ayjs.mxzg.gameserver.Bootstrap"
 call :WaitTwoPorts 9902 13101 180 "游戏服"
 if errorlevel 1 goto :Fatal
@@ -188,12 +188,12 @@ exit /b 0
 
 :RequireFile
 if exist "%~1" exit /b 0
-echo [失败] %~2 还不能启动，找不到 %~1 。先按 docs/server-local-run.md 第 3 节构建、第 4 节把 .temp 复制成 properties，并按 Q13 同步到 target\classes。脚本不会代做构建，也不会改配置。
+echo [失败] %~2 还不能启动，找不到 %~1 。先按 docs\server-local-run.md 第 3 节构建、第 4 节把 .temp 复制成 properties，并按 Q13 同步到 target\classes。脚本不会代做构建，也不会改配置。
 exit /b 1
 
 :RequireLib
 if exist "%~1\" exit /b 0
-echo [失败] %~1 不存在, 请先 Maven 构建，并在该模块执行 mvn -o dependency:copy-dependencies "-DoutputDirectory=target/lib"。本脚本不代做这一步，也不改配置。
+echo [失败] %~1 不存在, 请先 Maven 构建，并在该模块执行 mvn -o dependency:copy-dependencies -DoutputDirectory=target/lib 。本脚本不代做这一步，也不改配置。
 exit /b 1
 
 rem ============================================================
@@ -308,8 +308,8 @@ echo 关键端口没听全。成功要同时听到 TCP 11122、TCP 9902、WS 131
 exit /b 1
 :HealthOk
 echo [启动成功] TCP 11122、TCP 9902、WS 13101 都在听。
-echo 没启动 cross 时，游戏服日志里连接 127.0.0.1:11422 失败，中心服日志里游戏服加载跨服失败，都是预期，不算失败。
-echo D1 仍要倩确认之后才能在 PROJECT_PLAN.md 里打勾。客户端仍走 Mock。
+echo 没启动 cross 时，游戏服连 127.0.0.1:11422 失败、中心服跨服加载失败是预期，不算启动失败。
+echo 客户端仍走 Mock。下一项是 D2：本仓库 H5 接 WS 13101。
 exit /b 0
 
 :StopHint

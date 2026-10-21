@@ -1,8 +1,9 @@
 # 本机起服（D1）
 
 > **来源：** 本文按 2026-10-19《项目分析与启动指南》写成。端口、密码、路径和命令只取那份分析，不另补。  
-> **D1 仍未勾选。** 分析记录的是当天那台开发机：中心服和游戏服起来了，跨服因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败，大型跨服没有启动。一键脚本的成功标准是 TCP `11122`、TCP `9902`、WS `13101` 都在听。倩确认之前，`PROJECT_PLAN.md` 里的 D1 保持 `[ ]`。  
-> **客户端仍走 Mock。** 本仓库 H5 连服是 D2，用分析里的游戏服 WebSocket **13101**。D1 只写怎么把 Java 服拉起来。
+> **D1 已在倩本机验证（2026-10-21，Asia/Shanghai）。** 双击 `scripts\start-local-server.bat`：`netstat` 见 TCP `11122`、TCP `9902`、WS `13101` 均在听，脚本打出「[启动成功]」。`PROJECT_PLAN.md` 里 D1 已勾选。  
+> **cross 默认不启。** 游戏服连 `127.0.0.1:11422` 失败、中心服「游戏服加载跨服失败」类日志是预期，不算启动失败。分析里 cross 曾因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败；单机只需 center + gameserver。  
+> **客户端仍走 Mock。** 本仓库 H5 连服是 **D2**，用分析里的游戏服 WebSocket **13101**。
 
 `server/`、`config/` 是本机 junction，不在 Git 里。不要把 junction 背后的内容推进这个仓库。
 
@@ -147,7 +148,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File F:\project\mxzg\scripts\star
 
 `stop-local-server.ps1` 和 `start-local-server.ps1 -Stop` 同样只打印停止说明。
 
-分析里的 `F:\源码\mj\program\start-services.bat` 仍会各开一个窗口。2026-10-21 有一次双击：11122、9902、13101 已在听，9804 的 actuator 是 UP，但 9801 的 `/actuator/health` 返回 404，旧脚本因此打印启动失败。成功标准已改成上面三个端口。D1 仍未勾选，等倩确认这次改过的脚本。
+分析里的 `F:\源码\mj\program\start-services.bat` 仍会各开一个窗口。2026-10-21 倩本机用本仓库 `start-local-server.bat` 验证：11122、9902、13101 在听即成功；9801 的 `/actuator/health` 可能 404（只警告）。没启 cross 时 11422 / 跨服日志噪声是预期。
 
 ## 1. MySQL
 
@@ -391,14 +392,14 @@ netstat -ano | findstr "11122 9902 13101"
 
 一键脚本认成功，只要求 `netstat` 里同时有 `11122`、`9902`、`13101`。9801 端口在听但 `/actuator/health` 返回 404 时，脚本警告 actuator 可能不存在，不因此失败。9804 的 curl 失败也只警告。
 
-下面这项留给倩在开发机上打勾。D1 仍不勾。
+**2026-10-21（倩本机）** 已对照下面清单完成 D1 验证（cross 未启，11422 相关日志按预期忽略）：
 
-- [ ] `MySQL80`、`RedisDev` 已在跑
-- [ ] center 日志有 `Center Server started...`
-- [ ] `curl http://127.0.0.1:9801/actuator/health`：端口在听但返回 404 只是警告，不单独挡住一键脚本
-- [ ] gameserver 已启动；`curl http://127.0.0.1:9804/actuator/health` 失败只警告，不单独挡住一键脚本
-- [ ] `netstat -ano | findstr "11122 9902 13101"` 能看到 center 的 `11122`、gameserver 的 `9902` 和 `13101`
-- [ ] 新客户端预览仍走 Mock，没有改去连 `13101`
+- [x] `MySQL80`、`RedisDev` 已在跑
+- [x] center 日志有 `Center Server started...`
+- [x] `curl http://127.0.0.1:9801/actuator/health`：端口在听但返回 404 只是警告，不单独挡住一键脚本
+- [x] gameserver 已启动；`curl http://127.0.0.1:9804/actuator/health` 失败只警告，不单独挡住一键脚本
+- [x] `netstat -ano | findstr "11122 9902 13101"` 能看到 center 的 `11122`、gameserver 的 `9902` 和 `13101`
+- [x] 新客户端预览仍走 Mock，没有改去连 `13101`
 
 cross 失败不挡住这张清单。单机不要求它在听。游戏服日志里连接 `127.0.0.1:11422` 失败，以及中心服日志里游戏服加载跨服失败，是没启动 cross 时的预期。
 
