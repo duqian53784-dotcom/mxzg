@@ -70,6 +70,7 @@ import { buildWireRunningPromotionPage, WireRunningPromotionPage } from "./WireR
 import { buildWireTowerRewardPage, WireTowerRewardPage } from "./WireTowerRewardPage";
 import { buildWireHeroLevelResetTimesPage, WireHeroLevelResetTimesPage } from "./WireHeroLevelResetTimesPage";
 import { buildWireSignInListPage, WireSignInListPage } from "./WireSignInListPage";
+import { buildWireDailyTaskListPage, WireDailyTaskListPage } from "./WireDailyTaskListPage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -101,6 +102,7 @@ import { WIRE_RUNNING_PROMOTION_UNSYNCED_TOAST } from "../net/protocol/wireRunni
 import { WIRE_TOWER_REWARD_UNSYNCED_TOAST } from "../net/protocol/wireTowerReward";
 import { WIRE_HERO_LEVEL_RESET_TIMES_UNSYNCED_TOAST } from "../net/protocol/wireHeroLevelResetTimes";
 import { WIRE_SIGN_IN_LIST_UNSYNCED_TOAST } from "../net/protocol/wireSignInList";
+import { WIRE_DAILY_TASK_LIST_UNSYNCED_TOAST } from "../net/protocol/wireDailyTaskList";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -199,6 +201,7 @@ const RUNNING_PROMOTION_FILL = new Color(168, 92, 48, 255);
 const TOWER_REWARD_FILL = new Color(96, 72, 156, 255);
 const HERO_LEVEL_RESET_TIMES_FILL = new Color(120, 64, 88, 255);
 const SIGN_IN_LIST_FILL = new Color(48, 112, 72, 255);
+const DAILY_TASK_LIST_FILL = new Color(88, 72, 140, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -244,6 +247,7 @@ export class MainApp extends Component {
   private towerReward: WireTowerRewardPage | null = null;
   private heroLevelResetTimes: WireHeroLevelResetTimesPage | null = null;
   private signInList: WireSignInListPage | null = null;
+  private dailyTaskList: WireDailyTaskListPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -357,6 +361,8 @@ export class MainApp extends Component {
     this.heroLevelResetTimes = null;
     this.signInList?.dispose();
     this.signInList = null;
+    this.dailyTaskList?.dispose();
+    this.dailyTaskList = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -470,7 +476,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -547,6 +553,7 @@ export class MainApp extends Component {
     if (id === "towerReward") return this.mountTowerReward();
     if (id === "heroLevelResetTimes") return this.mountHeroLevelResetTimes();
     if (id === "signInList") return this.mountSignInList();
+    if (id === "dailyTaskList") return this.mountDailyTaskList();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -659,6 +666,7 @@ export class MainApp extends Component {
     place(createButton("爬塔首通已领", () => this.openTowerReward(), 180, 32, TOWER_REWARD_FILL, 14), page, -220, 78);
     place(createButton("英雄等级重生次数", () => this.openHeroLevelResetTimes(), 220, 32, HERO_LEVEL_RESET_TIMES_FILL, 14), page, 0, 124);
     place(createButton("签到列表", () => this.openSignInList(), 160, 32, SIGN_IN_LIST_FILL, 14), page, 0, 170);
+    place(createButton("每日任务列表", () => this.openDailyTaskList(), 180, 32, DAILY_TASK_LIST_FILL, 14), page, 0, 216);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -870,6 +878,7 @@ export class MainApp extends Component {
     if (id === "towerReward") return this.blockWireTowerReward();
     if (id === "heroLevelResetTimes") return this.blockWireHeroLevelResetTimes();
     if (id === "signInList") return this.blockWireSignInList();
+    if (id === "dailyTaskList") return this.blockWireDailyTaskList();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -1173,7 +1182,7 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 3203 就停在主城。空包体也算同步。不发 3202、3204、3205、3206、3220。3200 本轮勿挂。4044 英雄等级重生次数另只读接在其后，勿合并。不做 20011。5001、51001 已有，勿重复。3099、3101、20101 勿再发。不做 3012、3010、12020、19001。4601 有 page，硬禁。29001 有 page，硬禁。20101 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  /** 没收到过 s2c 3203 就停在主城。空包体也算同步。不发 3202、3204、3205、3206、3220。3200 本轮勿挂。4044 英雄等级重生次数另只读接在其后，勿合并。不做 20011。5001、51001 已有，勿重复。3099、3101、20101 勿再发。不做 3012、3010、19001。12020 每日任务列表另只读接在 13010 之后。4601 有 page，硬禁。29001 有 page，硬禁。20101 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
   private blockWireTowerReward(): boolean {
     if (Session.source === "wire" && WireSession.hasTowerReward()) return false;
     GameLog.shared.info("MainApp", "wire tower reward unsynced");
@@ -1189,11 +1198,19 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 13010 就停在主城。空包体也算同步。不发 13011。不发 12020。不做 20011。不是启动链 12010。5001、51001 已有，勿重复。4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。4044 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  /** 没收到过 s2c 13010 就停在主城。空包体也算同步。不发 13011。12020 每日任务列表另只读接在其后，勿合并。不做 20011。不是启动链 12010。5001、51001 已有，勿重复。4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。4044 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
   private blockWireSignInList(): boolean {
     if (Session.source === "wire" && WireSession.hasSignInList()) return false;
     GameLog.shared.info("MainApp", "wire sign in list unsynced");
     this.shell?.showToast(WIRE_SIGN_IN_LIST_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 12020 就停在主城。空包体也算同步。不发 12021。不发 12022。不做 26002。不做 20011。不是启动链 12010。5001、51001 已有，勿重复。13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。13010 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireDailyTaskList(): boolean {
+    if (Session.source === "wire" && WireSession.hasDailyTaskList()) return false;
+    GameLog.shared.info("MainApp", "wire daily task list unsynced");
+    this.shell?.showToast(WIRE_DAILY_TASK_LIST_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -2089,7 +2106,7 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 真服爬塔首通已领。未同步 Toast。已同步压入只读页，列出已领 idx。无买票、领首通、扫荡入口。不发 3202、3204、3205、3206、3220。3200 本轮勿挂。4044 英雄等级重生次数另只读接在其后，勿合并。不做 20011。5001、51001 已有，勿重复。3099、3101、20101 勿再发。不做 3012、3010、12020、19001。4601 有 page，硬禁。29001 有 page，硬禁。与 20101 分开发，勿合并。本刀不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  /** 真服爬塔首通已领。未同步 Toast。已同步压入只读页，列出已领 idx。无买票、领首通、扫荡入口。不发 3202、3204、3205、3206、3220。3200 本轮勿挂。4044 英雄等级重生次数另只读接在其后，勿合并。不做 20011。5001、51001 已有，勿重复。3099、3101、20101 勿再发。不做 3012、3010、19001。12020 每日任务列表另只读接在 13010 之后。4601 有 page，硬禁。29001 有 page，硬禁。与 20101 分开发，勿合并。本刀不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
   private openTowerReward(): void {
     GameLog.shared.info("MainApp", "click tower reward");
     if (this.blockWirePage("towerReward")) return;
@@ -2135,7 +2152,7 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 真服签到列表。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 days、isSignIn、month、charged、newServer。无领奖入口。不发 13011。不发 12020。不做 20011。不是启动链 12010。5001、51001 已有，勿重复。4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 4044 分开发，勿合并。本刀不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  /** 真服签到列表。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 days、isSignIn、month、charged、newServer。无领奖入口。不发 13011。12020 每日任务列表另只读接在其后，勿合并。不做 20011。不是启动链 12010。5001、51001 已有，勿重复。4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 4044 分开发，勿合并。本刀不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
   private openSignInList(): void {
     GameLog.shared.info("MainApp", "click sign in list");
     if (this.blockWirePage("signInList")) return;
@@ -2155,6 +2172,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.signInList = page;
+    return page.node;
+  }
+
+  /** 真服每日任务列表。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 Task、RewardBoxIdx、DailyValue。无领奖入口。不发 12021。不发 12022。不做 26002。不做 20011。不是启动链 12010。5001、51001 已有，勿重复。13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 13010 分开发，勿合并。本刀不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  private openDailyTaskList(): void {
+    GameLog.shared.info("MainApp", "click daily task list");
+    if (this.blockWirePage("dailyTaskList")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("dailyTaskList");
+    this.refreshChrome();
+  }
+
+  private mountDailyTaskList(): Node {
+    this.dailyTaskList?.dispose();
+    const page = buildWireDailyTaskListPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.dailyTaskList = page;
     return page.node;
   }
 
@@ -2985,6 +3025,10 @@ export class MainApp extends Component {
     if (id === "signInList") {
       this.signInList?.dispose();
       this.signInList = null;
+    }
+    if (id === "dailyTaskList") {
+      this.dailyTaskList?.dispose();
+      this.dailyTaskList = null;
     }
     if (id === "bag") {
       this.bag?.dispose();
