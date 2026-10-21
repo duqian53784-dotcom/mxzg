@@ -29,6 +29,7 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 空的 c2s 20001 拉基金列表。s2c 20001 由 WireSession 按 GResPromotionList 读 is_buy_foundation 和 foundation_reward_record，不写顶栏。不发 20018。不发 20004、20010。不做 3007。挂在 51001 之后。不回落 Mock。
  * 空的 c2s 20012 拉超值首充记录。s2c 20012 由 WireSession 按 GResFirstRecharge 读 recharge、list 已领 idx 和 can_reward，不写顶栏。不发 20013。不做 13260。挂在 20001 之后。不回落 Mock。
  * 空的 c2s 70001 拉灵器数据。s2c 70001 由 WireSession 按 GResReikiEquipData 读 list 的 hero_id、sys_id、reiki_equip_id，不写顶栏。不发 70002、70003、70004、70005、70006。70007、70008 仅推送，不当拉包请求。不做 20011。挂在 20012 之后。不回落 Mock。
+ * 空的 c2s 73001 拉浮空岛时间。s2c 73001 由 WireSession 按 GResFloatingIslandsTime 读 next_time、stage，不写顶栏。不发 73002、73003、73004。73002 有懒建和日刷写库，不当纯只读。本号无写库。不做 20011。挂在 70001 之后。不回落 Mock。
  * 单条处理失败也不丢掉后面的帧。
  */
 
