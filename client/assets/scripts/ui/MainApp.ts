@@ -64,6 +64,7 @@ import { buildWireShenBinPage, WireShenBinPage } from "./WireShenBinPage";
 import { buildWireOccupationPage, WireOccupationPage } from "./WireOccupationPage";
 import { buildWireRoleShenBinPage, WireRoleShenBinPage } from "./WireRoleShenBinPage";
 import { buildWireFetterContractPage, WireFetterContractPage } from "./WireFetterContractPage";
+import { buildWireFormationPage, WireFormationPage } from "./WireFormationPage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -89,6 +90,7 @@ import { WIRE_SHENBIN_UNSYNCED_TOAST } from "../net/protocol/wireShenBin";
 import { WIRE_OCCUPATION_UNSYNCED_TOAST } from "../net/protocol/wireOccupation";
 import { WIRE_ROLE_SHENBIN_UNSYNCED_TOAST } from "../net/protocol/wireRoleShenBin";
 import { WIRE_FETTER_CONTRACT_UNSYNCED_TOAST } from "../net/protocol/wireFetterContract";
+import { WIRE_FORMATION_UNSYNCED_TOAST } from "../net/protocol/wireFormation";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -181,6 +183,7 @@ const SHENBIN_FILL = new Color(148, 96, 168, 255);
 const OCCUPATION_FILL = new Color(72, 120, 156, 255);
 const ROLE_SHENBIN_FILL = new Color(156, 108, 64, 255);
 const FETTER_CONTRACT_FILL = new Color(112, 84, 148, 255);
+const FORMATION_FILL = new Color(64, 108, 132, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -220,6 +223,7 @@ export class MainApp extends Component {
   private occupation: WireOccupationPage | null = null;
   private roleShenBin: WireRoleShenBinPage | null = null;
   private fetterContract: WireFetterContractPage | null = null;
+  private formation: WireFormationPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -321,6 +325,8 @@ export class MainApp extends Component {
     this.roleShenBin = null;
     this.fetterContract?.dispose();
     this.fetterContract = null;
+    this.formation?.dispose();
+    this.formation = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -434,7 +440,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -505,6 +511,7 @@ export class MainApp extends Component {
     if (id === "occupation") return this.mountOccupation();
     if (id === "roleShenBin") return this.mountRoleShenBin();
     if (id === "fetterContract") return this.mountFetterContract();
+    if (id === "formation") return this.mountFormation();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -611,6 +618,7 @@ export class MainApp extends Component {
     place(createButton("职级信息", () => this.openOccupation(), 140, 32, OCCUPATION_FILL, 14), page, 0, -14);
     place(createButton("神兵道具", () => this.openRoleShenBin(), 140, 32, ROLE_SHENBIN_FILL, 14), page, 0, 32);
     place(createButton("查看契约", () => this.openFetterContract(), 140, 32, FETTER_CONTRACT_FILL, 14), page, 220, 32);
+    place(createButton("查询阵法", () => this.openFormation(), 140, 32, FORMATION_FILL, 14), page, -220, 32);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -816,6 +824,7 @@ export class MainApp extends Component {
     if (id === "occupation") return this.blockWireOccupation();
     if (id === "roleShenBin") return this.blockWireRoleShenBin();
     if (id === "fetterContract") return this.blockWireFetterContract();
+    if (id === "formation") return this.blockWireFormation();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -1087,11 +1096,19 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 28107 就停在主城。空包体也算同步。不发 28101、28102、28104、28105、28106、28108、28109。不发 28002、28003、28004。不发 28201–28205。不做备选 3099。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。75615、75606 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  /** 没收到过 s2c 28107 就停在主城。空包体也算同步。不发 28101、28102、28104、28105、28106、28108、28109。不发 28002、28003、28004。不发 28201–28205。3099 查询阵法另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。75615、75606 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
   private blockWireFetterContract(): boolean {
     if (Session.source === "wire" && WireSession.hasFetterContract()) return false;
     GameLog.shared.info("MainApp", "wire fetter contract unsynced");
     this.shell?.showToast(WIRE_FETTER_CONTRACT_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 3099 就停在主城。空包体也算同步。不发 3097、3098、3100。不发 3102、3030。不做备选 3101。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。28107、75615 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireFormation(): boolean {
+    if (Session.source === "wire" && WireSession.hasFormation()) return false;
+    GameLog.shared.info("MainApp", "wire formation unsynced");
+    this.shell?.showToast(WIRE_FORMATION_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -1895,7 +1912,7 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 真服契约。未同步 Toast。已同步压入只读页，列出已激活 contracts。不保证顺序。无解锁契约、升级、升技、突破、重置、铸魂、洗炼入口。不发 28101、28102、28104、28105、28106、28108、28109。不发 28002、28003、28004。不发 28201–28205。不做备选 3099。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 75615、75606 分开发，勿合并。本刀不重复拉 75615，也不重复拉 75606。 */
+  /** 真服契约。未同步 Toast。已同步压入只读页，列出已激活 contracts。不保证顺序。无解锁契约、升级、升技、突破、重置、铸魂、洗炼入口。不发 28101、28102、28104、28105、28106、28108、28109。不发 28002、28003、28004。不发 28201–28205。3099 查询阵法另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 75615、75606 分开发，勿合并。本刀不重复拉 75615，也不重复拉 75606。 */
   private openFetterContract(): void {
     GameLog.shared.info("MainApp", "click fetter contract");
     if (this.blockWirePage("fetterContract")) return;
@@ -1915,6 +1932,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.fetterContract = page;
+    return page.node;
+  }
+
+  /** 真服阵法。未同步 Toast。已同步压入只读页，列出已解锁 unlockIds。不保证顺序。无解锁阵法、保存战斗队列入口。不发 3097、3098、3100。不发 3102、3030。不做备选 3101。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 28107、75615 分开发，勿合并。本刀不重复拉 28107，也不重复拉 75615。 */
+  private openFormation(): void {
+    GameLog.shared.info("MainApp", "click formation");
+    if (this.blockWirePage("formation")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("formation");
+    this.refreshChrome();
+  }
+
+  private mountFormation(): Node {
+    this.formation?.dispose();
+    const page = buildWireFormationPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.formation = page;
     return page.node;
   }
 
@@ -2721,6 +2761,10 @@ export class MainApp extends Component {
     if (id === "fetterContract") {
       this.fetterContract?.dispose();
       this.fetterContract = null;
+    }
+    if (id === "formation") {
+      this.formation?.dispose();
+      this.formation = null;
     }
     if (id === "bag") {
       this.bag?.dispose();
