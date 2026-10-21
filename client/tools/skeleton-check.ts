@@ -844,6 +844,19 @@ import {
   WIRE_FASHION_UNSYNCED_TOAST,
   wireFashionNote,
 } from "../assets/scripts/net/protocol/wireFashion";
+import {
+  decodeWireWornFashion,
+  formatWireWornFashionHead,
+  formatWireWornFashionLine,
+  WIRE_WORN_FASHION_CMD,
+  WIRE_WORN_FASHION_EMPTY,
+  WIRE_WORN_FASHION_FIELD_NOTE,
+  WIRE_WORN_FASHION_READONLY_NOTE,
+  WIRE_WORN_FASHION_READONLY_TITLE,
+  WIRE_WORN_FASHION_SIDE_EFFECT,
+  WIRE_WORN_FASHION_UNSYNCED_TOAST,
+  wireWornFashionNote,
+} from "../assets/scripts/net/protocol/wireWornFashion";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1574,6 +1587,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("headPortrait") === "city", "head portrait list stays on the city tab");
   assert(rootTabFor("borderData") === "city", "border data stays on the city tab");
   assert(rootTabFor("fashionList") === "city", "fashion list stays on the city tab");
+  assert(rootTabFor("wornFashion") === "city", "worn fashion list stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -4268,6 +4282,21 @@ async function checkWs(): Promise<void> {
     concatBytes(concatBytes(fashionWide, fashionNeg), concatBytes(fashionZero, fieldVarint(8, 1)))
   );
   const fashionOuterOnly = fieldVarint(8, 1);
+  const wornOn = fieldBytes(1, concatBytes(fieldVarint(1, 3), fieldVarint(2, 11)));
+  const wornZero = fieldBytes(1, concatBytes(fieldVarint(1, 0), fieldVarint(2, 0)));
+  const wornMissingFashion = fieldBytes(1, fieldVarint(1, 4));
+  const wornMissingHero = fieldBytes(1, fieldVarint(2, 9));
+  const wornWide = fieldBytes(1, concatBytes(fieldVarint(1, 1), fieldVarint(2, 1099511627776)));
+  const wornNeg = fieldBytes(1, concatBytes(fieldVarint(1, 6), fieldNeg1(2)));
+  const wornBody = concatBytes(
+    concatBytes(concatBytes(wornOn, wornZero), concatBytes(wornMissingFashion, wornMissingHero)),
+    concatBytes(wornWide, concatBytes(wornNeg, fieldVarint(8, 1)))
+  );
+  const wornOuterOnly = fieldVarint(8, 1);
+  const emptyWorn = {
+    list: [] as { heroId: number | null; fashionId: number | null; marks: { field: number; text: string }[] }[],
+    marks: [] as { field: number; text: string }[],
+  };
   const emptyFashion = {
     list: [] as {
       heroType: number | null;
@@ -6579,6 +6608,157 @@ async function checkWs(): Promise<void> {
       decodeWireFashion(fieldVarint(1, 7))?.marks[0].text === "7",
     "4402 outer varint is a mark and is not a fashion row"
   );
+  const loggedWorn = decodeWireWornFashion(wornBody);
+  assert(
+    WireCmd.heroFashion === 4401 &&
+      WireCmd.heroFashion !== WireCmd.heroFashionList &&
+      WireCmd.heroFashion !== WireCmd.borderData,
+    "online 4401 stays off 4402 and 32001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.heroFashion)) === "0400000031110000", "empty c2s 4401");
+  assert(bytesToHex(encodeFrame(WireCmd.heroFashion)) !== "0400000032110000", "4401 is not the 4402 frame");
+  assert(bytesToHex(encodeFrame(4402)) !== "0400000031110000", "4402 is not the 4401 frame");
+  assert(bytesToHex(encodeFrame(4403)) !== "0400000031110000", "4403 is not the 4401 frame");
+  assert(bytesToHex(encodeFrame(4404)) !== "0400000031110000", "4404 is not the 4401 frame");
+  assert(bytesToHex(encodeFrame(4405)) !== "0400000031110000", "4405 is not the 4401 frame");
+  assert(bytesToHex(encodeFrame(4406)) !== "0400000031110000", "4406 is not the 4401 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "0400000031110000", "4601 is not the 4401 frame");
+  assert(bytesToHex(encodeFrame(4201)) !== "0400000031110000", "4201 is not the 4401 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "0400000031110000", "29001 is not the 4401 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "0400000031110000", "20011 is not the 4401 frame");
+  assert(WIRE_WORN_FASHION_CMD === "wire.4401", "worn fashion wire cmd");
+  assert(WIRE_WORN_FASHION_READONLY_TITLE === "穿戴皮肤英雄列表（真服只读）", "readonly worn fashion title");
+  assert(WIRE_WORN_FASHION_UNSYNCED_TOAST === "真服未同步", "unsynced worn fashion toast");
+  assert(WIRE_WORN_FASHION_EMPTY === "空穿戴", "empty worn fashion label");
+  assert(
+    WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("HeroFashion") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("fashionId") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("清理") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("无邮件") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("4403") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("4404") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("4405") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("4406") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("4402") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("4201") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_WORN_FASHION_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("无激活") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("4403") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("4404") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("4405") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("分刀") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("4201") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_WORN_FASHION_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_WORN_FASHION_FIELD_NOTE.indexOf("hero_id") >= 0 &&
+      WIRE_WORN_FASHION_FIELD_NOTE.indexOf("fashion_id") >= 0 &&
+      WIRE_WORN_FASHION_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "worn fashion page names the two fields and refuses the write cmds"
+  );
+  assert(
+    decodeWireWornFashion(new Uint8Array(0)) !== null &&
+      decodeWireWornFashion(new Uint8Array(0))?.list.length === 0 &&
+      formatWireWornFashionHead(decodeWireWornFashion(new Uint8Array(0)) || emptyWorn) === "list=空穿戴",
+    "empty 4401 body is synced and does not invent zero"
+  );
+  assert(decodeWireWornFashion(new Uint8Array([0x80])) === null, "bad 4401 ignored");
+  const wornZeroSnap = decodeWireWornFashion(wornZero);
+  assert(
+    wornZeroSnap !== null &&
+      wornZeroSnap.list.length === 1 &&
+      wornZeroSnap.list[0].heroId === 0 &&
+      wornZeroSnap.list[0].fashionId === 0 &&
+      formatWireWornFashionLine(wornZeroSnap.list[0]) === "hero_id=0 / fashion_id=0",
+    "present 4401 zero stays zero"
+  );
+  const wornMissingSnap = decodeWireWornFashion(wornMissingFashion);
+  assert(
+    wornMissingSnap !== null &&
+      wornMissingSnap.list.length === 1 &&
+      wornMissingSnap.list[0].heroId === 4 &&
+      wornMissingSnap.list[0].fashionId === null &&
+      formatWireWornFashionLine(wornMissingSnap.list[0]) === "hero_id=4 / fashion_id=无",
+    "missing 4401 fashion_id stays blank and does not invent zero"
+  );
+  const wornMissingHeroSnap = decodeWireWornFashion(wornMissingHero);
+  assert(
+    wornMissingHeroSnap !== null &&
+      wornMissingHeroSnap.list[0].heroId === null &&
+      wornMissingHeroSnap.list[0].fashionId === 9 &&
+      formatWireWornFashionLine(wornMissingHeroSnap.list[0]) === "hero_id=无 / fashion_id=9",
+    "missing 4401 hero_id stays blank and does not invent zero"
+  );
+  const wornNegSnap = decodeWireWornFashion(wornNeg);
+  assert(
+    wornNegSnap !== null &&
+      wornNegSnap.list[0].heroId === 6 &&
+      wornNegSnap.list[0].fashionId === null &&
+      formatWireWornFashionLine(wornNegSnap.list[0]).indexOf("fashion_id=无") >= 0 &&
+      formatWireWornFashionLine(wornNegSnap.list[0]).indexOf("-1") >= 0,
+    "4401 fashion_id -1 is not written as zero"
+  );
+  const wornWideSnap = decodeWireWornFashion(wornWide);
+  assert(
+    wornWideSnap !== null &&
+      wornWideSnap.list[0].heroId === 1 &&
+      wornWideSnap.list[0].fashionId === 1099511627776 &&
+      formatWireWornFashionLine(wornWideSnap.list[0]) === "hero_id=1 / fashion_id=1099511627776",
+    "4401 fashion_id keeps the wide integer"
+  );
+  assert(
+    loggedWorn !== null &&
+      loggedWorn.list.length === 6 &&
+      loggedWorn.list[0].heroId === 3 &&
+      loggedWorn.list[0].fashionId === 11 &&
+      loggedWorn.list[1].heroId === 0 &&
+      loggedWorn.list[1].fashionId === 0 &&
+      loggedWorn.list[2].fashionId === null &&
+      loggedWorn.list[3].heroId === null &&
+      loggedWorn.list[4].fashionId === 1099511627776 &&
+      loggedWorn.list[5].fashionId === null &&
+      loggedWorn.marks.length === 1 &&
+      loggedWorn.marks[0].field === 8 &&
+      formatWireWornFashionHead(loggedWorn) === "list=6 条 / 字段8=1" &&
+      formatWireWornFashionLine(loggedWorn.list[0]) === "hero_id=3 / fashion_id=11" &&
+      wireWornFashionNote(loggedWorn).indexOf(WIRE_WORN_FASHION_SIDE_EFFECT) >= 0 &&
+      wireWornFashionNote(loggedWorn).indexOf("不写金币") >= 0 &&
+      wireWornFashionNote(loggedWorn).indexOf("不写钻石") >= 0,
+    "4401 sample keeps hero_id and fashion_id including zero and does not fill missing numbers with 0"
+  );
+  const wornSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.heroFashion, wornBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    wornSticky.frames.length === 2 &&
+      wornSticky.frames[0].cmdId === 4401 &&
+      wornSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireWornFashion(wornSticky.frames[0].body)?.list.length === 6,
+    "sticky 4401 frame stops at its length prefix"
+  );
+  assert(decodeWireWornFashion(fieldBytes(1, new Uint8Array([0x80]))) === null, "4401 row blob that will not decode is ignored");
+  assert(
+    decodeWireWornFashion(wornOuterOnly) !== null &&
+      decodeWireWornFashion(wornOuterOnly)?.list.length === 0 &&
+      formatWireWornFashionHead(decodeWireWornFashion(wornOuterOnly) || emptyWorn) === "list=空穿戴 / 字段8=1",
+    "non-empty 4401 without list stays synced and does not invent zero"
+  );
+  assert(
+    decodeWireWornFashion(fieldVarint(1, 7)) !== null &&
+      decodeWireWornFashion(fieldVarint(1, 7))?.list.length === 0 &&
+      decodeWireWornFashion(fieldVarint(1, 7))?.marks[0].field === 1 &&
+      decodeWireWornFashion(fieldVarint(1, 7))?.marks[0].text === "7",
+    "4401 outer varint is a mark and is not a worn row"
+  );
+  assert(
+    decodeWireWornFashion(fashionPerm)?.list.length === 1 && decodeWireWornFashion(fashionPerm)?.list[0].heroId === 3,
+    "a 4402 row still yields hero_id from field 1 when read as 4401 and does not invent the other fields"
+  );
   assert(
     decodeWireFashion(portraitUnpacked)?.list.length === 0 && decodeWireFashion(fashionPerm)?.list[0].heroType === 3,
     "34001 idx varints are not fashion rows and a fashion row keeps hero_type"
@@ -7693,7 +7873,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 28, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 29, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -7807,6 +7987,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 4402 after 32001"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 28] as ArrayBuffer)) === "0400000031110000",
+        "pullIdle sends empty c2s 4401 after 4402"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -7834,6 +8018,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 34001") &&
           sawLog(lines, "发送 c2s 32001") &&
           sawLog(lines, "发送 c2s 4402") &&
+          sawLog(lines, "发送 c2s 4401") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -7855,6 +8040,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000d1840000") &&
           sawLog(lines, "04000000017d0000") &&
           sawLog(lines, "0400000032110000") &&
+          sawLog(lines, "0400000031110000") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -7922,11 +8108,11 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 34003") === false &&
           sawLog(lines, "发送 c2s 32002") === false &&
           sawLog(lines, "发送 c2s 32003") === false &&
-          sawLog(lines, "发送 c2s 4401") === false &&
           sawLog(lines, "发送 c2s 4403") === false &&
           sawLog(lines, "发送 c2s 4404") === false &&
           sawLog(lines, "发送 c2s 4405") === false &&
           sawLog(lines, "发送 c2s 4406") === false &&
+          sawLog(lines, "发送 c2s 4601") === false &&
           sawLog(lines, "发送 c2s 29001") === false &&
           sawLog(lines, "发送 c2s 59002") === false &&
           sawLog(lines, "发送 c2s 59003") === false &&
@@ -8399,30 +8585,51 @@ async function checkWs(): Promise<void> {
       assert(bytesToHex(new Uint8Array(fashionSent as ArrayBuffer)) === "0400000032110000", "wire.4402 frame");
       assert(roleSockets[0].sent.length === sentBeforeBorderOther + 1, "4402 is its own frame and is not merged into 32001");
       const sentAfterFashion = roleSockets[0].sent.length;
-      roleNet.send("wire.4401");
+      roleNet.send(WIRE_WORN_FASHION_CMD);
+      const wornSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(wornSent as ArrayBuffer)) === "0400000031110000", "wire.4401 frame");
+      assert(roleSockets[0].sent.length === sentAfterFashion + 1, "4401 is its own frame and is not merged into 4402");
+      const sentAfterWorn = roleSockets[0].sent.length;
       roleNet.send("wire.4403");
       roleNet.send("wire.4404");
       roleNet.send("wire.4405");
       roleNet.send("wire.4406");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.4201");
       roleNet.send("wire.29001");
       roleNet.send("wire.20011");
       assert(
-        roleSockets[0].sent.length === sentAfterFashion,
-        "4401 4403 4404 4405 4406 29001 and 20011 stay off the fashion wire"
+        roleSockets[0].sent.length === sentAfterWorn,
+        "4403 4404 4405 4406 4601 4201 29001 and 20011 stay off the worn fashion wire"
       );
       assert(
-        sawLog(lines, "未发送 wire.4401") &&
-          sawLog(lines, "未发送 wire.4403") &&
+        sawLog(lines, "未发送 wire.4403") &&
           sawLog(lines, "未发送 wire.4404") &&
           sawLog(lines, "未发送 wire.4405") &&
           sawLog(lines, "未发送 wire.4406") &&
+          sawLog(lines, "未发送 wire.4601") &&
+          sawLog(lines, "未发送 wire.4201") &&
           sawLog(lines, "未发送 wire.29001") &&
           sawLog(lines, "未发送 wire.20011"),
-        "fashion activate replace upgrade and the unimplemented 4406 are not encoded"
+        "worn fashion activate replace upgrade and the unimplemented 4406 are not encoded"
       );
+      roleNet.send(WIRE_FASHION_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterWorn + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000032110000",
+        "sending 4402 does not also send 4401"
+      );
+      const sentAfterFashionAgain = roleSockets[0].sent.length;
+      roleNet.send(WIRE_WORN_FASHION_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterFashionAgain + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000031110000",
+        "sending 4401 does not also send 4402"
+      );
+      const sentAfterWornAgain = roleSockets[0].sent.length;
       roleNet.send(WIRE_BORDER_CMD);
       assert(
-        roleSockets[0].sent.length === sentAfterFashion + 1 &&
+        roleSockets[0].sent.length === sentAfterWornAgain + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000017d0000",
         "sending 32001 does not also send 4402"
       );
@@ -9859,8 +10066,14 @@ async function checkWs(): Promise<void> {
           WireSession.fashion.marks[0].text === "7" &&
           WireSession.border !== null &&
           WireSession.border.units.length === 1 &&
-          WireSession.border.units[0].id === 0,
-        "4403 4404 4405 4406 4401 29001 20011 and 32001 do not replace the 4402 record"
+          WireSession.border.units[0].id === 0 &&
+          WireSession.hasWornFashion() &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 0 &&
+          WireSession.wornFashion.marks.length === 1 &&
+          WireSession.wornFashion.marks[0].field === 1 &&
+          WireSession.wornFashion.marks[0].text === "9",
+        "4403 4404 4405 4406 29001 20011 and 32001 do not replace the 4402 record and 4401 writes its own snapshot"
       );
       roleSockets[0].push(encodeFrame(WireCmd.heroFashionList, new Uint8Array([0x80])));
       assert(
@@ -9988,6 +10201,150 @@ async function checkWs(): Promise<void> {
           WireSession.fashion.marks[0].field === 8 &&
           sawWire("4402 解不开，激活皮肤列表不改"),
         "undecodable 4402 row keeps the previous snapshot"
+      );
+      assert(
+        WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 0 &&
+          WireSession.wornFashion.marks[0].text === "9" &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.marks[0].field === 8,
+        "4402 refresh does not clear the 4401 list"
+      );
+      const goldBeforeBadWorn = Session.gold;
+      const diamondBeforeBadWorn = Session.diamond;
+      roleSockets[0].push(encodeFrame(4403, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(4404, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(4405, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(4406, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(4201, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashionList, fashionOuterOnly));
+      assert(
+        WireSession.hasWornFashion() &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.marks[0].text === "9" &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.list.length === 0 &&
+          WireSession.fashion.marks[0].field === 8,
+        "4403 4404 4405 4406 4601 4201 29001 20011 and 4402 do not replace the 4401 record"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasWornFashion() &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.marks[0].text === "9" &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.marks[0].field === 8 &&
+          sawWire("4401 解不开"),
+        "bad 4401 keeps the worn record and the 4402 record"
+      );
+      assert(
+        Session.gold === goldBeforeBadWorn && Session.diamond === diamondBeforeBadWorn,
+        "bad 4401 stays off the wallet"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion));
+      assert(
+        WireSession.hasWornFashion() &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 0 &&
+          formatWireWornFashionHead(WireSession.wornFashion) === "list=空穿戴" &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.marks[0].field === 8,
+        "empty 4401 body clears the list without writing zero and stays synced"
+      );
+      assert(
+        Session.gold === goldBeforeBadWorn && Session.diamond === diamondBeforeBadWorn,
+        "empty 4401 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion, wornZero));
+      assert(
+        WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 1 &&
+          WireSession.wornFashion.list[0].heroId === 0 &&
+          WireSession.wornFashion.list[0].fashionId === 0 &&
+          formatWireWornFashionLine(WireSession.wornFashion.list[0]) === "hero_id=0 / fashion_id=0" &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.list.length === 0,
+        "present 4401 zero stays zero and leaves 4402"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion, wornMissingFashion));
+      assert(
+        WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list[0].heroId === 4 &&
+          WireSession.wornFashion.list[0].fashionId === null &&
+          formatWireWornFashionLine(WireSession.wornFashion.list[0]) === "hero_id=4 / fashion_id=无",
+        "missing 4401 fashion_id stays blank"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion, wornNeg));
+      assert(
+        WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list[0].fashionId === null &&
+          formatWireWornFashionLine(WireSession.wornFashion.list[0]).indexOf("fashion_id=无") >= 0 &&
+          formatWireWornFashionLine(WireSession.wornFashion.list[0]).indexOf("-1") >= 0,
+        "4401 fashion_id -1 is not written as zero"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion, wornWide));
+      assert(
+        WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list[0].fashionId === 1099511627776 &&
+          formatWireWornFashionLine(WireSession.wornFashion.list[0]) === "hero_id=1 / fashion_id=1099511627776",
+        "4401 fashion_id keeps the wide integer"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion, wornBody));
+      assert(
+        WireSession.hasWornFashion() &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 6 &&
+          WireSession.wornFashion.list[0].heroId === 3 &&
+          WireSession.wornFashion.list[0].fashionId === 11 &&
+          WireSession.wornFashion.list[1].heroId === 0 &&
+          WireSession.wornFashion.list[1].fashionId === 0 &&
+          WireSession.wornFashion.list[2].fashionId === null &&
+          WireSession.wornFashion.list[3].heroId === null &&
+          WireSession.wornFashion.marks[0].field === 8 &&
+          formatWireWornFashionHead(WireSession.wornFashion) === "list=6 条 / 字段8=1" &&
+          wireWornFashionNote(WireSession.wornFashion).indexOf(WIRE_WORN_FASHION_SIDE_EFFECT) >= 0 &&
+          wireWornFashionNote(WireSession.wornFashion).indexOf("不写金币") >= 0 &&
+          wireWornFashionNote(WireSession.wornFashion).indexOf("不写钻石") >= 0 &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.marks[0].field === 8 &&
+          WireSession.border !== null,
+        "4401 sample keeps hero_id and fashion_id and leaves 4402"
+      );
+      assert(
+        Session.gold === goldBeforeBadWorn && Session.diamond === diamondBeforeBadWorn,
+        "4401 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashionList, fashionBody));
+      assert(
+        WireSession.fashion !== null &&
+          WireSession.fashion.list.length === 7 &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 6 &&
+          WireSession.wornFashion.list[1].fashionId === 0,
+        "4402 refresh does not clear the 4401 worn list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion, wornOuterOnly));
+      assert(
+        WireSession.hasWornFashion() &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 0 &&
+          formatWireWornFashionHead(WireSession.wornFashion) === "list=空穿戴 / 字段8=1" &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.list.length === 7,
+        "non-empty 4401 without list stays synced and leaves 4402"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion, fieldBytes(1, new Uint8Array([0x80]))));
+      assert(
+        WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 0 &&
+          WireSession.wornFashion.marks[0].field === 8 &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.list.length === 7 &&
+          sawWire("4401 解不开，穿戴皮肤英雄列表不改"),
+        "undecodable 4401 row keeps the previous snapshot"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
