@@ -447,3 +447,52 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | `BtnBack` | (0, -360) | 240×48 | `返回` |
 
 `Title` 字号 40，颜色 `TITLE` `(255, 228, 170)`。`Hint` 字号 20，颜色 `MUTED`。`Diamond` 字号 24，颜色 `TITLE`，句子是 `ownedDiamondText(0)`。`BtnSingle` 是 `singleButtonText()`（`SUMMON_SINGLE_COST = 10`），橙色按钮，不另染色。`BtnTen` 是 `tenButtonText()`（`SUMMON_TEN_COST = 90`），蓝底再染 `TEN_FILL`。`ResultTitle` 字号 22，代码没传宽，所以是默认 680，高是 22 + 16。`ResultCard` 对应代码里的 `result-bg`。`Result` 是 `summonResultText([])`，左对齐、顶对齐、可换行，颜色 `RESULT` `(214, 224, 236)`。`Footer` 字号 18，颜色 `MUTED`。`BtnBack` 蓝色按钮。三个按钮的 `clickEvents` 都是空的。
+
+## Shop（未接线）
+
+只有 Mock 商店页。仓内没有 `WireShopPage`，本波不做真服只读 Prefab。`ShopPage.ts` 的 `ShopController` 画出限购货架：开服天、钱包、三行 SKU、购买结果和返回。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| ShopPage | `prefabs/ui/shop/ShopPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/shop/ShopPage.prefab`
+- **状态**：**未接** Boot、`MainApp`、`ShopPage.ts`，以及任何 `USE_*_PREFAB`。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` / `render()` 一致）。`RowsHost`、`Rows`、`Row_0`、`Row_1`、`Row_2` 都放在 (0, 0) 且铺满 720×1280，所以 `Line` 和 `BtnBuy` 的 y 就是页面坐标。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid。Prefab 目录里没有 PNG。页面底用 `win-bg_win-bg-12` 染成暖棕 `(22, 16, 10)`（`PAGE_BG`），不是挂机或邮件那种深蓝 `(8, 16, 32)`。购买钮用 `button_btn-orange-big`，对应 `BUY_FILL` `(168, 112, 36)`。返回用 `button_btn-blue-big`，对应 `BACK_FILL` `(36, 72, 120)`。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 代码把底画在页面根上，其余放进 `body`，`render()` 会拆掉并重建 `rows`。Prefab 里 `Bg` 与内容同级，不放 `body`。三行是编辑器预览，不是代码去克隆的模板。代码容器名是小写 `rows-host` / `rows`；预制用下面表里的 PascalCase。
+- 再生：`python3 client/tools/gen_shop_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `ShopPage.ts`、`catalog.ts`、`rewards.ts` 的 `IDLE_ITEM_NAME`，以及 `MockGameSession.ts` 的起步金币和钻石）
+
+### ShopPage（Mock）
+
+根 `ShopPage`。对齐 `ShopController` 构造和 `render()`。默认态是已经读到开服第 1 天、三件都没买、背包持有按干净货架写成 0。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | 暖棕 `(22, 16, 10)` |
+| `Title` | (0, 460) | 680×56 | `基础商店` |
+| `Hint` | (0, 408) | 640×34 | `新号可买。召唤仍直接花钻石` |
+| `Refresh` | (0, 352) | 640×38 | `限购随开服天刷新 · 当前开服第 1 天` |
+| `Wallet` | (0, 308) | 640×38 | `持有金币 100 · 钻石 20` |
+| `RowsHost` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_0` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_0/Line` | (0, 210) | 640×36 | `强化石 ×5 · 金币 40 · 今日 0/3 · 背包 ×0` |
+| `RowsHost/Rows/Row_0/BtnBuy` | (0, 162) | 280×48 | `购买` |
+| `RowsHost/Rows/Row_1` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_1/Line` | (0, 90) | 640×36 | `小金币袋 ×1 · 钻石 8 · 今日 0/2 · 背包 ×0` |
+| `RowsHost/Rows/Row_1/BtnBuy` | (0, 42) | 280×48 | `购买` |
+| `RowsHost/Rows/Row_2` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_2/Line` | (0, -30) | 640×36 | `经验药水 ×1 · 金币 50 · 今日 0/2 · 背包 ×0` |
+| `RowsHost/Rows/Row_2/BtnBuy` | (0, -78) | 280×48 | `购买` |
+| `Result` | (0, -250) | 640×56 | `点购买。金币或钻石不够、今日卖完都会提示` |
+| `BtnBack` | (0, -330) | 240×48 | `返回` |
+
+`Refresh` 是 `shopRefreshLine(1)`。`view()` 返回前代码写的是 `读取中…`；预制展示的是已经读到开服第 1 天之后的句子。`Wallet` 是 `shopWalletLine(MOCK_STARTER_GOLD, MOCK_STARTER_DIAMOND)`。仓内这两个常量是 `100` 和 `20`，所以句子是 `持有金币 100 · 钻石 20`。打开时代码先放空字符串，预制不留那一帧。
+
+三行来自 `SHOP_OFFERS`，名字以仓内为准：强化石是 `IDLE_ITEM_NAME`（`强化石`），另外两件是目录里的 `小金币袋`、`经验药水`。数量和价格是 `SHOP_STONE_COUNT` 5、`SHOP_STONE_PRICE` 40、限购 3；小金币袋 ×1、`SHOP_BAG_PRICE` 8 钻、限购 2；经验药水 ×1、`SHOP_POTION_PRICE` 50 金、限购 2。行文案是 `shopSkuLine`，钮文案是 `shopBuyButton`。未售罄是 `购买`。`top = 210`，`step = 120`，按钮在该行 `y - 48`。
+
+背包 ×0 是这份干净预览（已购 0、持有 0）。Mock 新号 `grantStarterItems()` 会另发小金币袋 ×2（`STARTER_GOLD_BAG`）和经验药水 ×2（`STARTER_EXP_POTION`），强化石起步仍是 0。预制不把那两份起步消耗品写进货架行。
+
+`Result` 是构造时的 `lastReport`。它指定了高度 56，所以纵向顶对齐。购买钮字号是调用里的 22，橙色按钮底。返回没传字号，走 `createButton` 默认 24，蓝色按钮底。售罄时代码会把钮写成 `已售罄` 并改用 `SOLD_FILL` `(78, 84, 98)`；默认三行都可买，不另放第四行。空货架的 `商店暂时没有商品` 也不放进这份预制。
