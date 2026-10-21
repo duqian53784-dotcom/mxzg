@@ -205,6 +205,18 @@ export const WireCmd = {
    * 不夹在 2001 和 3007 中间。与 74100 宠物同城养成段。不是浮空岛时间 73001。不是宠物信息 74100。
    */
   totemsInfoList: 74300,
+  /**
+   * c2s 空体。进主城、空 c2s 74300 之后发，只发一次。无 page。
+   * 整帧 `04 00 00 00 a1 09 01 00`。68001 = 0x109A1，小端 a1 09 01 00。
+   * GReqAstrolabeData / GResAstrolabeData。handler getData 不读 req。
+   * maxStar 是字段 1。active 是字段 2，repeated PSMapData 的 key、value。
+   * activeElem 是字段 3，int 列表。activeAstrolabe 是字段 4。
+   * 不发 68002 激活元素、68003 点亮星盘、68004 重置、68006 激活星盘。
+   * 68005 是更新星数常量，勿发、勿当拉包请求。不做 20011。
+   * 服侧轻懒建：首次 load 可能 astrolabeDao.add 空行。无扣费，无领奖，无日刷写库。管理员认定可接受。
+   * 不夹在 2001 和 3007 中间。不是图腾信息 74300。不是浮空岛时间 73001。
+   */
+  astrolabeData: 68001,
 } as const;
 
 /**
