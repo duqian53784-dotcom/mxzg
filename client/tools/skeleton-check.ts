@@ -459,6 +459,7 @@ import {
   encodeObservedLoginBody,
   summarizeLoginReply,
   uidFromAccount,
+  encodeWireMessage,
   varintField,
   wireBody,
   wireRoleReady,
@@ -894,6 +895,19 @@ import {
   WIRE_FETTER_UNSYNCED_TOAST,
   wireFetterNote,
 } from "../assets/scripts/net/protocol/wireFetter";
+import {
+  decodeWireFetterFashion,
+  formatWireFetterFashionHead,
+  formatWireFetterFashionLine,
+  WIRE_FETTER_FASHION_CMD,
+  WIRE_FETTER_FASHION_EMPTY,
+  WIRE_FETTER_FASHION_FIELD_NOTE,
+  WIRE_FETTER_FASHION_READONLY_NOTE,
+  WIRE_FETTER_FASHION_READONLY_TITLE,
+  WIRE_FETTER_FASHION_SIDE_EFFECT,
+  WIRE_FETTER_FASHION_UNSYNCED_TOAST,
+  wireFetterFashionNote,
+} from "../assets/scripts/net/protocol/wireFetterFashion";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1628,6 +1642,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("heroPrayer") === "city", "hero prayer stays on the city tab");
   assert(rootTabFor("petIllustrate") === "city", "pet illustrate stays on the city tab");
   assert(rootTabFor("fetterData") === "city", "fetter data stays on the city tab");
+  assert(rootTabFor("fetterFashion") === "city", "fetter fashion stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -7278,6 +7293,220 @@ async function checkWs(): Promise<void> {
       decodeWireHeroPrayer(fetterBody)?.privilege === 4,
     "28100 reset_count is not a petTypes list and does not become a 74104 catalog"
   );
+  assert(
+    WireCmd.fetterFashion === 28200 &&
+      WireCmd.fetterFashion !== WireCmd.fetterList &&
+      WireCmd.fetterFashion !== WireCmd.heroFashionList &&
+      WireCmd.fetterFashion !== WireCmd.petIllustrate,
+    "online 28200 stays off fetter 28100, hero fashion 4402 and pet illustrate 74104"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.fetterFashion)) === "04000000286e0000", "empty c2s 28200");
+  assert(bytesToHex(encodeFrame(WireCmd.fetterFashion)) !== "04000000c46d0000", "28200 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.fetterFashion)) !== "0400000078210100", "28200 is not the 74104 frame");
+  assert(bytesToHex(encodeFrame(28201)) !== "04000000286e0000", "28201 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28202)) !== "04000000286e0000", "28202 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28203)) !== "04000000286e0000", "28203 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28204)) !== "04000000286e0000", "28204 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28205)) !== "04000000286e0000", "28205 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28101)) !== "04000000286e0000", "28101 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28102)) !== "04000000286e0000", "28102 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28103)) !== "04000000286e0000", "28103 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28104)) !== "04000000286e0000", "28104 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28105)) !== "04000000286e0000", "28105 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28106)) !== "04000000286e0000", "28106 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28107)) !== "04000000286e0000", "28107 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28108)) !== "04000000286e0000", "28108 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28109)) !== "04000000286e0000", "28109 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28002)) !== "04000000286e0000", "28002 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(28003)) !== "04000000286e0000", "28003 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(75601)) !== "04000000286e0000", "75601 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000286e0000", "20011 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "04000000286e0000", "4601 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "04000000286e0000", "29001 is not the 28200 frame");
+  const bannedFashionCmds = [
+    "wire.28201",
+    "wire.28202",
+    "wire.28203",
+    "wire.28204",
+    "wire.28205",
+    "wire.28101",
+    "wire.28102",
+    "wire.28103",
+    "wire.28104",
+    "wire.28105",
+    "wire.28106",
+    "wire.28107",
+    "wire.28108",
+    "wire.28109",
+    "wire.28002",
+    "wire.28003",
+    "wire.75601",
+    "wire.20011",
+    "wire.4601",
+    "wire.29001",
+  ];
+  for (let i = 0; i < bannedFashionCmds.length; i++) {
+    assert(encodeWireMessage({ cmd: bannedFashionCmds[i] }) === null, bannedFashionCmds[i] + " is not encoded");
+  }
+  assert(
+    encodeWireMessage({ cmd: WIRE_FETTER_FASHION_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_FETTER_FASHION_CMD })?.bytes || new Uint8Array(0)) === "04000000286e0000",
+    "wire.28200 encodes the empty frame"
+  );
+  assert(WIRE_FETTER_FASHION_CMD === "wire.28200", "fetter fashion wire cmd");
+  assert(WIRE_FETTER_FASHION_READONLY_TITLE === "羁绊皮肤（真服只读）", "readonly fetter fashion title");
+  assert(WIRE_FETTER_FASHION_UNSYNCED_TOAST === "真服未同步", "unsynced fetter fashion toast");
+  assert(WIRE_FETTER_FASHION_EMPTY === "空羁绊皮肤", "empty fetter fashion label");
+  assert(
+    WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("goddess_fashion") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("无发奖") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("不改皮肤") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("28100") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("28201") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("28202") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("28203") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("28204") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("28205") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("28101") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("28109") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("28002") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("28003") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("75601") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_FETTER_FASHION_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("active_type") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("use_type") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("无熔炼") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("激活") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("领奖") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("使用皮肤") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("28203") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("75601") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_FETTER_FASHION_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_FETTER_FASHION_FIELD_NOTE.indexOf("active_type") >= 0 &&
+      WIRE_FETTER_FASHION_FIELD_NOTE.indexOf("use_type") >= 0 &&
+      WIRE_FETTER_FASHION_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_FETTER_FASHION_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "fetter fashion page names active_type and use_type and refuses the write cmds"
+  );
+  const emptyFetterFashion = {
+    activeTypes: [] as number[],
+    useType: null as number | null,
+    marks: [] as { field: number; text: string }[],
+  };
+  const fetterFashionUnpacked = concatBytes(
+    concatBytes(fieldVarint(1, 8), fieldVarint(1, 0)),
+    concatBytes(fieldVarint(1, 9), concatBytes(fieldVarint(2, 2), fieldVarint(8, 1)))
+  );
+  const fetterFashionPacked = concatBytes(fieldBytes(1, Uint8Array.from([8, 0, 9])), fieldVarint(2, 0));
+  const fetterFashionZeroType = fieldVarint(1, 0);
+  const fetterFashionZeroUse = fieldVarint(2, 0);
+  const fetterFashionNegUse = fieldNeg1(2);
+  const fetterFashionWide = fieldVarint(2, 1099511627776);
+  const fetterFashionOuter = fieldVarint(9, 1);
+  assert(
+    decodeWireFetterFashion(new Uint8Array(0)) !== null &&
+      decodeWireFetterFashion(new Uint8Array(0))?.activeTypes.length === 0 &&
+      decodeWireFetterFashion(new Uint8Array(0))?.useType === null &&
+      formatWireFetterFashionHead(decodeWireFetterFashion(new Uint8Array(0)) || emptyFetterFashion) ===
+        "active_type=空羁绊皮肤 / use_type=无",
+    "empty 28200 body is synced and does not invent zero"
+  );
+  assert(decodeWireFetterFashion(null) === null, "null 28200 body is not a snapshot");
+  assert(decodeWireFetterFashion(new Uint8Array([0x80])) === null, "bad 28200 ignored");
+  assert(decodeWireFetterFashion(fieldBytes(1, new Uint8Array([0x80]))) === null, "28200 packed blob that fails is not an empty table");
+  assert(
+    decodeWireFetterFashion(fetterFashionZeroType) !== null &&
+      decodeWireFetterFashion(fetterFashionZeroType)?.activeTypes.length === 1 &&
+      decodeWireFetterFashion(fetterFashionZeroType)?.activeTypes[0] === 0 &&
+      decodeWireFetterFashion(fetterFashionZeroType)?.useType === null &&
+      formatWireFetterFashionHead(decodeWireFetterFashion(fetterFashionZeroType) || emptyFetterFashion) ===
+        "active_type=0 / use_type=无" &&
+      formatWireFetterFashionLine(0) === "type=0",
+    "present 28200 active_type zero stays zero and does not invent use_type"
+  );
+  assert(
+    decodeWireFetterFashion(fetterFashionZeroUse) !== null &&
+      decodeWireFetterFashion(fetterFashionZeroUse)?.activeTypes.length === 0 &&
+      decodeWireFetterFashion(fetterFashionZeroUse)?.useType === 0 &&
+      formatWireFetterFashionHead(decodeWireFetterFashion(fetterFashionZeroUse) || emptyFetterFashion) ===
+        "active_type=空羁绊皮肤 / use_type=0",
+    "present 28200 use_type zero stays zero and does not invent active_type"
+  );
+  const fetterFashionNegSnap = decodeWireFetterFashion(fetterFashionNegUse);
+  assert(
+    fetterFashionNegSnap !== null &&
+      fetterFashionNegSnap.useType === -1 &&
+      fetterFashionNegSnap.activeTypes.length === 0 &&
+      formatWireFetterFashionHead(fetterFashionNegSnap) === "active_type=空羁绊皮肤 / use_type=-1",
+    "28200 use_type -1 stays -1"
+  );
+  const fetterFashionWideSnap = decodeWireFetterFashion(fetterFashionWide);
+  assert(
+    fetterFashionWideSnap !== null &&
+      fetterFashionWideSnap.useType === 1099511627776 &&
+      formatWireFetterFashionHead(fetterFashionWideSnap) === "active_type=空羁绊皮肤 / use_type=1099511627776",
+    "28200 use_type keeps the wide integer"
+  );
+  const loggedFetterFashion = decodeWireFetterFashion(fetterFashionUnpacked);
+  assert(
+    loggedFetterFashion !== null &&
+      loggedFetterFashion.activeTypes.length === 3 &&
+      loggedFetterFashion.activeTypes[0] === 8 &&
+      loggedFetterFashion.activeTypes[1] === 0 &&
+      loggedFetterFashion.activeTypes[2] === 9 &&
+      loggedFetterFashion.useType === 2 &&
+      loggedFetterFashion.marks.length === 1 &&
+      loggedFetterFashion.marks[0].field === 8 &&
+      formatWireFetterFashionHead(loggedFetterFashion) === "active_type=8,0,9 / use_type=2 / 字段8=1" &&
+      formatWireFetterFashionLine(loggedFetterFashion.activeTypes[0]) === "type=8" &&
+      formatWireFetterFashionLine(loggedFetterFashion.activeTypes[1]) === "type=0" &&
+      wireFetterFashionNote(loggedFetterFashion).indexOf(WIRE_FETTER_FASHION_SIDE_EFFECT) >= 0 &&
+      wireFetterFashionNote(loggedFetterFashion).indexOf("不写金币") >= 0 &&
+      wireFetterFashionNote(loggedFetterFashion).indexOf("不写钻石") >= 0,
+    "28200 unpacked sample keeps active_type including zero and use_type and does not fill a missing number with 0"
+  );
+  const loggedFetterFashionPacked = decodeWireFetterFashion(fetterFashionPacked);
+  assert(
+    loggedFetterFashionPacked !== null &&
+      loggedFetterFashionPacked.activeTypes.length === 3 &&
+      loggedFetterFashionPacked.activeTypes[1] === 0 &&
+      loggedFetterFashionPacked.useType === 0 &&
+      formatWireFetterFashionHead(loggedFetterFashionPacked) === "active_type=8,0,9 / use_type=0",
+    "28200 packed sample keeps active_type including zero and a present use_type zero"
+  );
+  assert(
+    decodeWireFetterFashion(fetterFashionOuter) !== null &&
+      decodeWireFetterFashion(fetterFashionOuter)?.activeTypes.length === 0 &&
+      decodeWireFetterFashion(fetterFashionOuter)?.useType === null &&
+      formatWireFetterFashionHead(decodeWireFetterFashion(fetterFashionOuter) || emptyFetterFashion) ===
+        "active_type=空羁绊皮肤 / use_type=无 / 字段9=1",
+    "non-empty 28200 without active_type and use_type stays synced and does not invent zero"
+  );
+  const fetterFashionSticky = decodeFrames(
+    concatBytes(encodeFrame(WireCmd.fetterFashion, fetterFashionUnpacked), encodeFrame(WireCmd.heartbeat))
+  );
+  assert(
+    fetterFashionSticky.frames.length === 2 &&
+      fetterFashionSticky.frames[0].cmdId === 28200 &&
+      fetterFashionSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireFetterFashion(fetterFashionSticky.frames[0].body)?.activeTypes.length === 3 &&
+      decodeWireFetterFashion(fetterFashionSticky.frames[0].body)?.useType === 2,
+    "sticky 28200 frame stops at its length prefix"
+  );
+  assert(
+    decodeWireFetter(fetterFashionUnpacked)?.resetCount === 8 &&
+      decodeWireFetter(fetterFashionUnpacked)?.goddess.length === 0 &&
+      decodeWirePetIllustrate(fetterFashionUnpacked)?.petTypes.length === 3,
+    "28200 active_type varints are not 28100 goddess rows"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -8388,7 +8617,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 32, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 33, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -8518,6 +8747,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 28100 after 74104"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 32] as ArrayBuffer)) === "04000000286e0000",
+        "pullIdle sends empty c2s 28200 after 28100"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -8549,7 +8782,9 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 4201") &&
           sawLog(lines, "发送 c2s 74104") &&
           sawLog(lines, "发送 c2s 28100") &&
+          sawLog(lines, "发送 c2s 28200") &&
           sawLog(lines, "04000000c46d0000") &&
+          sawLog(lines, "04000000286e0000") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -8616,10 +8851,17 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 28105") === false &&
           sawLog(lines, "发送 c2s 28106") === false &&
           sawLog(lines, "发送 c2s 28108") === false &&
+          sawLog(lines, "发送 c2s 28103") === false &&
+          sawLog(lines, "发送 c2s 28107") === false &&
           sawLog(lines, "发送 c2s 28109") === false &&
           sawLog(lines, "发送 c2s 28002") === false &&
           sawLog(lines, "发送 c2s 28003") === false &&
-          sawLog(lines, "发送 c2s 28200") === false &&
+          sawLog(lines, "发送 c2s 28201") === false &&
+          sawLog(lines, "发送 c2s 28202") === false &&
+          sawLog(lines, "发送 c2s 28203") === false &&
+          sawLog(lines, "发送 c2s 28204") === false &&
+          sawLog(lines, "发送 c2s 28205") === false &&
+          sawLog(lines, "发送 c2s 75601") === false &&
           sawLog(lines, "发送 c2s 74105") === false &&
           sawLog(lines, "发送 c2s 74106") === false &&
           sawLog(lines, "发送 c2s 70002") === false &&
@@ -9245,27 +9487,29 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.28106");
       roleNet.send("wire.28108");
       roleNet.send("wire.28109");
+      roleNet.send("wire.28103");
+      roleNet.send("wire.28107");
       roleNet.send("wire.28002");
       roleNet.send("wire.28003");
-      roleNet.send("wire.28200");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeFetterOther,
-        "28101 28102 28104 28105 28106 28108 28109 28002 28003 28200 20011 4601 and 29001 stay off the fetter wire"
+        "28101 28102 28103 28104 28105 28106 28107 28108 28109 28002 28003 20011 4601 and 29001 stay off the fetter wire"
       );
       assert(
         sawLog(lines, "未发送 wire.28101") &&
           sawLog(lines, "未发送 wire.28102") &&
+          sawLog(lines, "未发送 wire.28103") &&
           sawLog(lines, "未发送 wire.28104") &&
           sawLog(lines, "未发送 wire.28105") &&
           sawLog(lines, "未发送 wire.28106") &&
+          sawLog(lines, "未发送 wire.28107") &&
           sawLog(lines, "未发送 wire.28108") &&
           sawLog(lines, "未发送 wire.28109") &&
           sawLog(lines, "未发送 wire.28002") &&
           sawLog(lines, "未发送 wire.28003") &&
-          sawLog(lines, "未发送 wire.28200") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001"),
@@ -9283,6 +9527,67 @@ async function checkWs(): Promise<void> {
         roleSockets[0].sent.length === sentAfterIllustrateAlone + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000c46d0000",
         "sending 28100 does not also send 74104 or 4201"
+      );
+      const sentBeforeFetterFashion = roleSockets[0].sent.length;
+      roleNet.send(WIRE_FETTER_FASHION_CMD);
+      const fetterFashionSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(fetterFashionSent as ArrayBuffer)) === "04000000286e0000", "wire.28200 frame");
+      assert(roleSockets[0].sent.length === sentBeforeFetterFashion + 1, "28200 is its own frame and is not merged into 28100");
+      const sentBeforeFetterFashionOther = roleSockets[0].sent.length;
+      roleNet.send("wire.28201");
+      roleNet.send("wire.28202");
+      roleNet.send("wire.28203");
+      roleNet.send("wire.28204");
+      roleNet.send("wire.28205");
+      roleNet.send("wire.28101");
+      roleNet.send("wire.28102");
+      roleNet.send("wire.28103");
+      roleNet.send("wire.28104");
+      roleNet.send("wire.28105");
+      roleNet.send("wire.28106");
+      roleNet.send("wire.28107");
+      roleNet.send("wire.28108");
+      roleNet.send("wire.28109");
+      roleNet.send("wire.28002");
+      roleNet.send("wire.28003");
+      roleNet.send("wire.75601");
+      roleNet.send("wire.20011");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.29001");
+      assert(
+        roleSockets[0].sent.length === sentBeforeFetterFashionOther,
+        "28201 28202 28203 28204 28205 28101-28109 28002 28003 75601 20011 4601 and 29001 stay off the fetter fashion wire"
+      );
+      assert(
+        sawLog(lines, "未发送 wire.28201") &&
+          sawLog(lines, "未发送 wire.28202") &&
+          sawLog(lines, "未发送 wire.28203") &&
+          sawLog(lines, "未发送 wire.28204") &&
+          sawLog(lines, "未发送 wire.28205") &&
+          sawLog(lines, "未发送 wire.28101") &&
+          sawLog(lines, "未发送 wire.28103") &&
+          sawLog(lines, "未发送 wire.28107") &&
+          sawLog(lines, "未发送 wire.28109") &&
+          sawLog(lines, "未发送 wire.28002") &&
+          sawLog(lines, "未发送 wire.28003") &&
+          sawLog(lines, "未发送 wire.75601") &&
+          sawLog(lines, "未发送 wire.20011") &&
+          sawLog(lines, "未发送 wire.4601") &&
+          sawLog(lines, "未发送 wire.29001"),
+        "fetter fashion smelt activate task reward use and the banned cmds are not encoded"
+      );
+      roleNet.send(WIRE_FETTER_CMD);
+      assert(
+        roleSockets[0].sent.length === sentBeforeFetterFashionOther + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000c46d0000",
+        "sending 28100 does not also send 28200"
+      );
+      const sentAfterFetterAlone = roleSockets[0].sent.length;
+      roleNet.send(WIRE_FETTER_FASHION_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterFetterAlone + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000286e0000",
+        "sending 28200 does not also send 28100 or 74104"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -11291,8 +11596,74 @@ async function checkWs(): Promise<void> {
           WireSession.petIllustrate.petTypes.length === 3 &&
           WireSession.petIllustrate.petTypes[1] === 0 &&
           Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer &&
+          WireSession.hasFetterFashion() &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.activeTypes.length === 1 &&
+          WireSession.fetterFashion.activeTypes[0] === 9 &&
+          WireSession.fetterFashion.useType === null,
+        "28101-28109 28002 28003 4601 29001 20011 and 74104 do not replace the 28100 list and 28200 writes its own active_type"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.fetterFashion));
+      assert(
+        WireSession.hasFetterFashion() &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.activeTypes.length === 0 &&
+          WireSession.fetterFashion.useType === null &&
+          formatWireFetterFashionHead(WireSession.fetterFashion) === "active_type=空羁绊皮肤 / use_type=无" &&
+          WireSession.fetter !== null &&
+          WireSession.fetter.resetCount === 4 &&
+          Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
-        "28101 28102 28104 28105 28106 28108 28109 28002 28003 28200 4601 29001 20011 and 74104 do not replace the 28100 list"
+        "empty 28200 body clears active_type without writing zero and stays synced"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.fetterFashion, fetterFashionUnpacked));
+      assert(
+        WireSession.hasFetterFashion() &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.activeTypes.length === 3 &&
+          WireSession.fetterFashion.activeTypes[1] === 0 &&
+          WireSession.fetterFashion.useType === 2 &&
+          formatWireFetterFashionHead(WireSession.fetterFashion) === "active_type=8,0,9 / use_type=2 / 字段8=1" &&
+          formatWireFetterFashionLine(WireSession.fetterFashion.activeTypes[0]) === "type=8" &&
+          wireFetterFashionNote(WireSession.fetterFashion).indexOf(WIRE_FETTER_FASHION_SIDE_EFFECT) >= 0 &&
+          wireFetterFashionNote(WireSession.fetterFashion).indexOf("不写金币") >= 0 &&
+          wireFetterFashionNote(WireSession.fetterFashion).indexOf("不写钻石") >= 0 &&
+          WireSession.fetter !== null &&
+          WireSession.fetter.resetCount === 4 &&
+          WireSession.fetter.goddess[0].exp === 0,
+        "28200 sample keeps active_type and use_type and leaves 28100"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.fetterFashion, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasFetterFashion() &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.activeTypes.length === 3 &&
+          WireSession.fetterFashion.useType === 2 &&
+          WireSession.fetter !== null &&
+          WireSession.fetter.goddess.length === 1 &&
+          sawWire("28200 解不开"),
+        "bad 28200 keeps the fetter fashion list and the 28100 record"
+      );
+      roleSockets[0].push(encodeFrame(28201, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(28202, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(28203, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(28204, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(28205, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(28103, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(28107, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(75601, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(WireCmd.fetterList, fetterBody));
+      assert(
+        WireSession.hasFetterFashion() &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.activeTypes[1] === 0 &&
+          WireSession.fetterFashion.useType === 2 &&
+          WireSession.fetter !== null &&
+          WireSession.fetter.resetCount === 4 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "28201 28202 28203 28204 28205 28103 28107 75601 and 28100 do not replace the 28200 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();

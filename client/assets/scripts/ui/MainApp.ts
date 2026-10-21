@@ -59,6 +59,7 @@ import { buildWireWornFashionPage, WireWornFashionPage } from "./WireWornFashion
 import { buildWireHeroPrayerPage, WireHeroPrayerPage } from "./WireHeroPrayerPage";
 import { buildWirePetIllustratePage, WirePetIllustratePage } from "./WirePetIllustratePage";
 import { buildWireFetterPage, WireFetterPage } from "./WireFetterPage";
+import { buildWireFetterFashionPage, WireFetterFashionPage } from "./WireFetterFashionPage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -79,6 +80,7 @@ import { WIRE_WORN_FASHION_UNSYNCED_TOAST } from "../net/protocol/wireWornFashio
 import { WIRE_HERO_PRAYER_UNSYNCED_TOAST } from "../net/protocol/wireHeroPrayer";
 import { WIRE_PET_ILLUSTRATE_UNSYNCED_TOAST } from "../net/protocol/wirePetIllustrate";
 import { WIRE_FETTER_UNSYNCED_TOAST } from "../net/protocol/wireFetter";
+import { WIRE_FETTER_FASHION_UNSYNCED_TOAST } from "../net/protocol/wireFetterFashion";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -166,6 +168,7 @@ const WORN_FASHION_FILL = new Color(112, 84, 148, 255);
 const HERO_PRAYER_FILL = new Color(176, 120, 48, 255);
 const PET_ILLUSTRATE_FILL = new Color(72, 148, 88, 255);
 const FETTER_FILL = new Color(148, 72, 132, 255);
+const FETTER_FASHION_FILL = new Color(176, 112, 72, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -200,6 +203,7 @@ export class MainApp extends Component {
   private heroPrayer: WireHeroPrayerPage | null = null;
   private petIllustrate: WirePetIllustratePage | null = null;
   private fetterData: WireFetterPage | null = null;
+  private fetterFashion: WireFetterFashionPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -291,6 +295,8 @@ export class MainApp extends Component {
     this.petIllustrate = null;
     this.fetterData?.dispose();
     this.fetterData = null;
+    this.fetterFashion?.dispose();
+    this.fetterFashion = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -404,7 +410,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -470,6 +476,7 @@ export class MainApp extends Component {
     if (id === "heroPrayer") return this.mountHeroPrayer();
     if (id === "petIllustrate") return this.mountPetIllustrate();
     if (id === "fetterData") return this.mountFetter();
+    if (id === "fetterFashion") return this.mountFetterFashion();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -571,6 +578,7 @@ export class MainApp extends Component {
     place(createButton("英雄祈愿数据", () => this.openHeroPrayer(), 180, 32, HERO_PRAYER_FILL, 14), page, 0, -60);
     place(createButton("宠物图鉴", () => this.openPetIllustrate(), 140, 32, PET_ILLUSTRATE_FILL, 14), page, 220, -60);
     place(createButton("羁绊数据", () => this.openFetter(), 140, 32, FETTER_FILL, 14), page, -220, -60);
+    place(createButton("羁绊皮肤", () => this.openFetterFashion(), 140, 32, FETTER_FASHION_FILL, 14), page, -220, -14);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -740,7 +748,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。英雄图鉴收到 4013 时另走只读页，不发 4014。宠物信息收到 74100 时另走只读页，不发 74101、74102、74103。世界等级收到 51001 时另走只读页，不做 20101。基金列表收到 20001 时另走只读页，不发 20018，不发 20004、20010，不做 3007。超值首充收到 20012 时另走只读页，不发 20013，不做 13260。灵器数据收到 70001 时另走只读页，不发 70002、70003、70004、70005、70006，70007、70008 不当拉包请求，不做 20011。浮空岛时间收到 73001 时另走只读页，不发 73002、73003、73004，不做 20011。图腾信息收到 74300 时另走只读页，不发 74301、74302、74303。74304 是推送，勿发、勿当拉包。不做 20011。星盘数据收到 68001 时另走只读页，不发 68002、68003、68004、68006。68005 是更新星数常量，勿当拉包。不做 20011。魔方数据收到 75501 时另走只读页，不发 75502、75503、75504、75505。75506 是等级推送，勿当拉包。不做 34001。不做 20011。圣龙数据收到 59001 时另走只读页，不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。不做 34001。不做 20011。圣物图鉴收到 59010 时另走只读页，不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。勿与 59001 合并成一个请求。不做 34001。不做 20011。称号列表收到 55001 时另走只读页。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。34001 是另只读，单独在 55001 之后拉包，勿与 55001 合并。头像列表收到 34001 时另走只读页。不发 34002 更换头像。34003 是解锁推送，勿发、勿当拉包。32001 另只读接在其后。不做 20011。轻懒建，RoleHeadPortraitService.select 无记录则 dao.add 默认解锁头。无扣费，无领奖，不改当前头像。头像框数据收到 32001 时另走只读页。不发 32002 道具激活。不发 32003 使用/切换边框。32003 是服侧推送，勿当拉包。4402 另只读接在其后。29001 有 page，硬禁。不做 20011。轻懒建免费框可接受。激活皮肤列表收到 4402 时另走只读页。不发 4403 激活、4404 替换/使用、4405 皮肤升级。4406 无实现，勿发。4401 另只读接在其后，勿合并。不做 20011。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮剔除，并可能把英雄 fashionId 置 0。只读展示。无扣费，无领奖。穿戴皮肤英雄列表收到 4401 时另走只读页。不发 4403 激活、4404 替换/使用、4405 皮肤升级。4406 无实现，勿发。与 4402 分刀，勿合并。本刀不重复拉 4402。4201 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮清理，并可能卸英雄 fashionId。只读展示。无扣费，无领奖，无邮件。英雄祈愿数据收到 4201 时另走只读页。不发 4202。74104 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建 hero_prayer。特权过期清字段。只读展示。无扣费，无领奖。无祈愿写入口。挂在 4401 之后，与已合刀分开发，勿合并。本刀不重复拉 4401。宠物图鉴收到 74104 时另走只读页。不发 74101 升级、74102 携带、74103 卸下。74105、74106 是背包增减推送，勿当拉包。28100 羁绊数据另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建空 PetIllustrate。无扣费，无发奖。只读展示已解锁宠物类型。无升级、携带、卸下入口。挂在 4201 之后，与 74100、4201 分开发，勿合并。本刀不重复拉 74100，也不重复拉 4201。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。英雄图鉴收到 4013 时另走只读页，不发 4014。宠物信息收到 74100 时另走只读页，不发 74101、74102、74103。世界等级收到 51001 时另走只读页，不做 20101。基金列表收到 20001 时另走只读页，不发 20018，不发 20004、20010，不做 3007。超值首充收到 20012 时另走只读页，不发 20013，不做 13260。灵器数据收到 70001 时另走只读页，不发 70002、70003、70004、70005、70006，70007、70008 不当拉包请求，不做 20011。浮空岛时间收到 73001 时另走只读页，不发 73002、73003、73004，不做 20011。图腾信息收到 74300 时另走只读页，不发 74301、74302、74303。74304 是推送，勿发、勿当拉包。不做 20011。星盘数据收到 68001 时另走只读页，不发 68002、68003、68004、68006。68005 是更新星数常量，勿当拉包。不做 20011。魔方数据收到 75501 时另走只读页，不发 75502、75503、75504、75505。75506 是等级推送，勿当拉包。不做 34001。不做 20011。圣龙数据收到 59001 时另走只读页，不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。不做 34001。不做 20011。圣物图鉴收到 59010 时另走只读页，不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。勿与 59001 合并成一个请求。不做 34001。不做 20011。称号列表收到 55001 时另走只读页。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。34001 是另只读，单独在 55001 之后拉包，勿与 55001 合并。头像列表收到 34001 时另走只读页。不发 34002 更换头像。34003 是解锁推送，勿发、勿当拉包。32001 另只读接在其后。不做 20011。轻懒建，RoleHeadPortraitService.select 无记录则 dao.add 默认解锁头。无扣费，无领奖，不改当前头像。头像框数据收到 32001 时另走只读页。不发 32002 道具激活。不发 32003 使用/切换边框。32003 是服侧推送，勿当拉包。4402 另只读接在其后。29001 有 page，硬禁。不做 20011。轻懒建免费框可接受。激活皮肤列表收到 4402 时另走只读页。不发 4403 激活、4404 替换/使用、4405 皮肤升级。4406 无实现，勿发。4401 另只读接在其后，勿合并。不做 20011。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮剔除，并可能把英雄 fashionId 置 0。只读展示。无扣费，无领奖。穿戴皮肤英雄列表收到 4401 时另走只读页。不发 4403 激活、4404 替换/使用、4405 皮肤升级。4406 无实现，勿发。与 4402 分刀，勿合并。本刀不重复拉 4402。4201 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮清理，并可能卸英雄 fashionId。只读展示。无扣费，无领奖，无邮件。英雄祈愿数据收到 4201 时另走只读页。不发 4202。74104 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建 hero_prayer。特权过期清字段。只读展示。无扣费，无领奖。无祈愿写入口。挂在 4401 之后，与已合刀分开发，勿合并。本刀不重复拉 4401。宠物图鉴收到 74104 时另走只读页。不发 74101 升级、74102 携带、74103 卸下。74105、74106 是背包增减推送，勿当拉包。28100 羁绊数据另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建空 PetIllustrate。无扣费，无发奖。只读展示已解锁宠物类型。无升级、携带、卸下入口。挂在 4201 之后，与 74100、4201 分开发，勿合并。本刀不重复拉 74100，也不重复拉 4201。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。羁绊皮肤收到 28200 时另走只读页。不发 28201 熔炼、28202 激活、28204 领任务奖、28205 使用皮肤。28203 任务列表虽只读，本刀勿夹发。不发 28101–28109、28002、28003。不做 75601。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建 goddess_fashion。无扣费，无发奖，不改皮肤。只读展示。挂在 28100 之后，与 28100 分开发，勿合并。本刀不重复拉 28100。 */
   private blockWirePage(id: string): boolean {
     if (id === "achieve") return this.blockWireAchievement();
     if (id === "buygold") return this.blockWireBuyGold();
@@ -771,6 +779,7 @@ export class MainApp extends Component {
     if (id === "heroPrayer") return this.blockWireHeroPrayer();
     if (id === "petIllustrate") return this.blockWirePetIllustrate();
     if (id === "fetterData") return this.blockWireFetter();
+    if (id === "fetterFashion") return this.blockWireFetterFashion();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -1002,11 +1011,19 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 28100 就停在主城。空包体也算同步。不发 28101、28102、28104、28105、28106、28108、28109。不发 28002、28003。不做 28200。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。74104、4201 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  /** 没收到过 s2c 28100 就停在主城。空包体也算同步。不发 28101、28102、28104、28105、28106、28108、28109。不发 28002、28003。28200 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。74104、4201 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
   private blockWireFetter(): boolean {
     if (Session.source === "wire" && WireSession.hasFetter()) return false;
     GameLog.shared.info("MainApp", "wire fetter unsynced");
     this.shell?.showToast(WIRE_FETTER_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 28200 就停在主城。空包体也算同步。不发 28201、28202、28203、28204、28205。28203 虽只读，本刀勿夹发。不发 28101–28109、28002、28003。不做 75601。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。28100、74104 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireFetterFashion(): boolean {
+    if (Session.source === "wire" && WireSession.hasFetterFashion()) return false;
+    GameLog.shared.info("MainApp", "wire fetter fashion unsynced");
+    this.shell?.showToast(WIRE_FETTER_FASHION_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -1695,7 +1712,7 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 真服羁绊数据。未同步 Toast。已同步压入只读页，列出 reset_count 和 goddess。无升级、升技、突破、重置、铸魂、契约、洗炼、领奖、精炼入口。不发 28101、28102、28104、28105、28106、28108、28109、28002、28003。不做 28200。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 74104、4201 分开发，勿合并。本刀不重复拉 74104，也不重复拉 4201。 */
+  /** 真服羁绊数据。未同步 Toast。已同步压入只读页，列出 reset_count 和 goddess。无升级、升技、突破、重置、铸魂、契约、洗炼、领奖、精炼入口。不发 28101、28102、28104、28105、28106、28108、28109、28002、28003。28200 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 74104、4201 分开发，勿合并。本刀不重复拉 74104，也不重复拉 4201。 */
   private openFetter(): void {
     GameLog.shared.info("MainApp", "click fetter");
     if (this.blockWirePage("fetterData")) return;
@@ -1715,6 +1732,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.fetterData = page;
+    return page.node;
+  }
+
+  /** 真服羁绊皮肤。未同步 Toast。已同步压入只读页，列出 active_type 和 use_type。无熔炼、激活、领任务奖、使用皮肤入口。不发 28201、28202、28203、28204、28205。28203 任务列表虽只读，本刀勿夹发。不发 28101–28109、28002、28003。不做 75601。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 28100、74104 分开发，勿合并。本刀不重复拉 28100，也不重复拉 74104。 */
+  private openFetterFashion(): void {
+    GameLog.shared.info("MainApp", "click fetter fashion");
+    if (this.blockWirePage("fetterFashion")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("fetterFashion");
+    this.refreshChrome();
+  }
+
+  private mountFetterFashion(): Node {
+    this.fetterFashion?.dispose();
+    const page = buildWireFetterFashionPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.fetterFashion = page;
     return page.node;
   }
 
@@ -2501,6 +2541,10 @@ export class MainApp extends Component {
     if (id === "fetterData") {
       this.fetterData?.dispose();
       this.fetterData = null;
+    }
+    if (id === "fetterFashion") {
+      this.fetterFashion?.dispose();
+      this.fetterFashion = null;
     }
     if (id === "bag") {
       this.bag?.dispose();
