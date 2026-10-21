@@ -57,7 +57,7 @@ client/assets/resources/config/maincity.meta   # 目录 meta（新 uuid，非 Pi
 | main_exotic_adventure | 异域冒险 | main-city/icon-main_exotic_adventure.png | main-city_icon-main_exotic_adventure.png | OK |
 | main_magic_cube | 魔方 | main-city/icon-main_magic_cube.png | main-city_icon-main_magic_cube.png | OK |
 | main_crusade_group | 远征团 | main-city/icon-main_crusade_group.png | main-city_icon-main_crusade_group.png | OK |
-| main_country_war | 国战 | main-city/icon-main_country_war.png | — | **缺图** |
+| main_country_war | 国战 | main-city/icon-main_country_war.png | main-city_icon-main_country_war.png | OK |
 
 仓内另有未进 pos 表的建筑 icon（可后续挂）：`clan` / `dream` / `dungeon` / `fetter` / `mission` / `proving_lang` / `rank` / `champion` / `champion_cross`。
 
@@ -101,7 +101,7 @@ client/assets/resources/config/maincity.meta   # 目录 meta（新 uuid，非 Pi
 | act_war_order | 战令 | icon-act_war_order.png | OK | OK |
 | act_spring | 春节 | icon-act_spring.png | OK | OK |
 
-仓内仅有 `btn-login-1` / `btn-login-8`，config 引用的 2–7、9–14 均未解帧入库。多数活动已有 `icon-act_*`，实现时应优先走 act icon，或另开补图 PR 解 `btn-login-*`（勿搬日文 lbl）。
+仓内仅有 `btn-login-1` / `btn-login-8`，图集键也只有这两个。config 引用的 2–7、9–14 没有独立 PNG。`CityMap` 的 `activityIconCandidates` 先找 `ui/city/main-city_<文件名>`，找不到就用 `ui/city/main-city_icon-<atom>`（即已有的 `main-city_icon-act_*`）。缺的登录钮保持这条回退，不另画按钮，也不搬日文 lbl。
 
 ## `maincityeffect.json` — 地图特效挂点
 
@@ -120,10 +120,10 @@ client/assets/resources/config/maincity.meta   # 目录 meta（新 uuid，非 Pi
 
 共 **12** 张（6 对）。方案 B 拼图用这些板即可，本包不改地图图。
 
-## 缺口清单（本包不补图）
+## 缺口清单
 
-1. **建筑 icon**：`main-city_icon-main_country_war.png`（Pilot frames 有 `main-city__icon-main_country_war.png`，未进 mxzg）。
-2. **活动 btn-login**：`btn-login-2..7,9..14` 与 `hero-arrive.png` 缺（可用已有 `icon-act_*` 顶）。
+1. **建筑 icon**：`main-city_icon-main_country_war.png` 已入库（spriteFrame `3e507128-946f-56a8-ace2-852b82b1145d@f9941`）。
+2. **活动 btn-login**：`btn-login-2..7,9..14` 与 `hero-arrive.png` 仍缺。`CityMap` 继续用 `main-city_icon-act_*` 回退，不补假图。
 3. **path 命名**：config 写 `main-city/foo.png`，解帧文件是 `main-city_foo.png` — 加载层需做映射。
 4. **日文 lbl**：明确不迁。
 

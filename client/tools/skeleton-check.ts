@@ -1657,13 +1657,7 @@ function checkCityMap(): void {
   const warIcon = join(resources, "ui", "city", "main-city_icon-main_country_war.png");
   const plate = join(resources, "ui", "maps", "map-bg-city-2-1-1.png");
   assert(readFileSync(summonIcon).length > 0 && readFileSync(plate).length > 0, "map plate and summon icon exist");
-  let warMissing = false;
-  try {
-    readFileSync(warIcon);
-  } catch {
-    warMissing = true;
-  }
-  assert(warMissing, "country war icon is absent");
+  assert(readFileSync(warIcon).length > 0, "country war icon exists");
   for (let i = 0; i < layout.nodes.length; i++) {
     const frame = layout.nodes[i].frame;
     if (!frame) continue;
