@@ -31,6 +31,7 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 空的 c2s 70001 拉灵器数据。s2c 70001 由 WireSession 按 GResReikiEquipData 读 list 的 hero_id、sys_id、reiki_equip_id，不写顶栏。不发 70002、70003、70004、70005、70006。70007、70008 仅推送，不当拉包请求。不做 20011。挂在 20012 之后。不回落 Mock。
  * 空的 c2s 73001 拉浮空岛时间。s2c 73001 由 WireSession 按 GResFloatingIslandsTime 读 next_time、stage，不写顶栏。不发 73002、73003、73004。73002 有懒建和日刷写库，不当纯只读。本号无写库。不做 20011。挂在 70001 之后。不回落 Mock。
  * 空的 c2s 74300 拉图腾信息。s2c 74300 由 WireSession 按 GResTotemsInfoList 读 list 的 t_id、sys_id、hero_id、level、quality，不写顶栏。不发 74301 升级/升阶、74302 装备/卸/换、74303 重置。74304 仅推送，勿发、勿当拉包请求。本号无写库。不做 20011。挂在 73001 之后。与 74100 宠物同城养成段。不回落 Mock。
+ * 空的 c2s 68001 拉星盘数据。无 page。s2c 68001 由 WireSession 按 GResAstrolabeData 读 maxStar、active 的 PSMapData key、value、activeElem、activeAstrolabe，不写顶栏。不发 68002 激活元素、68003 点亮星盘、68004 重置、68006 激活星盘。68005 是更新星数常量，勿发、勿当拉包请求。轻懒建，首次 load 可能 astrolabeDao.add 空行，无扣费、无领奖、无日刷写库，管理员认定可接受。不做 20011。挂在 74300 之后。不回落 Mock。
  * 单条处理失败也不丢掉后面的帧。
  */
 

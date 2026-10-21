@@ -738,6 +738,19 @@ import {
   WIRE_TOTEMS_UNSYNCED_TOAST,
   wireTotemsNote,
 } from "../assets/scripts/net/protocol/wireTotems";
+import {
+  decodeWireAstrolabe,
+  formatWireAstrolabeHead,
+  formatWireAstrolabeLine,
+  WIRE_ASTROLABE_CMD,
+  WIRE_ASTROLABE_EMPTY,
+  WIRE_ASTROLABE_FIELD_NOTE,
+  WIRE_ASTROLABE_READONLY_NOTE,
+  WIRE_ASTROLABE_READONLY_TITLE,
+  WIRE_ASTROLABE_SIDE_EFFECT,
+  WIRE_ASTROLABE_UNSYNCED_TOAST,
+  wireAstrolabeNote,
+} from "../assets/scripts/net/protocol/wireAstrolabe";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -4031,6 +4044,18 @@ async function checkWs(): Promise<void> {
   const totemsWide = fieldBytes(1, fieldVarint(5, 1099511627776));
   const totemsOuterOnly = fieldVarint(7, 1);
   const totemsPush = fieldBytes(1, fieldVarint(1, 99));
+  const astroActiveA = concatBytes(fieldVarint(1, 1), fieldVarint(2, 2));
+  const astroActiveB = concatBytes(fieldVarint(2, 0), fieldVarint(6, 4));
+  const astroBody = concatBytes(
+    concatBytes(concatBytes(fieldVarint(1, 12), fieldBytes(2, astroActiveA)), fieldBytes(2, astroActiveB)),
+    concatBytes(concatBytes(fieldVarint(3, 5), fieldBytes(3, new Uint8Array([7]))), concatBytes(fieldVarint(4, 3), fieldVarint(8, 9)))
+  );
+  const astroMissing = fieldVarint(1, 8);
+  const astroZero = fieldVarint(1, 0);
+  const astroElemZero = fieldVarint(3, 0);
+  const astroWide = fieldVarint(4, 1099511627776);
+  const astroOuterOnly = fieldVarint(8, 1);
+  const astroPush = fieldVarint(1, 99);
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -5136,6 +5161,159 @@ async function checkWs(): Promise<void> {
       formatWireTotemsHead(decodeWireTotems(totemsOuterOnly) || { rows: [], marks: [] }) === "空表 / 字段7=1",
     "non-empty 74300 without list stays synced and does not invent a row"
   );
+  const loggedAstrolabe = decodeWireAstrolabe(astroBody);
+  assert(
+    WireCmd.astrolabeData === 68001 && WireCmd.totemsInfoList === 74300 && WireCmd.floatingIslandsTime === 73001,
+    "online 68001 stays off 74300 and 73001"
+  );
+  assert(
+    WireCmd.astrolabeData !== WireCmd.reikiEquipData &&
+      WireCmd.astrolabeData !== WireCmd.roleProfile &&
+      WireCmd.astrolabeData !== WireCmd.worldLevel,
+    "68001 stays off 70001, 2001 and 51001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.astrolabeData)) === "04000000a1090100", "empty c2s 68001");
+  assert(bytesToHex(encodeFrame(68002)) === "04000000a2090100", "68002 activate element frame stays distinct");
+  assert(bytesToHex(encodeFrame(68003)) === "04000000a3090100", "68003 light astrolabe frame stays distinct");
+  assert(bytesToHex(encodeFrame(68004)) === "04000000a4090100", "68004 reset frame stays distinct");
+  assert(bytesToHex(encodeFrame(68005)) === "04000000a5090100", "68005 star constant frame stays distinct");
+  assert(bytesToHex(encodeFrame(68006)) === "04000000a6090100", "68006 activate astrolabe frame stays distinct");
+  assert(bytesToHex(encodeFrame(20011)) === "040000002b4e0000", "20011 stays off the 68001 frame");
+  assert(bytesToHex(encodeFrame(68002)) !== "04000000a1090100", "68002 is not the 68001 frame");
+  assert(bytesToHex(encodeFrame(68003)) !== "04000000a1090100", "68003 is not the 68001 frame");
+  assert(bytesToHex(encodeFrame(68004)) !== "04000000a1090100", "68004 is not the 68001 frame");
+  assert(bytesToHex(encodeFrame(68005)) !== "04000000a1090100", "68005 is not the 68001 frame");
+  assert(bytesToHex(encodeFrame(68006)) !== "04000000a1090100", "68006 is not the 68001 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000a1090100", "20011 is not the 68001 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.totemsInfoList)) !== "04000000a1090100", "74300 is not the 68001 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.floatingIslandsTime)) !== "04000000a1090100", "73001 is not the 68001 frame");
+  assert(WIRE_ASTROLABE_READONLY_TITLE === "星盘数据（真服只读）", "readonly astrolabe title");
+  assert(WIRE_ASTROLABE_UNSYNCED_TOAST === "真服未同步", "unsynced astrolabe toast");
+  assert(WIRE_ASTROLABE_EMPTY === "空记录", "empty astrolabe active label");
+  assert(
+    WIRE_ASTROLABE_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("astrolabeDao.add") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("无日刷") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("可接受") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("74300") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("68002") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("68003") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("68004") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("68006") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("68005") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("勿当拉包") >= 0 &&
+      WIRE_ASTROLABE_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_ASTROLABE_READONLY_NOTE.indexOf("无激活") >= 0 &&
+      WIRE_ASTROLABE_READONLY_NOTE.indexOf("点亮") >= 0 &&
+      WIRE_ASTROLABE_READONLY_NOTE.indexOf("重置") >= 0 &&
+      WIRE_ASTROLABE_READONLY_NOTE.indexOf("激活星盘") >= 0 &&
+      WIRE_ASTROLABE_READONLY_NOTE.indexOf("勿当拉包") >= 0 &&
+      WIRE_ASTROLABE_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_ASTROLABE_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_ASTROLABE_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_ASTROLABE_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_ASTROLABE_FIELD_NOTE.indexOf("maxStar") >= 0 &&
+      WIRE_ASTROLABE_FIELD_NOTE.indexOf("activeElem") >= 0 &&
+      WIRE_ASTROLABE_FIELD_NOTE.indexOf("activeAstrolabe") >= 0 &&
+      WIRE_ASTROLABE_FIELD_NOTE.indexOf("key") >= 0 &&
+      WIRE_ASTROLABE_FIELD_NOTE.indexOf("value") >= 0 &&
+      WIRE_ASTROLABE_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "astrolabe page names fields and refuses activate light reset and the 68005 pull"
+  );
+  assert(
+    decodeWireAstrolabe(new Uint8Array(0)) !== null &&
+      decodeWireAstrolabe(new Uint8Array(0))?.maxStar === null &&
+      decodeWireAstrolabe(new Uint8Array(0))?.active.length === 0 &&
+      decodeWireAstrolabe(new Uint8Array(0))?.activeElem.length === 0 &&
+      decodeWireAstrolabe(new Uint8Array(0))?.activeAstrolabe === null &&
+      formatWireAstrolabeHead(decodeWireAstrolabe(new Uint8Array(0)) || { maxStar: null, active: [], activeElem: [], activeAstrolabe: null, marks: [] }) ===
+        "maxStar=无 / active=空记录 / activeElem=无 / activeAstrolabe=无",
+    "empty 68001 body is synced and does not invent zero"
+  );
+  assert(decodeWireAstrolabe(new Uint8Array([0x80])) === null, "bad 68001 ignored");
+  const astroMissingSnap = decodeWireAstrolabe(astroMissing);
+  assert(
+    astroMissingSnap !== null &&
+      astroMissingSnap.maxStar === 8 &&
+      astroMissingSnap.active.length === 0 &&
+      astroMissingSnap.activeElem.length === 0 &&
+      astroMissingSnap.activeAstrolabe === null &&
+      formatWireAstrolabeHead(astroMissingSnap) === "maxStar=8 / active=空记录 / activeElem=无 / activeAstrolabe=无",
+    "missing 68001 active activeElem and activeAstrolabe stay blank"
+  );
+  assert(
+    decodeWireAstrolabe(astroZero) !== null &&
+      decodeWireAstrolabe(astroZero)?.maxStar === 0 &&
+      decodeWireAstrolabe(astroZero)?.active.length === 0 &&
+      decodeWireAstrolabe(astroZero)?.activeAstrolabe === null &&
+      formatWireAstrolabeHead(decodeWireAstrolabe(astroZero) || { maxStar: null, active: [], activeElem: [], activeAstrolabe: null, marks: [] }) ===
+        "maxStar=0 / active=空记录 / activeElem=无 / activeAstrolabe=无",
+    "present 68001 maxStar zero stays zero and does not fill the other fields"
+  );
+  assert(
+    decodeWireAstrolabe(astroElemZero) !== null &&
+      decodeWireAstrolabe(astroElemZero)?.maxStar === null &&
+      decodeWireAstrolabe(astroElemZero)?.activeElem.length === 1 &&
+      decodeWireAstrolabe(astroElemZero)?.activeElem[0] === 0 &&
+      decodeWireAstrolabe(astroElemZero)?.activeAstrolabe === null &&
+      formatWireAstrolabeHead(decodeWireAstrolabe(astroElemZero) || { maxStar: null, active: [], activeElem: [], activeAstrolabe: null, marks: [] }) ===
+        "maxStar=无 / active=空记录 / activeElem=0 / activeAstrolabe=无",
+    "present 68001 activeElem zero stays zero and does not invent maxStar"
+  );
+  const astroWideSnap = decodeWireAstrolabe(astroWide);
+  assert(
+    astroWideSnap !== null &&
+      astroWideSnap.maxStar === null &&
+      astroWideSnap.active.length === 0 &&
+      astroWideSnap.activeAstrolabe === 1099511627776,
+    "68001 activeAstrolabe keeps the wide int64 and does not invent maxStar"
+  );
+  assert(
+    loggedAstrolabe !== null &&
+      loggedAstrolabe.maxStar === 12 &&
+      loggedAstrolabe.active.length === 2 &&
+      loggedAstrolabe.active[0].key === 1 &&
+      loggedAstrolabe.active[0].value === 2 &&
+      loggedAstrolabe.active[1].key === null &&
+      loggedAstrolabe.active[1].value === 0 &&
+      loggedAstrolabe.activeElem.length === 2 &&
+      loggedAstrolabe.activeElem[0] === 5 &&
+      loggedAstrolabe.activeElem[1] === 7 &&
+      loggedAstrolabe.activeAstrolabe === 3 &&
+      loggedAstrolabe.marks.length === 1 &&
+      loggedAstrolabe.marks[0].field === 8 &&
+      formatWireAstrolabeHead(loggedAstrolabe) === "maxStar=12 / active=2 条 / activeElem=5,7 / activeAstrolabe=3 / 字段8=9" &&
+      formatWireAstrolabeLine(loggedAstrolabe.active[0]) === "key=1 / value=2" &&
+      formatWireAstrolabeLine(loggedAstrolabe.active[1]) === "key=无 / value=0 / 字段6=4" &&
+      wireAstrolabeNote(loggedAstrolabe).indexOf(WIRE_ASTROLABE_SIDE_EFFECT) >= 0 &&
+      wireAstrolabeNote(loggedAstrolabe).indexOf("不写金币") >= 0 &&
+      wireAstrolabeNote(loggedAstrolabe).indexOf("不写钻石") >= 0,
+    "68001 sample keeps maxStar active activeElem and activeAstrolabe and does not fill missing numbers with 0"
+  );
+  const astroSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.astrolabeData, astroBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    astroSticky.frames.length === 2 &&
+      astroSticky.frames[0].cmdId === 68001 &&
+      astroSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireAstrolabe(astroSticky.frames[0].body)?.maxStar === 12 &&
+      decodeWireAstrolabe(astroSticky.frames[0].body)?.activeAstrolabe === 3,
+    "sticky 68001 frame stops at its length prefix"
+  );
+  assert(decodeWireAstrolabe(fieldBytes(2, new Uint8Array([0x80]))) === null, "68001 active blob that will not decode is ignored");
+  assert(decodeWireAstrolabe(fieldBytes(3, new Uint8Array([0x80]))) === null, "68001 packed activeElem that will not decode is ignored");
+  assert(
+    decodeWireAstrolabe(astroOuterOnly) !== null &&
+      decodeWireAstrolabe(astroOuterOnly)?.maxStar === null &&
+      decodeWireAstrolabe(astroOuterOnly)?.active.length === 0 &&
+      decodeWireAstrolabe(astroOuterOnly)?.activeElem.length === 0 &&
+      decodeWireAstrolabe(astroOuterOnly)?.activeAstrolabe === null &&
+      formatWireAstrolabeHead(decodeWireAstrolabe(astroOuterOnly) || { maxStar: null, active: [], activeElem: [], activeAstrolabe: null, marks: [] }) ===
+        "maxStar=无 / active=空记录 / activeElem=无 / activeAstrolabe=无 / 字段8=1",
+    "non-empty 68001 without maxStar active activeElem and activeAstrolabe stays synced and does not invent them"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -5622,6 +5800,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasReiki() && WireSession.reiki === null, "reiki stays unsynced before the city role");
       assert(!WireSession.hasIslands() && WireSession.islands === null, "floating islands stays unsynced before the city role");
       assert(!WireSession.hasTotems() && WireSession.totems === null, "totems stays unsynced before the city role");
+      assert(!WireSession.hasAstrolabe() && WireSession.astrolabe === null, "astrolabe stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -5917,6 +6096,31 @@ async function checkWs(): Promise<void> {
         "s2c 74300 writes the totems list and leaves the 70001 list, the 73001 time and the 74100 rows"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "74300 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.astrolabeData, astroBody));
+      assert(
+        WireSession.hasAstrolabe() &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.maxStar === 12 &&
+          WireSession.astrolabe.active.length === 2 &&
+          WireSession.astrolabe.active[0].key === 1 &&
+          WireSession.astrolabe.active[0].value === 2 &&
+          WireSession.astrolabe.active[1].key === null &&
+          WireSession.astrolabe.active[1].value === 0 &&
+          WireSession.astrolabe.activeElem.length === 2 &&
+          WireSession.astrolabe.activeElem[0] === 5 &&
+          WireSession.astrolabe.activeElem[1] === 7 &&
+          WireSession.astrolabe.activeAstrolabe === 3 &&
+          formatWireAstrolabeLine(WireSession.astrolabe.active[0]) === "key=1 / value=2" &&
+          formatWireAstrolabeLine(WireSession.astrolabe.active[1]) === "key=无 / value=0 / 字段6=4" &&
+          formatWireAstrolabeHead(WireSession.astrolabe) === "maxStar=12 / active=2 条 / activeElem=5,7 / activeAstrolabe=3 / 字段8=9" &&
+          WireSession.totems !== null &&
+          WireSession.totems.rows.length === 2 &&
+          WireSession.totems.rows[0].tId === 11 &&
+          WireSession.islands !== null &&
+          WireSession.islands.nextTime === 1792464848,
+        "s2c 68001 writes maxStar active activeElem and activeAstrolabe and leaves the 74300 list and the 73001 time"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "68001 stays off the wallet");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
       assert(Session.wireSync.level && Session.role?.level === 1 && formatNameLine() === "见习冒险家 Lv1", "flush writes field 6");
@@ -6161,7 +6365,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 20, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 21, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -6243,6 +6447,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 74300 after 73001"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 20] as ArrayBuffer)) === "04000000a1090100",
+        "pullIdle sends empty c2s 68001 after 74300"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -6262,6 +6470,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 70001") &&
           sawLog(lines, "发送 c2s 73001") &&
           sawLog(lines, "发送 c2s 74300") &&
+          sawLog(lines, "发送 c2s 68001") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -6275,6 +6484,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000071110100") &&
           sawLog(lines, "04000000291d0100") &&
           sawLog(lines, "040000003c220100") &&
+          sawLog(lines, "04000000a1090100") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -6327,7 +6537,12 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 74301") === false &&
           sawLog(lines, "发送 c2s 74302") === false &&
           sawLog(lines, "发送 c2s 74303") === false &&
-          sawLog(lines, "发送 c2s 74304") === false,
+          sawLog(lines, "发送 c2s 74304") === false &&
+          sawLog(lines, "发送 c2s 68002") === false &&
+          sawLog(lines, "发送 c2s 68003") === false &&
+          sawLog(lines, "发送 c2s 68004") === false &&
+          sawLog(lines, "发送 c2s 68005") === false &&
+          sawLog(lines, "发送 c2s 68006") === false,
         "mail hero buy gold achievement arena seven day goal wish summon prophet jewel illustrat pet and world pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
@@ -6638,6 +6853,26 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.74304") &&
           sawLog(lines, "未发送 wire.20011"),
         "totems upgrade equip reset and the 74304 push are not encoded"
+      );
+      roleNet.send(WIRE_ASTROLABE_CMD);
+      const astrolabeSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(astrolabeSent as ArrayBuffer)) === "04000000a1090100", "wire.68001 frame");
+      const sentBeforeAstrolabeOther = roleSockets[0].sent.length;
+      roleNet.send("wire.68002");
+      roleNet.send("wire.68003");
+      roleNet.send("wire.68004");
+      roleNet.send("wire.68005");
+      roleNet.send("wire.68006");
+      roleNet.send("wire.20011");
+      assert(roleSockets[0].sent.length === sentBeforeAstrolabeOther, "68002 68003 68004 68005 68006 and 20011 stay off the astrolabe wire");
+      assert(
+        sawLog(lines, "未发送 wire.68002") &&
+          sawLog(lines, "未发送 wire.68003") &&
+          sawLog(lines, "未发送 wire.68004") &&
+          sawLog(lines, "未发送 wire.68005") &&
+          sawLog(lines, "未发送 wire.68006") &&
+          sawLog(lines, "未发送 wire.20011"),
+        "astrolabe activate light reset and the 68005 star constant are not encoded"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -7330,6 +7565,85 @@ async function checkWs(): Promise<void> {
           WireSession.pet.rows.length === 0 &&
           WireSession.pet.marks.length === 1,
         "non-empty 74300 without list stays synced and leaves 73001 and 74100"
+      );
+      const goldBeforeBadAstrolabe = Session.gold;
+      const diamondBeforeBadAstrolabe = Session.diamond;
+      roleSockets[0].push(encodeFrame(68002, astroPush));
+      roleSockets[0].push(encodeFrame(68003, astroPush));
+      roleSockets[0].push(encodeFrame(68004, astroPush));
+      roleSockets[0].push(encodeFrame(68005, astroPush));
+      roleSockets[0].push(encodeFrame(68006, astroPush));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 3)));
+      assert(
+        WireSession.hasAstrolabe() &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.maxStar === 12 &&
+          WireSession.astrolabe.active.length === 2 &&
+          WireSession.astrolabe.activeAstrolabe === 3 &&
+          WireSession.totems !== null &&
+          WireSession.totems.marks.length === 1,
+        "68002 68003 68004 68005 68006 and 20011 do not replace the 68001 record"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.astrolabeData, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasAstrolabe() &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.maxStar === 12 &&
+          WireSession.astrolabe.active[0].key === 1 &&
+          WireSession.totems !== null &&
+          WireSession.totems.marks[0].field === 7 &&
+          sawWire("68001 解不开"),
+        "bad 68001 keeps the astrolabe record and the 74300 list"
+      );
+      assert(Session.gold === goldBeforeBadAstrolabe && Session.diamond === diamondBeforeBadAstrolabe, "bad 68001 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.astrolabeData));
+      assert(
+        WireSession.hasAstrolabe() &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.maxStar === null &&
+          WireSession.astrolabe.active.length === 0 &&
+          WireSession.astrolabe.activeElem.length === 0 &&
+          WireSession.astrolabe.activeAstrolabe === null &&
+          formatWireAstrolabeHead(WireSession.astrolabe) === "maxStar=无 / active=空记录 / activeElem=无 / activeAstrolabe=无" &&
+          WireSession.totems !== null &&
+          WireSession.totems.marks[0].field === 7,
+        "empty 68001 body clears maxStar active activeElem and activeAstrolabe without writing zero and stays synced"
+      );
+      assert(
+        Session.gold === goldBeforeBadAstrolabe && Session.diamond === diamondBeforeBadAstrolabe,
+        "empty 68001 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.astrolabeData, astroMissing));
+      assert(
+        WireSession.hasAstrolabe() &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.maxStar === 8 &&
+          WireSession.astrolabe.active.length === 0 &&
+          WireSession.astrolabe.activeElem.length === 0 &&
+          WireSession.astrolabe.activeAstrolabe === null &&
+          WireSession.totems !== null &&
+          WireSession.totems.marks[0].field === 7,
+        "68001 without active activeElem and activeAstrolabe stays blank and leaves 74300"
+      );
+      assert(
+        Session.gold === goldBeforeBadAstrolabe && Session.diamond === diamondBeforeBadAstrolabe,
+        "missing 68001 field does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.astrolabeData, astroOuterOnly));
+      assert(
+        WireSession.hasAstrolabe() &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.maxStar === null &&
+          WireSession.astrolabe.active.length === 0 &&
+          WireSession.astrolabe.activeElem.length === 0 &&
+          WireSession.astrolabe.activeAstrolabe === null &&
+          WireSession.astrolabe.marks.length === 1 &&
+          WireSession.astrolabe.marks[0].field === 8 &&
+          WireSession.totems !== null &&
+          WireSession.totems.marks[0].field === 7 &&
+          WireSession.islands !== null &&
+          WireSession.islands.marks[0].field === 1,
+        "non-empty 68001 without maxStar active activeElem and activeAstrolabe stays synced and leaves 74300 and 73001"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
