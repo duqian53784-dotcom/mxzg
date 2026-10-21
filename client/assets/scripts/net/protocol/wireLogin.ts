@@ -60,6 +60,11 @@ export interface LoginReplySummary {
   detail: string;
 }
 
+/** 字段 1 是已证明的角色 id。空包或没有这个字段时不进主城。 */
+export function wireRoleReady(summary: LoginReplySummary): boolean {
+  return typeof summary.roleId === "number" && summary.roleId > 0;
+}
+
 export function uidFromAccount(account: string): number | null {
   const text = (account || "").trim();
   if (!/^[1-9][0-9]{0,9}$/.test(text)) return null;
@@ -211,7 +216,7 @@ export function summarizeLoginReply(body: Uint8Array): LoginReplySummary {
       empty: true,
       roleId: null,
       status: "登录回包是空的",
-      detail: "日志里空的 1001 表示还没有角色。点创角发 1002。不进主城。",
+      detail: "日志里空的 1001 表示还没有角色。点创角发 1002。有角色才会进主城。",
     };
   }
   const fields = decodeProtoFields(body);
@@ -222,11 +227,12 @@ export function summarizeLoginReply(body: Uint8Array): LoginReplySummary {
   if (roleId !== null) bits.push("字段1=" + roleId);
   if (time !== null) bits.push("字段2=" + time);
   if (tz !== null) bits.push("字段4=" + tz);
-  bits.push("不进主城");
+  const ready = roleId !== null && roleId > 0;
+  bits.push(ready ? "进入主城" : "没有角色 id，不进主城");
   return {
     empty: false,
     roleId,
-    status: roleId !== null ? "登录回包 角色 " + roleId : "登录回包 1001",
+    status: ready ? "登录回包 角色 " + roleId : "登录回包 1001",
     detail: bits.join(" "),
   };
 }

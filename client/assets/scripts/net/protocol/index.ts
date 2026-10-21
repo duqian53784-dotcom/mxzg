@@ -10,6 +10,7 @@ export {
   summarizeCreateReply,
   summarizeLoginReply,
   uidFromAccount,
+  wireRoleReady,
   varintField,
   wireBody,
 } from "./wireLogin";
