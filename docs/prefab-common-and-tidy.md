@@ -149,14 +149,23 @@
 
 若下一刀要清内卡染色，应改对应生成器和页面脚本里的填充色，而不是只改 Prefab。
 
-## 仍缺的图
+## 国战图标
 
-仓库里没有这些文件，本刀不画假图。
+`main_country_war` 的建筑图已入库：
 
-| 缺什么 | 现有替代 | 说明 |
-|--------|----------|------|
-| `ui/city/main-city_icon-main_country_war.png` | 无 | `maincitypos.json` 的 `main_country_war`（国战）。全库没有这份 PNG，也没有同名 stub |
-| `main-city_btn-login-2` … `7`、`9` … `14` | 多数活动已有 `icon-act_*` | 仓内活动入口钮只有 `main-city_btn-login-1.png` 和 `main-city_btn-login-8.png` |
-| `hero-arrive.png` | `icon-act_hero_arrive` | 与 btn-login 同一批未解帧，见 `docs/maincity-map-config.md` |
+`client/assets/resources/ui/city/main-city_icon-main_country_war.png`
 
-日文 `lbl` 位图（`main-scene-lang_lbl-*`、`other_lbl-dead`）保持不动，不拿来补这些缺口。
+SpriteFrame uuid 是 `3e507128-946f-56a8-ace2-852b82b1145d@f9941`，158×88，未与仓内其他 uuid 冲突。`.meta` 沿用随图带来的 Creator 3.8 结构（`6c48a` 贴图 + `f9941` spriteFrame），`displayName` 改成和同目录 `main-city_icon-*` 一样的文件名。`buildingIconCandidates("main_country_war")` 本来就指向 `ui/city/main-city_icon-main_country_war`，所以这份图能被主城建筑图标候选命中。国战仍然没有独立页面路由，只保留「国战」标签。
+
+日文 `lbl` 位图（`main-scene-lang_lbl-*`、`other_lbl-dead`）没有改。
+
+## 仍缺的 btn-login
+
+活动入口钮解出来的 PNG 只有这两张，图集键也只有这两个：
+
+- `client/assets/resources/ui/city/main-city_btn-login-1.png`
+- `client/assets/resources/ui/city/main-city_btn-login-8.png`
+
+没有 `btn-login-2` … `btn-login-7`，也没有 `btn-login-9` … `btn-login-14` 的独立图。`hero-arrive.png` 同样没有。本刀不补假图。
+
+`CityMap` 继续走 `activityIconCandidates`：先试 `ui/city/main-city_<config 文件名>`（例如 `main-city_btn-login-3`），文件不在就落到 `ui/city/main-city_icon-<atom>`，也就是已有的 `main-city_icon-act_*`。缺的登录钮保持这条回退，不要改成新画的按钮。
