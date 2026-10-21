@@ -19,7 +19,10 @@ export class Session {
   static role: MockRole | null = null;
   /** 开服自然日。来自 Mock 的 role.enter；缺省第 1 天。真服不从 s2c 2001 字段 16 推这一天。 */
   static openDay = 1;
-  /** 下一关。主城「主线」用它发 stage.enter。 */
+  /**
+   * 下一关。Mock 主城「主线」用它发 stage.enter。
+   * 真服按钮不读这里：s2c 3007 的 now_idx / max_idx 记在 WireSession，不写进这一格。
+   */
   static stageId = 1;
   /** Mock 钱包。道具 id 1 金币、id 2 钻石。没进角色时是 0。wire 在对应标记为真之前，界面写未同步，不读这里的 0。 */
   static gold = 0;

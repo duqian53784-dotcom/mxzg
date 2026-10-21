@@ -19,6 +19,9 @@
  *   字段4 string = local
  *   字段5 string = mxzg-web-1001
  * s2c 1002 字段1 = 新角色 id。
+ *
+ * 进主城后另外两帧也在这里编：空的 c2s 2001（wire.2001）和空的 c2s 3007（wire.3007）。
+ * 3007 的三例见 wireChapter.ts。3002 / 3004 不编。
  */
 import { NetMessage } from "../NetTypes";
 import { Cmd } from "./cmds";
@@ -100,7 +103,9 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
 /**
  * 把 NetClient 的明文 cmd 编成线上帧。
  * heartbeat → 1004 空体。login → 1001。role.create → 1002。wire.2001 → 空的 c2s 2001。
+ * wire.3007 → 空的 c2s 3007（主线关卡进度）。
  * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
+ * 3002 / 3004 / 3010 这一轮不编码。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -138,6 +143,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.roleProfile,
       bytes: encodeFrame(WireCmd.roleProfile),
+      note: "空体",
+    };
+  }
+  if (cmd === "wire.3007") {
+    return {
+      cmdId: WireCmd.chapterData,
+      bytes: encodeFrame(WireCmd.chapterData),
       note: "空体",
     };
   }

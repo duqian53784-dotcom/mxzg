@@ -173,7 +173,7 @@ export class MainApp extends Component {
       if (!this.isValid) return;
       this.refreshHub();
     });
-    this.refreshChrome();
+    this.refreshHub();
     const goldText = Session.source === "wire" && !Session.wireSync.gold ? "未同步" : String(Session.gold);
     const diamondText = Session.source === "wire" && !Session.wireSync.diamond ? "未同步" : String(Session.diamond);
     GameLog.shared.info(
@@ -890,7 +890,7 @@ export class MainApp extends Component {
   }
 
   private stageButtonText(): string {
-    if (Session.source === "wire") return "主线 · 未同步";
+    if (Session.source === "wire") return WireSession.mainlineLabel();
     const stageId = Session.stageId >= 1 ? Session.stageId : 1;
     return "主线 · 第" + stageId + "关";
   }

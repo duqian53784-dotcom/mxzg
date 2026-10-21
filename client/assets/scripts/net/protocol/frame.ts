@@ -25,6 +25,11 @@ export const WireCmd = {
    * 不是占位表里的 tower.view（也占了数字 2001，只给 Mock）。
    */
   roleProfile: 2001,
+  /**
+   * c2s 空体。Battle.proto 的 GReqChapterData。旧桥日志里进游戏同步会发这一帧，
+   * s2c 回 now_idx / max_idx。占位表里没有 3007。不是 stage.enter。
+   */
+  chapterData: 3007,
 } as const;
 
 /**
