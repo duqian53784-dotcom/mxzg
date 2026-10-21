@@ -17,7 +17,7 @@
 | 旧工程参考 | `F:\源码\mj\program` |
 | 构建和启动的工作目录 | `F:\源码\mj\program\server`（与上面的 junction 是同一目录） |
 | 分析里的一键 bat | `F:\源码\mj\program\start-services.bat`（在 `program` 目录，不在 `server` 里） |
-| 本仓库一键启服 | `scripts/start-local-server.ps1`、`scripts/stop-local-server.ps1` |
+| 本仓库一键启服 | 双击 `F:\project\mxzg\scripts\start-local-server.bat`。停止说明是 `scripts\stop-local-server.bat`。PowerShell 替代：`scripts/start-local-server.ps1`、`scripts/stop-local-server.ps1` |
 | JDK 1.8 | `C:\dev\jdk1.8`（Temurin 1.8.0_504） |
 | Maven 3.6.3 | `C:\dev\maven`（已配 `JAVA_HOME`、`MAVEN_HOME`、`PATH`） |
 | MySQL 8.0.29 | `C:\dev\mysql`（Windows 服务 `MySQL80`，开机自启） |
@@ -100,37 +100,48 @@ D2 才把本仓库 H5 接到游戏服 WebSocket `13101`。在那之前不要改�
 
 ## 一键启服
 
-第 3、4 节的构建和配置仍要先做完一次。脚本只做第 5 节的 `mvn -o dependency:copy-dependencies` 和 classpath `java`，并做第 7 节的检查。它放在本仓库，不放进 junction。
+第 3、4 节的构建和配置仍要先做完一次。第 5 节的 `mvn -o dependency:copy-dependencies` 也要先做过，`target\lib` 里要已经有依赖。脚本放在本仓库，不放进 junction。
 
-Windows PowerShell 的执行策略经常拦住脚本。下面这条只放宽这一次，不改系统策略：
+双击这个文件（拉完代码后的路径）：
+
+```
+F:\project\mxzg\scripts\start-local-server.bat
+```
+
+也可以在 `F:\project\mxzg` 的命令行里执行 `scripts\start-local-server.bat`。这是纯 bat，不经过 PowerShell。失败会 `pause`，成功也会 `pause`，避免双击后窗口立刻关掉，看不到中文报错或停止说明。
+
+它会：
+
+- 设 `JAVA_HOME=C:\dev\jdk1.8`，并把 `%JAVA_HOME%\bin` 加到 `PATH` 前面。先确认 `%JAVA_HOME%\bin\java.exe` 存在，再看 `java -version` 里有没有 `1.8`。
+- 服目录优先 `F:\源码\mj\program\server`，没有再用 junction `F:\project\mxzg\server`。启动用的 `ROOT` 是这下面的 `mxzg-server`。
+- 看端口 `3306`（MySQL，`127.0.0.1:3306`）和 `11001`（Redis，`127.0.0.1:11001`）是否已在听。分析没有写出如何启动服务 `MySQL80`、`RedisDev`，脚本不启动它们；不在听就用中文退出。
+- 检查 `target\lib`，以及 `target\classes` 里的 properties 和启动类。中心服要有 `application.properties`、`database.properties`、`com\ayjs\mxzg\center\CenterBootstrap.class`。游戏服要有 `application.properties`、`database-game.properties`、`database-log.properties`、`com\ayjs\mxzg\gameserver\Bootstrap.class`。缺了就退出。不代做构建，不改配置，也不跑 `mvn`。
+- 端口已经在听就跳过，不另开一个进程。旧 `start-all.bat` 会 `taskkill`。这个 bat 默认不结束已有进程。窗口没了但仍占端口时用 Q7，脚本自己不执行。
+- `start "mxzg-center" cmd /k`，命令与第 5.1 节相同：`java -Xms512m -Xmx2048m -cp "target/classes;target/lib/*" com.ayjs.mxzg.center.CenterBootstrap`。等到 TCP `11122` 和 HTTP `9801`，再同样方式启动 `com.ayjs.mxzg.gameserver.Bootstrap`，等到 TCP `9902` 和 WS `13101`。分析没有写启动要等多久。两个端口共用最多约 180 秒（与 `start-local-server.ps1` 的上限相同）。
+- 默认不启 cross，不启 large-cross。不启旧 H5 的 `dev-platform.ps1` / `serve.ps1`，也不开浏览器。Creator 客户端仍走 Mock。D2 才接游戏服。
+- 起来之后按第 7 节检查。调用 `curl.exe`，最多 10 秒，并执行 `netstat -ano | findstr "11122 9902 13101"`：
+
+```
+curl.exe -fsS --max-time 10 http://127.0.0.1:9801/actuator/health
+curl.exe -fsS --max-time 10 http://127.0.0.1:9804/actuator/health
+netstat -ano | findstr "11122 9902 13101"
+```
+
+停止仍是分析里的做法：在该窗口输入 `stop` 回车。顺序是先 gameserver，再 center。本 bat 不打开 cross。若另外开了 cross，顺序是 gameserver、cross、center。分析没有写出从别的窗口代输入 `stop` 的命令，所以停止脚本不结束进程：
+
+```
+F:\project\mxzg\scripts\stop-local-server.bat
+```
+
+PowerShell 仍可用。执行策略只放宽这一次，不改系统策略。`start-local-server.ps1` 会自己跑第 5 节的 `mvn -o dependency:copy-dependencies`，Java 固定用 `C:\dev\jdk1.8\bin\java.exe`。要启 cross 才加 `-IncludeCross`。bat 没有这个开关。
 
 ```
 powershell -NoProfile -ExecutionPolicy Bypass -File F:\project\mxzg\scripts\start-local-server.ps1
 ```
 
-脚本先看端口 `3306`（MySQL，`127.0.0.1:3306`）和 `11001`（Redis，`127.0.0.1:11001`）是否已在听。分析没有写出如何启动服务 `MySQL80`、`RedisDev`，脚本不启动它们；不在听就用中文退出。
+`stop-local-server.ps1` 和 `start-local-server.ps1 -Stop` 同样只打印停止说明。
 
-然后各开一个窗口，窗口标题是 `mxzg-center`、`mxzg-gameserver`。Java 固定用 `C:\dev\jdk1.8\bin\java.exe`，参数是分析里的 `-Xms512m -Xmx2048m -cp "target/classes;target/lib/*"`，启动类分别是 `com.ayjs.mxzg.center.CenterBootstrap` 和 `com.ayjs.mxzg.gameserver.Bootstrap`。先等 center 的 TCP `11122` 和 HTTP `9801`，再开 gameserver。cross 默认不启（2026-10-19 因讨伐团 `CRUSADE_GROUP_WORKER` 失败）。要启才加 `-IncludeCross`。large-cross 不启。
-
-起来之后脚本自己检查。PowerShell 里 `curl` 是别名，脚本调用 `curl.exe`，地址与第 7 节相同，并加上最多 10 秒，避免检查卡住：
-
-```
-curl.exe http://127.0.0.1:9801/actuator/health
-curl.exe http://127.0.0.1:9804/actuator/health
-netstat -ano | findstr "11122 9902 13101"
-```
-
-分析没有写启动要等多久。脚本最多轮询约 180 秒。
-
-停止仍是分析里的做法：在该窗口输入 `stop` 回车。顺序是先 gameserver，若开了 cross 再 cross，最后 center。分析没有写出从别的窗口代输入 `stop` 的命令，所以停止脚本不结束进程：
-
-```
-powershell -NoProfile -ExecutionPolicy Bypass -File F:\project\mxzg\scripts\stop-local-server.ps1
-```
-
-`start-local-server.ps1 -Stop` 也是这段说明。窗口没了但端口还在，用 Q7。
-
-分析里的 `F:\源码\mj\program\start-services.bat` 仍会各开一个窗口。本仓库这份脚本把同一套 classpath 命令放进 Git。D1 仍未勾选：脚本还没有在开发机上跑过。
+分析里的 `F:\源码\mj\program\start-services.bat` 仍会各开一个窗口。D1 仍未勾选：这些脚本还没有在开发机上跑过。
 
 ## 1. MySQL
 
@@ -333,7 +344,7 @@ java -Xms512m -Xmx2048m -cp "target/classes;target/lib/*" com.ayjs.mxzg.gameserv
 
 ### 5.4 一键脚本
 
-分析里还可以双击 `F:\源码\mj\program\start-services.bat`。它会依次打开 center 和 gameserver，各一个窗口，不含 cross。本仓库的一键方式见上面「一键启服」，用的是第 5.1 节和第 5.3 节同一套 classpath 命令。
+分析里还可以双击 `F:\源码\mj\program\start-services.bat`。它会依次打开 center 和 gameserver，各一个窗口，不含 cross。本仓库双击 `F:\project\mxzg\scripts\start-local-server.bat`，用的是第 5.1 节和第 5.3 节同一套 classpath 命令。细节见上面「一键启服」。
 
 ### 5.5 仓库里的 Linux 部署（不要拿来在本机跑）
 
@@ -385,7 +396,7 @@ cross 失败不挡住这张清单。单机不要求它在听。
 
 ## 8. 停止
 
-Windows：在该服务的命令行窗口输入 `stop` 然后回车。`scripts/start-local-server.ps1` 开出的窗口同样如此。`scripts/stop-local-server.ps1` 和 `start-local-server.ps1 -Stop` 只打印顺序，不结束进程。
+Windows：在该服务的命令行窗口输入 `stop` 然后回车。`scripts\start-local-server.bat` 和 `scripts/start-local-server.ps1` 开出的窗口同样如此。`scripts\stop-local-server.bat`、`scripts/stop-local-server.ps1` 和 `start-local-server.ps1 -Stop` 只打印顺序，不结束进程。
 
 停止顺序与启动相反：gameserver → large-cross → cross → center。
 
