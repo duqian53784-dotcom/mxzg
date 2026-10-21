@@ -27,14 +27,27 @@ import {
   wireProfileNote,
   WireRoleProfile,
 } from "./protocol/wireProfile";
+import {
+  applyWireBagGain,
+  decodeWireBagGain,
+  decodeWireBagList,
+  WIRE_BAG_CMD,
+  WIRE_BAG_GAIN_CMD,
+  wireBagGainNote,
+  wireBagNote,
+  WireBagGain,
+  WireBagItem,
+} from "./protocol/wireBag";
 import { wireBody } from "./protocol/wireLogin";
 
 /**
  * ?transport=ws 登录进主城后，这条 NetClient 要活过 Boot 切场景。
  * 心跳 1004 继续发。
- * 连上就听 wire.2001、wire.3007、wire.3004 和 wire.3005。
- * 登录成功后先发空的 c2s 2001（日志里的拉角色资料），紧接着发空的 c2s 3007，
- * 再发空的 c2s 3004（挂机奖励列表）。不等 s2c 2001，也不夹那一长串别的号。
+ * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3004 和 wire.3005。
+ * 登录成功后先发空的 c2s 2001（日志里的拉角色资料）。pullRoleProfile 紧接着发空的 c2s 5001。
+ * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。
+ * 线上顺序是 2001 → 5001 → 3007 → 3004。不等 s2c 2001，也不夹那一长串别的号。
+ * 不发 5010，也不发 5004–5009、5011–5013。
  * s2c 2001 按 Role.proto：字段 9 角色名、字段 6 等级、字段 2 金币、字段 1 宝石（顶栏钻石）。
  * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。
  * 不写 Session.stageId，主城按钮用 mainlineLabel()。
@@ -43,6 +56,10 @@ import { wireBody } from "./protocol/wireLogin";
  * s2c 3004 按 Battle.proto：字段 1 reward_time、字段 2 max_reward_time。缺的不写成 0。
  * 不写 Session.gold。挂机页用 rewardTime / maxRewardTime。没有这两项时主城挂机只 Toast。
  * s2c 3005 只改 reward_time。没有奖励清单，不改金币和钻石。
+ * s2c 5001 按 GResBackPackList 替换本地背包。空包体是已同步的空背包。
+ * 从未收到 5001 时主城背包只 Toast，不打开 Mock 背包页。
+ * s2c 5002 在已经有列表之后合并：num > 0 加上，num = 0 删掉该格。type 只记日志，不弹窗。
+ * 背包、5002、5010、50000 都不写顶栏。钱包只认 s2c 2001 的金币和宝石。
  * 缺的顶栏字段不写，那个格子保持未同步。字段 5 是奖杯，不写进金币。开服天不推。
  * 别的 s2c 仍只记 wire.<cmdId>。解不开就忽略，不抛进拆帧循环。
  */
@@ -61,26 +78,49 @@ export class WireSession {
   static claimSerial = 0;
   /** 最近一帧 s2c 3005 的说明。不写金币。 */
   static claimNote = "";
+  /**
+   * s2c 5001 的整表。null 表示这次进主城还没收到 5001。
+   * 空数组是已同步的空背包，不是未同步。
+   */
+  static bagItems: WireBagItem[] | null = null;
 
   private static watched: NetClient | null = null;
   private static offProfile: (() => void) | null = null;
   private static offChapter: (() => void) | null = null;
   private static offIdle: (() => void) | null = null;
   private static offIdleClaim: (() => void) | null = null;
+  private static offBag: (() => void) | null = null;
+  private static offBagGain: (() => void) | null = null;
   private static pending: WireRoleProfile | null = null;
   private static pendingChapter: WireChapterProgress | null = null;
   private static pendingIdle: WireIdleSnapshot | null = null;
+  /** null 表示登录过程里还没看到 5001。空数组是空背包。 */
+  private static pendingBag: WireBagItem[] | null = null;
+  /** 快照之后、进主城之前到达的 5002。新的 5001 会清掉。 */
+  private static pendingGains: WireBagGain[] = [];
   private static listeners = new Set<() => void>();
 
-  /** 套接字一开就听。登录回包里如果已经夹着 2001、3007 或 3004，先记下，等角色写入后再套上。 */
+  /** 套接字一开就听。登录回包里如果已经夹着 2001、5001、3007 或 3004，先记下，等角色写入后再套上。 */
   static watch(net: NetClient): void {
-    if (this.watched === net && this.offProfile && this.offChapter && this.offIdle && this.offIdleClaim) return;
+    if (
+      this.watched === net &&
+      this.offProfile &&
+      this.offChapter &&
+      this.offIdle &&
+      this.offIdleClaim &&
+      this.offBag &&
+      this.offBagGain
+    ) {
+      return;
+    }
     this.unhook();
     this.watched = net;
     this.offProfile = net.subscribe(WIRE_ROLE_CMD, (msg) => this.onRole(msg.data));
     this.offChapter = net.subscribe(WIRE_CHAPTER_CMD, (msg) => this.onChapter(msg.data));
     this.offIdle = net.subscribe(WIRE_IDLE_CMD, (msg) => this.onIdle(msg.data));
     this.offIdleClaim = net.subscribe(WIRE_IDLE_CLAIM_CMD, (msg) => this.onIdleClaim(msg.data));
+    this.offBag = net.subscribe(WIRE_BAG_CMD, (msg) => this.onBag(msg.data));
+    this.offBagGain = net.subscribe(WIRE_BAG_GAIN_CMD, (msg) => this.onBagGain(msg.data));
   }
 
   static hold(net: NetClient): void {
@@ -90,7 +130,7 @@ export class WireSession {
   }
 
   /**
-   * 这次进主城还没看到新的 s2c 3007 / 3004。丢掉上一名角色的 idx 和挂机时间。
+   * 这次进主城还没看到新的 s2c 3007 / 3004 / 5001。丢掉上一名角色的 idx、挂机时间和背包。
    * 登录过程中先到的包仍留在 pending，接着 flush 再写。
    */
   static prepareCity(): void {
@@ -100,6 +140,7 @@ export class WireSession {
     this.maxRewardTime = null;
     this.claimNote = "";
     this.claimSerial = 0;
+    this.bagItems = null;
   }
 
   /** 只放下引用。调用方自己 close。 */
@@ -111,12 +152,15 @@ export class WireSession {
       this.pending = null;
       this.pendingChapter = null;
       this.pendingIdle = null;
+      this.pendingBag = null;
+      this.pendingGains = [];
       this.nowIdx = null;
       this.maxIdx = null;
       this.rewardTime = null;
       this.maxRewardTime = null;
       this.claimNote = "";
       this.claimSerial = 0;
+      this.bagItems = null;
     }
   }
 
@@ -128,12 +172,15 @@ export class WireSession {
     this.pending = null;
     this.pendingChapter = null;
     this.pendingIdle = null;
+    this.pendingBag = null;
+    this.pendingGains = [];
     this.nowIdx = null;
     this.maxIdx = null;
     this.rewardTime = null;
     this.maxRewardTime = null;
     this.claimNote = "";
     this.claimSerial = 0;
+    this.bagItems = null;
     if (net) net.close();
   }
 
@@ -150,18 +197,37 @@ export class WireSession {
     this.commit();
     this.commitChapter();
     this.commitIdle();
+    this.commitBag();
   }
 
-  /** 空的 c2s 2001。旧桥日志里这一帧没有包体。 */
+  /**
+   * 空的 c2s 2001，紧接着空的 c2s 5001。
+   * Boot 仍只调用这一处再调用 pullChapter / pullIdle，所以不改 Boot.ts。
+   * 线上顺序因此是 2001 → 5001 → 3007 → 3004。
+   */
   static pullRoleProfile(): void {
     const net = this.net || this.watched;
     if (!net || net.state !== "connected") return;
     net.send(WIRE_ROLE_CMD);
+    this.pullBackpack();
+  }
+
+  /** 空的 c2s 5001。GReqBackPackList 没有包体。 */
+  static pullBackpack(): void {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return;
+    net.send(WIRE_BAG_CMD);
+  }
+
+  /** 收到过 s2c 5001（含空包体）才算同步。5002 单独到不算。 */
+  static hasBag(): boolean {
+    return this.bagItems !== null;
   }
 
   /**
    * 空的 c2s 3007。旧桥日志三例都在 c2s 2001 之后的进游戏同步里发这一帧，包体是空的。
-   * 这里跟在 pullRoleProfile 后面发，不等 s2c 2001，也不发夹在中间的其它号。
+   * 这里跟在 pullRoleProfile 后面发。pullRoleProfile 已经先发了空的 5001。
+   * 不等 s2c 2001，也不发夹在中间的其它号。
    */
   static pullChapter(): void {
     const net = this.net || this.watched;
@@ -308,6 +374,58 @@ export class WireSession {
     this.finishClaim(note);
   }
 
+  private static onBag(data: unknown): void {
+    let list: { items: WireBagItem[] } | null = null;
+    try {
+      list = decodeWireBagList(wireBody(data));
+    } catch (err) {
+      GameLog.shared.error("Wire", "s2c 5001 解不开 " + (err instanceof Error ? err.message : "未知错误"));
+      return;
+    }
+    if (!list) {
+      GameLog.shared.info("Wire", "s2c 5001 解不开，背包不改");
+      return;
+    }
+    this.pendingBag = list.items.map(copyBagItem);
+    this.pendingGains = [];
+    if (Session.source !== "wire" || !Session.role) {
+      GameLog.shared.info("Wire", "s2c 5001 先记下：" + wireBagNote(list.items));
+      return;
+    }
+    this.commitBag();
+  }
+
+  private static onBagGain(data: unknown): void {
+    let gain: WireBagGain | null = null;
+    try {
+      gain = decodeWireBagGain(wireBody(data));
+    } catch (err) {
+      GameLog.shared.error("Wire", "s2c 5002 解不开 " + (err instanceof Error ? err.message : "未知错误"));
+      return;
+    }
+    if (!gain) {
+      GameLog.shared.info("Wire", "s2c 5002 解不开，背包不改，顶栏不改");
+      return;
+    }
+    GameLog.shared.info("Wire", "s2c 5002 " + wireBagGainNote(gain));
+    if (gain.items.length === 0) return;
+    const inCity = Session.source === "wire" && !!Session.role;
+    if (!inCity) {
+      if (this.pendingBag === null) {
+        GameLog.shared.info("Wire", "s2c 5002 在背包列表之前，不合并");
+        return;
+      }
+      this.pendingGains.push(gain);
+      return;
+    }
+    if (this.bagItems === null) {
+      GameLog.shared.info("Wire", "s2c 5002 在背包列表之前，不合并");
+      return;
+    }
+    this.bagItems = applyWireBagGain(this.bagItems, gain);
+    this.emit();
+  }
+
   /** 后到的包只补上自己有的字段，不把先记下、这一包没有的格子清掉。 */
   private static remember(profile: WireRoleProfile): void {
     const prev = this.pending;
@@ -364,6 +482,20 @@ export class WireSession {
     this.emit();
   }
 
+  private static commitBag(): void {
+    if (this.pendingBag === null) return;
+    if (Session.source !== "wire" || !Session.role) return;
+    let items = this.pendingBag.map(copyBagItem);
+    for (let i = 0; i < this.pendingGains.length; i++) {
+      items = applyWireBagGain(items, this.pendingGains[i]);
+    }
+    this.pendingBag = null;
+    this.pendingGains = [];
+    this.bagItems = items;
+    GameLog.shared.info("Wire", "s2c 5001 " + wireBagNote(items));
+    this.emit();
+  }
+
   private static commitIdle(): void {
     const snapshot = this.pendingIdle;
     if (!snapshot || !wireIdleHasTime(snapshot)) return;
@@ -408,5 +540,17 @@ export class WireSession {
       this.offIdleClaim();
       this.offIdleClaim = null;
     }
+    if (this.offBag) {
+      this.offBag();
+      this.offBag = null;
+    }
+    if (this.offBagGain) {
+      this.offBagGain();
+      this.offBagGain = null;
+    }
   }
+}
+
+function copyBagItem(item: WireBagItem): WireBagItem {
+  return { itemId: item.itemId, itemType: item.itemType, num: item.num };
 }

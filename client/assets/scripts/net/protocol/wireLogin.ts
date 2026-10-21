@@ -20,9 +20,10 @@
  *   字段5 string = mxzg-web-1001
  * s2c 1002 字段1 = 新角色 id。
  *
- * 进主城后另外几帧也在这里编：空的 c2s 2001（wire.2001）、空的 c2s 3007（wire.3007）、
- * 空的 c2s 3004（wire.3004）。挂机页领取再编空的 c2s 3005（wire.3005）。
- * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。3002 不编。
+ * 进主城后另外几帧也在这里编：空的 c2s 2001（wire.2001）、空的 c2s 5001（wire.5001）、
+ * 空的 c2s 3007（wire.3007）、空的 c2s 3004（wire.3004）。挂机页领取再编空的 c2s 3005（wire.3005）。
+ * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。
+ * 3002 不编。5002 只收不发。5004–5009、5010、5011–5013 不编。
  */
 import { NetMessage } from "../NetTypes";
 import { Cmd } from "./cmds";
@@ -104,10 +105,13 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
 /**
  * 把 NetClient 的明文 cmd 编成线上帧。
  * heartbeat → 1004 空体。login → 1001。role.create → 1002。wire.2001 → 空的 c2s 2001。
+ * wire.5001 → 空的 c2s 5001（背包整表）。
  * wire.3007 → 空的 c2s 3007（主线关卡进度）。
  * wire.3004 → 空的 c2s 3004（挂机奖励列表）。wire.3005 → 空的 c2s 3005（领取挂机）。
  * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
- * 占位 idle.query / idle.claim 仍是 1301 / 1302，和这两帧不是一回事。3002 / 3010 不编码。
+ * 占位 idle.query / idle.claim 仍是 1301 / 1302，和这两帧不是一回事。
+ * 占位 bag.list / bag.use 仍是 1601 / 1602。3002 / 3010 不编码。
+ * 5002 不编码。5004–5009、5010、5011–5013 不编码。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -145,6 +149,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.roleProfile,
       bytes: encodeFrame(WireCmd.roleProfile),
+      note: "空体",
+    };
+  }
+  if (cmd === "wire.5001") {
+    return {
+      cmdId: WireCmd.backpackList,
+      bytes: encodeFrame(WireCmd.backpackList),
       note: "空体",
     };
   }
