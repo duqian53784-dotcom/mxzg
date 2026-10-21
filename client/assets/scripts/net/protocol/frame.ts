@@ -83,6 +83,14 @@ export const WireCmd = {
    * 对手空时服可能补名单。不匹配，不扣次，不开战。
    */
   pvpData: 18001,
+  /**
+   * c2s 空体。进主城、空 c2s 18001 之后发。
+   * 整帧 `04 00 00 00 f0 55 00 00`。GReqSevenDayLoginData，没有字段，也没有 page。
+   * s2c 是 GResSevenDayLoginData。不发 22001。
+   * 22002 是隔天推送，只收不发。无写库，无自动领奖。
+   * 不是占位 login7.view（2201）。不是点金 17000，也不是七日目标。
+   */
+  sevenDayLogin: 22000,
 } as const;
 
 /**

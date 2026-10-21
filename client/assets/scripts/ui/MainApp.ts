@@ -42,6 +42,7 @@ import { buildWirePvpPage, WirePvpPage } from "./WirePvpPage";
 import { buildTowerPage, TowerPage } from "./TowerPage";
 import { buildDailyGoldPage, DailyGoldPage } from "./DailyGoldPage";
 import { buildLogin7Page, Login7Page } from "./Login7Page";
+import { buildWireSevenDayPage, WireSevenDayPage } from "./WireSevenDayPage";
 import { buildWireAchievementPage, WireAchievementPage } from "./WireAchievementPage";
 import { buildWireActivityPage, WireActivityPage } from "./WireActivityPage";
 import { buildGoal7Page, Goal7Page } from "./Goal7Page";
@@ -63,6 +64,7 @@ import { WIRE_MAIL_UNSYNCED_TOAST } from "../net/protocol/wireMail";
 import { WIRE_ACHIEVEMENT_UNSYNCED_TOAST } from "../net/protocol/wireAchievement";
 import { WIRE_ACTIVITY_UNSYNCED_TOAST } from "../net/protocol/wireActivity";
 import { WIRE_PVP_UNSYNCED_TOAST } from "../net/protocol/wirePvp";
+import { WIRE_SEVEN_UNSYNCED_TOAST } from "../net/protocol/wireSevenDay";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
@@ -107,7 +109,7 @@ export class MainApp extends Component {
   private arena: ArenaPage | WirePvpPage | null = null;
   private tower: TowerPage | null = null;
   private daily: DailyGoldPage | null = null;
-  private login7: Login7Page | null = null;
+  private login7: Login7Page | WireSevenDayPage | null = null;
   private goal7: Goal7Page | null = null;
   private buyGold: WireActivityPage | null = null;
   private achieve: WireAchievementPage | null = null;
@@ -256,7 +258,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && id === "arena") && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "arena")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "arena" || id === "login7")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -479,11 +481,12 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录不绑 17000。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。 */
   private blockWirePage(id: string): boolean {
     if (id === "achieve") return this.blockWireAchievement();
     if (id === "buygold") return this.blockWireBuyGold();
     if (id === "arena") return this.blockWireArena();
+    if (id === "login7") return this.blockWireSevenDay();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -526,6 +529,15 @@ export class MainApp extends Component {
     if (Session.source === "wire" && WireSession.hasActivity()) return false;
     GameLog.shared.info("MainApp", "wire buygold unsynced");
     this.shell?.showToast(WIRE_ACTIVITY_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 22000 就停在主城或玩法。空表也算同步。Mock 仍走原来的领取页。 */
+  private blockWireSevenDay(): boolean {
+    if (Session.source !== "wire") return false;
+    if (WireSession.hasSevenDay()) return false;
+    GameLog.shared.info("MainApp", "wire login7 unsynced");
+    this.shell?.showToast(WIRE_SEVEN_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -661,12 +673,22 @@ export class MainApp extends Component {
   }
 
   /**
-   * 主城和玩法都能进。新号第 1 天可领，不看主线等级和开服天。
-   * 没连上时不压页面。
+   * 主城和玩法都能进。Mock 新号第 1 天可领，不看主线等级和开服天。
+   * 真服收到 22000 后走只读页，不领奖。没连上时不压页面。
    */
   private openLogin7(): void {
     GameLog.shared.info("MainApp", "click login7");
     if (this.blockWirePage("login7")) return;
+    if (Session.source === "wire") {
+      const net = this.cityNet();
+      if (net.state !== "connected") {
+        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+        return;
+      }
+      this.panels?.openChild("login7");
+      this.refreshChrome();
+      return;
+    }
     if (!this.allow("login7")) return;
     if (!this.ensureNet()) return;
     this.panels?.openChild("login7");
@@ -674,6 +696,7 @@ export class MainApp extends Component {
   }
 
   private mountLogin7(): Node {
+    if (Session.source === "wire") return this.mountWireSevenDay();
     this.login7?.dispose();
     const page = buildLogin7Page({
       showToast: (text) => this.shell?.showToast(text, 2400),
@@ -686,6 +709,16 @@ export class MainApp extends Component {
         this.refreshChrome();
         this.bag?.reload();
       },
+      close: () => this.back(),
+    });
+    this.login7 = page;
+    return page.node;
+  }
+
+  private mountWireSevenDay(): Node {
+    this.login7?.dispose();
+    const page = buildWireSevenDayPage({
+      alive: () => this.isValid,
       close: () => this.back(),
     });
     this.login7 = page;
