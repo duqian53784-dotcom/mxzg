@@ -7,7 +7,7 @@ export interface MockRole {
   level: number;
 }
 
-/** mock：钱包和关卡来自 Mock。wire：只记下真服角色，金币钻石还没同步。 */
+/** mock：钱包和关卡来自 Mock。wire：顶栏只写 s2c 2001 里解开的格子，没写到的仍是未同步。 */
 export type SessionSource = "mock" | "wire";
 
 export class Session {
@@ -17,7 +17,7 @@ export class Session {
   static serverId = findServer(1).id;
   static serverName = findServer(1).name;
   static role: MockRole | null = null;
-  /** 开服自然日。来自 Mock 的 role.enter；缺省第 1 天。真服登录不拿它当进度。 */
+  /** 开服自然日。来自 Mock 的 role.enter；缺省第 1 天。真服不从 s2c 2001 字段 16 推这一天。 */
   static openDay = 1;
   /** 下一关。主城「主线」用它发 stage.enter。 */
   static stageId = 1;
@@ -26,8 +26,9 @@ export class Session {
   static diamond = 0;
   static source: SessionSource = "mock";
   /**
-   * 真服顶栏哪些格子已经从包里写过。
-   * 角色名可以来自 s2c 2001 字段 9。等级、金币、钻石在 net-20261020 里对不上，保持 false。
+   * 真服顶栏哪些格子已经从 s2c 2001 写过。
+   * 角色名是字段 9，等级是字段 6，金币是字段 2，钻石是字段 1（宝石）。
+   * 缺字段保持 false。字段 5 是奖杯，不进金币。开服天不在这里。
    */
   static wireSync = { name: false, level: false, gold: false, diamond: false };
 
@@ -58,7 +59,7 @@ export class Session {
 
   /**
    * 真服 s2c 1001 有角色 id 时写入。
-   * 不填 Mock 起步金币 100 / 钻石 20。等级和关卡界面上标成未同步。
+   * 不填 Mock 起步金币 100 / 钻石 20。等级、金币、钻石等 s2c 2001，没到之前界面上标成未同步。
    * name 只有创角面板刚提交的名字。s2c 1001 没有角色名，名字等 s2c 2001 字段 9。
    */
   static applyWireRole(input: { account: string; serverId: number; roleId: number; name?: string | null }): void {
@@ -81,7 +82,8 @@ export class Session {
 
   /**
    * 真服同步包里已经能确定的顶栏格子。没进 wire 角色时不改。
-   * 调用方不要把 Mock 的 100 / 20 传进来。等级、金币、钻石目前没有包能填，接口留着，顶栏才能在以后写上时刷新。
+   * 调用方不要把 Mock 的 100 / 20 传进来。没出现的字段传 null，不要补 0。
+   * 金币和钻石的 0 是服上的 0，要传 0。等级至少 1。
    */
   static applyWireSync(patch: {
     name?: string | null;
@@ -142,7 +144,7 @@ export function formatNameLine(): string {
   return name + " Lv" + level;
 }
 
-/** 顶栏左侧第二行：服务器和开服自然日。真服还没有开服天。 */
+/** 顶栏左侧第二行：服务器和开服自然日。真服开服天仍未同步，这里只写角色 id。 */
 export function formatSubLine(): string {
   if (!Session.account) return "请从 Boot 进入";
   if (Session.source === "wire") {

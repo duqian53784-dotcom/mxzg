@@ -10,7 +10,7 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 线上只写 frame.ts 里的长度前缀帧：心跳 1004 空体、登录 1001、创角 1002。
  * 占位 cmd 没有日志里的帧时不发送。粘包按 TCP 帧切开。见 docs/h5-websocket.md。
  * 登录后的推送（倩本机见过 28000、28103、20005、25001、23000、21013、50000）记日志并派发成 wire.<cmdId>。
- * 空的 c2s 2001 是日志里拉角色名的那一帧，回包由 WireSession 读字段 9。别的号不猜。
+ * 空的 c2s 2001 是日志里拉角色资料的那一帧。回包由 WireSession 读字段 9、6、2、1。别的号不猜。
  * 单条处理失败也不丢掉后面的帧。
  */
 
