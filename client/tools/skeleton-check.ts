@@ -1160,6 +1160,20 @@ import {
   WIRE_TIME_TOWER_UNSYNCED_TOAST,
   wireTimeTowerNote,
 } from "../assets/scripts/net/protocol/wireTimeTower";
+import {
+  decodeWireSpaceTimeAdventure,
+  formatWireSpaceTimeAdventureLine,
+  WIRE_SPACE_TIME_ADVENTURE_BANNED_CMDS,
+  WIRE_SPACE_TIME_ADVENTURE_CMD,
+  WIRE_SPACE_TIME_ADVENTURE_EMPTY,
+  WIRE_SPACE_TIME_ADVENTURE_FIELD_NOTE,
+  WIRE_SPACE_TIME_ADVENTURE_FRAME,
+  WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE,
+  WIRE_SPACE_TIME_ADVENTURE_READONLY_TITLE,
+  WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT,
+  WIRE_SPACE_TIME_ADVENTURE_UNSYNCED_TOAST,
+  wireSpaceTimeAdventureNote,
+} from "../assets/scripts/net/protocol/wireSpaceTimeAdventure";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1913,6 +1927,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("heroPalace") === "city", "hero palace stays on the city tab");
   assert(rootTabFor("rechargeDaysB") === "city", "recharge days b stays on the city tab");
   assert(rootTabFor("timeTower") === "city", "time tower stays on the city tab");
+  assert(rootTabFor("spaceTimeAdventure") === "city", "space time adventure stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -11554,6 +11569,335 @@ async function checkWs(): Promise<void> {
       }).indexOf("不写钻石") >= 0,
     "74001 note keeps the side effect and does not write gold or diamond"
   );
+  assert(WireCmd.spaceTimeAdventure === 74120 && WireCmd.spaceTimeAdventure !== WireCmd.timeTower, "online 74120 is not 74001");
+  assert(
+    WireCmd.spaceTimeAdventure !== 74121 &&
+      WireCmd.spaceTimeAdventure !== 74122 &&
+      WireCmd.spaceTimeAdventure !== 74123 &&
+      WireCmd.spaceTimeAdventure !== 74124 &&
+      WireCmd.spaceTimeAdventure !== 74125 &&
+      WireCmd.spaceTimeAdventure !== 74126 &&
+      WireCmd.spaceTimeAdventure !== 74127 &&
+      WireCmd.spaceTimeAdventure !== 74128 &&
+      WireCmd.spaceTimeAdventure !== 74129 &&
+      WireCmd.spaceTimeAdventure !== 74131 &&
+      WireCmd.spaceTimeAdventure !== 74142 &&
+      WireCmd.spaceTimeAdventure !== 74147 &&
+      WireCmd.spaceTimeAdventure !== 74148 &&
+      WireCmd.spaceTimeAdventure !== 74149 &&
+      WireCmd.spaceTimeAdventure !== 76501 &&
+      WireCmd.spaceTimeAdventure !== 73002 &&
+      WireCmd.spaceTimeAdventure !== 71001 &&
+      WireCmd.spaceTimeAdventure !== 20011 &&
+      WireCmd.spaceTimeAdventure !== 4601 &&
+      WireCmd.spaceTimeAdventure !== 29001 &&
+      WireCmd.spaceTimeAdventure !== 5001 &&
+      WireCmd.spaceTimeAdventure !== 51001 &&
+      WireCmd.spaceTimeAdventure !== 68001 &&
+      WireCmd.spaceTimeAdventure !== 70001 &&
+      WireCmd.spaceTimeAdventure !== 69001 &&
+      WireCmd.spaceTimeAdventure !== 63001 &&
+      WireCmd.spaceTimeAdventure !== 62001 &&
+      WireCmd.spaceTimeAdventure !== 61001 &&
+      WireCmd.spaceTimeAdventure !== 26001 &&
+      WireCmd.spaceTimeAdventure !== 26002 &&
+      WireCmd.spaceTimeAdventure !== 12020 &&
+      WireCmd.spaceTimeAdventure !== 13010 &&
+      WireCmd.spaceTimeAdventure !== 4044 &&
+      WireCmd.spaceTimeAdventure !== 3203 &&
+      WireCmd.spaceTimeAdventure !== 20101 &&
+      WireCmd.spaceTimeAdventure !== 3101 &&
+      WireCmd.spaceTimeAdventure !== 3099,
+    "online 74120 stays off the write cmds and the earlier idle pulls"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.spaceTimeAdventure)) === WIRE_SPACE_TIME_ADVENTURE_FRAME, "empty c2s 74120");
+  assert(bytesToHex(encodeFrame(74120)) === "0400000088210100", "empty c2s 74120 hex");
+  assert(WIRE_SPACE_TIME_ADVENTURE_FRAME === "0400000088210100", "74120 frame constant");
+  assert(bytesToHex(encodeFrame(74120)) !== "0400000011210100", "74120 is not the 74001 frame");
+  assert(bytesToHex(encodeFrame(74121)) === "0400000089210100" && bytesToHex(encodeFrame(74121)) !== "0400000088210100", "74121 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74122)) === "040000008a210100" && bytesToHex(encodeFrame(74122)) !== "0400000088210100", "74122 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74123)) === "040000008b210100" && bytesToHex(encodeFrame(74123)) !== "0400000088210100", "74123 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74124)) === "040000008c210100" && bytesToHex(encodeFrame(74124)) !== "0400000088210100", "74124 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74125)) === "040000008d210100" && bytesToHex(encodeFrame(74125)) !== "0400000088210100", "74125 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74126)) === "040000008e210100" && bytesToHex(encodeFrame(74126)) !== "0400000088210100", "74126 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74127)) === "040000008f210100" && bytesToHex(encodeFrame(74127)) !== "0400000088210100", "74127 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74128)) === "0400000090210100" && bytesToHex(encodeFrame(74128)) !== "0400000088210100", "74128 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74129)) === "0400000091210100" && bytesToHex(encodeFrame(74129)) !== "0400000088210100", "74129 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74131)) === "0400000093210100" && bytesToHex(encodeFrame(74131)) !== "0400000088210100", "74131 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74142)) === "040000009e210100" && bytesToHex(encodeFrame(74142)) !== "0400000088210100", "74142 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74147)) === "04000000a3210100" && bytesToHex(encodeFrame(74147)) !== "0400000088210100", "74147 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74148)) === "04000000a4210100" && bytesToHex(encodeFrame(74148)) !== "0400000088210100", "74148 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(74149)) === "04000000a5210100" && bytesToHex(encodeFrame(74149)) !== "0400000088210100", "74149 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(76501)) === "04000000d52a0100" && bytesToHex(encodeFrame(76501)) !== "0400000088210100", "76501 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(73002)) !== "0400000088210100", "73002 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(71001)) !== "0400000088210100", "71001 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "0400000088210100", "20011 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(5001)) !== "0400000088210100", "5001 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(51001)) !== "0400000088210100", "51001 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(68001)) !== "0400000088210100", "68001 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(70001)) !== "0400000088210100", "70001 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "0400000088210100", "4601 is not the 74120 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "0400000088210100", "29001 is not the 74120 frame");
+  for (let i = 0; i < WIRE_SPACE_TIME_ADVENTURE_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_SPACE_TIME_ADVENTURE_BANNED_CMDS[i] }) === null, WIRE_SPACE_TIME_ADVENTURE_BANNED_CMDS[i] + " is not encoded");
+  }
+  const spaceTimeOwn = encodeWireMessage({ cmd: WIRE_SPACE_TIME_ADVENTURE_CMD });
+  assert(
+    spaceTimeOwn !== null &&
+      bytesToHex(spaceTimeOwn.bytes) === "0400000088210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000011210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000890d0100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000019f60000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000031f20000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000049ee0000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000091650000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000092650000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000f42e0000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000d2320000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000cc0f0000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000830c0000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000854e0000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000001d0c0000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000001b0c0000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000089130000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000039c70000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000a1090100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000071110100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000089210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000008a210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000008b210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000008c210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000008d210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000008e210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000008f210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000090210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000091210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000093210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000009e210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000a3210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000a4210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000a5210100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000d52a0100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000002a1d0100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000059150100" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "040000002b4e0000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "04000000f9110000" &&
+      bytesToHex(spaceTimeOwn.bytes) !== "0400000049710000",
+    "wire.74120 encodes the empty 74120 frame and not 74001 or the banned cmds"
+  );
+  assert(WIRE_SPACE_TIME_ADVENTURE_CMD === "wire.74120", "space time adventure wire cmd");
+  assert(WIRE_SPACE_TIME_ADVENTURE_READONLY_TITLE === "时空冒险（真服只读）", "readonly space time adventure title");
+  assert(WIRE_SPACE_TIME_ADVENTURE_UNSYNCED_TOAST === "真服未同步", "unsynced space time adventure toast");
+  assert(WIRE_SPACE_TIME_ADVENTURE_EMPTY === "已同步空表", "empty space time adventure label");
+  assert(
+    WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("unlock_route") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("not_route") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("energy") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("not_progress") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("end_time") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("shop_end_time") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("shop_list") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("status") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("product_end_time") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("product_id") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("product_buy") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("speed_buff") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74123") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74124") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74125") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74126") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74127") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74128") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74129") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74131") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74142") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74147") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74148") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74149") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74121") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74122") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("76501") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("73002") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("71001") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("74001") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("5001") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("51001") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("68001") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("70001") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_READONLY_NOTE.indexOf("无 page") >= 0,
+    "74120 readonly note lists the present fields and the hard bans"
+  );
+  assert(
+    WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT.indexOf("不重复拉 74001") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT.indexOf("spaceTimeInfoDao") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT.indexOf("regainEnergy") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT.indexOf("shopItems") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT.indexOf("无探索") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT.indexOf("无购买") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT.indexOf("0400000088210100") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT.indexOf("与 74001 分开发") >= 0,
+    "74120 side effect keeps the lazy create and does not explore or buy"
+  );
+  assert(
+    WIRE_SPACE_TIME_ADVENTURE_FIELD_NOTE.indexOf("unlock_route") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_FIELD_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_SPACE_TIME_ADVENTURE_FIELD_NOTE.indexOf("不发明") >= 0,
+    "74120 field note does not invent missing numbers"
+  );
+  const spaceTimeEmpty = decodeWireSpaceTimeAdventure(new Uint8Array(0));
+  assert(
+    spaceTimeEmpty !== null &&
+      spaceTimeEmpty.unlockRoute === null &&
+      spaceTimeEmpty.notRoute === null &&
+      spaceTimeEmpty.energy === null &&
+      spaceTimeEmpty.notProgress === null &&
+      spaceTimeEmpty.endTime === null &&
+      spaceTimeEmpty.shopEndTime === null &&
+      spaceTimeEmpty.shopList === null &&
+      spaceTimeEmpty.status === null &&
+      spaceTimeEmpty.productEndTime === null &&
+      spaceTimeEmpty.productId === null &&
+      spaceTimeEmpty.productBuy === null &&
+      spaceTimeEmpty.speedBuff === null &&
+      spaceTimeEmpty.marks.length === 0 &&
+      formatWireSpaceTimeAdventureLine(spaceTimeEmpty) === WIRE_SPACE_TIME_ADVENTURE_EMPTY &&
+      formatWireSpaceTimeAdventureLine(spaceTimeEmpty).indexOf("energy=0") < 0 &&
+      formatWireSpaceTimeAdventureLine(spaceTimeEmpty).indexOf("unlock_route") < 0,
+    "empty 74120 body is 已同步空表 and does not invent zeros"
+  );
+  assert(decodeWireSpaceTimeAdventure(null) === null, "missing 74120 body stays unsynced");
+  assert(decodeWireSpaceTimeAdventure(Uint8Array.from([0x80])) === null, "bad 74120 varint returns null");
+  const spaceTimeEnergyZero = decodeWireSpaceTimeAdventure(fieldVarint(3, 0));
+  assert(
+    spaceTimeEnergyZero !== null &&
+      spaceTimeEnergyZero.energy === 0 &&
+      spaceTimeEnergyZero.unlockRoute === null &&
+      formatWireSpaceTimeAdventureLine(spaceTimeEnergyZero) === "energy=0" &&
+      formatWireSpaceTimeAdventureLine(spaceTimeEnergyZero).indexOf("unlock_route") < 0,
+    "present 74120 energy zero stays zero and omits unlock_route"
+  );
+  const spaceTimeRouteZero = decodeWireSpaceTimeAdventure(fieldVarint(1, 0));
+  assert(
+    spaceTimeRouteZero !== null &&
+      spaceTimeRouteZero.unlockRoute !== null &&
+      spaceTimeRouteZero.unlockRoute[0].kind === "num" &&
+      spaceTimeRouteZero.unlockRoute[0].value === 0 &&
+      spaceTimeRouteZero.energy === null &&
+      formatWireSpaceTimeAdventureLine(spaceTimeRouteZero) === "unlock_route=0" &&
+      formatWireSpaceTimeAdventureLine(spaceTimeRouteZero).indexOf("energy=") < 0,
+    "present 74120 unlock_route zero stays zero and omits energy"
+  );
+  const spaceTimeEndNeg = decodeWireSpaceTimeAdventure(fieldNeg1(5));
+  assert(
+    spaceTimeEndNeg !== null &&
+      spaceTimeEndNeg.endTime === -1 &&
+      formatWireSpaceTimeAdventureLine(spaceTimeEndNeg) === "end_time=-1",
+    "74120 end_time -1 stays -1"
+  );
+  const spaceTimeOmitEnergy = decodeWireSpaceTimeAdventure(concatBytes(fieldVarint(1, 2), fieldVarint(8, 1)));
+  assert(
+    spaceTimeOmitEnergy !== null &&
+      spaceTimeOmitEnergy.energy === null &&
+      formatWireSpaceTimeAdventureLine(spaceTimeOmitEnergy) === "unlock_route=2 / status=1" &&
+      formatWireSpaceTimeAdventureLine(spaceTimeOmitEnergy).indexOf("energy=") < 0,
+    "74120 omitted energy stays omitted"
+  );
+  const spaceTimeUnknown = decodeWireSpaceTimeAdventure(fieldVarint(13, 5));
+  assert(
+    spaceTimeUnknown !== null &&
+      spaceTimeUnknown.energy === null &&
+      formatWireSpaceTimeAdventureLine(spaceTimeUnknown) === "字段13=5" &&
+      formatWireSpaceTimeAdventureLine(spaceTimeUnknown).indexOf("energy=") < 0,
+    "74120 unknown field stays a mark and does not invent named zeros"
+  );
+  const spaceTimeBytes = decodeWireSpaceTimeAdventure(fieldBytes(3, Uint8Array.from([0x41])));
+  assert(
+    spaceTimeBytes !== null &&
+      spaceTimeBytes.energy === null &&
+      formatWireSpaceTimeAdventureLine(spaceTimeBytes) === "字段3=A",
+    "74120 field 3 bytes is a mark and not a nested list"
+  );
+  const spaceTimePacked = decodeWireSpaceTimeAdventure(fieldBytes(1, Uint8Array.from([0x01, 0x02])));
+  assert(
+    spaceTimePacked !== null &&
+      formatWireSpaceTimeAdventureLine(spaceTimePacked) === "unlock_route=1,2",
+    "74120 packed unlock_route stays numbers"
+  );
+  const spaceTimeShop = decodeWireSpaceTimeAdventure(fieldBytes(7, Uint8Array.from([0x08, 0x02, 0x10, 0x00])));
+  assert(
+    spaceTimeShop !== null &&
+      spaceTimeShop.energy === null &&
+      formatWireSpaceTimeAdventureLine(spaceTimeShop) === "shop_list=字段1=2 / 字段2=0" &&
+      formatWireSpaceTimeAdventureLine(spaceTimeShop).indexOf("energy=") < 0,
+    "74120 shop_list shows inner field numbers and a present zero"
+  );
+  const spaceTimeSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.spaceTimeAdventure, fieldVarint(3, 0)), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    spaceTimeSticky.frames.length === 2 &&
+      spaceTimeSticky.frames[0].cmdId === 74120 &&
+      spaceTimeSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireSpaceTimeAdventure(spaceTimeSticky.frames[0].body)?.energy === 0,
+    "sticky 74120 frame stops at its length prefix"
+  );
+  assert(
+    wireSpaceTimeAdventureNote(spaceTimeEmpty || {
+      unlockRoute: null,
+      notRoute: null,
+      energy: null,
+      notProgress: null,
+      endTime: null,
+      shopEndTime: null,
+      shopList: null,
+      status: null,
+      productEndTime: null,
+      productId: null,
+      productBuy: null,
+      speedBuff: null,
+      marks: [],
+    }).indexOf(WIRE_SPACE_TIME_ADVENTURE_SIDE_EFFECT) >= 0 &&
+      wireSpaceTimeAdventureNote(spaceTimeEmpty || {
+        unlockRoute: null,
+        notRoute: null,
+        energy: null,
+        notProgress: null,
+        endTime: null,
+        shopEndTime: null,
+        shopList: null,
+        status: null,
+        productEndTime: null,
+        productId: null,
+        productBuy: null,
+        speedBuff: null,
+        marks: [],
+      }).indexOf("不写金币") >= 0 &&
+      wireSpaceTimeAdventureNote(spaceTimeEmpty || {
+        unlockRoute: null,
+        notRoute: null,
+        energy: null,
+        notProgress: null,
+        endTime: null,
+        shopEndTime: null,
+        shopList: null,
+        status: null,
+        productEndTime: null,
+        productId: null,
+        productBuy: null,
+        speedBuff: null,
+        marks: [],
+      }).indexOf("不写钻石") >= 0,
+    "74120 note keeps the side effect and does not write gold or diamond"
+  );
   assert(
     bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
@@ -12680,7 +13024,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 51, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once and does not send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 52, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once and does not resend 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -13637,6 +13981,60 @@ async function checkWs(): Promise<void> {
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 50] as ArrayBuffer)) !== "0400000049710000",
         "pullIdle 74001 frame is not the 29001 cmd"
       );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 50] as ArrayBuffer)) !== "0400000088210100",
+        "pullIdle 74001 frame is not merged into the 74120 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 51] as ArrayBuffer)) === "0400000088210100",
+        "pullIdle sends empty c2s 74120 after 74001"
+      );
+      {
+        const spaceHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 51] as ArrayBuffer));
+        const notFrames = [
+          "0400000011210100",
+          "04000000890d0100",
+          "0400000019f60000",
+          "0400000031f20000",
+          "0400000049ee0000",
+          "0400000091650000",
+          "0400000092650000",
+          "04000000f42e0000",
+          "04000000d2320000",
+          "04000000cc0f0000",
+          "04000000830c0000",
+          "04000000854e0000",
+          "040000001d0c0000",
+          "040000001b0c0000",
+          "0400000089130000",
+          "0400000039c70000",
+          "04000000a1090100",
+          "0400000071110100",
+          "0400000089210100",
+          "040000008a210100",
+          "040000008b210100",
+          "040000008c210100",
+          "040000008d210100",
+          "040000008e210100",
+          "040000008f210100",
+          "0400000090210100",
+          "0400000091210100",
+          "0400000093210100",
+          "040000009e210100",
+          "04000000a3210100",
+          "04000000a4210100",
+          "04000000a5210100",
+          "04000000d52a0100",
+          "040000002a1d0100",
+          "0400000059150100",
+          "040000002b4e0000",
+          "04000000f9110000",
+          "0400000049710000",
+        ];
+        for (let n = 0; n < notFrames.length; n++) {
+          assert(spaceHex !== notFrames[n], "pullIdle 74120 frame is not " + notFrames[n]);
+        }
+      }
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -13677,15 +14075,31 @@ async function checkWs(): Promise<void> {
           "0400000012210100": true,
           "0400000013210100": true,
           "040000002a1d0100": true,
+          "0400000089210100": true,
+          "040000008a210100": true,
+          "040000008b210100": true,
+          "040000008c210100": true,
+          "040000008d210100": true,
+          "040000008e210100": true,
+          "040000008f210100": true,
+          "0400000090210100": true,
+          "0400000091210100": true,
+          "0400000093210100": true,
+          "040000009e210100": true,
+          "04000000a3210100": true,
+          "04000000a4210100": true,
+          "04000000a5210100": true,
+          "04000000d52a0100": true,
         };
         let weekendFrames = 0;
         let godRelicFrames = 0;
         let heroPalaceFrames = 0;
         let rechargeDaysFrames = 0;
         let timeTowerFrames = 0;
+        let spaceTimeFrames = 0;
         let astrolabeFrames = 0;
         let reikiFrames = 0;
-        for (let i = 0; i < 51; i++) {
+        for (let i = 0; i < 52; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -13703,6 +14117,7 @@ async function checkWs(): Promise<void> {
           if (hex === "0400000019f60000") heroPalaceFrames += 1;
           if (hex === "04000000890d0100") rechargeDaysFrames += 1;
           if (hex === "0400000011210100") timeTowerFrames += 1;
+          if (hex === "0400000088210100") spaceTimeFrames += 1;
           if (hex === "04000000a1090100") astrolabeFrames += 1;
           if (hex === "0400000071110100") reikiFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
@@ -13725,11 +14140,12 @@ async function checkWs(): Promise<void> {
             heroPalaceFrames === 1 &&
             rechargeDaysFrames === 1 &&
             timeTowerFrames === 1 &&
+            spaceTimeFrames === 1 &&
             astrolabeFrames === 1 &&
             reikiFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once and 74001 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 74002 74003 73002 71001 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once and 74120 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 74002 74003 73002 71001 20011 4601 29001"
         );
       }
       assert(
@@ -13827,6 +14243,38 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000890d0100") &&
           sawLog(lines, "发送 c2s 74001") &&
           sawLog(lines, "0400000011210100") &&
+          sawLog(lines, "发送 c2s 74120") &&
+          sawLog(lines, "0400000088210100") &&
+          sawLog(lines, "发送 c2s 74121") === false &&
+          sawLog(lines, "0400000089210100") === false &&
+          sawLog(lines, "发送 c2s 74122") === false &&
+          sawLog(lines, "040000008a210100") === false &&
+          sawLog(lines, "发送 c2s 74123") === false &&
+          sawLog(lines, "040000008b210100") === false &&
+          sawLog(lines, "发送 c2s 74124") === false &&
+          sawLog(lines, "040000008c210100") === false &&
+          sawLog(lines, "发送 c2s 74125") === false &&
+          sawLog(lines, "040000008d210100") === false &&
+          sawLog(lines, "发送 c2s 74126") === false &&
+          sawLog(lines, "040000008e210100") === false &&
+          sawLog(lines, "发送 c2s 74127") === false &&
+          sawLog(lines, "040000008f210100") === false &&
+          sawLog(lines, "发送 c2s 74128") === false &&
+          sawLog(lines, "0400000090210100") === false &&
+          sawLog(lines, "发送 c2s 74129") === false &&
+          sawLog(lines, "0400000091210100") === false &&
+          sawLog(lines, "发送 c2s 74131") === false &&
+          sawLog(lines, "0400000093210100") === false &&
+          sawLog(lines, "发送 c2s 74142") === false &&
+          sawLog(lines, "040000009e210100") === false &&
+          sawLog(lines, "发送 c2s 74147") === false &&
+          sawLog(lines, "04000000a3210100") === false &&
+          sawLog(lines, "发送 c2s 74148") === false &&
+          sawLog(lines, "04000000a4210100") === false &&
+          sawLog(lines, "发送 c2s 74149") === false &&
+          sawLog(lines, "04000000a5210100") === false &&
+          sawLog(lines, "发送 c2s 76501") === false &&
+          sawLog(lines, "04000000d52a0100") === false &&
           sawLog(lines, "发送 c2s 74002") === false &&
           sawLog(lines, "0400000012210100") === false &&
           sawLog(lines, "发送 c2s 74003") === false &&
@@ -14052,6 +14500,9 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_TIME_TOWER_CMD);
       const timeTowerSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(timeTowerSent as ArrayBuffer)) === "0400000011210100", "wire.74001 frame");
+      roleNet.send(WIRE_SPACE_TIME_ADVENTURE_CMD);
+      const spaceTimeSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(spaceTimeSent as ArrayBuffer)) === "0400000088210100", "wire.74120 frame");
       const sentBeforeRechargeOther = roleSockets[0].sent.length;
       roleNet.send("wire.61002");
       roleNet.send("wire.62002");
@@ -14070,8 +14521,23 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
+      roleNet.send("wire.74121");
+      roleNet.send("wire.74122");
+      roleNet.send("wire.74123");
+      roleNet.send("wire.74124");
+      roleNet.send("wire.74125");
+      roleNet.send("wire.74126");
+      roleNet.send("wire.74127");
+      roleNet.send("wire.74128");
+      roleNet.send("wire.74129");
+      roleNet.send("wire.74131");
+      roleNet.send("wire.74142");
+      roleNet.send("wire.74147");
+      roleNet.send("wire.74148");
+      roleNet.send("wire.74149");
+      roleNet.send("wire.76501");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 and goal claim stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 and goal claim stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.61002") &&
           sawLog(lines, "未发送 wire.62002") &&
@@ -14090,8 +14556,23 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001") &&
+          sawLog(lines, "未发送 wire.74121") &&
+          sawLog(lines, "未发送 wire.74122") &&
+          sawLog(lines, "未发送 wire.74123") &&
+          sawLog(lines, "未发送 wire.74124") &&
+          sawLog(lines, "未发送 wire.74125") &&
+          sawLog(lines, "未发送 wire.74126") &&
+          sawLog(lines, "未发送 wire.74127") &&
+          sawLog(lines, "未发送 wire.74128") &&
+          sawLog(lines, "未发送 wire.74129") &&
+          sawLog(lines, "未发送 wire.74131") &&
+          sawLog(lines, "未发送 wire.74142") &&
+          sawLog(lines, "未发送 wire.74147") &&
+          sawLog(lines, "未发送 wire.74148") &&
+          sawLog(lines, "未发送 wire.74149") &&
+          sawLog(lines, "未发送 wire.76501") &&
           sawLog(lines, "未发送 goal7.claim"),
-        "time tower banned cmds and goal claim are not encoded"
+        "space time adventure banned cmds and goal claim are not encoded"
       );
       roleNet.send(WIRE_PVP_CMD);
       const pvpSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -18383,6 +18864,151 @@ async function checkWs(): Promise<void> {
           formatWireRechargeDaysBLine(WireSession.rechargeDaysB || { rows: null, marks: [] }) === "list=day=1,money=0,hasReward=1" &&
           sawWire("74001 解不开"),
         "bad 74001 keeps the previous time tower and the 69001 list"
+      );
+      const towerBeforeSpace = formatWireTimeTowerLine(WireSession.timeTower || {
+        missionId: null,
+        accumulatePass: null,
+        maxPass: null,
+        heart: null,
+        missionMark: null,
+        starttime: null,
+        endtime: null,
+        marks: [],
+      });
+      roleSockets[0].push(encodeFrame(74120, fieldVarint(3, 0)));
+      assert(
+        WireSession.hasSpaceTimeAdventure() &&
+          WireSession.spaceTimeAdventure !== null &&
+          WireSession.spaceTimeAdventure.energy === 0 &&
+          WireSession.spaceTimeAdventure.unlockRoute === null &&
+          formatWireSpaceTimeAdventureLine(WireSession.spaceTimeAdventure) === "energy=0" &&
+          formatWireTimeTowerLine(WireSession.timeTower || {
+            missionId: null,
+            accumulatePass: null,
+            maxPass: null,
+            heart: null,
+            missionMark: null,
+            starttime: null,
+            endtime: null,
+            marks: [],
+          }) === towerBeforeSpace,
+        "74120 field 3 is energy and does not replace the 74001 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(74123, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74121, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74122, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74124, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74125, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74126, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74127, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74128, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74129, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74131, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74142, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74147, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74148, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74149, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76501, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(73002, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(71001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(5001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(51001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(68001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(70001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 9)));
+      assert(
+        formatWireSpaceTimeAdventureLine(WireSession.spaceTimeAdventure || {
+          unlockRoute: null,
+          notRoute: null,
+          energy: null,
+          notProgress: null,
+          endTime: null,
+          shopEndTime: null,
+          shopList: null,
+          status: null,
+          productEndTime: null,
+          productId: null,
+          productBuy: null,
+          speedBuff: null,
+          marks: [],
+        }) === "energy=0" &&
+          formatWireTimeTowerLine(WireSession.timeTower || {
+            missionId: null,
+            accumulatePass: null,
+            maxPass: null,
+            heart: null,
+            missionMark: null,
+            starttime: null,
+            endtime: null,
+            marks: [],
+          }) === towerBeforeSpace,
+        "74123-74129 74131 74142 74147-74149 74121 74122 76501 73002 71001 20011 5001 51001 68001 70001 4601 and 29001 do not replace the 74120 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(74120));
+      assert(
+        WireSession.hasSpaceTimeAdventure() &&
+          formatWireSpaceTimeAdventureLine(WireSession.spaceTimeAdventure || {
+            unlockRoute: null,
+            notRoute: null,
+            energy: null,
+            notProgress: null,
+            endTime: null,
+            shopEndTime: null,
+            shopList: null,
+            status: null,
+            productEndTime: null,
+            productId: null,
+            productBuy: null,
+            speedBuff: null,
+            marks: [],
+          }) === WIRE_SPACE_TIME_ADVENTURE_EMPTY &&
+          formatWireTimeTowerLine(WireSession.timeTower || {
+            missionId: null,
+            accumulatePass: null,
+            maxPass: null,
+            heart: null,
+            missionMark: null,
+            starttime: null,
+            endtime: null,
+            marks: [],
+          }) === towerBeforeSpace,
+        "empty 74120 clears to 已同步空表 and does not replace the 74001 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(74120, concatBytes(fieldVarint(1, 2), fieldVarint(8, 1))));
+      assert(
+        WireSession.spaceTimeAdventure !== null &&
+          formatWireSpaceTimeAdventureLine(WireSession.spaceTimeAdventure) === "unlock_route=2 / status=1" &&
+          formatWireSpaceTimeAdventureLine(WireSession.spaceTimeAdventure).indexOf("energy=") < 0 &&
+          formatWireTimeTowerLine(WireSession.timeTower || {
+            missionId: null,
+            accumulatePass: null,
+            maxPass: null,
+            heart: null,
+            missionMark: null,
+            starttime: null,
+            endtime: null,
+            marks: [],
+          }) === towerBeforeSpace,
+        "74120 shows only the fields that arrived"
+      );
+      roleSockets[0].push(encodeFrame(74120, Uint8Array.from([0x80])));
+      assert(
+        WireSession.spaceTimeAdventure !== null &&
+          formatWireSpaceTimeAdventureLine(WireSession.spaceTimeAdventure) === "unlock_route=2 / status=1" &&
+          formatWireTimeTowerLine(WireSession.timeTower || {
+            missionId: null,
+            accumulatePass: null,
+            maxPass: null,
+            heart: null,
+            missionMark: null,
+            starttime: null,
+            endtime: null,
+            marks: [],
+          }) === towerBeforeSpace &&
+          sawWire("74120 解不开"),
+        "bad 74120 keeps the previous space time adventure and the 74001 snapshot"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
