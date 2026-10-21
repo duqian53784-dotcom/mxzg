@@ -218,16 +218,24 @@ import {
   WireDragonCollectionMark,
   WireDragonCollectionSnapshot,
 } from "./protocol/wireDragonCollection";
+import {
+  decodeWireTitle,
+  WIRE_TITLE_CMD,
+  wireTitleNote,
+  WireTitleMark,
+  WireTitleRow,
+  WireTitleSnapshot,
+} from "./protocol/wireTitle";
 import { wireBody } from "./protocol/wireLogin";
 
 /**
  * ?transport=ws 登录进主城后，这条 NetClient 要活过 Boot 切场景。
  * 心跳 1004 继续发。
- * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3004、wire.3005、wire.15000、wire.4001、wire.17000、wire.12010、wire.18001、wire.22000、wire.22002、wire.21010、wire.21013、wire.27001、wire.4004、wire.13044、wire.4101、wire.4013、wire.74100、wire.51001、wire.20001、wire.20012、wire.70001、wire.73001、wire.74300、wire.68001、wire.75501、wire.59001 和 wire.59010。
+ * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3004、wire.3005、wire.15000、wire.4001、wire.17000、wire.12010、wire.18001、wire.22000、wire.22002、wire.21010、wire.21013、wire.27001、wire.4004、wire.13044、wire.4101、wire.4013、wire.74100、wire.51001、wire.20001、wire.20012、wire.70001、wire.73001、wire.74300、wire.68001、wire.75501、wire.59001、wire.59010 和 wire.55001。
  * 登录成功后先发空的 c2s 2001（日志里的拉角色资料）。pullRoleProfile 紧接着发空的 c2s 5001。
- * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。pullIdle 在 3004 之后再发空的 c2s 15000，然后 c2s 4001 page=1，再发空的 c2s 17000，再发空的 c2s 12010，再发空的 c2s 18001，再发空的 c2s 22000，再发空的 c2s 21010，再发空的 c2s 27001，再发空的 c2s 4004，再发空的 c2s 13044，再发空的 c2s 4101，再发空的 c2s 4013，再发空的 c2s 74100，再发空的 c2s 51001，再发空的 c2s 20001，再发空的 c2s 20012，再发空的 c2s 70001，再发空的 c2s 73001，再发空的 c2s 74300，再发空的 c2s 68001，再发空的 c2s 75501，再发空的 c2s 59001，再发空的 c2s 59010。
- * 相对顺序是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001 → 20001 → 20012 → 70001 → 73001 → 74300 → 68001 → 75501 → 59001 → 59010。不等 s2c 2001。51001 在 74100 之后发一次，20001 接在 51001 之后，20012 接在 20001 之后，70001 接在 20012 之后，73001 接在 70001 之后，74300 接在 73001 之后，68001 接在 74300 之后，75501 接在 68001 之后，59001 接在 75501 之后，59010 接在 59001 之后。不夹在 2001 和 3007 中间。11005、58017 仍不发。不做 20101。不做 3007 的加发。
- * 不发 5010，也不发 5004–5009、5011–5013。不发邮件领取、已读、删除。不发英雄升级。空 c2s 20001 只读，不发 20018，不发 20004、20010。空 c2s 20012 只读，不发 20013，不做 13260。空 c2s 70001 只读，不发 70002、70003、70004、70005、70006。70007、70008 仅推送，不当拉包请求。不做 20011。空 c2s 73001 只读，不发 73002、73003、73004。73002 有懒建和日刷写库，不当纯只读。本号无写库。不做 20011。空 c2s 74300 只读，不发 74301 升级/升阶、74302 装备/卸/换、74303 重置。74304 是推送，勿发、勿当拉包。本号无写库。不做 20011。与 74100 同城养成段。空 c2s 68001 只读，无 page。不发 68002 激活元素、68003 点亮星盘、68004 重置、68006 激活星盘。68005 是更新星数常量，勿当拉包。轻懒建，首次 load 可能 astrolabeDao.add 空行，无扣费、无领奖、无日刷写库，管理员认定可接受。不做 20011。空 c2s 75501 只读，无 page。不发 75502 添加、75503 卸下、75504 开格子、75505 清 cd。75506 是等级推送，勿当拉包。轻懒建，首次 get 可能 doCreate + tweakCubeDao.add，建免费槽并按战力塞供奉，无扣费、无领奖，管理员认定可接受，同星盘。不做 34001。不做 20011。空 c2s 59001 只读，无 page。handler scanDragonInfo 不读 msg。不发 59002 放源石、59003 提升鉴定、59005 加速鉴定、59006 鉴定领奖、59007 提升圣龙等级、59008 圣物替换、59009 调顺序、59011、59012 升星、59013 分解。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。轻懒建，首次 dragonDao.add。无扣费，无领奖。不做 34001。不做 20011。不点金。不发 12020，不领奖。不发 18002、18003、18005、18007、18008。不发 22001。22002 只收。不发 21011、21012。21013 只收。不发 27002、27003、27004。不发 4201。不发 4002、4005。不做 58001、58007。4004 不是 4001。不发 13041、13042、13043。13044 不是 4004。不发 4102、4103、4104、4105、4106、4107。不做 9001。4101 不是 4001，也不是 13044。不发 4014。4014 仅 s2c 推送。不把 4013 当领奖再发写号。4013 不是 4001，也不是 4101。不发 74101 升级、74102 携带、74103 卸下。74105、74106 仅 s2c 推送，不主动发。74100 不是 4001，也不是 4013。51001 无写操作号。不做 20101。
+ * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。pullIdle 在 3004 之后再发空的 c2s 15000，然后 c2s 4001 page=1，再发空的 c2s 17000，再发空的 c2s 12010，再发空的 c2s 18001，再发空的 c2s 22000，再发空的 c2s 21010，再发空的 c2s 27001，再发空的 c2s 4004，再发空的 c2s 13044，再发空的 c2s 4101，再发空的 c2s 4013，再发空的 c2s 74100，再发空的 c2s 51001，再发空的 c2s 20001，再发空的 c2s 20012，再发空的 c2s 70001，再发空的 c2s 73001，再发空的 c2s 74300，再发空的 c2s 68001，再发空的 c2s 75501，再发空的 c2s 59001，再发空的 c2s 59010，再发空的 c2s 55001。
+ * 相对顺序是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001 → 20001 → 20012 → 70001 → 73001 → 74300 → 68001 → 75501 → 59001 → 59010 → 55001。不等 s2c 2001。51001 在 74100 之后发一次，20001 接在 51001 之后，20012 接在 20001 之后，70001 接在 20012 之后，73001 接在 70001 之后，74300 接在 73001 之后，68001 接在 74300 之后，75501 接在 68001 之后，59001 接在 75501 之后，59010 接在 59001 之后，55001 接在 59010 之后。不夹在 2001 和 3007 中间。11005、58017 仍不发。不做 20101。不做 3007 的加发。
+ * 不发 5010，也不发 5004–5009、5011–5013。不发邮件领取、已读、删除。不发英雄升级。空 c2s 20001 只读，不发 20018，不发 20004、20010。空 c2s 20012 只读，不发 20013，不做 13260。空 c2s 70001 只读，不发 70002、70003、70004、70005、70006。70007、70008 仅推送，不当拉包请求。不做 20011。空 c2s 73001 只读，不发 73002、73003、73004。73002 有懒建和日刷写库，不当纯只读。本号无写库。不做 20011。空 c2s 74300 只读，不发 74301 升级/升阶、74302 装备/卸/换、74303 重置。74304 是推送，勿发、勿当拉包。本号无写库。不做 20011。与 74100 同城养成段。空 c2s 68001 只读，无 page。不发 68002 激活元素、68003 点亮星盘、68004 重置、68006 激活星盘。68005 是更新星数常量，勿当拉包。轻懒建，首次 load 可能 astrolabeDao.add 空行，无扣费、无领奖、无日刷写库，管理员认定可接受。不做 20011。空 c2s 75501 只读，无 page。不发 75502 添加、75503 卸下、75504 开格子、75505 清 cd。75506 是等级推送，勿当拉包。轻懒建，首次 get 可能 doCreate + tweakCubeDao.add，建免费槽并按战力塞供奉，无扣费、无领奖，管理员认定可接受，同星盘。不做 34001。不做 20011。空 c2s 59001 只读，无 page。handler scanDragonInfo 不读 msg。不发 59002 放源石、59003 提升鉴定、59005 加速鉴定、59006 鉴定领奖、59007 提升圣龙等级、59008 圣物替换、59009 调顺序、59011、59012 升星、59013 分解。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。轻懒建，首次 dragonDao.add。无扣费，无领奖。不做 34001。不做 20011。空 c2s 55001 只读，无 page。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。不做 34001。不做 20011。不点金。不发 12020，不领奖。不发 18002、18003、18005、18007、18008。不发 22001。22002 只收。不发 21011、21012。21013 只收。不发 27002、27003、27004。不发 4201。不发 4002、4005。不做 58001、58007。4004 不是 4001。不发 13041、13042、13043。13044 不是 4004。不发 4102、4103、4104、4105、4106、4107。不做 9001。4101 不是 4001，也不是 13044。不发 4014。4014 仅 s2c 推送。不把 4013 当领奖再发写号。4013 不是 4001，也不是 4101。不发 74101 升级、74102 携带、74103 卸下。74105、74106 仅 s2c 推送，不主动发。74100 不是 4001，也不是 4013。51001 无写操作号。不做 20101。
  * s2c 2001 按 Role.proto：字段 9 角色名、字段 6 等级、字段 2 金币、字段 1 宝石（顶栏钻石）。
  * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。
  * 不写 Session.stageId，主城按钮用 mainlineLabel()。
@@ -333,6 +341,10 @@ import { wireBody } from "./protocol/wireLogin";
  * 按 GResDragonCollection 写字段 1 repeated int32 sys_id（图鉴 manuals）。没有的数不写成 0。出现的 0 仍写 0。
  * 只在 pullIdle 链尾、空 c2s 59001 之后发一次。无 page。handler 不读 msg。不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。勿与 59001 合并成一个请求。轻懒建，与 59001 同 getDragon / dragonDao.add。无扣费，无领奖。不做 34001。不做 20011。不写金币，不写钻石。
  * 从未收到 59010 时主城「圣物图鉴」只 Toast，不回落 Mock。59001 单独到不算。
+ * s2c 55001 替换本地称号列表。空包体是已同步，titles 为空写「空称号」，不写成 0。
+ * 按 GResScanTitleList 写字段 1 repeated PSTitle titles（idx、end_time）。end_time：-1 永久，0 未激活，时间戳为到期。没有的数不写成 0。出现的 0 仍写 0。
+ * 只在 pullIdle 链尾、空 c2s 59010 之后发一次。无 page。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。不做 34001。不做 20011。不写金币，不写钻石。
+ * 从未收到 55001 时主城「称号列表」只 Toast，不回落 Mock。59010 单独到不算。
  * 缺的顶栏字段不写，那个格子保持未同步。字段 5 是奖杯，不写进金币。开服天不推。
  * 别的 s2c 仍只记 wire.<cmdId>。解不开就忽略，不抛进拆帧循环。
  */
@@ -474,6 +486,11 @@ export class WireSession {
    * 空包体是已同步，sys_id 为空，不是未同步，也不写成 0。
    */
   static dragonCollection: WireDragonCollectionSnapshot | null = null;
+  /**
+   * 收到的 s2c 55001。null 表示这次进主城还没收到 55001。
+   * 空包体是已同步，titles 为空，不是未同步，也不写成 0。
+   */
+  static titleList: WireTitleSnapshot | null = null;
 
   private static watched: NetClient | null = null;
   private static offProfile: (() => void) | null = null;
@@ -507,6 +524,7 @@ export class WireSession {
   private static offTweakCube: (() => void) | null = null;
   private static offDragon: (() => void) | null = null;
   private static offDragonCollection: (() => void) | null = null;
+  private static offTitle: (() => void) | null = null;
   private static pending: WireRoleProfile | null = null;
   private static pendingChapter: WireChapterProgress | null = null;
   private static pendingIdle: WireIdleSnapshot | null = null;
@@ -565,6 +583,8 @@ export class WireSession {
   private static pendingDragon: WireDragonSnapshot | null = null;
   /** null 表示登录过程里还没看到 59010。空包体的 sys_id 是空数组。 */
   private static pendingDragonCollection: WireDragonCollectionSnapshot | null = null;
+  /** null 表示登录过程里还没看到 55001。空包体的 titles 是空数组。 */
+  private static pendingTitle: WireTitleSnapshot | null = null;
   private static listeners = new Set<() => void>();
 
   /** 套接字一开就听。登录回包里如果已经夹着 2001、5001、3007 或 3004，先记下，等角色写入后再套上。 */
@@ -601,7 +621,8 @@ export class WireSession {
       this.offAstrolabe &&
       this.offTweakCube &&
       this.offDragon &&
-      this.offDragonCollection
+      this.offDragonCollection &&
+      this.offTitle
     ) {
       return;
     }
@@ -638,6 +659,7 @@ export class WireSession {
     this.offTweakCube = net.subscribe(WIRE_CUBE_CMD, (msg) => this.onTweakCube(msg.data));
     this.offDragon = net.subscribe(WIRE_DRAGON_CMD, (msg) => this.onDragon(msg.data));
     this.offDragonCollection = net.subscribe(WIRE_DRAGON_COLLECTION_CMD, (msg) => this.onDragonCollection(msg.data));
+    this.offTitle = net.subscribe(WIRE_TITLE_CMD, (msg) => this.onTitle(msg.data));
   }
 
   static hold(net: NetClient): void {
@@ -647,7 +669,7 @@ export class WireSession {
   }
 
   /**
-   * 这次进主城还没看到新的 s2c 3007 / 3004 / 5001 / 15000 / 4001 / 17000 / 12010 / 18001 / 22000 / 21010 / 27001 / 4004 / 13044 / 4101 / 4013 / 74100 / 51001 / 20001 / 20012 / 70001 / 73001 / 74300 / 68001 / 75501 / 59001 / 59010。丢掉上一名角色的 idx、挂机时间、背包、邮件、英雄、点金、成就、竞技场、七日登录、七日目标、许愿池、召唤次数、先知召唤幸运值、英雄宝石、英雄图鉴、宠物信息、世界等级、基金列表、超值首充记录、灵器数据、浮空岛时间、图腾信息、星盘数据、魔方数据、圣龙数据和圣物图鉴。
+   * 这次进主城还没看到新的 s2c 3007 / 3004 / 5001 / 15000 / 4001 / 17000 / 12010 / 18001 / 22000 / 21010 / 27001 / 4004 / 13044 / 4101 / 4013 / 74100 / 51001 / 20001 / 20012 / 70001 / 73001 / 74300 / 68001 / 75501 / 59001 / 59010 / 55001。丢掉上一名角色的 idx、挂机时间、背包、邮件、英雄、点金、成就、竞技场、七日登录、七日目标、许愿池、召唤次数、先知召唤幸运值、英雄宝石、英雄图鉴、宠物信息、世界等级、基金列表、超值首充记录、灵器数据、浮空岛时间、图腾信息、星盘数据、魔方数据、圣龙数据、圣物图鉴和称号列表。
    * 登录过程中先到的包仍留在 pending，接着 flush 再写。
    */
   static prepareCity(): void {
@@ -682,6 +704,7 @@ export class WireSession {
     this.tweakCube = null;
     this.dragon = null;
     this.dragonCollection = null;
+    this.titleList = null;
   }
 
   /** 只放下引用。调用方自己 close。 */
@@ -719,6 +742,7 @@ export class WireSession {
       this.pendingTweakCube = null;
       this.pendingDragon = null;
       this.pendingDragonCollection = null;
+      this.pendingTitle = null;
       this.resetHeroGather();
       this.nowIdx = null;
       this.maxIdx = null;
@@ -751,6 +775,7 @@ export class WireSession {
       this.tweakCube = null;
       this.dragon = null;
       this.dragonCollection = null;
+      this.titleList = null;
     }
   }
 
@@ -788,6 +813,7 @@ export class WireSession {
     this.pendingTweakCube = null;
     this.pendingDragon = null;
     this.pendingDragonCollection = null;
+    this.pendingTitle = null;
     this.resetHeroGather();
     this.nowIdx = null;
     this.maxIdx = null;
@@ -820,6 +846,7 @@ export class WireSession {
     this.tweakCube = null;
     this.dragon = null;
     this.dragonCollection = null;
+    this.titleList = null;
     if (net) net.close();
   }
 
@@ -860,13 +887,14 @@ export class WireSession {
     this.commitTweakCube();
     this.commitDragon();
     this.commitDragonCollection();
+    this.commitTitle();
   }
 
   /**
    * 空的 c2s 2001，紧接着空的 c2s 5001。
    * Boot 仍只调用这一处再调用 pullChapter / pullIdle，所以不改 Boot.ts。
-   * 相对顺序因此是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001 → 20001 → 20012 → 70001 → 73001 → 74300 → 68001 → 75501 → 59001 → 59010。
-   * 15000、4001、17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100、51001、20001、20012、70001、73001、74300、68001、75501、59001 和 59010 在 pullIdle 里，跟在 3004 后面。4001 带 page=1，不是空体。17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100、51001、20001、20012、70001、73001、74300、68001、75501、59001 和 59010 是空体。
+   * 相对顺序因此是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001 → 20001 → 20012 → 70001 → 73001 → 74300 → 68001 → 75501 → 59001 → 59010 → 55001。
+   * 15000、4001、17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100、51001、20001、20012、70001、73001、74300、68001、75501、59001、59010 和 55001 在 pullIdle 里，跟在 3004 后面。4001 带 page=1，不是空体。17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100、51001、20001、20012、70001、73001、74300、68001、75501、59001、59010 和 55001 是空体。
    */
   static pullRoleProfile(): void {
     const net = this.net || this.watched;
@@ -909,10 +937,10 @@ export class WireSession {
   }
 
   /**
-   * 空的 c2s 3004，紧接着空的 c2s 15000，再发 c2s 4001 page=1，然后空的 c2s 17000，再发空的 c2s 12010，再发空的 c2s 18001，再发空的 c2s 22000，再发空的 c2s 21010，再发空的 c2s 27001，再发空的 c2s 4004，再发空的 c2s 13044，再发空的 c2s 4101，再发空的 c2s 4013，再发空的 c2s 74100，再发空的 c2s 51001，再发空的 c2s 20001，再发空的 c2s 20012，再发空的 c2s 70001，再发空的 c2s 73001，再发空的 c2s 74300，再发空的 c2s 68001，再发空的 c2s 75501，再发空的 c2s 59001，再发空的 c2s 59010。
-   * 跟在 pullChapter 后面发，不等 s2c 2001。51001 在 74100 之后发一次，20001 接在 51001 之后，20012 接在 20001 之后，70001 接在 20012 之后，73001 接在 70001 之后，74300 接在 73001 之后，68001 接在 74300 之后，75501 接在 68001 之后，59001 接在 75501 之后，59010 接在 59001 之后。不夹在 2001 和 3007 中间。不做 3007 的加发。
-   * 3004 在空 c2s 3007 之后，包体是空的。15000、4001、17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100、51001、20001、20012、70001、73001、74300、68001、75501、59001 和 59010 接在 3004 后，不改 Boot.ts。
-   * 不发 20018，也不发 20004、20010，也不发 20013，也不发 13260，也不发 12020，也不发 18002，也不发 22001，也不发 21011、21012，也不发 27002、27003、27004，也不发 4201，也不发 4002、4005，也不发 58001、58007，也不发 13041、13042、13043，也不发 4102、4103、4104、4105、4106、4107，也不发 9001，也不发 4014，也不发 74101、74102、74103、74105、74106，也不发 20101。17000 不点金。12010 不领奖。18001 不开战。22000 不领奖。21010 不发奖。27001 不刷新，不抽奖，不领幸运奖。4004 不召唤，不领累积奖。4004 不是 4001。13044 不抽，不置换，不确认置换。13044 不是 4004。4101 不替换，不卸下，不一键穿，不一键卸，不合成。4101 不是 4001，也不是 13044。4013 不领奖。4013 不是 4001，也不是 4101。4014 仅 s2c 推送。74100 不升级，不携带，不卸下。74100 不是 4001，也不是 4013。74105、74106 仅 s2c 推送。51001 无写操作号。20001 不领奖。20012 不领奖。70001 不激活，不穿，不卸，不转换，不合成。70007、70008 仅推送。不做 20011。73001 不挑战，不买次数。不发 73002、73003、73004。73002 有懒建和日刷写库。本号无写库。不做 20011。74300 不升级，不升阶，不装备，不卸下，不更换，不重置。不发 74301、74302、74303。74304 仅推送，勿当拉包。本号无写库。不做 20011。68001 不激活元素，不点亮星盘，不重置，不激活星盘。不发 68002、68003、68004、68006。68005 是更新星数常量，勿当拉包。无 page。轻懒建，首次 load 可能 astrolabeDao.add 空行。无扣费，无领奖，无日刷写库。管理员认定可接受。不做 20011。75501 不添加，不卸下，不开格子，不清 cd。不发 75502、75503、75504、75505。75506 是等级推送，勿当拉包。无 page。轻懒建，首次 get 可能 doCreate + tweakCubeDao.add，建免费槽并按战力塞供奉。无扣费，无领奖。管理员认定可接受，同星盘。不做 34001。不做 20011。59001 不放源石，不提升鉴定，不加速鉴定，不领鉴定奖，不提升圣龙等级，不替换圣物，不调顺序，不升星，不分解。不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。无 page。轻懒建，首次 dragonDao.add。无扣费，无领奖。不做 34001。不做 20011。
+   * 空的 c2s 3004，紧接着空的 c2s 15000，再发 c2s 4001 page=1，然后空的 c2s 17000，再发空的 c2s 12010，再发空的 c2s 18001，再发空的 c2s 22000，再发空的 c2s 21010，再发空的 c2s 27001，再发空的 c2s 4004，再发空的 c2s 13044，再发空的 c2s 4101，再发空的 c2s 4013，再发空的 c2s 74100，再发空的 c2s 51001，再发空的 c2s 20001，再发空的 c2s 20012，再发空的 c2s 70001，再发空的 c2s 73001，再发空的 c2s 74300，再发空的 c2s 68001，再发空的 c2s 75501，再发空的 c2s 59001，再发空的 c2s 59010，再发空的 c2s 55001。
+   * 跟在 pullChapter 后面发，不等 s2c 2001。51001 在 74100 之后发一次，20001 接在 51001 之后，20012 接在 20001 之后，70001 接在 20012 之后，73001 接在 70001 之后，74300 接在 73001 之后，68001 接在 74300 之后，75501 接在 68001 之后，59001 接在 75501 之后，59010 接在 59001 之后，55001 接在 59010 之后。不夹在 2001 和 3007 中间。不做 3007 的加发。
+   * 3004 在空 c2s 3007 之后，包体是空的。15000、4001、17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100、51001、20001、20012、70001、73001、74300、68001、75501、59001、59010 和 55001 接在 3004 后，不改 Boot.ts。
+   * 不发 20018，也不发 20004、20010，也不发 20013，也不发 13260，也不发 12020，也不发 18002，也不发 22001，也不发 21011、21012，也不发 27002、27003、27004，也不发 4201，也不发 4002、4005，也不发 58001、58007，也不发 13041、13042、13043，也不发 4102、4103、4104、4105、4106、4107，也不发 9001，也不发 4014，也不发 74101、74102、74103、74105、74106，也不发 20101。17000 不点金。12010 不领奖。18001 不开战。22000 不领奖。21010 不发奖。27001 不刷新，不抽奖，不领幸运奖。4004 不召唤，不领累积奖。4004 不是 4001。13044 不抽，不置换，不确认置换。13044 不是 4004。4101 不替换，不卸下，不一键穿，不一键卸，不合成。4101 不是 4001，也不是 13044。4013 不领奖。4013 不是 4001，也不是 4101。4014 仅 s2c 推送。74100 不升级，不携带，不卸下。74100 不是 4001，也不是 4013。74105、74106 仅 s2c 推送。51001 无写操作号。20001 不领奖。20012 不领奖。70001 不激活，不穿，不卸，不转换，不合成。70007、70008 仅推送。不做 20011。73001 不挑战，不买次数。不发 73002、73003、73004。73002 有懒建和日刷写库。本号无写库。不做 20011。74300 不升级，不升阶，不装备，不卸下，不更换，不重置。不发 74301、74302、74303。74304 仅推送，勿当拉包。本号无写库。不做 20011。68001 不激活元素，不点亮星盘，不重置，不激活星盘。不发 68002、68003、68004、68006。68005 是更新星数常量，勿当拉包。无 page。轻懒建，首次 load 可能 astrolabeDao.add 空行。无扣费，无领奖，无日刷写库。管理员认定可接受。不做 20011。75501 不添加，不卸下，不开格子，不清 cd。不发 75502、75503、75504、75505。75506 是等级推送，勿当拉包。无 page。轻懒建，首次 get 可能 doCreate + tweakCubeDao.add，建免费槽并按战力塞供奉。无扣费，无领奖。管理员认定可接受，同星盘。不做 34001。不做 20011。59001 不放源石，不提升鉴定，不加速鉴定，不领鉴定奖，不提升圣龙等级，不替换圣物，不调顺序，不升星，不分解。不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。无 page。轻懒建，首次 dragonDao.add。无扣费，无领奖。不做 34001。不做 20011。55001 只读，无 page。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。不做 34001。不做 20011。
    */
   static pullIdle(): void {
     const net = this.net || this.watched;
@@ -941,6 +969,7 @@ export class WireSession {
     this.pullTweakCube();
     this.pullDragon();
     this.pullDragonCollection();
+    this.pullTitleList();
   }
 
   /** 空的 c2s 15000。没有包体。不发领取和删除。 */
@@ -1222,6 +1251,18 @@ export class WireSession {
   /** 收到过 s2c 59010（含空包体）才算同步。解不开的包不算。59001、59002、59003、59005、59006、59007、59008、59009、59011、59012、59013、34001、20011 单独到不算。 */
   static hasDragonCollection(): boolean {
     return this.dragonCollection !== null;
+  }
+
+  /** 空的 c2s 55001。GReqScanTitleList 没有包体，没有 page。只在 59010 之后发一次。Title.proto 仅 55001 读写对，同模块无写号。不做 34001。不做 20011。轻懒建可接受。 */
+  static pullTitleList(): void {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return;
+    net.send(WIRE_TITLE_CMD);
+  }
+
+  /** 收到过 s2c 55001（含空包体）才算同步。解不开的包不算。59010、59001、34001、20011 单独到不算。 */
+  static hasTitleList(): boolean {
+    return this.titleList !== null;
   }
 
   /** 空的 c2s 3005。没连上时返回 false，调用方 Toast。 */
@@ -1885,6 +1926,26 @@ export class WireSession {
     this.commitDragonCollection();
   }
 
+  private static onTitle(data: unknown): void {
+    let snap: WireTitleSnapshot | null = null;
+    try {
+      snap = decodeWireTitle(wireBody(data));
+    } catch (err) {
+      GameLog.shared.error("Wire", "s2c 55001 解不开 " + (err instanceof Error ? err.message : "未知错误"));
+      return;
+    }
+    if (!snap) {
+      GameLog.shared.info("Wire", "s2c 55001 解不开，称号列表不改");
+      return;
+    }
+    this.pendingTitle = copyTitle(snap);
+    if (Session.source !== "wire" || !Session.role) {
+      GameLog.shared.info("Wire", "s2c 55001 先记下：" + wireTitleNote(snap));
+      return;
+    }
+    this.commitTitle();
+  }
+
   /** 只收。不建表，不改已经有的七日目标，也不发奖。 */
   private static onGoal7Push(_data: unknown): void {
     GameLog.shared.info("Wire", "s2c 21013 只收，七日目标不改，不发奖");
@@ -2262,6 +2323,17 @@ export class WireSession {
     this.emit();
   }
 
+  private static commitTitle(): void {
+    const snap = this.pendingTitle;
+    if (!snap) return;
+    if (Session.source !== "wire" || !Session.role) return;
+    const next = copyTitle(snap);
+    this.pendingTitle = null;
+    this.titleList = next;
+    GameLog.shared.info("Wire", "s2c 55001 " + wireTitleNote(next));
+    this.emit();
+  }
+
   private static commitIdle(): void {
     const snapshot = this.pendingIdle;
     if (!snapshot || !wireIdleHasTime(snapshot)) return;
@@ -2413,6 +2485,10 @@ export class WireSession {
     if (this.offDragonCollection) {
       this.offDragonCollection();
       this.offDragonCollection = null;
+    }
+    if (this.offTitle) {
+      this.offTitle();
+      this.offTitle = null;
     }
   }
 }
@@ -2818,6 +2894,25 @@ function copyDragonCollection(snap: WireDragonCollectionSnapshot): WireDragonCol
 }
 
 function copyDragonCollectionMark(mark: WireDragonCollectionMark): WireDragonCollectionMark {
+  return { field: mark.field, text: mark.text };
+}
+
+function copyTitle(snap: WireTitleSnapshot): WireTitleSnapshot {
+  return {
+    titles: snap.titles.map(copyTitleRow),
+    marks: snap.marks.map(copyTitleMark),
+  };
+}
+
+function copyTitleRow(row: WireTitleRow): WireTitleRow {
+  return {
+    idx: row.idx,
+    endTime: row.endTime,
+    marks: row.marks.map(copyTitleMark),
+  };
+}
+
+function copyTitleMark(mark: WireTitleMark): WireTitleMark {
   return { field: mark.field, text: mark.text };
 }
 

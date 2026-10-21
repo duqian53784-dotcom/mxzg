@@ -792,6 +792,19 @@ import {
   WIRE_DRAGON_COLLECTION_UNSYNCED_TOAST,
   wireDragonCollectionNote,
 } from "../assets/scripts/net/protocol/wireDragonCollection";
+import {
+  decodeWireTitle,
+  formatWireTitleHead,
+  formatWireTitleLine,
+  WIRE_TITLE_CMD,
+  WIRE_TITLE_EMPTY,
+  WIRE_TITLE_FIELD_NOTE,
+  WIRE_TITLE_READONLY_NOTE,
+  WIRE_TITLE_READONLY_TITLE,
+  WIRE_TITLE_SIDE_EFFECT,
+  WIRE_TITLE_UNSYNCED_TOAST,
+  wireTitleNote,
+} from "../assets/scripts/net/protocol/wireTitle";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1518,6 +1531,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("tweakCube") === "city", "tweak cube stays on the city tab");
   assert(rootTabFor("dragon") === "city", "dragon scan stays on the city tab");
   assert(rootTabFor("dragonCollection") === "city", "dragon collection stays on the city tab");
+  assert(rootTabFor("titleList") === "city", "title list stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -3268,6 +3282,15 @@ function fieldVarint(field: number, value: number): Uint8Array {
   return Uint8Array.from(parts);
 }
 
+/** protobuf int64 的 -1。appendVarint 会把负数收成 0，这里按十字节符号扩展写。 */
+function fieldNeg1(field: number): Uint8Array {
+  const parts: number[] = [];
+  appendVarint(parts, field << 3);
+  for (let i = 0; i < 9; i++) parts.push(0xff);
+  parts.push(0x01);
+  return Uint8Array.from(parts);
+}
+
 function fieldBytes(field: number, payload: Uint8Array): Uint8Array {
   const parts: number[] = [];
   appendVarint(parts, (field << 3) | 2);
@@ -4136,6 +4159,21 @@ async function checkWs(): Promise<void> {
   const collectionOuterOnly = fieldVarint(8, 1);
   const collectionWide = fieldVarint(1, 1099511627776);
   const emptyCollection = { sysIds: [] as number[], marks: [] as { field: number; text: string }[] };
+  const titlePerm = fieldBytes(1, concatBytes(fieldVarint(1, 3), fieldNeg1(2)));
+  const titleOff = fieldBytes(1, concatBytes(fieldVarint(1, 0), fieldVarint(2, 0)));
+  const titleStamp = fieldBytes(1, concatBytes(fieldVarint(1, 8), fieldVarint(2, 1792464848)));
+  const titleMissingEnd = fieldBytes(1, fieldVarint(1, 4));
+  const titleMissingIdx = fieldBytes(1, fieldNeg1(2));
+  const titleWide = fieldBytes(1, concatBytes(fieldVarint(1, 1), fieldVarint(2, 1099511627776)));
+  const titleBody = concatBytes(
+    concatBytes(concatBytes(titlePerm, titleOff), concatBytes(titleStamp, titleMissingEnd)),
+    concatBytes(titleMissingIdx, fieldVarint(8, 1))
+  );
+  const titleOuterOnly = fieldVarint(8, 1);
+  const emptyTitle = {
+    titles: [] as { idx: number | null; endTime: number | null; marks: { field: number; text: string }[] }[],
+    marks: [] as { field: number; text: string }[],
+  };
   const emptyDragon = {
     identifyLevel: null as number | null,
     attrLevel: null as number | null,
@@ -5581,6 +5619,7 @@ async function checkWs(): Promise<void> {
   assert(bytesToHex(encodeFrame(59008)) === "0400000080e60000", "59008 relic replace frame stays distinct");
   assert(bytesToHex(encodeFrame(59009)) === "0400000081e60000", "59009 order frame stays distinct");
   assert(bytesToHex(encodeFrame(59010)) === "0400000082e60000", "59010 other readonly frame stays distinct");
+  assert(bytesToHex(encodeFrame(55001)) === "04000000d9d60000", "55001 title list frame stays distinct");
   assert(bytesToHex(encodeFrame(59011)) === "0400000083e60000", "59011 star frame stays distinct");
   assert(bytesToHex(encodeFrame(59012)) === "0400000084e60000", "59012 star frame stays distinct");
   assert(bytesToHex(encodeFrame(59013)) === "0400000085e60000", "59013 decompose frame stays distinct");
@@ -5875,6 +5914,140 @@ async function checkWs(): Promise<void> {
       decodeWireDragon(collectionUnpacked)?.slots.length === 0 &&
       decodeWireDragonCollection(dragonBody)?.sysIds[0] === 4,
     "59010 body is not the 59001 snapshot and 59001 body is not treated as this request"
+  );
+  const loggedTitle = decodeWireTitle(titleBody);
+  assert(
+    WireCmd.scanTitleList === 55001 && WireCmd.dragonCollection === 59010 && WireCmd.dragonScan === 59001,
+    "online 55001 stays off 59010 and 59001"
+  );
+  assert(
+    WireCmd.scanTitleList !== WireCmd.roleProfile && WireCmd.scanTitleList !== WireCmd.dragonCollection,
+    "55001 stays off 2001 and is not the 59010 cmd"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.scanTitleList)) === "04000000d9d60000", "empty c2s 55001");
+  assert(bytesToHex(encodeFrame(WireCmd.scanTitleList)) !== "0400000082e60000", "55001 is not the 59010 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.dragonCollection)) !== "04000000d9d60000", "59010 is not the 55001 frame");
+  assert(bytesToHex(encodeFrame(34001)) !== "04000000d9d60000", "34001 is not the 55001 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000d9d60000", "20011 is not the 55001 frame");
+  assert(WIRE_TITLE_READONLY_TITLE === "称号列表（真服只读）", "readonly title list title");
+  assert(WIRE_TITLE_UNSYNCED_TOAST === "真服未同步", "unsynced title list toast");
+  assert(WIRE_TITLE_EMPTY === "空称号", "empty title list label");
+  assert(
+    WIRE_TITLE_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("TitleService.getTitle") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("dao.add") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("无日刷") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("59010") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("55001") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("同模块无写号") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("34001") >= 0 &&
+      WIRE_TITLE_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_TITLE_READONLY_NOTE.indexOf("永久") >= 0 &&
+      WIRE_TITLE_READONLY_NOTE.indexOf("未激活") >= 0 &&
+      WIRE_TITLE_READONLY_NOTE.indexOf("到期") >= 0 &&
+      WIRE_TITLE_READONLY_NOTE.indexOf("同模块无写号") >= 0 &&
+      WIRE_TITLE_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_TITLE_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_TITLE_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_TITLE_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_TITLE_FIELD_NOTE.indexOf("idx") >= 0 &&
+      WIRE_TITLE_FIELD_NOTE.indexOf("end_time") >= 0 &&
+      WIRE_TITLE_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "title list page names idx end_time and refuses the other write cmds"
+  );
+  assert(
+    decodeWireTitle(new Uint8Array(0)) !== null &&
+      decodeWireTitle(new Uint8Array(0))?.titles.length === 0 &&
+      formatWireTitleHead(decodeWireTitle(new Uint8Array(0)) || emptyTitle) === "titles=空称号",
+    "empty 55001 body is synced and does not invent zero"
+  );
+  assert(decodeWireTitle(new Uint8Array([0x80])) === null, "bad 55001 ignored");
+  assert(
+    decodeWireTitle(titleOff) !== null &&
+      decodeWireTitle(titleOff)?.titles.length === 1 &&
+      decodeWireTitle(titleOff)?.titles[0].idx === 0 &&
+      decodeWireTitle(titleOff)?.titles[0].endTime === 0 &&
+      formatWireTitleLine((decodeWireTitle(titleOff) || emptyTitle).titles[0]) === "idx=0 / end_time=0 未激活",
+    "present 55001 zero stays zero and means inactive"
+  );
+  assert(
+    decodeWireTitle(titlePerm) !== null &&
+      decodeWireTitle(titlePerm)?.titles[0].idx === 3 &&
+      decodeWireTitle(titlePerm)?.titles[0].endTime === -1 &&
+      formatWireTitleLine((decodeWireTitle(titlePerm) || emptyTitle).titles[0]) === "idx=3 / end_time=-1 永久",
+    "55001 end_time -1 stays permanent and is not written as zero"
+  );
+  assert(
+    decodeWireTitle(titleMissingEnd) !== null &&
+      decodeWireTitle(titleMissingEnd)?.titles[0].idx === 4 &&
+      decodeWireTitle(titleMissingEnd)?.titles[0].endTime === null &&
+      formatWireTitleLine((decodeWireTitle(titleMissingEnd) || emptyTitle).titles[0]) === "idx=4 / end_time=无",
+    "missing 55001 end_time stays blank and does not invent zero"
+  );
+  assert(
+    decodeWireTitle(titleMissingIdx) !== null &&
+      decodeWireTitle(titleMissingIdx)?.titles[0].idx === null &&
+      decodeWireTitle(titleMissingIdx)?.titles[0].endTime === -1 &&
+      formatWireTitleLine((decodeWireTitle(titleMissingIdx) || emptyTitle).titles[0]) === "idx=无 / end_time=-1 永久",
+    "missing 55001 idx stays blank and does not invent zero"
+  );
+  const titleWideSnap = decodeWireTitle(titleWide);
+  assert(
+    titleWideSnap !== null &&
+      titleWideSnap.titles.length === 1 &&
+      titleWideSnap.titles[0].idx === 1 &&
+      titleWideSnap.titles[0].endTime === 1099511627776 &&
+      formatWireTitleLine(titleWideSnap.titles[0]) === "idx=1 / end_time=1099511627776 到期",
+    "55001 end_time keeps the wide int64 and does not invent another idx"
+  );
+  assert(
+    loggedTitle !== null &&
+      loggedTitle.titles.length === 5 &&
+      loggedTitle.titles[0].idx === 3 &&
+      loggedTitle.titles[0].endTime === -1 &&
+      loggedTitle.titles[1].idx === 0 &&
+      loggedTitle.titles[1].endTime === 0 &&
+      loggedTitle.titles[2].idx === 8 &&
+      loggedTitle.titles[2].endTime === 1792464848 &&
+      loggedTitle.titles[3].idx === 4 &&
+      loggedTitle.titles[3].endTime === null &&
+      loggedTitle.titles[4].idx === null &&
+      loggedTitle.titles[4].endTime === -1 &&
+      loggedTitle.marks.length === 1 &&
+      loggedTitle.marks[0].field === 8 &&
+      formatWireTitleHead(loggedTitle) === "titles=5 条 / 字段8=1" &&
+      formatWireTitleLine(loggedTitle.titles[0]) === "idx=3 / end_time=-1 永久" &&
+      formatWireTitleLine(loggedTitle.titles[1]) === "idx=0 / end_time=0 未激活" &&
+      formatWireTitleLine(loggedTitle.titles[2]) === "idx=8 / end_time=1792464848 到期" &&
+      formatWireTitleLine(loggedTitle.titles[3]) === "idx=4 / end_time=无" &&
+      formatWireTitleLine(loggedTitle.titles[4]) === "idx=无 / end_time=-1 永久" &&
+      wireTitleNote(loggedTitle).indexOf(WIRE_TITLE_SIDE_EFFECT) >= 0 &&
+      wireTitleNote(loggedTitle).indexOf("不写金币") >= 0 &&
+      wireTitleNote(loggedTitle).indexOf("不写钻石") >= 0,
+    "55001 sample keeps idx and end_time including -1 and 0 and does not fill missing numbers with 0"
+  );
+  const titleSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.scanTitleList, titleBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    titleSticky.frames.length === 2 &&
+      titleSticky.frames[0].cmdId === 55001 &&
+      titleSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireTitle(titleSticky.frames[0].body)?.titles.length === 5,
+    "sticky 55001 frame stops at its length prefix"
+  );
+  assert(decodeWireTitle(fieldBytes(1, new Uint8Array([0x80]))) === null, "55001 title blob that will not decode is ignored");
+  assert(
+    decodeWireTitle(titleOuterOnly) !== null &&
+      decodeWireTitle(titleOuterOnly)?.titles.length === 0 &&
+      formatWireTitleHead(decodeWireTitle(titleOuterOnly) || emptyTitle) === "titles=空称号 / 字段8=1",
+    "non-empty 55001 without titles stays synced and does not invent zero"
+  );
+  assert(
+    decodeWireTitle(collectionUnpacked)?.titles.length === 0 &&
+      decodeWireDragonCollection(titlePerm) === null,
+    "55001 body is not the 59010 snapshot and 59010 body is not treated as this request"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -6984,7 +7157,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 24, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 25, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -7082,6 +7255,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 59010 after 59001"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 24] as ArrayBuffer)) === "04000000d9d60000",
+        "pullIdle sends empty c2s 55001 after 59010"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -7105,6 +7282,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 75501") &&
           sawLog(lines, "发送 c2s 59001") &&
           sawLog(lines, "发送 c2s 59010") &&
+          sawLog(lines, "发送 c2s 55001") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -7122,6 +7300,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000ed260100") &&
           sawLog(lines, "0400000079e60000") &&
           sawLog(lines, "0400000082e60000") &&
+          sawLog(lines, "04000000d9d60000") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -7594,6 +7773,24 @@ async function checkWs(): Promise<void> {
         roleSockets[0].sent.length === sentAfterCollection + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000079e60000",
         "sending 59001 does not also send 59010"
+      );
+      roleNet.send(WIRE_TITLE_CMD);
+      const titleSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(titleSent as ArrayBuffer)) === "04000000d9d60000", "wire.55001 frame");
+      const sentBeforeTitleOther = roleSockets[0].sent.length;
+      roleNet.send("wire.34001");
+      roleNet.send("wire.20011");
+      assert(roleSockets[0].sent.length === sentBeforeTitleOther, "34001 and 20011 stay off the title wire");
+      assert(
+        sawLog(lines, "未发送 wire.34001") && sawLog(lines, "未发送 wire.20011"),
+        "title list does not encode 34001 or 20011"
+      );
+      const sentAfterTitle = roleSockets[0].sent.length;
+      roleNet.send(WIRE_DRAGON_COLLECTION_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterTitle + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000082e60000",
+        "sending 59010 does not also send 55001"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -8663,6 +8860,101 @@ async function checkWs(): Promise<void> {
           WireSession.tweakCube !== null &&
           WireSession.tweakCube.marks[0].field === 8,
         "non-empty 59010 without sys_id stays synced and leaves 59001 and 75501"
+      );
+      assert(WireSession.hasTitleList() === false, "59010 alone does not sync the title list");
+      const goldBeforeBadTitle = Session.gold;
+      const diamondBeforeBadTitle = Session.diamond;
+      roleSockets[0].push(encodeFrame(34001, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(59010, new Uint8Array([0x80])));
+      roleSockets[0].push(encodeFrame(59001, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasTitleList() === false &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.marks[0].field === 8 &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.identifyLevel === 4 &&
+          WireSession.dragon.marks[0].field === 8,
+        "59010 59001 34001 and 20011 do not open the title list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.scanTitleList, titleBody));
+      assert(
+        WireSession.hasTitleList() &&
+          WireSession.titleList !== null &&
+          WireSession.titleList.titles.length === 5 &&
+          WireSession.titleList.titles[0].endTime === -1 &&
+          WireSession.titleList.titles[1].idx === 0 &&
+          WireSession.titleList.titles[1].endTime === 0 &&
+          WireSession.titleList.titles[2].endTime === 1792464848 &&
+          WireSession.titleList.titles[3].endTime === null &&
+          WireSession.titleList.titles[4].idx === null &&
+          formatWireTitleHead(WireSession.titleList) === "titles=5 条 / 字段8=1" &&
+          formatWireTitleLine(WireSession.titleList.titles[0]) === "idx=3 / end_time=-1 永久" &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.marks.length === 1 &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.marks[0].field === 8,
+        "55001 writes idx and end_time and leaves 59010 and 59001"
+      );
+      assert(
+        Session.gold === goldBeforeBadTitle && Session.diamond === diamondBeforeBadTitle,
+        "55001 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.scanTitleList, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasTitleList() &&
+          WireSession.titleList !== null &&
+          WireSession.titleList.titles[0].endTime === -1 &&
+          WireSession.dragonCollection !== null &&
+          sawWire("55001 解不开"),
+        "bad 55001 keeps the title list and the 59010 record"
+      );
+      assert(
+        Session.gold === goldBeforeBadTitle && Session.diamond === diamondBeforeBadTitle,
+        "bad 55001 stays off the wallet"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.scanTitleList));
+      assert(
+        WireSession.hasTitleList() &&
+          WireSession.titleList !== null &&
+          WireSession.titleList.titles.length === 0 &&
+          formatWireTitleHead(WireSession.titleList) === "titles=空称号" &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.marks.length === 1,
+        "empty 55001 body clears titles without writing zero and stays synced"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.scanTitleList, titleOff));
+      assert(
+        WireSession.hasTitleList() &&
+          WireSession.titleList !== null &&
+          WireSession.titleList.titles.length === 1 &&
+          WireSession.titleList.titles[0].idx === 0 &&
+          WireSession.titleList.titles[0].endTime === 0 &&
+          formatWireTitleLine(WireSession.titleList.titles[0]) === "idx=0 / end_time=0 未激活" &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.marks[0].field === 8,
+        "present 55001 zero stays zero and leaves 59001"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.scanTitleList, titleOuterOnly));
+      assert(
+        WireSession.hasTitleList() &&
+          WireSession.titleList !== null &&
+          WireSession.titleList.titles.length === 0 &&
+          formatWireTitleHead(WireSession.titleList) === "titles=空称号 / 字段8=1" &&
+          WireSession.dragonCollection !== null &&
+          WireSession.tweakCube !== null &&
+          WireSession.tweakCube.marks[0].field === 8,
+        "non-empty 55001 without titles stays synced and leaves 59010 and 75501"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dragonCollection, collectionUnpacked));
+      assert(
+        WireSession.hasDragonCollection() &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds.length === 3 &&
+          WireSession.titleList !== null &&
+          WireSession.titleList.titles.length === 0 &&
+          WireSession.titleList.marks.length === 1,
+        "59010 refresh does not clear the 55001 title list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
