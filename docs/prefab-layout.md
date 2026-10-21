@@ -267,3 +267,85 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | `BtnBack` | (0, -430) | 240×48 | `返回` |
 
 行文案是 `mailRowText`（未读/已读、标题、有附件时才加后缀），再加代码里的 `已选 ` 前缀。行上没有发件人。`Row_0` 底图用橙色按钮，对应 `SELECT_FILL`。`Row_1` 用蓝色按钮。无附件不加后缀，所以维护公告只到标题。`Summary` 是 `mailSummaryText(2, 1, 1)`。`list()` 返回前代码写的是 `读取邮件…`；预制展示的是已经读到这 2 封之后的句子。`FromTitle` 是 `from + " · " + title`。正文是 `starterMails` 里开服补给那一段，左对齐。附件是 `attachmentText`：金币 ×80（`MAIL_REWARD_GOLD`）、强化石 ×3（`IDLE_ITEM_NAME` / `MAIL_REWARD_STONE`）、小金币袋 ×1（`MAIL_REWARD_GOLD_BAG`）。`BtnClaim` 因为这封可领，文案是 `领取`（`claimButtonText`），绿色按钮。`BtnClaimAll` 是 `claimAllButtonText(1)`，全角括号，也是绿色。`BtnDelete` 在附件还没领时不能删，贴蓝色按钮并染成 `LOCKED_FILL` `(78, 84, 98)`，同时开灰度。列表变长时 `detailAnchor()` 会把详情往下放到不盖住最后一行的位置，最低 -140。这份预制只放 2 行短列表。默认这些预览节点都是显示的；没有单独的空邮箱占位。
+
+## Hero（未接线）
+
+真服只读页和 Mock 英雄页各一份 Prefab。`HeroPage.ts` 是 Mock：列表加详情。`WireHeroPage.ts` 是只读页。两页没有可以共用的内容根。
+
+**Prefab 按 4001 / GResHeroList，不跟 #50 的 s2c 18001 名字方案。** `wireHero.ts` 已是 4001。只读页文案跟 `WIRE_HERO_FIELD_NOTE`、`formatWireHeroLine`、`formatWireHeroDetail`。没有名字字段：类型对不上表就写类型号。详情用中文标签（类型、id、等级、阶段、星级、元素、职业、锁定、战力），不写 `hero_id` / `hero_type` 这种原始键。协议脚本和页面 TS 都不改，所以运行时仍是代码 UI。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| WireHeroPage | `prefabs/ui/hero/WireHeroPage` | **未接** |
+| HeroPage | `prefabs/ui/hero/HeroPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/hero/WireHeroPage.prefab`、`client/assets/prefabs/ui/hero/HeroPage.prefab`
+- **状态**：**未接** Boot、`MainApp`、`WireHeroPage.ts`、`HeroPage.ts`，以及任何 `USE_*_PREFAB`。不改协议。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` 一致）。`ListHost`、`Rows`、`RowsHost`、`Detail`、`PanelList`、`PanelDetail` 都放在 (0, 0) 且铺满 720×1280，子节点的 y 就是代码里的页面坐标。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid（`@f9941`）。Prefab 目录里没有 PNG。页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；详情卡用 `win-bg_block-bg-5` 染成 `(16, 28, 48)`；返回和列表行用 `button_btn-blue-big`；升级钮用 `button_btn-orange-big`。生成器的素材表与背包/邮件相同，也读了 `button_btn-green-big`，本页没有绿色按钮。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 运行时 `render()` 会拆掉并重建 `rows`。Prefab 里的行和详情是编辑器预览，不是代码去克隆的模板。代码里的容器名是小写 `list-host` / `rows` / `rows-host`；预制用下面表里的 PascalCase。
+- 再生：`python3 client/tools/gen_hero_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `WireHeroPage.ts` / `HeroPage.ts` 的坐标，以及 `wireHero.ts` 的 4001 常量和 `formatWireHeroLine` / `formatWireHeroDetail`）
+
+### WireHeroPage（真服只读）
+
+根 `WireHeroPage`。坐标对齐 `WireHeroController.build()` / `render()`（`VISIBLE_ROWS = 8`，列表按钮 y=`300 − i×52`，详情行 y=`300 − i×40`）。默认只打开未同步占位，对应 `heroes == null`。列表行和详情容器都是 inactive。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | — |
+| `Title` | (0, 470) | 680×56 | `英雄（真服只读）` |
+| `Note` | (0, 420) | 640×38 | `只读。不升级，不写金币` |
+| `Status` | (0, 380) | 640×36 | `没有名字。类型对不上就写类型号` |
+| `ListHost` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows/Unsynced` | (0, 280) | 640×44 | `真服英雄未同步`（默认显示） |
+| `ListHost/Rows/Empty` | (0, 280) | 640×44 | `空名册`（`_active: false`） |
+| `ListHost/Rows/Row_0` … `Row_7` | (0, 300 − i×52) | 640×44 | `类型 101 · id 10001 · Lv1 · 3星 · 战力 1200`（蓝底按钮，`_active: false`） |
+| `ListHost/Rows/More` | (0, -116) | 640×36 | `还有 2 名`（`_active: false`） |
+| `ListHost/Rows/Detail` | (0, 0) | 720×1280 | 详情容器（默认 **inactive**） |
+| `Detail/Line_0` … `Line_8` | (0, 300 − i×40) | 640×40 | `类型 101`、`id 10001`、`等级 1`、`阶段 2`、`星级 3`、`元素 1`、`职业 2`、`锁定 0`、`战力 1200`（左对齐） |
+| `Detail/BtnBackList` | (0, -84) | 240×48 | `返回列表` |
+| `BtnBack` | (0, -460) | 240×48 | `返回` |
+
+`Title` / `Note` / `Status` / `Empty` / `Unsynced` 与 `WIRE_HERO_READONLY_TITLE` / `WIRE_HERO_READONLY_NOTE` / `WIRE_HERO_FIELD_NOTE` / `WIRE_HERO_EMPTY` / `WIRE_HERO_UNSYNCED_TOAST` 相同。行文案是 `formatWireHeroLine` 在没有类型备注时的句子：`类型 101 · id 10001 · Lv1 · 3星 · 战力 1200`。阶段、元素、职业、锁定不进列表行。八行用同一句占位，默认隐藏。详情九行是 `formatWireHeroDetail` 对同一条样本（阶段 2、元素 1、职业 2、锁定 0）的输出，左对齐。`More` 的 y 是 `300 − 8×52`。`BtnBackList` 的 y 是 `300 − 9×40 − 24`（九行详情之下，与 `renderDetail` 的算法一致）。`Detail` 默认 inactive。`Empty` 与 `Unsynced` 同一位置，默认只显示未同步。
+
+### HeroPage（Mock）
+
+根 `HeroPage`。代码是两页（`HeroListPage` / `HeroDetailPage`），预制用双面板，习惯同 Mainline：`Bg` 与面板同级，面板自身 720×1280、放在 (0, 0)。`PanelList` 默认显示，对齐 `HeroListController`。`PanelDetail` 默认 `_active: false`，对齐 `HeroDetailController`。升级钮留在树上，`clickEvents` 为空，不接线。
+
+#### PanelList
+
+三行是 `growth.ts` 的 `starterRoster()`。行文案是 `heroRowText` 再加 ` · 武器Lv` 和 `weaponLevel`。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Title` | (0, 470) | 680×56 | `英雄` |
+| `Count` | (0, 410) | 640×36 | `3 名英雄 · 点名字查看详情` |
+| `RowsHost` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_0` | (0, 300) | 600×76 | `光耀骑士  Lv1 · 3星 · 武器Lv1` |
+| `RowsHost/Rows/Row_1` | (0, 200) | 600×76 | `林间游侠  Lv1 · 2星 · 武器Lv1` |
+| `RowsHost/Rows/Row_2` | (0, 100) | 600×76 | `星辉法师  Lv1 · 1星 · 武器Lv1` |
+| `BtnBack` | (0, -420) | 240×48 | `返回` |
+
+`Count` 在 `list()` 返回前代码写的是 `读取英雄…`；预制展示的是已经读到 3 名之后的句子。行 y 是 `300 − i×100`，蓝底按钮。名字和 `Lv` 之间是两个空格，与 `heroRowText` 一致。
+
+#### PanelDetail
+
+第一名起步英雄。属性是 `heroStats(1, 3)` 再加武器加成。Lv1 新手短剑加成为 0，所以攻击 70、生命 320、防御 20。`Level` 是 `heroLevelText`。`Weapon` 是 `weaponLineText`。`Gold` 是 `ownedGoldText(MOCK_STARTER_GOLD)`。升级钮是 `upgradeButtonText(1)`。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Title` | (0, 470) | 680×56 | `英雄详情` |
+| `Name` | (0, 390) | 640×52 | `光耀骑士` |
+| `Level` | (0, 330) | 640×40 | `Lv1 · 3星` |
+| `Card` | (0, 170) | 640×220 | — |
+| `Atk` | (0, 230) | 560×42 | `攻击 70` |
+| `Hp` | (0, 170) | 560×42 | `生命 320` |
+| `Def` | (0, 120) | 560×42 | `防御 20` |
+| `Weapon` | (0, 70) | 560×38 | `武器 新手短剑 Lv1 · 攻击 +0` |
+| `Gold` | (0, 0) | 640×38 | `持有金币 100` |
+| `BtnUpgrade` | (0, -80) | 460×68 | `升级（金币 30）`（橙） |
+| `Hint` | (0, -160) | 640×34 | `属性为占位。升级不改武器，武器到铁匠铺强化` |
+| `BtnBack` | (0, -250) | 240×48 | `返回` |
