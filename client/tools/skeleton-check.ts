@@ -1118,6 +1118,20 @@ import {
   WIRE_GOD_RELIC_UNSYNCED_TOAST,
   wireGodRelicNote,
 } from "../assets/scripts/net/protocol/wireGodRelic";
+import {
+  decodeWireHeroPalace,
+  formatWireHeroPalaceLine,
+  WIRE_HERO_PALACE_BANNED_CMDS,
+  WIRE_HERO_PALACE_CMD,
+  WIRE_HERO_PALACE_EMPTY,
+  WIRE_HERO_PALACE_FIELD_NOTE,
+  WIRE_HERO_PALACE_FRAME,
+  WIRE_HERO_PALACE_READONLY_NOTE,
+  WIRE_HERO_PALACE_READONLY_TITLE,
+  WIRE_HERO_PALACE_SIDE_EFFECT,
+  WIRE_HERO_PALACE_UNSYNCED_TOAST,
+  wireHeroPalaceNote,
+} from "../assets/scripts/net/protocol/wireHeroPalace";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1868,6 +1882,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("mouthWelfareList") === "city", "mouth welfare list stays on the city tab");
   assert(rootTabFor("weekendGift") === "city", "weekend gift stays on the city tab");
   assert(rootTabFor("godRelic") === "city", "god relic stays on the city tab");
+  assert(rootTabFor("heroPalace") === "city", "hero palace stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -10806,6 +10821,205 @@ async function checkWs(): Promise<void> {
     "62001 note keeps the side effect and does not write gold or diamond"
   );
   assert(
+    WireCmd.heroPalace === 63001 &&
+      WireCmd.heroPalace !== WireCmd.godRelic &&
+      WireCmd.heroPalace !== WireCmd.weekendGift &&
+      WireCmd.heroPalace !== WireCmd.mouthWelfareList &&
+      WireCmd.heroPalace !== WireCmd.dailyWelfareList &&
+      WireCmd.heroPalace !== WireCmd.dailyTaskList &&
+      WireCmd.heroPalace !== 12010 &&
+      WireCmd.heroPalace !== 26001 &&
+      WireCmd.heroPalace !== 26002 &&
+      WireCmd.heroPalace !== 5001 &&
+      WireCmd.heroPalace !== 51001 &&
+      WireCmd.heroPalace !== 63002 &&
+      WireCmd.heroPalace !== 63003 &&
+      WireCmd.heroPalace !== 69001,
+    "online 63001 stays off 62001, 61001, 26001, 26002, 12020, 13010, boot 12010, 4044, tower 3203, running promotion 20101, lineup 3101, formation 3099, world 51001, bag 5001, worship 63002, rank reward 63003 and alternate 69001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.heroPalace)) === WIRE_HERO_PALACE_FRAME, "empty c2s 63001");
+  assert(bytesToHex(encodeFrame(63001)) === "0400000019f60000", "empty c2s 63001 hex");
+  assert(WIRE_HERO_PALACE_FRAME === "0400000019f60000", "63001 frame constant");
+  assert(bytesToHex(encodeFrame(63001)) !== "0400000031f20000", "63001 is not the 62001 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "0400000049ee0000", "63001 is not the 61001 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "0400000091650000", "63001 is not the 26001 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "0400000092650000", "63001 is not the 26002 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "04000000f42e0000", "63001 is not the 12020 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "04000000d2320000", "63001 is not the 13010 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "04000000cc0f0000", "63001 is not the 4044 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "04000000830c0000", "63001 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "04000000854e0000", "63001 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "040000001d0c0000", "63001 is not the 3101 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "040000001b0c0000", "63001 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "0400000039c70000", "63001 is not the 51001 frame");
+  assert(bytesToHex(encodeFrame(63001)) !== "0400000089130000", "63001 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(63002)) === "040000001af60000" && bytesToHex(encodeFrame(63002)) !== "0400000019f60000", "63002 is not the 63001 frame");
+  assert(bytesToHex(encodeFrame(63003)) === "040000001bf60000" && bytesToHex(encodeFrame(63003)) !== "0400000019f60000", "63003 is not the 63001 frame");
+  assert(bytesToHex(encodeFrame(69001)) === "04000000890d0100" && bytesToHex(encodeFrame(69001)) !== "0400000019f60000", "69001 is not the 63001 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "0400000019f60000", "20011 is not the 63001 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "0400000019f60000", "4601 is not the 63001 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "0400000019f60000", "29001 is not the 63001 frame");
+  for (let i = 0; i < WIRE_HERO_PALACE_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_HERO_PALACE_BANNED_CMDS[i] }) === null, WIRE_HERO_PALACE_BANNED_CMDS[i] + " is not encoded");
+  }
+  const heroPalaceOwn = encodeWireMessage({ cmd: WIRE_HERO_PALACE_CMD });
+  assert(
+    heroPalaceOwn !== null &&
+      bytesToHex(heroPalaceOwn.bytes) === "0400000019f60000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "0400000031f20000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "0400000049ee0000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "0400000091650000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "0400000092650000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "04000000f42e0000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "04000000d2320000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "04000000cc0f0000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "04000000830c0000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "04000000854e0000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "040000001d0c0000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "040000001b0c0000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "0400000039c70000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "0400000089130000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "040000001af60000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "040000001bf60000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "04000000890d0100" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "040000002b4e0000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "04000000f9110000" &&
+      bytesToHex(heroPalaceOwn.bytes) !== "0400000049710000",
+    "wire.63001 encodes the empty frame and is not 62001, 61001, 26001, 26002, 12020, 13010, 4044, 3203, 20101, 3101, 3099, 51001, 5001, 63002, 63003, 69001, 20011, 4601 or 29001"
+  );
+  assert(WIRE_HERO_PALACE_CMD === "wire.63001", "hero palace wire cmd");
+  assert(WIRE_HERO_PALACE_READONLY_TITLE === "英雄殿堂（真服只读）", "readonly hero palace title");
+  assert(WIRE_HERO_PALACE_UNSYNCED_TOAST === "真服未同步", "unsynced hero palace toast");
+  assert(WIRE_HERO_PALACE_EMPTY === "已同步空表", "empty hero palace label");
+  assert(
+    WIRE_HERO_PALACE_READONLY_NOTE.indexOf("type") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("rankRole") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("isReward") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("isWorship") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("serverRankRole") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("63002") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("63003") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("69001") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("62001") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("61001") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("26001") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("26002") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("12020") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("13010") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("4044") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("3203") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("20101") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("3101") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("3099") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("5001") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("51001") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_HERO_PALACE_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_HERO_PALACE_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("不重复拉 62001") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("轻日刷") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("worshipType") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("无成长写") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("0400000019f60000") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("63002") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("63003") >= 0 &&
+      WIRE_HERO_PALACE_SIDE_EFFECT.indexOf("69001") >= 0,
+    "63001 notes name the palace fields and keep worship, rank reward, and the alternate cmd off this slice"
+  );
+  const heroPalaceEmpty = decodeWireHeroPalace(new Uint8Array(0));
+  assert(
+    heroPalaceEmpty !== null &&
+      heroPalaceEmpty.rows === null &&
+      heroPalaceEmpty.marks.length === 0 &&
+      formatWireHeroPalaceLine(heroPalaceEmpty) === WIRE_HERO_PALACE_EMPTY &&
+      formatWireHeroPalaceLine(heroPalaceEmpty).indexOf("type=0") < 0 &&
+      formatWireHeroPalaceLine(heroPalaceEmpty).indexOf("rankRole") < 0,
+    "empty 63001 is synced and does not invent zero"
+  );
+  assert(decodeWireHeroPalace(null) === null, "null 63001 body is not a snapshot");
+  assert(decodeWireHeroPalace(new Uint8Array([0x80])) === null, "bad 63001 varint returns null");
+  const heroPalaceTypeZero = decodeWireHeroPalace(fieldVarint(1, 0));
+  assert(
+    heroPalaceTypeZero !== null &&
+      heroPalaceTypeZero.rows !== null &&
+      heroPalaceTypeZero.rows[0].type === 0 &&
+      heroPalaceTypeZero.rows[0].rankRole === null &&
+      formatWireHeroPalaceLine(heroPalaceTypeZero) === "type=0",
+    "present 63001 type zero stays zero and omits rankRole"
+  );
+  const heroPalaceRewardZero = decodeWireHeroPalace(fieldVarint(3, 0));
+  assert(
+    heroPalaceRewardZero !== null &&
+      heroPalaceRewardZero.rows !== null &&
+      heroPalaceRewardZero.rows[0].type === null &&
+      heroPalaceRewardZero.rows[0].isReward === 0 &&
+      formatWireHeroPalaceLine(heroPalaceRewardZero) === "isReward=0",
+    "present 63001 isReward zero stays zero and omits type"
+  );
+  const heroPalaceRankNeg = decodeWireHeroPalace(fieldNeg1(2));
+  assert(
+    heroPalaceRankNeg !== null &&
+      heroPalaceRankNeg.rows !== null &&
+      heroPalaceRankNeg.rows[0].rankRole !== null &&
+      heroPalaceRankNeg.rows[0].rankRole.kind === "num" &&
+      heroPalaceRankNeg.rows[0].rankRole.value === -1 &&
+      formatWireHeroPalaceLine(heroPalaceRankNeg) === "rankRole=-1",
+    "63001 rankRole -1 stays -1"
+  );
+  const heroPalaceNested = decodeWireHeroPalace(fieldBytes(1, Uint8Array.from([0x08, 0x01, 0x18, 0x00])));
+  assert(
+    heroPalaceNested !== null &&
+      heroPalaceNested.rows !== null &&
+      heroPalaceNested.rows.length === 1 &&
+      heroPalaceNested.rows[0].type === 1 &&
+      heroPalaceNested.rows[0].isReward === 0 &&
+      heroPalaceNested.rows[0].rankRole === null &&
+      formatWireHeroPalaceLine(heroPalaceNested) === "type=1,isReward=0",
+    "63001 repeated palace row keeps present numbers"
+  );
+  const heroPalaceRoleBlob = decodeWireHeroPalace(fieldBytes(2, Uint8Array.from([0x08, 0x03, 0x10, 0x00])));
+  assert(
+    heroPalaceRoleBlob !== null &&
+      heroPalaceRoleBlob.rows !== null &&
+      heroPalaceRoleBlob.rows[0].rankRole !== null &&
+      heroPalaceRoleBlob.rows[0].rankRole.kind === "blob" &&
+      formatWireHeroPalaceLine(heroPalaceRoleBlob) === "rankRole=字段1=3 / 字段2=0",
+    "63001 rankRole message shows inner field numbers"
+  );
+  const heroPalaceEmptyRow = decodeWireHeroPalace(fieldBytes(1, new Uint8Array(0)));
+  assert(
+    heroPalaceEmptyRow !== null &&
+      heroPalaceEmptyRow.rows !== null &&
+      heroPalaceEmptyRow.rows.length === 1 &&
+      formatWireHeroPalaceLine(heroPalaceEmptyRow) === "空",
+    "63001 empty palace row stays 空"
+  );
+  assert(decodeWireHeroPalace(fieldBytes(1, Uint8Array.from([0x80]))) === null, "bad nested 63001 row returns null");
+  const heroPalaceSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.heroPalace, fieldVarint(1, 0)), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    heroPalaceSticky.frames.length === 2 &&
+      heroPalaceSticky.frames[0].cmdId === 63001 &&
+      heroPalaceSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireHeroPalace(heroPalaceSticky.frames[0].body)?.rows?.[0].type === 0,
+    "sticky 63001 frame stops at its length prefix"
+  );
+  assert(
+    wireHeroPalaceNote(heroPalaceEmpty || { rows: null, marks: [] }).indexOf(WIRE_HERO_PALACE_SIDE_EFFECT) >= 0 &&
+      wireHeroPalaceNote(heroPalaceEmpty || { rows: null, marks: [] }).indexOf("不写金币") >= 0 &&
+      wireHeroPalaceNote(heroPalaceEmpty || { rows: null, marks: [] }).indexOf("不写钻石") >= 0,
+    "63001 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
     bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("f52e0000") < 0 &&
@@ -11931,7 +12145,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 48, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 49, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -12616,6 +12830,86 @@ async function checkWs(): Promise<void> {
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 47] as ArrayBuffer)) !== "0400000049710000",
         "pullIdle 62001 frame is not the 29001 cmd"
       );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) === "0400000019f60000",
+        "pullIdle sends empty c2s 63001 after 62001"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "0400000031f20000",
+        "pullIdle 63001 frame is not merged into the 62001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "0400000049ee0000",
+        "pullIdle 63001 frame is not the 61001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "0400000091650000",
+        "pullIdle 63001 frame is not the 26001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "0400000092650000",
+        "pullIdle 63001 frame is not the 26002 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "04000000f42e0000",
+        "pullIdle 63001 frame is not the 12020 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "04000000d2320000",
+        "pullIdle 63001 frame is not the 13010 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "04000000cc0f0000",
+        "pullIdle 63001 frame is not the 4044 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "04000000830c0000",
+        "pullIdle 63001 frame is not the 3203 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "04000000854e0000",
+        "pullIdle 63001 frame is not the 20101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "040000001d0c0000",
+        "pullIdle 63001 frame is not the 3101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "040000001b0c0000",
+        "pullIdle 63001 frame is not the 3099 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "0400000089130000",
+        "pullIdle 63001 frame is not the 5001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "0400000039c70000",
+        "pullIdle 63001 frame is not the 51001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "040000001af60000",
+        "pullIdle 63001 frame is not the 63002 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "040000001bf60000",
+        "pullIdle 63001 frame is not the 63003 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "04000000890d0100",
+        "pullIdle 63001 frame is not the 69001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "040000002b4e0000",
+        "pullIdle 63001 frame is not the 20011 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "04000000f9110000",
+        "pullIdle 63001 frame is not the 4601 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 48] as ArrayBuffer)) !== "0400000049710000",
+        "pullIdle 63001 frame is not the 29001 cmd"
+      );
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -12646,14 +12940,17 @@ async function checkWs(): Promise<void> {
           "0400000033f20000": true,
           "0400000034f20000": true,
           "0400000035f20000": true,
-          "0400000019f60000": true,
+          "040000001af60000": true,
+          "040000001bf60000": true,
+          "04000000890d0100": true,
           "040000002b4e0000": true,
           "04000000f9110000": true,
           "0400000049710000": true,
         };
         let weekendFrames = 0;
         let godRelicFrames = 0;
-        for (let i = 0; i < 48; i++) {
+        let heroPalaceFrames = 0;
+        for (let i = 0; i < 49; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -12668,6 +12965,7 @@ async function checkWs(): Promise<void> {
           if (hex === "0400000091650000") mouthFrames += 1;
           if (hex === "0400000049ee0000") weekendFrames += 1;
           if (hex === "0400000031f20000") godRelicFrames += 1;
+          if (hex === "0400000019f60000") heroPalaceFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
           if (bannedHex[hex]) bannedFrames += 1;
         }
@@ -12685,9 +12983,10 @@ async function checkWs(): Promise<void> {
             mouthFrames === 1 &&
             weekendFrames === 1 &&
             godRelicFrames === 1 &&
+            heroPalaceFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once and 62001 once, keeps 12010 once and 51001 once, and does not repeat 5001 or 61001 or 26001 or 26002 or encode 3202 3204 3205 3206 3220 3200 4043 13011 12021 12022 61002 62002 62003 62004 62005 63001 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once and 63001 once, keeps 12010 once and 51001 once, and does not repeat 5001 or 61001 or 26001 or 26002 or 62001 or encode 3202 3204 3205 3206 3220 3200 4043 13011 12021 12022 61002 62002 62003 62004 62005 63002 63003 69001 20011 4601 29001"
         );
       }
       assert(
@@ -12779,6 +13078,14 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000049ee0000") &&
           sawLog(lines, "发送 c2s 62001") &&
           sawLog(lines, "0400000031f20000") &&
+          sawLog(lines, "发送 c2s 63001") &&
+          sawLog(lines, "0400000019f60000") &&
+          sawLog(lines, "发送 c2s 63002") === false &&
+          sawLog(lines, "040000001af60000") === false &&
+          sawLog(lines, "发送 c2s 63003") === false &&
+          sawLog(lines, "040000001bf60000") === false &&
+          sawLog(lines, "发送 c2s 69001") === false &&
+          sawLog(lines, "04000000890d0100") === false &&
           sawLog(lines, "发送 c2s 4043") === false &&
           sawLog(lines, "04000000cb0f0000") === false &&
           sawLog(lines, "发送 c2s 13011") === false &&
@@ -12814,8 +13121,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000034f20000") === false &&
           sawLog(lines, "发送 c2s 62005") === false &&
           sawLog(lines, "0400000035f20000") === false &&
-          sawLog(lines, "发送 c2s 63001") === false &&
-          sawLog(lines, "0400000019f60000") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
           sawLog(lines, "发送 c2s 22001") === false &&
           sawLog(lines, "发送 c2s 21011") === false &&
@@ -12983,34 +13288,41 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_GOD_RELIC_CMD);
       const godRelicSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(godRelicSent as ArrayBuffer)) === "0400000031f20000", "wire.62001 frame");
-      const sentBeforeGodRelicOther = roleSockets[0].sent.length;
+      roleNet.send(WIRE_HERO_PALACE_CMD);
+      const heroPalaceSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(heroPalaceSent as ArrayBuffer)) === "0400000019f60000", "wire.63001 frame");
+      const sentBeforeHeroPalaceOther = roleSockets[0].sent.length;
       roleNet.send("wire.61002");
       roleNet.send("wire.62002");
       roleNet.send("wire.62003");
       roleNet.send("wire.62004");
       roleNet.send("wire.62005");
-      roleNet.send("wire.63001");
+      roleNet.send("wire.63002");
+      roleNet.send("wire.63003");
+      roleNet.send("wire.69001");
       roleNet.send("wire.12021");
       roleNet.send("wire.12022");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeGodRelicOther, "61002 62002 62003 62004 62005 63001 12021 12022 20011 4601 29001 and goal claim stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeHeroPalaceOther, "61002 62002 62003 62004 62005 63002 63003 69001 12021 12022 20011 4601 29001 and goal claim stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.61002") &&
           sawLog(lines, "未发送 wire.62002") &&
           sawLog(lines, "未发送 wire.62003") &&
           sawLog(lines, "未发送 wire.62004") &&
           sawLog(lines, "未发送 wire.62005") &&
-          sawLog(lines, "未发送 wire.63001") &&
+          sawLog(lines, "未发送 wire.63002") &&
+          sawLog(lines, "未发送 wire.63003") &&
+          sawLog(lines, "未发送 wire.69001") &&
           sawLog(lines, "未发送 wire.12021") &&
           sawLog(lines, "未发送 wire.12022") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001") &&
           sawLog(lines, "未发送 goal7.claim"),
-        "god relic banned cmds and goal claim are not encoded"
+        "hero palace banned cmds and goal claim are not encoded"
       );
       roleNet.send(WIRE_PVP_CMD);
       const pvpSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -17102,7 +17414,21 @@ async function checkWs(): Promise<void> {
       );
       roleSockets[0].push(encodeFrame(61002, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(62001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(WireCmd.heroPalace));
+      assert(
+        WireSession.hasHeroPalace() &&
+          WireSession.heroPalace !== null &&
+          WireSession.heroPalace.rows === null &&
+          formatWireHeroPalaceLine(WireSession.heroPalace) === WIRE_HERO_PALACE_EMPTY &&
+          WireSession.hasGodRelic() &&
+          WireSession.godRelic !== null &&
+          WireSession.godRelic.buyCount === 9,
+        "empty 63001 clears to 已同步空表 and does not replace the 62001 snapshot"
+      );
       roleSockets[0].push(encodeFrame(63001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(63002, fieldVarint(1, 7)));
+      roleSockets[0].push(encodeFrame(63003, fieldVarint(1, 7)));
+      roleSockets[0].push(encodeFrame(69001, fieldVarint(1, 7)));
       assert(
         WireSession.weekendGift !== null &&
           formatWireWeekendGiftLine(WireSession.weekendGift) === "start_time=100 / end_time=200 / reward_status=idx=1,status=0" &&
@@ -17111,8 +17437,14 @@ async function checkWs(): Promise<void> {
           WireSession.godRelic !== null &&
           WireSession.godRelic.buyCount === 9 &&
           WireSession.godRelic.canChallengeCount === null &&
-          formatWireGodRelicLine(WireSession.godRelic) === "buyCount=9",
-        "62001 field 1 is buyCount and 61002 and 63001 do not replace the 61001 snapshot"
+          formatWireGodRelicLine(WireSession.godRelic) === "buyCount=9" &&
+          WireSession.hasHeroPalace() &&
+          WireSession.heroPalace !== null &&
+          WireSession.heroPalace.rows !== null &&
+          WireSession.heroPalace.rows[0].type === 9 &&
+          WireSession.heroPalace.rows[0].rankRole === null &&
+          formatWireHeroPalaceLine(WireSession.heroPalace) === "type=9",
+        "63001 field 1 is type and 61002 63002 63003 69001 do not replace the 61001 or 62001 snapshot"
       );
       roleSockets[0].push(encodeFrame(13011, fieldVarint(1, 8)));
       roleSockets[0].push(encodeFrame(12020, fieldVarint(1, 8)));
@@ -17179,9 +17511,14 @@ async function checkWs(): Promise<void> {
           WireSession.godRelic !== null &&
           WireSession.godRelic.buyCount === 9 &&
           formatWireGodRelicLine(WireSession.godRelic) === "buyCount=9" &&
+          WireSession.hasHeroPalace() &&
+          WireSession.heroPalace !== null &&
+          WireSession.heroPalace.rows !== null &&
+          WireSession.heroPalace.rows[0].type === 9 &&
+          formatWireHeroPalaceLine(WireSession.heroPalace) === "type=9" &&
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
-        "61001 field 1 varint is start_time and does not replace the 26001 list, the 26002 list, or the 62001 snapshot"
+        "61001 field 1 varint is start_time and does not replace the 26001 list, the 26002 list, the 62001 snapshot, or the 63001 snapshot"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
