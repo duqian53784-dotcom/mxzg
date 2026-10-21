@@ -108,6 +108,15 @@ export const WireCmd = {
    * 可能懒建或跨日写库，无扣费。不是占位 wish.view（2501）。
    */
   blessingPool: 27001,
+  /**
+   * c2s 空体。进主城、空 c2s 27001 之后发。
+   * 整帧 `04 00 00 00 a4 0f 00 00`。4004 = 0x0FA4，小端 a4 0f 00 00。
+   * GReq 没有字段，也没有 page。s2c 是 GResHeroSummonCount。
+   * 不发 4002 召唤、4005 累积召唤奖。不做 58001、58007、4201。
+   * 副作用仅可能懒建 HeroSummon。不写金币，不写钻石。
+   * 不是英雄列表 4001。不是占位 summon.pull（1501）。
+   */
+  heroSummonCount: 4004,
 } as const;
 
 /**
