@@ -457,9 +457,26 @@ export const WireCmd = {
    * 与 3099 分开发，勿合并。本刀不重复拉 3099。
    * 服侧允许 getHeroLineUps→fillLineUp 轻修复（formationId==0 则置 1 并轻修站位后 update；本路径不走 add）。
    * 只读，无扣费、无领奖、不写养成。
+   * 20101 进行中活动另只读接在其后，勿合并。
    * 不夹在 2001 和 3007 中间。不是阵法 3099。不是契约 28107。
    */
   lineUp: 3101,
+  /**
+   * c2s 空体。进主城、空 c2s 3101 之后发，只发一次。无 page。
+   * 整帧 `04 00 00 00 85 4E 00 00`。20101 = 0x4E85，小端 85 4E 00 00。
+   * GReqRunningPromotion / GResRunningPromotion。空体，无 page。
+   * promotions 是字段 1，repeated PbPromotionData。
+   * PbPromotionData：1 id，2 start_time，3 end_time，4 clear_time，5 turns。
+   * 服侧 PromotionNewHandler.getAllRunningPromotion；promotionControlService.getAllWillRun() 组列表。纯读。
+   * 不发各活动领奖写号（20018、20013、20004、20010，分散在各 Promotion*Handler）。
+   * 同文件 20102 非空体勿挂。不做 20011。
+   * 51001 已有，勿重复。5001 已有，勿重复。3101、3099 勿再发。
+   * 4601 有 page，硬禁。29001 有 page，硬禁。
+   * 与 3101 分开发，勿合并。本刀不重复拉 3101，也不重复拉 3099。
+   * 无扣费，无领奖，不写养成。
+   * 不夹在 2001 和 3007 中间。不是副本队列 3101。不是世界等级 51001。不是背包 5001。
+   */
+  runningPromotion: 20101,
 } as const;
 
 /**

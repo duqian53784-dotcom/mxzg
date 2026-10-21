@@ -66,6 +66,7 @@ import { buildWireRoleShenBinPage, WireRoleShenBinPage } from "./WireRoleShenBin
 import { buildWireFetterContractPage, WireFetterContractPage } from "./WireFetterContractPage";
 import { buildWireFormationPage, WireFormationPage } from "./WireFormationPage";
 import { buildWireLineUpPage, WireLineUpPage } from "./WireLineUpPage";
+import { buildWireRunningPromotionPage, WireRunningPromotionPage } from "./WireRunningPromotionPage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -93,6 +94,7 @@ import { WIRE_ROLE_SHENBIN_UNSYNCED_TOAST } from "../net/protocol/wireRoleShenBi
 import { WIRE_FETTER_CONTRACT_UNSYNCED_TOAST } from "../net/protocol/wireFetterContract";
 import { WIRE_FORMATION_UNSYNCED_TOAST } from "../net/protocol/wireFormation";
 import { WIRE_LINEUP_UNSYNCED_TOAST } from "../net/protocol/wireLineUp";
+import { WIRE_RUNNING_PROMOTION_UNSYNCED_TOAST } from "../net/protocol/wireRunningPromotion";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -187,6 +189,7 @@ const ROLE_SHENBIN_FILL = new Color(156, 108, 64, 255);
 const FETTER_CONTRACT_FILL = new Color(112, 84, 148, 255);
 const FORMATION_FILL = new Color(64, 108, 132, 255);
 const LINEUP_FILL = new Color(48, 132, 108, 255);
+const RUNNING_PROMOTION_FILL = new Color(168, 92, 48, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -228,6 +231,7 @@ export class MainApp extends Component {
   private fetterContract: WireFetterContractPage | null = null;
   private formation: WireFormationPage | null = null;
   private lineUp: WireLineUpPage | null = null;
+  private runningPromotion: WireRunningPromotionPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -333,6 +337,8 @@ export class MainApp extends Component {
     this.formation = null;
     this.lineUp?.dispose();
     this.lineUp = null;
+    this.runningPromotion?.dispose();
+    this.runningPromotion = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -446,7 +452,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -519,6 +525,7 @@ export class MainApp extends Component {
     if (id === "fetterContract") return this.mountFetterContract();
     if (id === "formation") return this.mountFormation();
     if (id === "lineUp") return this.mountLineUp();
+    if (id === "runningPromotion") return this.mountRunningPromotion();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -627,6 +634,7 @@ export class MainApp extends Component {
     place(createButton("查看契约", () => this.openFetterContract(), 140, 32, FETTER_CONTRACT_FILL, 14), page, 220, 32);
     place(createButton("查询阵法", () => this.openFormation(), 140, 32, FORMATION_FILL, 14), page, -220, 32);
     place(createButton("副本队列", () => this.openLineUp(), 140, 32, LINEUP_FILL, 14), page, 0, 78);
+    place(createButton("进行中活动", () => this.openRunningPromotion(), 160, 32, RUNNING_PROMOTION_FILL, 14), page, 220, 78);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -834,6 +842,7 @@ export class MainApp extends Component {
     if (id === "fetterContract") return this.blockWireFetterContract();
     if (id === "formation") return this.blockWireFormation();
     if (id === "lineUp") return this.blockWireLineUp();
+    if (id === "runningPromotion") return this.blockWireRunningPromotion();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -1121,11 +1130,19 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 3101 就停在主城。空包体也算同步。不发 3100、3098、3097、3030、3102、3103。3099 勿再发。不做备选 5001。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。3099 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  /** 没收到过 s2c 3101 就停在主城。空包体也算同步。不发 3100、3098、3097、3030、3102、3103。3099 勿再发。不做备选 5001。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。3099 单独到不算。20101 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
   private blockWireLineUp(): boolean {
     if (Session.source === "wire" && WireSession.hasLineUp()) return false;
     GameLog.shared.info("MainApp", "wire lineup unsynced");
     this.shell?.showToast(WIRE_LINEUP_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 20101 就停在主城。空包体也算同步。同文件 20102 非空体勿挂。不发各活动领奖写号。不做 20011。51001、5001 已有，勿重复。3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。3101 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireRunningPromotion(): boolean {
+    if (Session.source === "wire" && WireSession.hasRunningPromotion()) return false;
+    GameLog.shared.info("MainApp", "wire running promotion unsynced");
+    this.shell?.showToast(WIRE_RUNNING_PROMOTION_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -1998,6 +2015,29 @@ export class MainApp extends Component {
     return page.node;
   }
 
+  /** 真服进行中活动。未同步 Toast。已同步压入只读页，列出 promotions。无领奖入口。同文件 20102 非空体勿挂。不发各活动领奖写号。不做 20011。51001、5001 已有，勿重复。3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 3101 分开发，勿合并。本刀不重复拉 3101，也不重复拉 3099。 */
+  private openRunningPromotion(): void {
+    GameLog.shared.info("MainApp", "click running promotion");
+    if (this.blockWirePage("runningPromotion")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("runningPromotion");
+    this.refreshChrome();
+  }
+
+  private mountRunningPromotion(): Node {
+    this.runningPromotion?.dispose();
+    const page = buildWireRunningPromotionPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.runningPromotion = page;
+    return page.node;
+  }
+
   /** 真服点金。未同步 Toast。已同步压入只读页，不点金，不写金币。不走七日登录。 */
   private openBuyGold(): void {
     GameLog.shared.info("MainApp", "click buygold");
@@ -2809,6 +2849,10 @@ export class MainApp extends Component {
     if (id === "lineUp") {
       this.lineUp?.dispose();
       this.lineUp = null;
+    }
+    if (id === "runningPromotion") {
+      this.runningPromotion?.dispose();
+      this.runningPromotion = null;
     }
     if (id === "bag") {
       this.bag?.dispose();
