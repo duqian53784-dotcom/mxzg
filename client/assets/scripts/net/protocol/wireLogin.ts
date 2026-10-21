@@ -50,7 +50,7 @@
  * 空的 c2s 74104（wire.74104，宠物图鉴 GReqPetIllustrate / GResPetIllustrate。空体，无 page。petTypes 是字段 1，repeated int32，已解锁宠物类型。不编 74101、74102、74103。不编 74105、74106。74105、74106 是背包增减推送，勿当拉包。28100 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 74100、4201 分开发，勿合并。本刀不重复拉 74100，也不重复拉 4201。轻懒建空 PetIllustrate。无扣费，无发奖。只读展示。挂在 4201 之后）。
  * 空的 c2s 28100（wire.28100，羁绊数据 GReqFetterList / GResFetterList。空体，无 page。reset_count 是字段 1。goddess 是字段 2，repeated PSFetterData 的 type、exp、level、skill_level、refine_level、uplimit_level、soul_level、wash_level。不编 28101、28102、28104、28105、28106、28108、28109。不编 28002、28003。28200 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 74104、4201 分开发，勿合并。本刀不重复拉 74104，也不重复拉 4201。轻懒建（load/getFetterTask）。无扣费，无领奖。只读展示。挂在 74104 之后）。
  * 挂机页领取再编空的 c2s 3005（wire.3005）。
- * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。4004 见 wireSummon.ts。13044 见 wireProphet.ts。4101 见 wireJewel.ts。4013 见 wireIllustrat.ts。74100 见 wirePet.ts。51001 见 wireWorld.ts。20001 见 wirePromotion.ts。20012 见 wireFirstRecharge.ts。70001 见 wireReiki.ts。73001 见 wireFloatingIslands.ts。74300 见 wireTotems.ts。68001 见 wireAstrolabe.ts。75501 见 wireTweakCube.ts。59001 见 wireDragon.ts。59010 见 wireDragonCollection.ts。55001 见 wireTitle.ts。34001 见 wireHeadPortrait.ts。32001 见 wireBorder.ts。4402 见 wireFashion.ts。4401 见 wireWornFashion.ts。4201 见 wireHeroPrayer.ts。74104 见 wirePetIllustrate.ts。28100 见 wireFetter.ts。28200 见 wireFetterFashion.ts。
+ * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。4004 见 wireSummon.ts。13044 见 wireProphet.ts。4101 见 wireJewel.ts。4013 见 wireIllustrat.ts。74100 见 wirePet.ts。51001 见 wireWorld.ts。20001 见 wirePromotion.ts。20012 见 wireFirstRecharge.ts。70001 见 wireReiki.ts。73001 见 wireFloatingIslands.ts。74300 见 wireTotems.ts。68001 见 wireAstrolabe.ts。75501 见 wireTweakCube.ts。59001 见 wireDragon.ts。59010 见 wireDragonCollection.ts。55001 见 wireTitle.ts。34001 见 wireHeadPortrait.ts。32001 见 wireBorder.ts。4402 见 wireFashion.ts。4401 见 wireWornFashion.ts。4201 见 wireHeroPrayer.ts。74104 见 wirePetIllustrate.ts。28100 见 wireFetter.ts。28200 见 wireFetterFashion.ts。75601 见 wireShenBin.ts。
  * 不编 12020。不编 22001，也不编 22002。不编 21011、21012。不编 21013。旧号 21000 / 21001 不编。
  * 3002 不编。5002 只收不发。5004–5009、5010、5011–5013 不编。
  * 邮件领取、已读、删除不编。占位 mail.* 仍是 1701–1705。
@@ -82,8 +82,9 @@
  * 空的 4401 要编。无 page。不编 4402、4403、4404、4405、4406、4601、4202、74104、29001、20011。4406 无实现，勿发。4601 有 page，硬禁。29001 有 page，硬禁。与 4402 分刀，勿合并。本刀不重复拉 4402。4201 另只读接在其后，勿合并。轻懒建 HeroFashion 可接受。挂在 4402 之后。不是激活皮肤列表 4402。
  * 空的 4201 要编。无 page。不编 4202、74104、4601、29001、20011。4202 是英雄祈愿，扣道具并发奖，勿发。74104 另只读接在其后，勿合并。4601 有 page，硬禁。29001 有 page，硬禁。与 4401 分刀，勿合并。本刀不重复拉 4401。轻懒建 hero_prayer 可接受。挂在 4401 之后。不是穿戴皮肤英雄列表 4401。
  * 空的 74104 要编。无 page。不编 74101、74102、74103、74105、74106、4601、29001、20011。74105、74106 是背包增减推送，勿当拉包。28100 另只读接在其后，勿合并。4601 有 page，硬禁。29001 有 page，硬禁。与 74100、4201 分开发，勿合并。本刀不重复拉 74100，也不重复拉 4201。轻懒建空 PetIllustrate 可接受。挂在 4201 之后。不是宠物信息 74100。不是英雄祈愿数据 4201。
- * 空的 28100 要编。无 page。不编 28101、28102、28103、28104、28105、28106、28107、28108、28109、28002、28003、4601、29001、20011。28200 另帧编码空体，勿与 28100 合并。不编 28201、28202、28203、28204、28205、75601。4601 有 page，硬禁。29001 有 page，硬禁。与 74104、4201 分开发，勿合并。本刀不重复拉 74104，也不重复拉 4201。轻懒建（load/getFetterTask）可接受。挂在 74104 之后。不是宠物图鉴 74104。不是英雄祈愿数据 4201。
- * 空的 28200 要编。无 page。不编 28201、28202、28203、28204、28205、28101、28102、28103、28104、28105、28106、28107、28108、28109、28002、28003、75601、4601、29001、20011。28203 任务列表虽只读，本刀勿夹发。4601 有 page，硬禁。29001 有 page，硬禁。与 28100、74104 分开发，勿合并。本刀不重复拉 28100，也不重复拉 74104。轻懒建 goddess_fashion 可接受。无扣费，无发奖，不改皮肤。挂在 28100 之后。不是羁绊数据 28100。不是激活皮肤列表 4402。
+ * 空的 28100 要编。无 page。不编 28101、28102、28103、28104、28105、28106、28107、28108、28109、28002、28003、4601、29001、20011。28200 另帧编码空体，勿与 28100 合并。不编 28201、28202、28203、28204、28205。75601 另帧编码空体，勿与 28200 合并。不编 75602、75603、75604、75605、75606、75609、75619。4601 有 page，硬禁。29001 有 page，硬禁。与 74104、4201 分开发，勿合并。本刀不重复拉 74104，也不重复拉 4201。轻懒建（load/getFetterTask）可接受。挂在 74104 之后。不是宠物图鉴 74104。不是英雄祈愿数据 4201。
+ * 空的 28200 要编。无 page。不编 28201、28202、28203、28204、28205、28101、28102、28103、28104、28105、28106、28107、28108、28109、28002、28003、4601、29001、20011。28203 任务列表虽只读，本刀勿夹发。75601 另帧编码空体，勿与 28200 合并。不编 75602、75603、75604、75605、75606、75609、75619。4601 有 page，硬禁。29001 有 page，硬禁。与 28100、74104 分开发，勿合并。本刀不重复拉 28100，也不重复拉 74104。轻懒建 goddess_fashion 可接受。无扣费，无发奖，不改皮肤。挂在 28100 之后。不是羁绊数据 28100。不是激活皮肤列表 4402。
+ * 空的 75601 要编。无 page。不编 75602、75603、75604、75605、75606、75609、75619、4601、29001、20011。4601 有 page，硬禁。29001 有 page，硬禁。与 28200、28100 分开发，勿合并。本刀不重复拉 28200，也不重复拉 28100。按 job 轻懒建 core（默认 coreLv=1）可接受。无合成，无装备，无核心升级，无分解。挂在 28200 之后。不是羁绊皮肤 28200。不是羁绊数据 28100。
  */
 import { NetMessage } from "../NetTypes";
 import { Cmd } from "./cmds";
@@ -118,6 +119,7 @@ import { WIRE_HERO_PRAYER_CMD } from "./wireHeroPrayer";
 import { WIRE_PET_ILLUSTRATE_CMD } from "./wirePetIllustrate";
 import { WIRE_FETTER_CMD } from "./wireFetter";
 import { WIRE_FETTER_FASHION_CMD } from "./wireFetterFashion";
+import { WIRE_SHENBIN_CMD } from "./wireShenBin";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
 const LOGIN_FIELD1 = 7;
@@ -230,7 +232,8 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.4201 → 空的 c2s 4201（英雄祈愿数据 GReqHeroPrayerData / GResHeroPrayerData）。无 page。不编 4202、74104、4601、29001、20011。4202 扣道具并发奖，勿发。74104 另只读接在其后，勿合并。4601 有 page，硬禁。29001 有 page，硬禁。不是穿戴皮肤英雄列表 4401。
  * wire.74104 → 空的 c2s 74104（宠物图鉴 GReqPetIllustrate / GResPetIllustrate）。无 page。不编 74101、74102、74103、74105、74106、4601、29001、20011。74105、74106 是背包增减推送，勿当拉包。28100 另只读接在其后，勿合并。不是宠物信息 74100。不是英雄祈愿 4201。
  * wire.28100 → 空的 c2s 28100（羁绊数据 GReqFetterList / GResFetterList）。无 page。不编 28101、28102、28103、28104、28105、28106、28107、28108、28109、28002、28003、4601、29001、20011。28200 另帧，勿与本帧合并。不是宠物图鉴 74104。不是英雄祈愿 4201。
- * wire.28200 → 空的 c2s 28200（羁绊皮肤 GReqFashionData / GResFashionData）。无 page。不编 28201、28202、28203、28204、28205、28101、28102、28103、28104、28105、28106、28107、28108、28109、28002、28003、75601、4601、29001、20011。28203 虽只读，本刀勿夹发。不是羁绊数据 28100。不是激活皮肤列表 4402。
+ * wire.28200 → 空的 c2s 28200（羁绊皮肤 GReqFashionData / GResFashionData）。无 page。不编 28201、28202、28203、28204、28205、28101、28102、28103、28104、28105、28106、28107、28108、28109、28002、28003、4601、29001、20011。28203 虽只读，本刀勿夹发。75601 另帧，勿与本帧合并。不是羁绊数据 28100。不是激活皮肤列表 4402。
+ * wire.75601 → 空的 c2s 75601（神兵数据 GReqShenBinInfo / GResShenBinInfo）。无 page。不编 75602、75603、75604、75605、75606、75609、75619、4601、29001、20011。4601 有 page，硬禁。29001 有 page，硬禁。不是羁绊皮肤 28200。不是羁绊数据 28100。
  * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
  * 占位 idle.query / idle.claim 仍是 1301 / 1302，和这两帧不是一回事。
  * 占位 bag.list / bag.use 仍是 1601 / 1602。3002 / 3010 不编码。
@@ -249,7 +252,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.4102、wire.4103、wire.4104、wire.4105、wire.4106、wire.4107、wire.9001 不编码。
  * wire.4014 不编码。4014 是 s2c 推送。
  * wire.74101、wire.74102、wire.74103、wire.74105、wire.74106 不编码。74105、74106 是背包增减推送，勿当拉包。74104 只编码空体。28100 只编码空体，勿与 74104 合并。
- * wire.28101、wire.28102、wire.28103、wire.28104、wire.28105、wire.28106、wire.28107、wire.28108、wire.28109、wire.28002、wire.28003 不编码。28100 只编码空体。wire.28200 编码空体，勿与 28100 合并。wire.28201、wire.28202、wire.28203、wire.28204、wire.28205、wire.75601 不编码。
+ * wire.28101、wire.28102、wire.28103、wire.28104、wire.28105、wire.28106、wire.28107、wire.28108、wire.28109、wire.28002、wire.28003 不编码。28100 只编码空体。wire.28200 编码空体，勿与 28100 合并。wire.28201、wire.28202、wire.28203、wire.28204、wire.28205 不编码。wire.75601 编码空体，勿与 28200 合并。wire.75602、wire.75603、wire.75604、wire.75605、wire.75606、wire.75609、wire.75619 不编码。
  * wire.20101 不编码。51001 只编码空体。本模块无写操作号。
  * wire.20018、wire.20004、wire.20010 不编码。20001 只编码空体。不做 3007。
  * wire.20013、wire.13260 不编码。20012 只编码空体。不做 13260。
@@ -258,7 +261,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.74301、wire.74302、wire.74303、wire.74304、wire.20011 不编码。74300 只编码空体。74304 是 s2c 推送，勿当拉包。不做 20011。
  * wire.68002、wire.68003、wire.68004、wire.68005、wire.68006、wire.20011 不编码。68001 只编码空体。68005 是更新星数常量，勿当拉包。不做 20011。
  * wire.75502、wire.75503、wire.75504、wire.75505、wire.75506、wire.20011 不编码。75501 只编码空体。75506 是等级推送，勿当拉包。34001 另帧，勿与本帧合并。不做 20011。
- * wire.59002、wire.59003、wire.59005、wire.59006、wire.59007、wire.59008、wire.59009、wire.59011、wire.59012、wire.59013、wire.20011 不编码。59001 只编码空体。59010 只编码空体，勿与 59001 合并。55001 只编码空体，勿与 59010 合并。34001 只编码空体，勿与 55001 合并。32001 只编码空体，勿与 34001 合并。4402 只编码空体，勿与 32001 合并。不编 34002。不编 34003。34003 是解锁推送，勿当拉包。不编 32002。不编 32003。32003 是服侧推送，勿当拉包。4401 只编码空体，勿与 4402 合并。不编 4403。不编 4404。不编 4405。不编 4406。不编 4601。4601 有 page，硬禁。4201 只编码空体，勿与 4401 合并。不编 4202。74104 只编码空体，勿与 4201 合并，也勿与 74100 合并。不编 74101、74102、74103。28100 只编码空体，勿与 74104 合并。28200 只编码空体，勿与 28100 合并。不编 28101、28102、28103、28104、28105、28106、28107、28108、28109、28002、28003、28201、28202、28203、28204、28205、75601。4406 无实现，勿发。29001 有 page，硬禁。不做 20011。
+ * wire.59002、wire.59003、wire.59005、wire.59006、wire.59007、wire.59008、wire.59009、wire.59011、wire.59012、wire.59013、wire.20011 不编码。59001 只编码空体。59010 只编码空体，勿与 59001 合并。55001 只编码空体，勿与 59010 合并。34001 只编码空体，勿与 55001 合并。32001 只编码空体，勿与 34001 合并。4402 只编码空体，勿与 32001 合并。不编 34002。不编 34003。34003 是解锁推送，勿当拉包。不编 32002。不编 32003。32003 是服侧推送，勿当拉包。4401 只编码空体，勿与 4402 合并。不编 4403。不编 4404。不编 4405。不编 4406。不编 4601。4601 有 page，硬禁。4201 只编码空体，勿与 4401 合并。不编 4202。74104 只编码空体，勿与 4201 合并，也勿与 74100 合并。不编 74101、74102、74103。28100 只编码空体，勿与 74104 合并。28200 只编码空体，勿与 28100 合并。75601 只编码空体，勿与 28200 合并。不编 28101、28102、28103、28104、28105、28106、28107、28108、28109、28002、28003、28201、28202、28203、28204、28205、75602、75603、75604、75605、75606、75609、75619。4406 无实现，勿发。29001 有 page，硬禁。不做 20011。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -549,6 +552,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.fetterFashion,
       bytes: encodeFrame(WireCmd.fetterFashion),
+      note: "空体",
+    };
+  }
+  if (cmd === WIRE_SHENBIN_CMD) {
+    return {
+      cmdId: WireCmd.shenBin,
+      bytes: encodeFrame(WireCmd.shenBin),
       note: "空体",
     };
   }

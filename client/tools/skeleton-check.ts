@@ -908,6 +908,20 @@ import {
   WIRE_FETTER_FASHION_UNSYNCED_TOAST,
   wireFetterFashionNote,
 } from "../assets/scripts/net/protocol/wireFetterFashion";
+import {
+  decodeWireShenBin,
+  formatWireShenBinHead,
+  formatWireShenBinHole,
+  formatWireShenBinLine,
+  WIRE_SHENBIN_CMD,
+  WIRE_SHENBIN_EMPTY,
+  WIRE_SHENBIN_FIELD_NOTE,
+  WIRE_SHENBIN_READONLY_NOTE,
+  WIRE_SHENBIN_READONLY_TITLE,
+  WIRE_SHENBIN_SIDE_EFFECT,
+  WIRE_SHENBIN_UNSYNCED_TOAST,
+  wireShenBinNote,
+} from "../assets/scripts/net/protocol/wireShenBin";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1643,6 +1657,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("petIllustrate") === "city", "pet illustrate stays on the city tab");
   assert(rootTabFor("fetterData") === "city", "fetter data stays on the city tab");
   assert(rootTabFor("fetterFashion") === "city", "fetter fashion stays on the city tab");
+  assert(rootTabFor("shenBin") === "city", "shen bin stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -7340,7 +7355,6 @@ async function checkWs(): Promise<void> {
     "wire.28109",
     "wire.28002",
     "wire.28003",
-    "wire.75601",
     "wire.20011",
     "wire.4601",
     "wire.29001",
@@ -7506,6 +7520,217 @@ async function checkWs(): Promise<void> {
       decodeWireFetter(fetterFashionUnpacked)?.goddess.length === 0 &&
       decodeWirePetIllustrate(fetterFashionUnpacked)?.petTypes.length === 3,
     "28200 active_type varints are not 28100 goddess rows"
+  );
+  assert(
+    WireCmd.shenBin === 75601 &&
+      WireCmd.shenBin !== WireCmd.fetterFashion &&
+      WireCmd.shenBin !== WireCmd.fetterList,
+    "online 75601 stays off fetter fashion 28200 and fetter 28100"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.shenBin)) === "0400000051270100", "empty c2s 75601");
+  assert(bytesToHex(encodeFrame(75601)) === "0400000051270100", "empty c2s 75601 hex");
+  assert(bytesToHex(encodeFrame(WireCmd.shenBin)) !== "04000000286e0000", "75601 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.shenBin)) !== "04000000c46d0000", "75601 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(75602)) !== "0400000051270100", "75602 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(75603)) !== "0400000051270100", "75603 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(75604)) !== "0400000051270100", "75604 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(75605)) !== "0400000051270100", "75605 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(75606)) !== "0400000051270100", "75606 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(75609)) !== "0400000051270100", "75609 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(75619)) !== "0400000051270100", "75619 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "0400000051270100", "20011 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "0400000051270100", "4601 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "0400000051270100", "29001 is not the 75601 frame");
+  const bannedShenCmds = [
+    "wire.75602",
+    "wire.75603",
+    "wire.75604",
+    "wire.75605",
+    "wire.75606",
+    "wire.75609",
+    "wire.75619",
+    "wire.20011",
+    "wire.4601",
+    "wire.29001",
+  ];
+  for (let i = 0; i < bannedShenCmds.length; i++) {
+    assert(encodeWireMessage({ cmd: bannedShenCmds[i] }) === null, bannedShenCmds[i] + " is not encoded");
+  }
+  assert(
+    encodeWireMessage({ cmd: WIRE_SHENBIN_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SHENBIN_CMD })?.bytes || new Uint8Array(0)) === "0400000051270100",
+    "wire.75601 encodes the empty frame"
+  );
+  assert(WIRE_SHENBIN_CMD === "wire.75601", "shen bin wire cmd");
+  assert(WIRE_SHENBIN_READONLY_TITLE === "神兵数据（真服只读）", "readonly shen bin title");
+  assert(WIRE_SHENBIN_UNSYNCED_TOAST === "真服未同步", "unsynced shen bin toast");
+  assert(WIRE_SHENBIN_EMPTY === "空神兵", "empty shen bin label");
+  assert(
+    WIRE_SHENBIN_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("core") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("coreLv") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("无合成") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("无装备") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("无核心升级") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("无分解") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("28200") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("75602") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("75603") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("75604") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("75605") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("75606") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("75609") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("75619") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_SHENBIN_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("job") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("coreLv") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("equipData") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("fighting") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("无合成") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("装备") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("核心升级") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("分解") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("75602") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_SHENBIN_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_SHENBIN_FIELD_NOTE.indexOf("job") >= 0 &&
+      WIRE_SHENBIN_FIELD_NOTE.indexOf("coreLv") >= 0 &&
+      WIRE_SHENBIN_FIELD_NOTE.indexOf("equip_list") >= 0 &&
+      WIRE_SHENBIN_FIELD_NOTE.indexOf("PSHoleData") >= 0 &&
+      WIRE_SHENBIN_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_SHENBIN_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "shen bin page names job coreLv equipData fighting and refuses the write cmds"
+  );
+  const shenHole = concatBytes(fieldVarint(1, 0), fieldVarint(4, 7));
+  const shenEquip = concatBytes(fieldVarint(1, 2), concatBytes(fieldBytes(2, shenHole), fieldVarint(9, 1)));
+  const shenInfo = concatBytes(
+    concatBytes(fieldVarint(1, 2), fieldVarint(2, 0)),
+    concatBytes(fieldBytes(3, shenEquip), concatBytes(fieldVarint(4, 15), fieldVarint(8, 1)))
+  );
+  const shenBody = concatBytes(fieldBytes(1, shenInfo), fieldVarint(9, 1));
+  const shenJobOnly = fieldBytes(1, fieldVarint(1, 1));
+  const shenCoreZero = fieldBytes(1, fieldVarint(2, 0));
+  const shenCoreOne = fieldBytes(1, fieldVarint(2, 1));
+  const shenFightZero = fieldBytes(1, fieldVarint(4, 0));
+  const shenFightNeg = fieldBytes(1, fieldNeg1(4));
+  const shenFightWide = fieldBytes(1, fieldVarint(4, 1099511627776));
+  const shenEmptyEquip = fieldBytes(1, fieldBytes(3, new Uint8Array(0)));
+  const shenBadHole = fieldBytes(1, fieldBytes(3, fieldBytes(2, new Uint8Array([0x80]))));
+  const shenOuter = fieldVarint(9, 1);
+  assert(
+    decodeWireShenBin(new Uint8Array(0)) !== null &&
+      decodeWireShenBin(new Uint8Array(0))?.infos.length === 0 &&
+      formatWireShenBinHead(decodeWireShenBin(new Uint8Array(0)) || { infos: [], marks: [] }) === "shenBinInfos=空神兵",
+    "empty 75601 body is synced and does not invent zero"
+  );
+  assert(decodeWireShenBin(null) === null, "null 75601 body is not a snapshot");
+  assert(decodeWireShenBin(new Uint8Array([0x80])) === null, "bad 75601 ignored");
+  assert(decodeWireShenBin(shenBadHole) === null, "75601 hole that fails is not an empty table");
+  const shenJobSnap = decodeWireShenBin(shenJobOnly);
+  assert(
+    shenJobSnap !== null &&
+      shenJobSnap.infos.length === 1 &&
+      shenJobSnap.infos[0].job === 1 &&
+      shenJobSnap.infos[0].coreLv === null &&
+      shenJobSnap.infos[0].fighting === null &&
+      shenJobSnap.infos[0].equip === null &&
+      formatWireShenBinLine(shenJobSnap.infos[0]) === "job=1 / coreLv=无 / fighting=无 / equip=无",
+    "present 75601 job does not invent coreLv 1 or fighting"
+  );
+  const shenCoreZeroSnap = decodeWireShenBin(shenCoreZero);
+  assert(
+    shenCoreZeroSnap !== null &&
+      shenCoreZeroSnap.infos[0].coreLv === 0 &&
+      shenCoreZeroSnap.infos[0].job === null &&
+      formatWireShenBinLine(shenCoreZeroSnap.infos[0]) === "job=无 / coreLv=0 / fighting=无 / equip=无",
+    "present 75601 coreLv zero stays zero and does not invent job"
+  );
+  const shenCoreOneSnap = decodeWireShenBin(shenCoreOne);
+  assert(
+    shenCoreOneSnap !== null &&
+      shenCoreOneSnap.infos[0].coreLv === 1 &&
+      shenCoreOneSnap.infos[0].job === null &&
+      formatWireShenBinLine(shenCoreOneSnap.infos[0]) === "job=无 / coreLv=1 / fighting=无 / equip=无",
+    "present 75601 coreLv 1 stays 1 and a missing coreLv is not filled"
+  );
+  const shenFightZeroSnap = decodeWireShenBin(shenFightZero);
+  assert(
+    shenFightZeroSnap !== null &&
+      shenFightZeroSnap.infos[0].fighting === 0 &&
+      shenFightZeroSnap.infos[0].coreLv === null &&
+      formatWireShenBinLine(shenFightZeroSnap.infos[0]) === "job=无 / coreLv=无 / fighting=0 / equip=无",
+    "present 75601 fighting zero stays zero"
+  );
+  const shenFightNegSnap = decodeWireShenBin(shenFightNeg);
+  assert(
+    shenFightNegSnap !== null &&
+      shenFightNegSnap.infos[0].fighting === -1 &&
+      formatWireShenBinLine(shenFightNegSnap.infos[0]) === "job=无 / coreLv=无 / fighting=-1 / equip=无",
+    "75601 fighting -1 stays -1"
+  );
+  const shenFightWideSnap = decodeWireShenBin(shenFightWide);
+  assert(
+    shenFightWideSnap !== null &&
+      shenFightWideSnap.infos[0].fighting === 1099511627776 &&
+      formatWireShenBinLine(shenFightWideSnap.infos[0]) === "job=无 / coreLv=无 / fighting=1099511627776 / equip=无",
+    "75601 fighting keeps the wide integer"
+  );
+  const shenEmptyEquipSnap = decodeWireShenBin(shenEmptyEquip);
+  assert(
+    shenEmptyEquipSnap !== null &&
+      shenEmptyEquipSnap.infos[0].equip !== null &&
+      shenEmptyEquipSnap.infos[0].equip?.job === null &&
+      shenEmptyEquipSnap.infos[0].equip?.holes.length === 0 &&
+      formatWireShenBinLine(shenEmptyEquipSnap.infos[0]) === "job=无 / coreLv=无 / fighting=无 / equip.job=无 / equip_list=空孔",
+    "present 75601 empty equipData stays present and does not invent a hole"
+  );
+  const loggedShen = decodeWireShenBin(shenBody);
+  assert(
+    loggedShen !== null &&
+      loggedShen.infos.length === 1 &&
+      loggedShen.infos[0].job === 2 &&
+      loggedShen.infos[0].coreLv === 0 &&
+      loggedShen.infos[0].fighting === 15 &&
+      loggedShen.infos[0].equip !== null &&
+      loggedShen.infos[0].equip?.job === 2 &&
+      loggedShen.infos[0].equip?.holes.length === 1 &&
+      loggedShen.infos[0].equip?.holes[0].marks.length === 2 &&
+      loggedShen.infos[0].equip?.holes[0].marks[0].text === "0" &&
+      loggedShen.marks.length === 1 &&
+      loggedShen.marks[0].field === 9 &&
+      formatWireShenBinHead(loggedShen) === "shenBinInfos=1 条 / 字段9=1" &&
+      formatWireShenBinLine(loggedShen.infos[0]) ===
+        "job=2 / coreLv=0 / fighting=15 / equip.job=2 / equip_list=1 孔 / 字段9=1 / 字段8=1" &&
+      formatWireShenBinHole(loggedShen.infos[0].equip?.holes[0] || { marks: [] }) === "孔 字段1=0 / 字段4=7" &&
+      wireShenBinNote(loggedShen).indexOf(WIRE_SHENBIN_SIDE_EFFECT) >= 0 &&
+      wireShenBinNote(loggedShen).indexOf("不写金币") >= 0 &&
+      wireShenBinNote(loggedShen).indexOf("不写钻石") >= 0,
+    "75601 sample keeps job coreLv zero fighting equip hole zero and does not fill a missing number with 0"
+  );
+  assert(
+    decodeWireShenBin(shenOuter) !== null &&
+      decodeWireShenBin(shenOuter)?.infos.length === 0 &&
+      formatWireShenBinHead(decodeWireShenBin(shenOuter) || { infos: [], marks: [] }) === "shenBinInfos=空神兵 / 字段9=1",
+    "non-empty 75601 without shenBinInfos stays synced and does not invent zero"
+  );
+  const shenSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.shenBin, shenBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    shenSticky.frames.length === 2 &&
+      shenSticky.frames[0].cmdId === 75601 &&
+      shenSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireShenBin(shenSticky.frames[0].body)?.infos.length === 1 &&
+      decodeWireShenBin(shenSticky.frames[0].body)?.infos[0].coreLv === 0,
+    "sticky 75601 frame stops at its length prefix"
+  );
+  assert(
+    decodeWireShenBin(fetterFashionUnpacked)?.infos.length === 0 &&
+      (decodeWireShenBin(fetterFashionUnpacked)?.marks.length || 0) > 0,
+    "28200 active_type varints are not 75601 rows"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -8617,7 +8842,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 33, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 34, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -8751,6 +8976,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 28200 after 28100"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 33] as ArrayBuffer)) === "0400000051270100",
+        "pullIdle sends empty c2s 75601 after 28200"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -8783,8 +9012,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 74104") &&
           sawLog(lines, "发送 c2s 28100") &&
           sawLog(lines, "发送 c2s 28200") &&
+          sawLog(lines, "发送 c2s 75601") &&
           sawLog(lines, "04000000c46d0000") &&
           sawLog(lines, "04000000286e0000") &&
+          sawLog(lines, "0400000051270100") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -8861,7 +9092,13 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 28203") === false &&
           sawLog(lines, "发送 c2s 28204") === false &&
           sawLog(lines, "发送 c2s 28205") === false &&
-          sawLog(lines, "发送 c2s 75601") === false &&
+          sawLog(lines, "发送 c2s 75602") === false &&
+          sawLog(lines, "发送 c2s 75603") === false &&
+          sawLog(lines, "发送 c2s 75604") === false &&
+          sawLog(lines, "发送 c2s 75605") === false &&
+          sawLog(lines, "发送 c2s 75606") === false &&
+          sawLog(lines, "发送 c2s 75609") === false &&
+          sawLog(lines, "发送 c2s 75619") === false &&
           sawLog(lines, "发送 c2s 74105") === false &&
           sawLog(lines, "发送 c2s 74106") === false &&
           sawLog(lines, "发送 c2s 70002") === false &&
@@ -9550,13 +9787,12 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.28109");
       roleNet.send("wire.28002");
       roleNet.send("wire.28003");
-      roleNet.send("wire.75601");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeFetterFashionOther,
-        "28201 28202 28203 28204 28205 28101-28109 28002 28003 75601 20011 4601 and 29001 stay off the fetter fashion wire"
+        "28201 28202 28203 28204 28205 28101-28109 28002 28003 20011 4601 and 29001 stay off the fetter fashion wire"
       );
       assert(
         sawLog(lines, "未发送 wire.28201") &&
@@ -9570,7 +9806,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.28109") &&
           sawLog(lines, "未发送 wire.28002") &&
           sawLog(lines, "未发送 wire.28003") &&
-          sawLog(lines, "未发送 wire.75601") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001"),
@@ -9588,6 +9823,52 @@ async function checkWs(): Promise<void> {
         roleSockets[0].sent.length === sentAfterFetterAlone + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000286e0000",
         "sending 28200 does not also send 28100 or 74104"
+      );
+      const sentBeforeShenBin = roleSockets[0].sent.length;
+      roleNet.send(WIRE_SHENBIN_CMD);
+      const shenSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(shenSent as ArrayBuffer)) === "0400000051270100", "wire.75601 frame");
+      assert(roleSockets[0].sent.length === sentBeforeShenBin + 1, "75601 is its own frame and is not merged into 28200");
+      const sentBeforeShenBinOther = roleSockets[0].sent.length;
+      roleNet.send("wire.75602");
+      roleNet.send("wire.75603");
+      roleNet.send("wire.75604");
+      roleNet.send("wire.75605");
+      roleNet.send("wire.75606");
+      roleNet.send("wire.75609");
+      roleNet.send("wire.75619");
+      roleNet.send("wire.20011");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.29001");
+      assert(
+        roleSockets[0].sent.length === sentBeforeShenBinOther,
+        "75602 75603 75604 75605 75606 75609 75619 20011 4601 and 29001 stay off the shen bin wire"
+      );
+      assert(
+        sawLog(lines, "未发送 wire.75602") &&
+          sawLog(lines, "未发送 wire.75603") &&
+          sawLog(lines, "未发送 wire.75604") &&
+          sawLog(lines, "未发送 wire.75605") &&
+          sawLog(lines, "未发送 wire.75606") &&
+          sawLog(lines, "未发送 wire.75609") &&
+          sawLog(lines, "未发送 wire.75619") &&
+          sawLog(lines, "未发送 wire.20011") &&
+          sawLog(lines, "未发送 wire.4601") &&
+          sawLog(lines, "未发送 wire.29001"),
+        "shen bin compose equip core upgrade decompose and the banned cmds are not encoded"
+      );
+      roleNet.send(WIRE_FETTER_FASHION_CMD);
+      assert(
+        roleSockets[0].sent.length === sentBeforeShenBinOther + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000286e0000",
+        "sending 28200 does not also send 75601"
+      );
+      const sentAfterFashionAlone = roleSockets[0].sent.length;
+      roleNet.send(WIRE_SHENBIN_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterFashionAlone + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000051270100",
+        "sending 75601 does not also send 28200 or 28100"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -11664,6 +11945,88 @@ async function checkWs(): Promise<void> {
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
         "28201 28202 28203 28204 28205 28103 28107 75601 and 28100 do not replace the 28200 list"
+      );
+      assert(
+        WireSession.hasShenBin() &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos.length === 0 &&
+          WireSession.shenBin.marks.length === 1 &&
+          WireSession.shenBin.marks[0].field === 1 &&
+          WireSession.shenBin.marks[0].text === "3" &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.useType === 2 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "75601 scalar field 1 does not invent a shen bin row or replace 28200"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.shenBin));
+      assert(
+        WireSession.hasShenBin() &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos.length === 0 &&
+          formatWireShenBinHead(WireSession.shenBin) === "shenBinInfos=空神兵" &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.activeTypes[1] === 0 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 75601 body clears shenBinInfos without writing zero and stays synced"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.shenBin, shenBody));
+      assert(
+        WireSession.hasShenBin() &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos.length === 1 &&
+          WireSession.shenBin.infos[0].job === 2 &&
+          WireSession.shenBin.infos[0].coreLv === 0 &&
+          WireSession.shenBin.infos[0].fighting === 15 &&
+          WireSession.shenBin.infos[0].equip !== null &&
+          WireSession.shenBin.infos[0].equip?.holes.length === 1 &&
+          formatWireShenBinHead(WireSession.shenBin) === "shenBinInfos=1 条 / 字段9=1" &&
+          formatWireShenBinLine(WireSession.shenBin.infos[0]) ===
+            "job=2 / coreLv=0 / fighting=15 / equip.job=2 / equip_list=1 孔 / 字段9=1 / 字段8=1" &&
+          formatWireShenBinHole(WireSession.shenBin.infos[0].equip?.holes[0] || { marks: [] }) === "孔 字段1=0 / 字段4=7" &&
+          wireShenBinNote(WireSession.shenBin).indexOf(WIRE_SHENBIN_SIDE_EFFECT) >= 0 &&
+          wireShenBinNote(WireSession.shenBin).indexOf("不写金币") >= 0 &&
+          wireShenBinNote(WireSession.shenBin).indexOf("不写钻石") >= 0 &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.useType === 2 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "75601 sample keeps job coreLv zero fighting and leaves 28200"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.shenBin, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasShenBin() &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos.length === 1 &&
+          WireSession.shenBin.infos[0].coreLv === 0 &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.activeTypes.length === 3 &&
+          sawWire("75601 解不开"),
+        "bad 75601 keeps the shen bin list and the 28200 record"
+      );
+      roleSockets[0].push(encodeFrame(75602, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(75603, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(75604, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(75605, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(75606, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(75609, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(75619, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(WireCmd.fetterFashion, fetterFashionUnpacked));
+      assert(
+        WireSession.hasShenBin() &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos[0].coreLv === 0 &&
+          WireSession.shenBin.infos[0].fighting === 15 &&
+          WireSession.fetterFashion !== null &&
+          WireSession.fetterFashion.activeTypes.length === 3 &&
+          WireSession.fetterFashion.useType === 2 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "75602 75603 75604 75605 75606 75609 75619 4601 29001 20011 and 28200 do not replace the 75601 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
