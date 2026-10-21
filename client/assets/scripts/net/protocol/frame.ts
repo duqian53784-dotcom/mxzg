@@ -60,7 +60,7 @@ export const WireCmd = {
    * c2s GReqHeroList。必须带 page，进主城发 page=1。
    * 整帧 `06 00 00 00 a1 0f 00 00 08 01`。禁止空体：page 缺省 0 时服端负下标。
    * s2c 是 GResHeroList。不是占位 hero.list（1401）。
-   * 18001 是竞技场战斗匹配，本刀不发，也不当成英雄。
+   * 18001 是竞技场 GReqPvpData，见 pvpData。不是英雄。
    */
   heroList: 4001,
   /**
@@ -76,6 +76,13 @@ export const WireCmd = {
    * 服端会懒建首链成就并落库，客户端仍只读。
    */
   achievementList: 12010,
+  /**
+   * c2s 空体。进主城、空 c2s 12010 之后发。
+   * 整帧 `04 00 00 00 51 46 00 00`。PvpHandler.pvpData，GReqPvpData。
+   * s2c 是 GResPvpData。不发 18002、18003、18005、18007、18008。
+   * 对手空时服可能补名单。不匹配，不扣次，不开战。
+   */
+  pvpData: 18001,
 } as const;
 
 /**

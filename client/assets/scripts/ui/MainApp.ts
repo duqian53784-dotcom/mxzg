@@ -38,6 +38,7 @@ import { buildSummonPage, SummonPage } from "./SummonPage";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
+import { buildWirePvpPage, WirePvpPage } from "./WirePvpPage";
 import { buildTowerPage, TowerPage } from "./TowerPage";
 import { buildDailyGoldPage, DailyGoldPage } from "./DailyGoldPage";
 import { buildLogin7Page, Login7Page } from "./Login7Page";
@@ -61,6 +62,7 @@ import { WIRE_HERO_UNSYNCED_TOAST } from "../net/protocol/wireHero";
 import { WIRE_MAIL_UNSYNCED_TOAST } from "../net/protocol/wireMail";
 import { WIRE_ACHIEVEMENT_UNSYNCED_TOAST } from "../net/protocol/wireAchievement";
 import { WIRE_ACTIVITY_UNSYNCED_TOAST } from "../net/protocol/wireActivity";
+import { WIRE_PVP_UNSYNCED_TOAST } from "../net/protocol/wirePvp";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
@@ -102,7 +104,7 @@ export class MainApp extends Component {
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
-  private arena: ArenaPage | null = null;
+  private arena: ArenaPage | WirePvpPage | null = null;
   private tower: TowerPage | null = null;
   private daily: DailyGoldPage | null = null;
   private login7: Login7Page | null = null;
@@ -253,8 +255,8 @@ export class MainApp extends Component {
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
-    if (!this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve")) {
+    if (!(Session.source === "wire" && id === "arena") && !this.allow(id)) return;
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "arena")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -399,7 +401,10 @@ export class MainApp extends Component {
     const step = 40;
     for (let i = 0; i < PLAY_ENTRIES.length; i++) {
       const entry = PLAY_ENTRIES[i];
-      const access = entryAccess(entry, this.level(), this.day(), ConfigDb.current);
+      const access =
+        Session.source === "wire" && entry.id === "arena"
+          ? { open: true, hint: "" }
+          : entryAccess(entry, this.level(), this.day(), ConfigDb.current);
       const button = createButton(
         tabLabel(entry.title, access.open),
         () => this.openChild(entry.id),
@@ -474,10 +479,11 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。七日登录不绑 17000。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录不绑 17000。 */
   private blockWirePage(id: string): boolean {
     if (id === "achieve") return this.blockWireAchievement();
     if (id === "buygold") return this.blockWireBuyGold();
+    if (id === "arena") return this.blockWireArena();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -520,6 +526,15 @@ export class MainApp extends Component {
     if (Session.source === "wire" && WireSession.hasActivity()) return false;
     GameLog.shared.info("MainApp", "wire buygold unsynced");
     this.shell?.showToast(WIRE_ACTIVITY_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 18001 就停在玩法。空对手表也算同步。Mock 仍走原来的挑战页。 */
+  private blockWireArena(): boolean {
+    if (Session.source !== "wire") return false;
+    if (WireSession.hasPvp()) return false;
+    GameLog.shared.info("MainApp", "wire arena unsynced");
+    this.shell?.showToast(WIRE_PVP_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -616,8 +631,9 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 玩法「竞技场」。未到主线 Lv8 时 allow 已经 Toast，不会进到这里。 */
+  /** 玩法「竞技场」。真服收到 18001 后走只读页，不挑战。Mock 仍受主线 Lv8。 */
   private mountArena(): Node {
+    if (Session.source === "wire") return this.mountWireArena();
     this.arena?.dispose();
     const page = buildArenaPage({
       showToast: (text) => this.shell?.showToast(text, 2400),
@@ -628,6 +644,16 @@ export class MainApp extends Component {
         if (!this.isValid) return;
         this.refreshChrome();
       },
+      close: () => this.back(),
+    });
+    this.arena = page;
+    return page.node;
+  }
+
+  private mountWireArena(): Node {
+    this.arena?.dispose();
+    const page = buildWirePvpPage({
+      alive: () => this.isValid,
       close: () => this.back(),
     });
     this.arena = page;
