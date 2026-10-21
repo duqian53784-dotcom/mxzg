@@ -44,9 +44,10 @@
  * 空的 c2s 55001（wire.55001，称号列表 GReqScanTitleList / GResScanTitleList。无 page。titles 是字段 1，repeated PSTitle 的 idx、end_time。end_time：-1 永久，0 未激活，时间戳为到期。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。34001 另只读接在其后。不做 20011。挂在 59010 之后）。
  * 空的 c2s 34001（wire.34001，头像列表 GReqHeadPortraitList / GResHeadPortraitList。无 page。idx_list 是字段 1，repeated int32，已解锁头像 id。不编 34002。不编 34003。34003 是解锁推送，勿当拉包。32001 另只读接在其后。不做 20011。轻懒建，RoleHeadPortraitService.select 无记录则 dao.add 默认解锁头。无扣费，无领奖，不改当前头像。挂在 55001 之后）。
  * 空的 c2s 32001（wire.32001，头像框数据 GReqBorderData / GResBorderData。无 page。units 是字段 1，repeated PSBorderUnit 的 id、active_state。不编 32002。不编 32003。32003 是服侧推送，当前框过期时服侧可能写 role.borderId 回落并另推，勿当拉包。4402 另只读接在其后。不做 20011。29001 有 page，硬禁。轻懒建免费框可接受。挂在 34001 之后）。
- * 空的 c2s 4402（wire.4402，激活皮肤列表 GReqHeroFashionList / GResHeroFashionList。无 page。list 是字段 1，repeated PSFashionData 的 hero_type、fashion_id、level、status、end_time。status：0 永久，1 限时。不编 4403。不编 4404。不编 4405。不编 4406。4406 无实现，勿发。不做 4401。不做 20011。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮剔除，并可能把英雄 fashionId 置 0。只读展示。无扣费，无领奖。挂在 32001 之后）。
+ * 空的 c2s 4402（wire.4402，激活皮肤列表 GReqHeroFashionList / GResHeroFashionList。无 page。list 是字段 1，repeated PSFashionData 的 hero_type、fashion_id、level、status、end_time。status：0 永久，1 限时。不编 4403。不编 4404。不编 4405。不编 4406。4406 无实现，勿发。4401 另只读接在其后，勿合并。不做 20011。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮剔除，并可能把英雄 fashionId 置 0。只读展示。无扣费，无领奖。挂在 32001 之后）。
+ * 空的 c2s 4401（wire.4401，穿戴皮肤英雄列表 GReqHeroFashion / GResHeroFashion。无 page。list 是字段 1，repeated PSHeroFashion 的 hero_id、fashion_id。不编 4402。不编 4403。不编 4404。不编 4405。不编 4406。4406 无实现，勿发。与 4402 分刀，勿合并。本刀不重复拉 4402。不做 4201。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮清理，并可能卸英雄 fashionId。只读展示。无扣费，无领奖，无邮件。挂在 4402 之后）。
  * 挂机页领取再编空的 c2s 3005（wire.3005）。
- * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。4004 见 wireSummon.ts。13044 见 wireProphet.ts。4101 见 wireJewel.ts。4013 见 wireIllustrat.ts。74100 见 wirePet.ts。51001 见 wireWorld.ts。20001 见 wirePromotion.ts。20012 见 wireFirstRecharge.ts。70001 见 wireReiki.ts。73001 见 wireFloatingIslands.ts。74300 见 wireTotems.ts。68001 见 wireAstrolabe.ts。75501 见 wireTweakCube.ts。59001 见 wireDragon.ts。59010 见 wireDragonCollection.ts。55001 见 wireTitle.ts。34001 见 wireHeadPortrait.ts。32001 见 wireBorder.ts。4402 见 wireFashion.ts。
+ * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。4004 见 wireSummon.ts。13044 见 wireProphet.ts。4101 见 wireJewel.ts。4013 见 wireIllustrat.ts。74100 见 wirePet.ts。51001 见 wireWorld.ts。20001 见 wirePromotion.ts。20012 见 wireFirstRecharge.ts。70001 见 wireReiki.ts。73001 见 wireFloatingIslands.ts。74300 见 wireTotems.ts。68001 见 wireAstrolabe.ts。75501 见 wireTweakCube.ts。59001 见 wireDragon.ts。59010 见 wireDragonCollection.ts。55001 见 wireTitle.ts。34001 见 wireHeadPortrait.ts。32001 见 wireBorder.ts。4402 见 wireFashion.ts。4401 见 wireWornFashion.ts。
  * 不编 12020。不编 22001，也不编 22002。不编 21011、21012。不编 21013。旧号 21000 / 21001 不编。
  * 3002 不编。5002 只收不发。5004–5009、5010、5011–5013 不编。
  * 邮件领取、已读、删除不编。占位 mail.* 仍是 1701–1705。
@@ -74,7 +75,8 @@
  * 空的 55001 要编。无 page。Title.proto 仅 55001 读写对，同模块无写号。轻懒建可接受。34001 另只读接在其后。不做 20011。挂在 59010 之后。不是圣物图鉴 59010。
  * 空的 34001 要编。无 page。不编 34002。不编 34003。34003 是解锁推送，勿当拉包。32001 另只读接在其后。不做 20011。轻懒建可接受。挂在 55001 之后。不是称号列表 55001。
  * 空的 32001 要编。无 page。不编 32002。不编 32003。32003 是服侧推送，勿当拉包。4402 另只读接在其后。不做 20011。29001 有 page，硬禁。轻懒建免费框可接受。挂在 34001 之后。不是头像列表 34001。
- * 空的 4402 要编。无 page。不编 4403。不编 4404。不编 4405。不编 4406。4406 无实现，勿发。不做 4401。不做 20011。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。挂在 32001 之后。不是头像框数据 32001。
+ * 空的 4402 要编。无 page。不编 4403。不编 4404。不编 4405。不编 4406。4406 无实现，勿发。4401 另只读接在其后，勿合并。不做 20011。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。挂在 32001 之后。不是头像框数据 32001。
+ * 空的 4401 要编。无 page。不编 4402、4403、4404、4405、4406、4601、4201、29001、20011。4406 无实现，勿发。4601 有 page，硬禁。29001 有 page，硬禁。与 4402 分刀，勿合并。本刀不重复拉 4402。轻懒建 HeroFashion 可接受。挂在 4402 之后。不是激活皮肤列表 4402。
  */
 import { NetMessage } from "../NetTypes";
 import { Cmd } from "./cmds";
@@ -104,6 +106,7 @@ import { WIRE_TITLE_CMD } from "./wireTitle";
 import { WIRE_HEAD_PORTRAIT_CMD } from "./wireHeadPortrait";
 import { WIRE_BORDER_CMD } from "./wireBorder";
 import { WIRE_FASHION_CMD } from "./wireFashion";
+import { WIRE_WORN_FASHION_CMD } from "./wireWornFashion";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
 const LOGIN_FIELD1 = 7;
@@ -211,7 +214,8 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.55001 → 空的 c2s 55001（称号列表 GReqScanTitleList / GResScanTitleList）。无 page。Title.proto 仅 55001 读写对。34001 另帧，勿与本帧合并。不做 20011。不是圣物图鉴 59010。
  * wire.34001 → 空的 c2s 34001（头像列表 GReqHeadPortraitList / GResHeadPortraitList）。无 page。不编 34002、34003、20011。32001 另帧，勿与本帧合并。34003 是解锁推送，勿当拉包。不是称号列表 55001。
  * wire.32001 → 空的 c2s 32001（头像框数据 GReqBorderData / GResBorderData）。无 page。不编 32002、32003、29001、20011。4402 另帧，勿与本帧合并。32003 是服侧推送，勿当拉包。29001 有 page，硬禁。不是头像列表 34001。
- * wire.4402 → 空的 c2s 4402（激活皮肤列表 GReqHeroFashionList / GResHeroFashionList）。无 page。不编 4401、4403、4404、4405、4406、29001、20011。4406 无实现，勿发。29001 有 page，硬禁。不是头像框数据 32001。
+ * wire.4402 → 空的 c2s 4402（激活皮肤列表 GReqHeroFashionList / GResHeroFashionList）。无 page。4401 另帧，勿与本帧合并。不编 4403、4404、4405、4406、4601、4201、29001、20011。4601 有 page，硬禁。4406 无实现，勿发。29001 有 page，硬禁。不是头像框数据 32001。
+ * wire.4401 → 空的 c2s 4401（穿戴皮肤英雄列表 GReqHeroFashion / GResHeroFashion）。无 page。不编 4402、4403、4404、4405、4406、4601、4201、29001、20011。4406 无实现，勿发。4601 有 page，硬禁。29001 有 page，硬禁。不是激活皮肤列表 4402。
  * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
  * 占位 idle.query / idle.claim 仍是 1301 / 1302，和这两帧不是一回事。
  * 占位 bag.list / bag.use 仍是 1601 / 1602。3002 / 3010 不编码。
@@ -238,7 +242,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.74301、wire.74302、wire.74303、wire.74304、wire.20011 不编码。74300 只编码空体。74304 是 s2c 推送，勿当拉包。不做 20011。
  * wire.68002、wire.68003、wire.68004、wire.68005、wire.68006、wire.20011 不编码。68001 只编码空体。68005 是更新星数常量，勿当拉包。不做 20011。
  * wire.75502、wire.75503、wire.75504、wire.75505、wire.75506、wire.20011 不编码。75501 只编码空体。75506 是等级推送，勿当拉包。34001 另帧，勿与本帧合并。不做 20011。
- * wire.59002、wire.59003、wire.59005、wire.59006、wire.59007、wire.59008、wire.59009、wire.59011、wire.59012、wire.59013、wire.20011 不编码。59001 只编码空体。59010 只编码空体，勿与 59001 合并。55001 只编码空体，勿与 59010 合并。34001 只编码空体，勿与 55001 合并。32001 只编码空体，勿与 34001 合并。4402 只编码空体，勿与 32001 合并。不编 34002。不编 34003。34003 是解锁推送，勿当拉包。不编 32002。不编 32003。32003 是服侧推送，勿当拉包。不编 4401。不编 4403。不编 4404。不编 4405。不编 4406。4406 无实现，勿发。29001 有 page，硬禁。不做 20011。
+ * wire.59002、wire.59003、wire.59005、wire.59006、wire.59007、wire.59008、wire.59009、wire.59011、wire.59012、wire.59013、wire.20011 不编码。59001 只编码空体。59010 只编码空体，勿与 59001 合并。55001 只编码空体，勿与 59010 合并。34001 只编码空体，勿与 55001 合并。32001 只编码空体，勿与 34001 合并。4402 只编码空体，勿与 32001 合并。不编 34002。不编 34003。34003 是解锁推送，勿当拉包。不编 32002。不编 32003。32003 是服侧推送，勿当拉包。4401 只编码空体，勿与 4402 合并。不编 4403。不编 4404。不编 4405。不编 4406。不编 4601。4601 有 page，硬禁。不做 4201。4406 无实现，勿发。29001 有 page，硬禁。不做 20011。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -494,6 +498,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.heroFashionList,
       bytes: encodeFrame(WireCmd.heroFashionList),
+      note: "空体",
+    };
+  }
+  if (cmd === WIRE_WORN_FASHION_CMD) {
+    return {
+      cmdId: WireCmd.heroFashion,
+      bytes: encodeFrame(WireCmd.heroFashion),
       note: "空体",
     };
   }
