@@ -1,8 +1,10 @@
-# 本机起服联调（D1 提纲）
+# 本机起服联调
 
-这份是提纲，还不能照着把 Java 服跑起来。旧《项目分析与启动指南》不在本仓库。`server/` 和 `config/` 是本机 junction，GitHub 上没有实体。下面只写仓库里已经能确定的事，以及下次在开发机上要补的空档。
+`server/` 和 `config/` 是本机 junction，GitHub 上没有实体。下面只记已经核对过的端口，以及 H5 怎么连 13101。JDK、库表和完整 Java 命令仍以倩机器上的《项目分析与启动指南》为准，这里不抄密码和内网地址。
 
-**D1 仍未勾选。** 端口、JDK、启动命令补上并在本机跑通之前，不要把 `PROJECT_PLAN.md` 里的 D1 打勾。
+**D1：** 倩本机已验证 center + gameserver 起来，**11122 / 9902 / 13101** 在听。一键脚本是 `scripts/start-local-server.bat`（在本机，不在这个 Git 快照里）。
+
+**D2：** 预览可加 `?transport=ws` 去连 `ws://127.0.0.1:13101`。勾选仍等倩自己打开预览看连通。步骤见 `docs/h5-websocket.md`。
 
 ## 已经确定的路径
 
@@ -17,14 +19,14 @@
 
 `.gitignore` 忽略了 `/config` 和 `/server`。不要把 junction 背后的整仓推进 Git。
 
-## 客户端现在连的是 Mock
+## 客户端默认仍是 Mock
 
-预览不需要起服。
+不加参数时，预览不需要起服。
 
 - Boot 走 `mock://`，`MockTransport` 里一份 `MockGameSession`。
-- 协议在 `client/assets/scripts/net/protocol/`。`CmdId` 是客户端占位号，**不是**旧服消息号。限时活动是 `2801`–`2804`，同样是占位。
-- 编解码仍是明文对象。真 WebSocket 要改的是 `codec.ts` 和传输层，调用方继续用 `Proto.*`。
-- 细节见 `docs/protocol-stubs.md` 和 `docs/mock-replay.md`。
+- 协议在 `client/assets/scripts/net/protocol/`。`CmdId` 是客户端占位号，**不是**旧服消息号。限时活动是 `2801`–`2804`，同样是占位。心跳占位是 **1002**。旧桥日志里的心跳是 **1004**，不要混。
+- 编解码仍是明文对象。`?transport=ws` 只打开套接字，**不把** `encodeRequest` 的对象写到 13101。调用方继续用 `Proto.*` 走 Mock。
+- 细节见 `docs/protocol-stubs.md`、`docs/mock-replay.md`、`docs/h5-websocket.md`。
 
 ## 建议的联调顺序
 
@@ -40,7 +42,7 @@
 
 ## 下次在开发机上要填的空档
 
-对照 `F:\源码\mj\program` 里的《项目分析与启动指南》（或同等启动说明），把下面每行写成可执行步骤。仓库里没有这些答案，不要猜：
+对照 `F:\源码\mj\program` 里的《项目分析与启动指南》（或同等启动说明）。端口和 H5 入口已经按倩本机验证和分析里的公开事实写上。JDK、库账号不要猜，也不要写进仓库。
 
 | 空档 | 要写什么 |
 |------|----------|
@@ -48,9 +50,9 @@
 | 工作目录 | 在 junction 的 `server` 里启动，还是必须在 `F:\源码\mj\program\server` |
 | 依赖 | MySQL / Redis / 配置目录是否要先起来；库名和账号放哪 |
 | 配置 | 服读 `F:\mxzg-local` 还是服工程内部的表；和客户端 JSON 导出是否同一份 |
-| 启动命令 | 实际使用的脚本或主类。写全命令，不要写「运行某个 jar」这种空话 |
-| 端口 | 登录、网关、HTTP 或 WebSocket 各是多少。客户端 H5 要连哪一个 |
-| 网关 | H5 是直连 TCP，还是要一层 WS→TCP。这是 D2，本提纲只把入口记下来 |
+| 启动命令 | 倩本机一键：`scripts/start-local-server.bat`。仓库里没有这个文件，也没有 Java 主类命令 |
+| 端口 | center TCP **11122**。gameserver TCP **9902**，WebSocket **13101**。H5 这一步连 13101，不连 9902 |
+| 网关 | 新客户端直连 `ws://127.0.0.1:13101`（本地不用 wss）。旧 H5 是另一条路：`/game/9902` 再桥到 TCP 9902，不要套到 13101 上。帧还没对齐，见 `docs/h5-websocket.md` |
 | 开服时间 | 本机如何设置，才能让 `getOpenDays()` 落在第 1 天 |
 
-填完之后用同一份文档记一次：进程起来了、端口在听、客户端仍然走 Mock（D2 才改连接）。
+进程和端口倩本机已经听过。客户端默认仍走 Mock。D2 只在 `?transport=ws` 时连 13101，而且不发登录包。
