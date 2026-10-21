@@ -881,6 +881,19 @@ import {
   WIRE_PET_ILLUSTRATE_UNSYNCED_TOAST,
   wirePetIllustrateNote,
 } from "../assets/scripts/net/protocol/wirePetIllustrate";
+import {
+  decodeWireFetter,
+  formatWireFetterHead,
+  formatWireFetterLine,
+  WIRE_FETTER_CMD,
+  WIRE_FETTER_EMPTY,
+  WIRE_FETTER_FIELD_NOTE,
+  WIRE_FETTER_READONLY_NOTE,
+  WIRE_FETTER_READONLY_TITLE,
+  WIRE_FETTER_SIDE_EFFECT,
+  WIRE_FETTER_UNSYNCED_TOAST,
+  wireFetterNote,
+} from "../assets/scripts/net/protocol/wireFetter";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1614,6 +1627,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("wornFashion") === "city", "worn fashion list stays on the city tab");
   assert(rootTabFor("heroPrayer") === "city", "hero prayer stays on the city tab");
   assert(rootTabFor("petIllustrate") === "city", "pet illustrate stays on the city tab");
+  assert(rootTabFor("fetterData") === "city", "fetter data stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -7086,6 +7100,184 @@ async function checkWs(): Promise<void> {
       decodeWireHeroPrayer(petIllUnpacked)?.endTime === null,
     "74104 petTypes varints are not 74100 rows and do not fill a 4201 end_time"
   );
+  assert(
+    WireCmd.fetterList === 28100 &&
+      WireCmd.fetterList !== WireCmd.petIllustrate &&
+      WireCmd.fetterList !== WireCmd.heroPrayerData &&
+      WireCmd.fetterList !== WireCmd.petInfoList,
+    "online 28100 stays off pet illustrate 74104, hero prayer 4201 and pet list 74100"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.fetterList)) === "04000000c46d0000", "empty c2s 28100");
+  assert(bytesToHex(encodeFrame(WireCmd.fetterList)) !== "0400000078210100", "28100 is not the 74104 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.fetterList)) !== "0400000069100000", "28100 is not the 4201 frame");
+  assert(bytesToHex(encodeFrame(28101)) !== "04000000c46d0000", "28101 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(28102)) !== "04000000c46d0000", "28102 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(28104)) !== "04000000c46d0000", "28104 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(28105)) !== "04000000c46d0000", "28105 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(28106)) !== "04000000c46d0000", "28106 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(28108)) !== "04000000c46d0000", "28108 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(28109)) !== "04000000c46d0000", "28109 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(28002)) !== "04000000c46d0000", "28002 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(28003)) !== "04000000c46d0000", "28003 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(28200)) !== "04000000c46d0000", "28200 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000c46d0000", "20011 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "04000000c46d0000", "4601 is not the 28100 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "04000000c46d0000", "29001 is not the 28100 frame");
+  assert(WIRE_FETTER_CMD === "wire.28100", "fetter wire cmd");
+  assert(WIRE_FETTER_READONLY_TITLE === "羁绊数据（真服只读）", "readonly fetter title");
+  assert(WIRE_FETTER_UNSYNCED_TOAST === "真服未同步", "unsynced fetter toast");
+  assert(WIRE_FETTER_EMPTY === "空羁绊", "empty fetter label");
+  assert(
+    WIRE_FETTER_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("load/getFetterTask") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("74104") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("28101") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("28102") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("28104") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("28105") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("28106") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("28108") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("28109") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("28002") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("28003") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("28200") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_FETTER_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("reset_count") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("goddess") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("无升级") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("升技") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("突破") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("重置") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("铸魂") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("洗炼") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("领奖") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("精炼") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("28101") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("28002") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("28003") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("28200") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_FETTER_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_FETTER_FIELD_NOTE.indexOf("type") >= 0 &&
+      WIRE_FETTER_FIELD_NOTE.indexOf("exp") >= 0 &&
+      WIRE_FETTER_FIELD_NOTE.indexOf("skill_level") >= 0 &&
+      WIRE_FETTER_FIELD_NOTE.indexOf("refine_level") >= 0 &&
+      WIRE_FETTER_FIELD_NOTE.indexOf("uplimit_level") >= 0 &&
+      WIRE_FETTER_FIELD_NOTE.indexOf("soul_level") >= 0 &&
+      WIRE_FETTER_FIELD_NOTE.indexOf("wash_level") >= 0 &&
+      WIRE_FETTER_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_FETTER_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "fetter page names reset_count and goddess and refuses the write cmds"
+  );
+  const emptyFetter = {
+    resetCount: null as number | null,
+    goddess: [] as {
+      type: number | null;
+      exp: number | null;
+      level: number | null;
+      skillLevel: number | null;
+      refineLevel: number | null;
+      uplimitLevel: number | null;
+      soulLevel: number | null;
+      washLevel: number | null;
+      marks: { field: number; text: string }[];
+    }[],
+    marks: [] as { field: number; text: string }[],
+  };
+  const fetterGoddess = concatBytes(
+    concatBytes(fieldVarint(1, 1), fieldVarint(2, 0)),
+    concatBytes(fieldVarint(3, 2), concatBytes(fieldVarint(5, 3), fieldVarint(7, 0)))
+  );
+  const fetterBody = concatBytes(fieldVarint(1, 4), concatBytes(fieldBytes(2, fetterGoddess), fieldVarint(9, 1)));
+  const fetterZero = fieldVarint(1, 0);
+  const fetterNeg = fieldNeg1(1);
+  const fetterWide = fieldVarint(1, 1099511627776);
+  const fetterOuter = fieldVarint(9, 1);
+  assert(
+    decodeWireFetter(new Uint8Array(0)) !== null &&
+      decodeWireFetter(new Uint8Array(0))?.resetCount === null &&
+      decodeWireFetter(new Uint8Array(0))?.goddess.length === 0 &&
+      formatWireFetterHead(decodeWireFetter(new Uint8Array(0)) || emptyFetter) === "reset_count=无 / goddess=空羁绊",
+    "empty 28100 body is synced and does not invent zero"
+  );
+  assert(decodeWireFetter(null) === null, "null 28100 body is not a snapshot");
+  assert(decodeWireFetter(new Uint8Array([0x80])) === null, "bad 28100 ignored");
+  assert(decodeWireFetter(fieldBytes(2, new Uint8Array([0x80]))) === null, "28100 goddess blob that fails is not an empty table");
+  assert(
+    decodeWireFetter(fetterZero) !== null &&
+      decodeWireFetter(fetterZero)?.resetCount === 0 &&
+      decodeWireFetter(fetterZero)?.goddess.length === 0 &&
+      formatWireFetterHead(decodeWireFetter(fetterZero) || emptyFetter) === "reset_count=0 / goddess=空羁绊",
+    "present 28100 zero stays zero"
+  );
+  const fetterNegSnap = decodeWireFetter(fetterNeg);
+  assert(
+    fetterNegSnap !== null &&
+      fetterNegSnap.resetCount === -1 &&
+      fetterNegSnap.goddess.length === 0 &&
+      formatWireFetterHead(fetterNegSnap) === "reset_count=-1 / goddess=空羁绊",
+    "28100 reset_count -1 stays -1"
+  );
+  const fetterWideSnap = decodeWireFetter(fetterWide);
+  assert(
+    fetterWideSnap !== null && fetterWideSnap.resetCount === 1099511627776 && formatWireFetterHead(fetterWideSnap) === "reset_count=1099511627776 / goddess=空羁绊",
+    "28100 reset_count keeps the wide integer"
+  );
+  const loggedFetter = decodeWireFetter(fetterBody);
+  assert(
+    loggedFetter !== null &&
+      loggedFetter.resetCount === 4 &&
+      loggedFetter.goddess.length === 1 &&
+      loggedFetter.goddess[0].type === 1 &&
+      loggedFetter.goddess[0].exp === 0 &&
+      loggedFetter.goddess[0].level === 2 &&
+      loggedFetter.goddess[0].skillLevel === null &&
+      loggedFetter.goddess[0].refineLevel === 3 &&
+      loggedFetter.goddess[0].uplimitLevel === null &&
+      loggedFetter.goddess[0].soulLevel === 0 &&
+      loggedFetter.goddess[0].washLevel === null &&
+      loggedFetter.marks.length === 1 &&
+      loggedFetter.marks[0].field === 9 &&
+      formatWireFetterHead(loggedFetter) === "reset_count=4 / goddess=1 条 / 字段9=1" &&
+      formatWireFetterLine(loggedFetter.goddess[0]) ===
+        "type=1 / exp=0 / level=2 / skill_level=无 / refine_level=3 / uplimit_level=无 / soul_level=0 / wash_level=无" &&
+      wireFetterNote(loggedFetter).indexOf(WIRE_FETTER_SIDE_EFFECT) >= 0 &&
+      wireFetterNote(loggedFetter).indexOf("不写金币") >= 0 &&
+      wireFetterNote(loggedFetter).indexOf("不写钻石") >= 0,
+    "28100 sample keeps reset_count and goddess including zero and does not fill missing numbers with 0"
+  );
+  assert(
+    decodeWireFetter(fetterOuter) !== null &&
+      decodeWireFetter(fetterOuter)?.resetCount === null &&
+      decodeWireFetter(fetterOuter)?.goddess.length === 0 &&
+      formatWireFetterHead(decodeWireFetter(fetterOuter) || emptyFetter) === "reset_count=无 / goddess=空羁绊 / 字段9=1",
+    "non-empty 28100 without reset_count and goddess stays synced and does not invent zero"
+  );
+  const fetterSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.fetterList, fetterBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    fetterSticky.frames.length === 2 &&
+      fetterSticky.frames[0].cmdId === 28100 &&
+      fetterSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireFetter(fetterSticky.frames[0].body)?.resetCount === 4 &&
+      decodeWireFetter(fetterSticky.frames[0].body)?.goddess.length === 1,
+    "sticky 28100 frame stops at its length prefix"
+  );
+  assert(
+    decodeWirePetIllustrate(fetterBody)?.petTypes.length === 1 &&
+      decodeWirePetIllustrate(fetterBody)?.petTypes[0] === 4 &&
+      decodeWireHeroPrayer(fetterBody)?.privilege === 4,
+    "28100 reset_count is not a petTypes list and does not become a 74104 catalog"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -8196,7 +8388,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 31, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 32, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -8322,6 +8514,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 74104 after 4201"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 31] as ArrayBuffer)) === "04000000c46d0000",
+        "pullIdle sends empty c2s 28100 after 74104"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -8352,6 +8548,8 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 4401") &&
           sawLog(lines, "发送 c2s 4201") &&
           sawLog(lines, "发送 c2s 74104") &&
+          sawLog(lines, "发送 c2s 28100") &&
+          sawLog(lines, "04000000c46d0000") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -8412,7 +8610,16 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 74101") === false &&
           sawLog(lines, "发送 c2s 74102") === false &&
           sawLog(lines, "发送 c2s 74103") === false &&
-          sawLog(lines, "发送 c2s 28100") === false &&
+          sawLog(lines, "发送 c2s 28101") === false &&
+          sawLog(lines, "发送 c2s 28102") === false &&
+          sawLog(lines, "发送 c2s 28104") === false &&
+          sawLog(lines, "发送 c2s 28105") === false &&
+          sawLog(lines, "发送 c2s 28106") === false &&
+          sawLog(lines, "发送 c2s 28108") === false &&
+          sawLog(lines, "发送 c2s 28109") === false &&
+          sawLog(lines, "发送 c2s 28002") === false &&
+          sawLog(lines, "发送 c2s 28003") === false &&
+          sawLog(lines, "发送 c2s 28200") === false &&
           sawLog(lines, "发送 c2s 74105") === false &&
           sawLog(lines, "发送 c2s 74106") === false &&
           sawLog(lines, "发送 c2s 70002") === false &&
@@ -8987,13 +9194,12 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.74103");
       roleNet.send("wire.74105");
       roleNet.send("wire.74106");
-      roleNet.send("wire.28100");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforePetIllustrateOther,
-        "74101 74102 74103 74105 74106 28100 20011 4601 and 29001 stay off the pet illustrate wire"
+        "74101 74102 74103 74105 74106 20011 4601 and 29001 stay off the pet illustrate wire"
       );
       assert(
         sawLog(lines, "未发送 wire.74101") &&
@@ -9001,7 +9207,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.74103") &&
           sawLog(lines, "未发送 wire.74105") &&
           sawLog(lines, "未发送 wire.74106") &&
-          sawLog(lines, "未发送 wire.28100") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001"),
@@ -9026,6 +9231,58 @@ async function checkWs(): Promise<void> {
         roleSockets[0].sent.length === sentAfterPetAlone + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000078210100",
         "sending 74104 does not also send 74100 or 4201"
+      );
+      const sentBeforeFetter = roleSockets[0].sent.length;
+      roleNet.send(WIRE_FETTER_CMD);
+      const fetterSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(fetterSent as ArrayBuffer)) === "04000000c46d0000", "wire.28100 frame");
+      assert(roleSockets[0].sent.length === sentBeforeFetter + 1, "28100 is its own frame and is not merged into 74104");
+      const sentBeforeFetterOther = roleSockets[0].sent.length;
+      roleNet.send("wire.28101");
+      roleNet.send("wire.28102");
+      roleNet.send("wire.28104");
+      roleNet.send("wire.28105");
+      roleNet.send("wire.28106");
+      roleNet.send("wire.28108");
+      roleNet.send("wire.28109");
+      roleNet.send("wire.28002");
+      roleNet.send("wire.28003");
+      roleNet.send("wire.28200");
+      roleNet.send("wire.20011");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.29001");
+      assert(
+        roleSockets[0].sent.length === sentBeforeFetterOther,
+        "28101 28102 28104 28105 28106 28108 28109 28002 28003 28200 20011 4601 and 29001 stay off the fetter wire"
+      );
+      assert(
+        sawLog(lines, "未发送 wire.28101") &&
+          sawLog(lines, "未发送 wire.28102") &&
+          sawLog(lines, "未发送 wire.28104") &&
+          sawLog(lines, "未发送 wire.28105") &&
+          sawLog(lines, "未发送 wire.28106") &&
+          sawLog(lines, "未发送 wire.28108") &&
+          sawLog(lines, "未发送 wire.28109") &&
+          sawLog(lines, "未发送 wire.28002") &&
+          sawLog(lines, "未发送 wire.28003") &&
+          sawLog(lines, "未发送 wire.28200") &&
+          sawLog(lines, "未发送 wire.20011") &&
+          sawLog(lines, "未发送 wire.4601") &&
+          sawLog(lines, "未发送 wire.29001"),
+        "fetter upgrade skill breakthrough reset soul contract wash reward refine and the banned cmds are not encoded"
+      );
+      roleNet.send(WIRE_PET_ILLUSTRATE_CMD);
+      assert(
+        roleSockets[0].sent.length === sentBeforeFetterOther + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000078210100",
+        "sending 74104 does not also send 28100"
+      );
+      const sentAfterIllustrateAlone = roleSockets[0].sent.length;
+      roleNet.send(WIRE_FETTER_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterIllustrateAlone + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000c46d0000",
+        "sending 28100 does not also send 74104 or 4201"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -10951,8 +11208,91 @@ async function checkWs(): Promise<void> {
           WireSession.heroPrayer.privilege === 1 &&
           WireSession.heroPrayer.endTime === 1792464848 &&
           Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer &&
+          WireSession.hasFetter() &&
+          WireSession.fetter !== null &&
+          WireSession.fetter.resetCount === 2 &&
+          WireSession.fetter.goddess.length === 0,
+        "74101 74102 74103 4601 29001 20011 and 4201 do not replace the 74104 list and 28100 writes its own reset_count"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.fetterList));
+      assert(
+        WireSession.hasFetter() &&
+          WireSession.fetter !== null &&
+          WireSession.fetter.resetCount === null &&
+          WireSession.fetter.goddess.length === 0 &&
+          formatWireFetterHead(WireSession.fetter) === "reset_count=无 / goddess=空羁绊" &&
+          WireSession.petIllustrate !== null &&
+          WireSession.petIllustrate.petTypes.length === 3 &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === 1,
+        "empty 28100 body clears goddess without writing zero and stays synced"
+      );
+      assert(
+        Session.gold === goldBeforeBadPrayer && Session.diamond === diamondBeforeBadPrayer,
+        "empty 28100 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.fetterList, fetterBody));
+      assert(
+        WireSession.hasFetter() &&
+          WireSession.fetter !== null &&
+          WireSession.fetter.resetCount === 4 &&
+          WireSession.fetter.goddess.length === 1 &&
+          WireSession.fetter.goddess[0].type === 1 &&
+          WireSession.fetter.goddess[0].exp === 0 &&
+          WireSession.fetter.goddess[0].level === 2 &&
+          WireSession.fetter.goddess[0].skillLevel === null &&
+          WireSession.fetter.goddess[0].refineLevel === 3 &&
+          WireSession.fetter.goddess[0].soulLevel === 0 &&
+          WireSession.fetter.goddess[0].washLevel === null &&
+          formatWireFetterHead(WireSession.fetter) === "reset_count=4 / goddess=1 条 / 字段9=1" &&
+          formatWireFetterLine(WireSession.fetter.goddess[0]) ===
+            "type=1 / exp=0 / level=2 / skill_level=无 / refine_level=3 / uplimit_level=无 / soul_level=0 / wash_level=无" &&
+          wireFetterNote(WireSession.fetter).indexOf(WIRE_FETTER_SIDE_EFFECT) >= 0 &&
+          wireFetterNote(WireSession.fetter).indexOf("不写金币") >= 0 &&
+          wireFetterNote(WireSession.fetter).indexOf("不写钻石") >= 0 &&
+          WireSession.petIllustrate !== null &&
+          WireSession.petIllustrate.petTypes[0] === 8 &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === 1,
+        "28100 sample keeps reset_count and goddess and leaves 74104"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.fetterList, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasFetter() &&
+          WireSession.fetter !== null &&
+          WireSession.fetter.resetCount === 4 &&
+          WireSession.fetter.goddess.length === 1 &&
+          WireSession.petIllustrate !== null &&
+          WireSession.petIllustrate.petTypes.length === 3 &&
+          sawWire("28100 解不开"),
+        "bad 28100 keeps the fetter list and the 74104 record"
+      );
+      roleSockets[0].push(encodeFrame(28101, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(28102, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(28104, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(28105, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(28106, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(28108, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(28109, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(28002, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(28003, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(28200, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(WireCmd.petIllustrate, petIllPacked));
+      assert(
+        WireSession.hasFetter() &&
+          WireSession.fetter !== null &&
+          WireSession.fetter.resetCount === 4 &&
+          WireSession.fetter.goddess[0].exp === 0 &&
+          WireSession.petIllustrate !== null &&
+          WireSession.petIllustrate.petTypes.length === 3 &&
+          WireSession.petIllustrate.petTypes[1] === 0 &&
+          Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
-        "74101 74102 74103 28100 4601 29001 20011 and 4201 do not replace the 74104 list"
+        "28101 28102 28104 28105 28106 28108 28109 28002 28003 28200 4601 29001 20011 and 74104 do not replace the 28100 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
