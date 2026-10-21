@@ -117,6 +117,14 @@ export const WireCmd = {
    * 不是英雄列表 4001。不是占位 summon.pull（1501）。
    */
   heroSummonCount: 4004,
+  /**
+   * c2s 空体。进主城、空 c2s 4004 之后发。
+   * 整帧 `04 00 00 00 f4 32 00 00`。13044 = 0x32F4，小端 f4 32 00 00。
+   * GReqProphetSummonInfo / GResProphetSummonInfo。
+   * 不发 13041、13042、13043。不做 58007、4201。
+   * 不是召唤次数 4004。不是占位 summon.pull（1501）。
+   */
+  prophetSummon: 13044,
 } as const;
 
 /**
