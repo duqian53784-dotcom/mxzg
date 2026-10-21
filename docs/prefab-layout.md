@@ -411,3 +411,39 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | `BtnBack` | (0, -375) | 240×48 | `返回` |
 
 `Gold` 用 `goldPerMin(0)`，未通关是 6。`Item` 的名字是 `IDLE_ITEM_NAME`（`强化石`），后面的间隔是 `formatItemEvery(30000)`（`每 30 秒 1 个`）。`Cap` 是 `capPreviewLine(2880, 960)`，也就是未通关挂满 8 小时的那句。`Owned` 是 `已有` + 道具名 + ` 0（可在背包查看）`。`BtnQuick` 是 `quickLabel(1)`；`QUICK_BATTLE_COUNT` 为 1 时不带「起 N 关」。`BtnPush` 是 `pushButtonText()`，字号 22。`BtnClaim` 橙色，`BtnQuick` 和 `BtnBack` 蓝色，`BtnPush` 绿色（代码填充是 `DEBUG_FILL`，素材里没有紫色按钮）。封顶后 `Status` 会写成 `已达 8 小时上限，请领取`。
+
+## Summon（未接线）
+
+只有 Mock 召唤页一份 Prefab。仓内没有 `WireSummonPage`，也没有真服只读入口，所以这一波不写 Wire。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| SummonPage | `prefabs/ui/summon/SummonPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/summon/SummonPage.prefab`
+- **状态**：**未接** Boot、`MainApp`、`SummonPage.ts`，以及任何 `USE_*_PREFAB`。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` 一致）。代码把标题等挂在 `body` 下、底画在页面根上。Prefab 习惯同 Idle：`Bg` 与内容节点同级，子节点坐标即页面坐标。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid。Prefab 目录里没有 PNG。没有召唤专用图集：页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；结果底用 `win-bg_block-bg-5` 染成 `(16, 28, 48)`；单抽用 `button_btn-orange-big`；返回用 `button_btn-blue-big`。没有紫色按钮图，十连用 `button_btn-blue-big` 再染 `TEN_FILL` `(120, 72, 168)`。生成器也读了 `button_btn-green-big`，本页没有绿色按钮。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 文案节点的高是 `createLabel` 的默认（字号 + 16），宽是传入值，没传则是 680。`Result` 例外，代码写了高 270。
+- 再生：`python3 client/tools/gen_summon_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `SummonPage.ts` 的坐标和 `pull.ts` 的 `singleButtonText` / `tenButtonText` / `ownedDiamondText` / `summonResultText([])`）
+
+### SummonPage（Mock）
+
+根 `SummonPage`。对齐 `SummonController.build()`。默认是空结果态。钻石是规格里的占位 `持有钻石 0`，运行时由 `ownedDiamondText(host.diamond())` 覆盖。Mock 新号钱包是 `MOCK_STARTER_DIAMOND`（20），那一数不写进预制。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | — |
+| `Title` | (0, 470) | 680×56 | `召唤` |
+| `Hint` | (0, 410) | 640×36 | `单抽 10 钻石，十连 90 钻石。重复英雄转为碎片` |
+| `Diamond` | (0, 350) | 640×40 | `持有钻石 0` |
+| `BtnSingle` | (0, 260) | 460×68 | `召唤一次（钻石 10）` |
+| `BtnTen` | (0, 170) | 460×68 | `召唤十次（钻石 90）` |
+| `ResultTitle` | (0, 90) | 680×38 | `本次结果` |
+| `ResultCard` | (0, -90) | 640×300 | — |
+| `Result` | (0, -90) | 600×270 | `还没有召唤。新英雄会进入英雄列表` |
+| `Footer` | (0, -280) | 640×34 | `新英雄出现在底栏「英雄」。碎片可在背包查看` |
+| `BtnBack` | (0, -360) | 240×48 | `返回` |
+
+`Title` 字号 40，颜色 `TITLE` `(255, 228, 170)`。`Hint` 字号 20，颜色 `MUTED`。`Diamond` 字号 24，颜色 `TITLE`，句子是 `ownedDiamondText(0)`。`BtnSingle` 是 `singleButtonText()`（`SUMMON_SINGLE_COST = 10`），橙色按钮，不另染色。`BtnTen` 是 `tenButtonText()`（`SUMMON_TEN_COST = 90`），蓝底再染 `TEN_FILL`。`ResultTitle` 字号 22，代码没传宽，所以是默认 680，高是 22 + 16。`ResultCard` 对应代码里的 `result-bg`。`Result` 是 `summonResultText([])`，左对齐、顶对齐、可换行，颜色 `RESULT` `(214, 224, 236)`。`Footer` 字号 18，颜色 `MUTED`。`BtnBack` 蓝色按钮。三个按钮的 `clickEvents` 都是空的。
