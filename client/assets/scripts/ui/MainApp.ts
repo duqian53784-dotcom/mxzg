@@ -52,8 +52,10 @@ import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildWireIdlePage, WireIdlePage } from "./WireIdlePage";
 import { buildWireBagPage, WireBagPage } from "./WireBagPage";
 import { buildWireMailPage, WireMailPage } from "./WireMailPage";
+import { buildWireHeroPage, WireHeroPage } from "./WireHeroPage";
 import { buildWireMainlinePage, WireMainlinePage } from "./WireMainlinePage";
 import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
+import { WIRE_HERO_UNSYNCED_TOAST } from "../net/protocol/wireHero";
 import { WIRE_MAIL_UNSYNCED_TOAST } from "../net/protocol/wireMail";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -88,7 +90,7 @@ export class MainApp extends Component {
   private built = false;
   private mainline: MainlinePage | WireMainlinePage | null = null;
   private idle: IdlePage | WireIdlePage | null = null;
-  private heroList: HeroListPage | null = null;
+  private heroList: HeroListPage | WireHeroPage | null = null;
   private heroDetail: HeroDetailPage | null = null;
   private summon: SummonPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
@@ -225,7 +227,13 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "tab " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
-    if ((id === "hero" || id === "summon" || id === "smith") && !this.ensureNet()) return;
+    if (id === "hero" && Session.source === "wire") {
+      const net = this.cityNet();
+      if (net.state !== "connected") {
+        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+        return;
+      }
+    } else if ((id === "hero" || id === "summon" || id === "smith") && !this.ensureNet()) return;
     this.panels?.openRoot(id);
     this.refreshChrome();
   }
@@ -446,7 +454,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 18001 时另走只读页。 */
   private blockWirePage(id: string): boolean {
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
@@ -454,6 +462,8 @@ export class MainApp extends Component {
     if (id === "mainline") return this.blockWireMainline();
     if (id === "bag") return this.blockWireBag();
     if (id === "mail") return this.blockWireMail();
+    if (id === "hero") return this.blockWireHero();
+    if (id === "hero-detail") return this.blockWireHeroDetail();
     GameLog.shared.info("MainApp", "wire skip " + id);
     this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
     return true;
@@ -472,6 +482,21 @@ export class MainApp extends Component {
     if (WireSession.hasMail()) return false;
     GameLog.shared.info("MainApp", "wire mail unsynced");
     this.shell?.showToast(WIRE_MAIL_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 18001 就停在主城。空名册也算同步，放行后页面写「空名册」。 */
+  private blockWireHero(): boolean {
+    if (WireSession.hasHero()) return false;
+    GameLog.shared.info("MainApp", "wire hero unsynced");
+    this.shell?.showToast(WIRE_HERO_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 详情在只读页里。不另开 Mock 升级页。未同步时和列表同一句 Toast。 */
+  private blockWireHeroDetail(): boolean {
+    if (!WireSession.hasHero()) return this.blockWireHero();
+    GameLog.shared.info("MainApp", "wire hero detail stays on the readonly page");
     return true;
   }
 
@@ -505,6 +530,7 @@ export class MainApp extends Component {
   }
 
   private mountHeroList(): Node {
+    if (Session.source === "wire") return this.mountWireHero();
     this.heroList?.dispose();
     const page = buildHeroList({
       showToast: (text) => this.shell?.showToast(text, 2200),
@@ -514,6 +540,18 @@ export class MainApp extends Component {
         this.selectedHeroId = heroId;
         this.openChild("hero-detail");
       },
+      close: () => this.back(),
+    });
+    this.heroList = page;
+    return page.node;
+  }
+
+  private mountWireHero(): Node {
+    this.heroList?.dispose();
+    this.heroDetail?.dispose();
+    this.heroDetail = null;
+    const page = buildWireHeroPage({
+      alive: () => this.isValid,
       close: () => this.back(),
     });
     this.heroList = page;
@@ -769,6 +807,17 @@ export class MainApp extends Component {
     }
     if (jump === "idle") {
       this.openIdle();
+      return;
+    }
+    if (jump === "hero" && Session.source === "wire") {
+      if (!this.allow("hero")) return;
+      const net = this.cityNet();
+      if (net.state !== "connected") {
+        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+        return;
+      }
+      this.panels?.openChild("hero");
+      this.refreshChrome();
       return;
     }
     if (jump === "hero" || jump === "summon") {

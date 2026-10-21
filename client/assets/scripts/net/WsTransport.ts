@@ -12,7 +12,8 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 登录后的推送（倩本机见过 28000、28103、20005、25001、23000、21013、50000）记日志并派发成 wire.<cmdId>。
  * 空的 c2s 2001 是日志里拉角色资料的那一帧。回包由 WireSession 读字段 9、6、2、1。
  * 空的 c2s 5001 拉背包整表。s2c 5001 / 5002 由 WireSession 读，不写顶栏。
- * 空的 c2s 15000 拉邮件列表。s2c 15000 由 WireSession 读，不写顶栏，不领取。别的号不猜。
+ * 空的 c2s 15000 拉邮件列表。s2c 15000 由 WireSession 读，不写顶栏，不领取。
+ * 空的 c2s 18001 拉英雄列表。s2c 18001 由 WireSession 读，不写顶栏，不升级。别的号不猜。
  * 单条处理失败也不丢掉后面的帧。
  */
 

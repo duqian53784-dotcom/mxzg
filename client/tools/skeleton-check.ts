@@ -485,6 +485,17 @@ import {
   WIRE_MAIL_UNSYNCED_TOAST,
   wireMailNote,
 } from "../assets/scripts/net/protocol/wireMail";
+import {
+  decodeWireHeroList,
+  formatWireHeroDetail,
+  formatWireHeroLine,
+  WIRE_HERO_CMD,
+  WIRE_HERO_EMPTY,
+  WIRE_HERO_READONLY_NOTE,
+  WIRE_HERO_READONLY_TITLE,
+  WIRE_HERO_UNSYNCED_TOAST,
+  wireHeroNote,
+} from "../assets/scripts/net/protocol/wireHero";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -2993,6 +3004,80 @@ async function checkWs(): Promise<void> {
     unknownAtt !== null && unknownAtt.entries[0].attachment === "unknown" && formatWireMailLine(unknownAtt.entries[0]) === "欢迎 · 附件未解",
     "unparsed attachment is not called empty"
   );
+  assert(
+    WireCmd.heroList === 18001 && CmdId.heroList === 1401 && CmdId.heroUpgrade === 1402,
+    "online 18001 stays off the placeholder hero ids"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.heroList)) === "0400000051460000", "empty c2s 18001");
+  assert(WIRE_HERO_READONLY_TITLE === "英雄（真服只读）", "readonly hero title");
+  assert(WIRE_HERO_EMPTY === "空名册" && WIRE_HERO_UNSYNCED_TOAST === "真服英雄未同步", "hero empty is not the unsynced toast");
+  assert(WIRE_HERO_READONLY_NOTE.indexOf("不升级") >= 0 && WIRE_HERO_READONLY_NOTE.indexOf("不写金币") >= 0, "hero page refuses upgrade and wallet");
+  assert(decodeWireHeroList(new Uint8Array(0)) !== null && decodeWireHeroList(new Uint8Array(0))?.entries.length === 0, "empty 18001 is a synced empty roster");
+  assert(decodeWireHeroList(new Uint8Array([0x80])) === null, "bad 18001 ignored");
+  assert(decodeWireHeroList(fieldVarint(1, 3)) === null, "non-empty 18001 without a hero stays unsynced");
+  assert(decodeWireHeroList(fieldBytes(3, new Uint8Array([0x80]))) === null, "bad nested hero does not become an empty roster");
+  const heroSampleA = hexToBytes(
+    "080310e8071a1f081012084f696d79616b6f6e18002200300838fbdeee0448e807509c1658001a230804120c48617469206b65206861746918002200300838b9f9fa0448e80750e01258001a2c08181215486174692079616e672074616b20646973756b61691800220030083885f4f40448e80750d61158002080cff8d6063000"
+  );
+  const heroSampleB = hexToBytes(
+    "080310e8071a230804120c48617469206b65206861746918002200300838b9f9fa0448e80750e01258001a210816120a4167616b2065676f697318002200300838e4e6ee0448e80750b61558001a2d08081216486174692079616e672074616b206d656e796572616818002200300838d1d9e80448e80750be1458002080cff8d6063000"
+  );
+  const loggedHeroA = decodeWireHeroList(heroSampleA);
+  const loggedHeroB = decodeWireHeroList(heroSampleB);
+  assert(
+    loggedHeroA !== null &&
+      loggedHeroA.entries.length === 3 &&
+      loggedHeroA.outer1 === 3 &&
+      loggedHeroA.outer2 === 1000 &&
+      loggedHeroA.outer4 === 1792944000 &&
+      loggedHeroA.outer6 === 0 &&
+      loggedHeroA.entries[0].id === 16 &&
+      loggedHeroA.entries[0].name === "Oimyakon" &&
+      loggedHeroA.entries[0].mark3 === 0 &&
+      loggedHeroA.entries[0].mark6 === 8 &&
+      loggedHeroA.entries[0].mark7 === 10203003 &&
+      loggedHeroA.entries[0].mark9 === 1000 &&
+      loggedHeroA.entries[0].mark10 === 2844 &&
+      loggedHeroA.entries[0].mark11 === 0 &&
+      loggedHeroA.entries[1].id === 4 &&
+      loggedHeroA.entries[1].name === "Hati ke hati",
+    "18001 sample A has three heroes"
+  );
+  assert(
+    loggedHeroB !== null &&
+      loggedHeroB.entries.length === 3 &&
+      loggedHeroB.entries[0].name === "Hati ke hati" &&
+      loggedHeroB.entries[0].id === 4 &&
+      loggedHeroB.entries[0].mark7 === 10403001 &&
+      loggedHeroB.entries[1].name === "Agak egois" &&
+      loggedHeroB.entries[2].name === "Hati yang tak menyerah" &&
+      loggedHeroB.entries[2].id === 8,
+    "18001 sample B has three heroes"
+  );
+  assert(
+    loggedHeroA !== null && formatWireHeroLine(loggedHeroA.entries[1]) === "Hati ke hati · id 4 · 字段10 2400",
+    "hero line shows name id and field 10"
+  );
+  assert(
+    loggedHeroA !== null &&
+      formatWireHeroLine(loggedHeroA.entries[0]).indexOf("1000") < 0 &&
+      formatWireHeroLine(loggedHeroA.entries[0]).indexOf("Lv") < 0 &&
+      formatWireHeroDetail(loggedHeroA.entries[1]).indexOf("字段9 1000") >= 0 &&
+      formatWireHeroDetail(loggedHeroA.entries[1]).indexOf("字段7 10403001") >= 0 &&
+      formatWireHeroDetail(loggedHeroA.entries[1]).join(" ").indexOf("星") < 0,
+    "hero detail keeps field numbers and leaves level star and trophy off the row"
+  );
+  assert(
+    loggedHeroA !== null && wireHeroNote(loggedHeroA).indexOf("字段2=1000") >= 0 && wireHeroNote(loggedHeroA).indexOf("不写金币") >= 0,
+    "hero outer trophy stays in the log note"
+  );
+  const heroNameOnly = decodeWireHeroList(fieldBytes(3, fieldBytes(2, new TextEncoder().encode("无名测试"))));
+  assert(
+    heroNameOnly !== null && heroNameOnly.entries.length === 1 && formatWireHeroLine(heroNameOnly.entries[0]) === "无名测试",
+    "hero name without field 10 omits that suffix"
+  );
+  const heroIdOnly = decodeWireHeroList(fieldBytes(3, fieldVarint(1, 9)));
+  assert(heroIdOnly !== null && formatWireHeroLine(heroIdOnly.entries[0]) === "无名 · id 9", "hero without a name keeps the id");
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -3432,6 +3517,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.backpackGain, earlyGain));
       roleSockets[0].push(encodeFrame(WireCmd.backpackList));
       roleSockets[0].push(encodeFrame(WireCmd.mailList, mailSample));
+      roleSockets[0].push(encodeFrame(WireCmd.heroList, heroSampleA));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -3439,6 +3525,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasIdle(), "idle entry stays unsynced before the city role");
       assert(!WireSession.hasBag() && WireSession.bagItems === null, "bag stays unsynced before the city role");
       assert(!WireSession.hasMail() && WireSession.mailEntries === null, "mail stays unsynced before the city role");
+      assert(!WireSession.hasHero() && WireSession.heroes === null, "hero stays unsynced before the city role");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
       Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
@@ -3465,6 +3552,16 @@ async function checkWs(): Promise<void> {
         "flush writes the logged mail"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "15000 stays off the wallet");
+      assert(
+        WireSession.hasHero() &&
+          WireSession.heroes !== null &&
+          WireSession.heroes.length === 3 &&
+          WireSession.heroes[0].name === "Oimyakon" &&
+          WireSession.heroes[0].id === 16 &&
+          WireSession.heroes[1].name === "Hati ke hati",
+        "flush writes the logged heroes"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "18001 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -3579,6 +3676,18 @@ async function checkWs(): Promise<void> {
         "empty 15000 replaces the list and stays synced"
       );
       assert(Session.gold === 40, "empty 15000 does not write gold");
+      roleSockets[0].push(encodeFrame(WireCmd.heroList, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasHero() && WireSession.heroes !== null && WireSession.heroes.length === 3 && sawWire("18001 解不开"),
+        "bad 18001 keeps the roster"
+      );
+      assert(Session.gold === 40 && Session.diamond === 0, "bad 18001 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.heroList));
+      assert(
+        WireSession.hasHero() && WireSession.heroes !== null && WireSession.heroes.length === 0,
+        "empty 18001 replaces the roster and stays synced"
+      );
+      assert(Session.gold === 40, "empty 18001 does not write gold");
       lines.length = 0;
       const sentBeforePull = roleSockets[0].sent.length;
       WireSession.pullRoleProfile();
@@ -3608,7 +3717,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 2, "idle pull sends 3004 then 15000");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 3, "idle pull sends 3004 then 15000 then 18001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -3617,7 +3726,11 @@ async function checkWs(): Promise<void> {
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 1] as ArrayBuffer)) === "04000000983a0000",
         "pullIdle sends empty c2s 15000 after 3004"
       );
-      assert(sawLog(lines, "发送 c2s 15000"), "mail pull is logged");
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 2] as ArrayBuffer)) === "0400000051460000",
+        "pullIdle sends empty c2s 18001 after 15000"
+      );
+      assert(sawLog(lines, "发送 c2s 15000") && sawLog(lines, "发送 c2s 18001"), "mail and hero pulls are logged");
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(mailSent as ArrayBuffer)) === "04000000983a0000", "wire.15000 frame");
@@ -3629,6 +3742,15 @@ async function checkWs(): Promise<void> {
       roleNet.send(Cmd.mailDelete);
       assert(roleSockets[0].sent.length === sentBeforeMailOther, "mail read claim and delete stay off the wire");
       assert(sawLog(lines, "未发送 wire.15001") && sawLog(lines, "未发送 mail.claim") && sawLog(lines, "未发送 mail.delete"), "mail mutations are not encoded");
+      roleNet.send(WIRE_HERO_CMD);
+      const heroSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(heroSent as ArrayBuffer)) === "0400000051460000", "wire.18001 frame");
+      const sentBeforeHeroOther = roleSockets[0].sent.length;
+      roleNet.send(Cmd.heroList);
+      roleNet.send(Cmd.heroUpgrade);
+      roleNet.send("wire.18002");
+      assert(roleSockets[0].sent.length === sentBeforeHeroOther, "hero list and upgrade placeholders stay off the wire");
+      assert(sawLog(lines, "未发送 hero.list") && sawLog(lines, "未发送 hero.upgrade") && sawLog(lines, "未发送 wire.18002"), "hero upgrade is not encoded");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {
