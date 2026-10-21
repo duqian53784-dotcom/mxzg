@@ -714,6 +714,17 @@ import {
   WIRE_REIKI_UNSYNCED_TOAST,
   wireReikiNote,
 } from "../assets/scripts/net/protocol/wireReiki";
+import {
+  decodeWireIslands,
+  formatWireIslandsLine,
+  WIRE_ISLANDS_CMD,
+  WIRE_ISLANDS_FIELD_NOTE,
+  WIRE_ISLANDS_READONLY_NOTE,
+  WIRE_ISLANDS_READONLY_TITLE,
+  WIRE_ISLANDS_SIDE_EFFECT,
+  WIRE_ISLANDS_UNSYNCED_TOAST,
+  wireIslandsNote,
+} from "../assets/scripts/net/protocol/wireFloatingIslands";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1434,6 +1445,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("promotion") === "city", "promotion list stays on the city tab");
   assert(rootTabFor("firstRecharge") === "city", "first recharge stays on the city tab");
   assert(rootTabFor("reiki") === "city", "reiki equip stays on the city tab");
+  assert(rootTabFor("islands") === "city", "floating islands time stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -3988,6 +4000,12 @@ async function checkWs(): Promise<void> {
   const reikiWide = fieldBytes(1, fieldVarint(3, 1099511627776));
   const reikiOuterOnly = fieldVarint(5, 1);
   const reikiPush = fieldBytes(1, fieldVarint(1, 99));
+  const islandsBody = concatBytes(concatBytes(fieldVarint(2, 1792464848), fieldVarint(3, 2)), fieldVarint(5, 9));
+  const islandsMissing = fieldVarint(4, 7);
+  const islandsZeroTime = fieldVarint(2, 0);
+  const islandsZeroStage = fieldVarint(3, 0);
+  const islandsWide = fieldVarint(2, 1099511627776);
+  const islandsOuterOnly = fieldVarint(1, 4);
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -4846,6 +4864,116 @@ async function checkWs(): Promise<void> {
     "sticky 70001 frame stops at its length prefix"
   );
   assert(decodeWireReiki(fieldBytes(1, new Uint8Array([0x80]))) === null, "70001 list blob that will not decode is ignored");
+  const loggedIslands = decodeWireIslands(islandsBody);
+  assert(
+    WireCmd.floatingIslandsTime === 73001 && WireCmd.reikiEquipData === 70001 && WireCmd.roleProfile === 2001,
+    "online 73001 stays off 70001 and role profile 2001"
+  );
+  assert(
+    WireCmd.floatingIslandsTime !== WireCmd.firstRecharge &&
+      WireCmd.floatingIslandsTime !== WireCmd.promotionList &&
+      WireCmd.floatingIslandsTime !== WireCmd.worldLevel,
+    "73001 stays off 20012, 20001 and 51001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.floatingIslandsTime)) === "04000000291d0100", "empty c2s 73001");
+  assert(bytesToHex(encodeFrame(73002)) === "040000002a1d0100", "73002 stays off the 73001 frame");
+  assert(bytesToHex(encodeFrame(73003)) === "040000002b1d0100", "73003 stays off the 73001 frame");
+  assert(bytesToHex(encodeFrame(73004)) === "040000002c1d0100", "73004 stays off the 73001 frame");
+  assert(bytesToHex(encodeFrame(20011)) === "040000002b4e0000", "20011 stays off the 73001 frame");
+  assert(bytesToHex(encodeFrame(73002)) !== "04000000291d0100", "73002 is not the 73001 frame");
+  assert(bytesToHex(encodeFrame(73003)) !== "04000000291d0100", "73003 is not the 73001 frame");
+  assert(bytesToHex(encodeFrame(73004)) !== "04000000291d0100", "73004 is not the 73001 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000291d0100", "20011 is not the 73001 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.reikiEquipData)) !== "04000000291d0100", "70001 is not the 73001 frame");
+  assert(WIRE_ISLANDS_READONLY_TITLE === "浮空岛时间（真服只读）", "readonly islands title");
+  assert(WIRE_ISLANDS_UNSYNCED_TOAST === "真服未同步", "unsynced islands toast");
+  assert(
+    WIRE_ISLANDS_SIDE_EFFECT.indexOf("本号无写库") >= 0 &&
+      WIRE_ISLANDS_SIDE_EFFECT.indexOf("70001") >= 0 &&
+      WIRE_ISLANDS_SIDE_EFFECT.indexOf("73002") >= 0 &&
+      WIRE_ISLANDS_SIDE_EFFECT.indexOf("73003") >= 0 &&
+      WIRE_ISLANDS_SIDE_EFFECT.indexOf("73004") >= 0 &&
+      WIRE_ISLANDS_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_ISLANDS_READONLY_NOTE.indexOf("无挑战") >= 0 &&
+      WIRE_ISLANDS_READONLY_NOTE.indexOf("买次数") >= 0 &&
+      WIRE_ISLANDS_READONLY_NOTE.indexOf("懒建") >= 0 &&
+      WIRE_ISLANDS_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_ISLANDS_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_ISLANDS_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_ISLANDS_FIELD_NOTE.indexOf("next_time") >= 0 &&
+      WIRE_ISLANDS_FIELD_NOTE.indexOf("stage") >= 0 &&
+      WIRE_ISLANDS_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "islands page names next_time and stage and refuses 73002 73003 73004 and 20011"
+  );
+  assert(
+    decodeWireIslands(new Uint8Array(0)) !== null &&
+      decodeWireIslands(new Uint8Array(0))?.nextTime === null &&
+      decodeWireIslands(new Uint8Array(0))?.stage === null &&
+      formatWireIslandsLine(decodeWireIslands(new Uint8Array(0)) || { nextTime: null, stage: null, marks: [] }) ===
+        "next_time=无 / stage=无",
+    "empty 73001 body is synced and does not invent zero"
+  );
+  assert(decodeWireIslands(new Uint8Array([0x80])) === null, "bad 73001 ignored");
+  const islandsMissingSnap = decodeWireIslands(islandsMissing);
+  assert(
+    islandsMissingSnap !== null &&
+      islandsMissingSnap.nextTime === null &&
+      islandsMissingSnap.stage === null &&
+      islandsMissingSnap.marks.length === 1 &&
+      islandsMissingSnap.marks[0].field === 4 &&
+      formatWireIslandsLine(islandsMissingSnap) === "next_time=无 / stage=无 / 字段4=7",
+    "missing 73001 next_time and stage stay blank"
+  );
+  assert(
+    decodeWireIslands(islandsZeroTime) !== null &&
+      decodeWireIslands(islandsZeroTime)?.nextTime === 0 &&
+      decodeWireIslands(islandsZeroTime)?.stage === null &&
+      formatWireIslandsLine(decodeWireIslands(islandsZeroTime) || { nextTime: null, stage: null, marks: [] }) ===
+        "next_time=0 / stage=无",
+    "present 73001 next_time zero stays zero and does not invent stage"
+  );
+  assert(
+    decodeWireIslands(islandsZeroStage) !== null &&
+      decodeWireIslands(islandsZeroStage)?.nextTime === null &&
+      decodeWireIslands(islandsZeroStage)?.stage === 0 &&
+      formatWireIslandsLine(decodeWireIslands(islandsZeroStage) || { nextTime: null, stage: null, marks: [] }) ===
+        "next_time=无 / stage=0",
+    "present 73001 stage zero stays zero and does not invent next_time"
+  );
+  assert(
+    decodeWireIslands(islandsWide)?.nextTime === 1099511627776 && decodeWireIslands(islandsWide)?.stage === null,
+    "73001 next_time keeps the wide int64 and does not invent stage"
+  );
+  assert(
+    loggedIslands !== null &&
+      loggedIslands.nextTime === 1792464848 &&
+      loggedIslands.stage === 2 &&
+      loggedIslands.marks.length === 1 &&
+      loggedIslands.marks[0].field === 5 &&
+      formatWireIslandsLine(loggedIslands) === "next_time=1792464848 / stage=2 / 字段5=9" &&
+      wireIslandsNote(loggedIslands).indexOf(WIRE_ISLANDS_SIDE_EFFECT) >= 0 &&
+      wireIslandsNote(loggedIslands).indexOf("不写金币") >= 0,
+    "73001 sample keeps next_time and stage and does not fill missing numbers with 0"
+  );
+  const islandsSticky = decodeFrames(
+    concatBytes(encodeFrame(WireCmd.floatingIslandsTime, islandsBody), encodeFrame(WireCmd.heartbeat))
+  );
+  assert(
+    islandsSticky.frames.length === 2 &&
+      islandsSticky.frames[0].cmdId === 73001 &&
+      islandsSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireIslands(islandsSticky.frames[0].body)?.nextTime === 1792464848 &&
+      decodeWireIslands(islandsSticky.frames[0].body)?.stage === 2,
+    "sticky 73001 frame stops at its length prefix"
+  );
+  assert(
+    decodeWireIslands(islandsOuterOnly) !== null &&
+      decodeWireIslands(islandsOuterOnly)?.nextTime === null &&
+      decodeWireIslands(islandsOuterOnly)?.stage === null &&
+      formatWireIslandsLine(decodeWireIslands(islandsOuterOnly) || { nextTime: null, stage: null, marks: [] }) ===
+        "next_time=无 / stage=无 / 字段1=4",
+    "non-empty 73001 without next_time and stage stays synced and does not invent them"
+  );
   assert(
     decodeWireReiki(reikiOuterOnly) !== null &&
       decodeWireReiki(reikiOuterOnly)?.rows.length === 0 &&
@@ -5336,6 +5464,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasPromotion() && WireSession.promotion === null, "promotion stays unsynced before the city role");
       assert(!WireSession.hasFirstRecharge() && WireSession.firstRecharge === null, "first recharge stays unsynced before the city role");
       assert(!WireSession.hasReiki() && WireSession.reiki === null, "reiki stays unsynced before the city role");
+      assert(!WireSession.hasIslands() && WireSession.islands === null, "floating islands stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -5572,6 +5701,18 @@ async function checkWs(): Promise<void> {
       );
       assert(Session.gold === 0 && Session.diamond === 0, "20012 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
+      roleSockets[0].push(encodeFrame(WireCmd.floatingIslandsTime, islandsBody));
+      assert(
+        WireSession.hasIslands() &&
+          WireSession.islands !== null &&
+          WireSession.islands.nextTime === 1792464848 &&
+          WireSession.islands.stage === 2 &&
+          formatWireIslandsLine(WireSession.islands) === "next_time=1792464848 / stage=2 / 字段5=9" &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.recharge === 6,
+        "s2c 73001 writes next_time and stage and leaves the 20012 record"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "73001 stays off the wallet");
       roleSockets[0].push(encodeFrame(WireCmd.reikiEquipData, reikiBody));
       assert(
         WireSession.hasReiki() &&
@@ -5587,8 +5728,11 @@ async function checkWs(): Promise<void> {
           formatWireReikiLine(WireSession.reiki.rows[1]) === "hero_id=无 / sys_id=0 / reiki_equip_id=无 / 字段6=4" &&
           formatWireReikiHead(WireSession.reiki) === "2 条 / 字段5=9" &&
           WireSession.firstRecharge !== null &&
-          WireSession.firstRecharge.recharge === 6,
-        "s2c 70001 writes the reiki list and leaves the 20012 record"
+          WireSession.firstRecharge.recharge === 6 &&
+          WireSession.islands !== null &&
+          WireSession.islands.nextTime === 1792464848 &&
+          WireSession.islands.stage === 2,
+        "s2c 70001 writes the reiki list and leaves the 20012 record and the 73001 time"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "70001 stays off the wallet");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
@@ -5835,7 +5979,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 18, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 19, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -5909,6 +6053,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 70001 after 20012"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 18] as ArrayBuffer)) === "04000000291d0100",
+        "pullIdle sends empty c2s 73001 after 70001"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -5926,6 +6074,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 20001") &&
           sawLog(lines, "发送 c2s 20012") &&
           sawLog(lines, "发送 c2s 70001") &&
+          sawLog(lines, "发送 c2s 73001") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -5937,6 +6086,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000214e0000") &&
           sawLog(lines, "040000002c4e0000") &&
           sawLog(lines, "0400000071110100") &&
+          sawLog(lines, "04000000291d0100") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -5982,7 +6132,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 70006") === false &&
           sawLog(lines, "发送 c2s 70007") === false &&
           sawLog(lines, "发送 c2s 70008") === false &&
-          sawLog(lines, "发送 c2s 20011") === false,
+          sawLog(lines, "发送 c2s 20011") === false &&
+          sawLog(lines, "发送 c2s 73002") === false &&
+          sawLog(lines, "发送 c2s 73003") === false &&
+          sawLog(lines, "发送 c2s 73004") === false,
         "mail hero buy gold achievement arena seven day goal wish summon prophet jewel illustrat pet and world pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
@@ -6259,6 +6412,22 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.70008") &&
           sawLog(lines, "未发送 wire.20011"),
         "reiki activate wear unequip convert compose and pushes are not encoded"
+      );
+      roleNet.send(WIRE_ISLANDS_CMD);
+      const islandsSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(islandsSent as ArrayBuffer)) === "04000000291d0100", "wire.73001 frame");
+      const sentBeforeIslandsOther = roleSockets[0].sent.length;
+      roleNet.send("wire.73002");
+      roleNet.send("wire.73003");
+      roleNet.send("wire.73004");
+      roleNet.send("wire.20011");
+      assert(roleSockets[0].sent.length === sentBeforeIslandsOther, "73002 73003 73004 and 20011 stay off the islands wire");
+      assert(
+        sawLog(lines, "未发送 wire.73002") &&
+          sawLog(lines, "未发送 wire.73003") &&
+          sawLog(lines, "未发送 wire.73004") &&
+          sawLog(lines, "未发送 wire.20011"),
+        "floating islands lazy refresh challenge buy and 20011 are not encoded"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -6805,6 +6974,76 @@ async function checkWs(): Promise<void> {
           WireSession.firstRecharge !== null &&
           WireSession.firstRecharge.marks[0].field === 7,
         "non-empty 70001 without list stays synced and leaves 20012"
+      );
+      const goldBeforeBadIslands = Session.gold;
+      const diamondBeforeBadIslands = Session.diamond;
+      roleSockets[0].push(encodeFrame(73002, fieldVarint(2, 1)));
+      roleSockets[0].push(encodeFrame(73003, fieldVarint(3, 9)));
+      roleSockets[0].push(encodeFrame(73004, fieldVarint(2, 8)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 3)));
+      assert(
+        WireSession.hasIslands() &&
+          WireSession.islands !== null &&
+          WireSession.islands.nextTime === 1792464848 &&
+          WireSession.islands.stage === 2 &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.marks.length === 1,
+        "73002 73003 73004 and 20011 do not replace the 73001 time"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.floatingIslandsTime, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasIslands() &&
+          WireSession.islands !== null &&
+          WireSession.islands.nextTime === 1792464848 &&
+          WireSession.islands.stage === 2 &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.marks[0].field === 5 &&
+          sawWire("73001 解不开"),
+        "bad 73001 keeps the islands time and the 70001 list"
+      );
+      assert(Session.gold === goldBeforeBadIslands && Session.diamond === diamondBeforeBadIslands, "bad 73001 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.floatingIslandsTime));
+      assert(
+        WireSession.hasIslands() &&
+          WireSession.islands !== null &&
+          WireSession.islands.nextTime === null &&
+          WireSession.islands.stage === null &&
+          formatWireIslandsLine(WireSession.islands) === "next_time=无 / stage=无" &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.marks[0].field === 5,
+        "empty 73001 body clears next_time and stage without writing zero and stays synced"
+      );
+      assert(
+        Session.gold === goldBeforeBadIslands && Session.diamond === diamondBeforeBadIslands,
+        "empty 73001 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.floatingIslandsTime, islandsMissing));
+      assert(
+        WireSession.hasIslands() &&
+          WireSession.islands !== null &&
+          WireSession.islands.nextTime === null &&
+          WireSession.islands.stage === null &&
+          WireSession.islands.marks.length === 1 &&
+          WireSession.islands.marks[0].field === 4 &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.marks[0].field === 5,
+        "73001 without next_time and stage stays blank and leaves 70001"
+      );
+      assert(
+        Session.gold === goldBeforeBadIslands && Session.diamond === diamondBeforeBadIslands,
+        "missing 73001 field does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.floatingIslandsTime, islandsOuterOnly));
+      assert(
+        WireSession.hasIslands() &&
+          WireSession.islands !== null &&
+          WireSession.islands.nextTime === null &&
+          WireSession.islands.stage === null &&
+          WireSession.islands.marks.length === 1 &&
+          WireSession.islands.marks[0].field === 1 &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.marks[0].field === 5,
+        "non-empty 73001 without next_time and stage stays synced and leaves 70001"
       );
       if (roleNet) roleNet.close();
       WireSession.close();

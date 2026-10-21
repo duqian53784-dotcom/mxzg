@@ -45,12 +45,14 @@ import { buildWireWorldPage, WireWorldPage } from "./WireWorldPage";
 import { buildWirePromotionPage, WirePromotionPage } from "./WirePromotionPage";
 import { buildWireFirstRechargePage, WireFirstRechargePage } from "./WireFirstRechargePage";
 import { buildWireReikiPage, WireReikiPage } from "./WireReikiPage";
+import { buildWireIslandsPage, WireIslandsPage } from "./WireFloatingIslandsPage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
 import { WIRE_PROMOTION_UNSYNCED_TOAST } from "../net/protocol/wirePromotion";
 import { WIRE_FIRST_UNSYNCED_TOAST } from "../net/protocol/wireFirstRecharge";
 import { WIRE_REIKI_UNSYNCED_TOAST } from "../net/protocol/wireReiki";
+import { WIRE_ISLANDS_UNSYNCED_TOAST } from "../net/protocol/wireFloatingIslands";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -124,6 +126,7 @@ const WORLD_FILL = new Color(48, 96, 132, 255);
 const PROMOTION_FILL = new Color(156, 92, 48, 255);
 const FIRST_FILL = new Color(168, 56, 72, 255);
 const REIKI_FILL = new Color(36, 120, 112, 255);
+const ISLANDS_FILL = new Color(48, 112, 156, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -144,6 +147,7 @@ export class MainApp extends Component {
   private promotion: WirePromotionPage | null = null;
   private firstRecharge: WireFirstRechargePage | null = null;
   private reiki: WireReikiPage | null = null;
+  private islands: WireIslandsPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -207,6 +211,8 @@ export class MainApp extends Component {
     this.firstRecharge = null;
     this.reiki?.dispose();
     this.reiki = null;
+    this.islands?.dispose();
+    this.islands = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -320,7 +326,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -372,6 +378,7 @@ export class MainApp extends Component {
     if (id === "promotion") return this.mountPromotion();
     if (id === "firstRecharge") return this.mountFirstRecharge();
     if (id === "reiki") return this.mountReiki();
+    if (id === "islands") return this.mountIslands();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -459,6 +466,7 @@ export class MainApp extends Component {
     place(createButton("基金列表", () => this.openPromotion(), 160, 32, PROMOTION_FILL, 14), page, 200, -336);
     place(createButton("超值首充", () => this.openFirstRecharge(), 160, 32, FIRST_FILL, 14), page, -200, -336);
     place(createButton("灵器数据", () => this.openReiki(), 160, 32, REIKI_FILL, 14), page, 0, -290);
+    place(createButton("浮空岛时间", () => this.openIslands(), 180, 32, ISLANDS_FILL, 14), page, 200, -290);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -628,7 +636,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。英雄图鉴收到 4013 时另走只读页，不发 4014。宠物信息收到 74100 时另走只读页，不发 74101、74102、74103。世界等级收到 51001 时另走只读页，不做 20101。基金列表收到 20001 时另走只读页，不发 20018，不发 20004、20010，不做 3007。超值首充收到 20012 时另走只读页，不发 20013，不做 13260。灵器数据收到 70001 时另走只读页，不发 70002、70003、70004、70005、70006，70007、70008 不当拉包请求，不做 20011。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。英雄图鉴收到 4013 时另走只读页，不发 4014。宠物信息收到 74100 时另走只读页，不发 74101、74102、74103。世界等级收到 51001 时另走只读页，不做 20101。基金列表收到 20001 时另走只读页，不发 20018，不发 20004、20010，不做 3007。超值首充收到 20012 时另走只读页，不发 20013，不做 13260。灵器数据收到 70001 时另走只读页，不发 70002、70003、70004、70005、70006，70007、70008 不当拉包请求，不做 20011。浮空岛时间收到 73001 时另走只读页，不发 73002、73003、73004，不做 20011。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
   private blockWirePage(id: string): boolean {
     if (id === "achieve") return this.blockWireAchievement();
     if (id === "buygold") return this.blockWireBuyGold();
@@ -645,6 +653,7 @@ export class MainApp extends Component {
     if (id === "promotion") return this.blockWirePromotion();
     if (id === "firstRecharge") return this.blockWireFirstRecharge();
     if (id === "reiki") return this.blockWireReiki();
+    if (id === "islands") return this.blockWireIslands();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -769,6 +778,14 @@ export class MainApp extends Component {
     if (Session.source === "wire" && WireSession.hasReiki()) return false;
     GameLog.shared.info("MainApp", "wire reiki unsynced");
     this.shell?.showToast(WIRE_REIKI_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 73001 就停在主城。空包体也算同步。不发 73002、73003、73004。不做 20011。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireIslands(): boolean {
+    if (Session.source === "wire" && WireSession.hasIslands()) return false;
+    GameLog.shared.info("MainApp", "wire islands unsynced");
+    this.shell?.showToast(WIRE_ISLANDS_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -1155,6 +1172,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.reiki = page;
+    return page.node;
+  }
+
+  /** 真服浮空岛时间。未同步 Toast。已同步压入只读页，不挑战，不买次数。不发 73002、73003、73004。不做 20011。 */
+  private openIslands(): void {
+    GameLog.shared.info("MainApp", "click islands");
+    if (this.blockWirePage("islands")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("islands");
+    this.refreshChrome();
+  }
+
+  private mountIslands(): Node {
+    this.islands?.dispose();
+    const page = buildWireIslandsPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.islands = page;
     return page.node;
   }
 
@@ -1885,6 +1925,10 @@ export class MainApp extends Component {
     if (id === "reiki") {
       this.reiki?.dispose();
       this.reiki = null;
+    }
+    if (id === "islands") {
+      this.islands?.dispose();
+      this.islands = null;
     }
     if (id === "bag") {
       this.bag?.dispose();

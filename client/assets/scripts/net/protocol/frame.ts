@@ -186,6 +186,15 @@ export const WireCmd = {
    * 不夹在 2001 和 3007 中间。不是角色资料 2001。不是基金列表 20001。不是超值首充 20012。
    */
   reikiEquipData: 70001,
+  /**
+   * c2s 空体。进主城、空 c2s 70001 之后发，只发一次。
+   * 整帧 `04 00 00 00 29 1d 01 00`。73001 = 0x11D29，小端 29 1d 01 00。
+   * GReqFloatingIslandsTime / GResFloatingIslandsTime。next_time 是字段 2，stage 是字段 3。
+   * 不发 73002。73002 有懒建和日刷写库，不当纯只读。
+   * 不发 73003 挑战、73004 买次数。本号无写库。不做 20011。
+   * 不夹在 2001 和 3007 中间。不是角色资料 2001。不是灵器数据 70001。
+   */
+  floatingIslandsTime: 73001,
 } as const;
 
 /**
