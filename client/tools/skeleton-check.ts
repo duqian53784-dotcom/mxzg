@@ -631,6 +631,19 @@ import {
   WIRE_ILLUSTRAT_UNSYNCED_TOAST,
   wireIllustratNote,
 } from "../assets/scripts/net/protocol/wireIllustrat";
+import {
+  decodeWirePet,
+  formatWirePetHead,
+  formatWirePetLine,
+  WIRE_PET_CMD,
+  WIRE_PET_EMPTY,
+  WIRE_PET_FIELD_NOTE,
+  WIRE_PET_READONLY_NOTE,
+  WIRE_PET_READONLY_TITLE,
+  WIRE_PET_SIDE_EFFECT,
+  WIRE_PET_UNSYNCED_TOAST,
+  wirePetNote,
+} from "../assets/scripts/net/protocol/wirePet";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1346,6 +1359,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("prophet") === "city", "prophet stays on the city tab");
   assert(rootTabFor("jewel") === "city", "jewel stays on the city tab");
   assert(rootTabFor("illustrat") === "city", "illustrat stays on the city tab");
+  assert(rootTabFor("pet") === "city", "pet stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -3693,6 +3707,14 @@ async function checkWs(): Promise<void> {
   const illustratBody = concatBytes(concatBytes(fieldBytes(1, illustratRowA), fieldBytes(1, illustratRowB)), fieldVarint(4, 3));
   const illustratMissing = fieldBytes(1, fieldVarint(1, 8));
   const illustratOuterOnly = fieldVarint(4, 1);
+  const petRowA = concatBytes(
+    concatBytes(fieldVarint(1, 11), fieldVarint(2, 22)),
+    concatBytes(fieldVarint(3, 16), fieldVarint(4, 3))
+  );
+  const petRowB = concatBytes(fieldVarint(2, 0), fieldVarint(6, 4));
+  const petBody = concatBytes(concatBytes(fieldBytes(1, petRowA), fieldBytes(1, petRowB)), fieldVarint(5, 9));
+  const petMissing = fieldBytes(1, fieldVarint(1, 8));
+  const petOuterOnly = fieldVarint(5, 1);
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -4084,6 +4106,91 @@ async function checkWs(): Promise<void> {
       decodeWireIllustrat(illustratSticky.frames[0].body)?.rows.length === 0 &&
       decodeWireIllustrat(illustratSticky.frames[0].body)?.marks.length === 1,
     "sticky 4013 frame stops at its length prefix"
+  );
+  const loggedPet = decodeWirePet(petBody);
+  assert(
+    WireCmd.petInfoList === 74100 && WireCmd.heroList === 4001 && WireCmd.illustratReward === 4013,
+    "online 74100 stays off the hero list 4001 and illustrat 4013"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.petInfoList)) === "0400000074210100", "empty c2s 74100");
+  assert(bytesToHex(encodeFrame(74101)) !== "0400000074210100", "74101 is not the 74100 frame");
+  assert(bytesToHex(encodeFrame(74102)) !== "0400000074210100", "74102 is not the 74100 frame");
+  assert(bytesToHex(encodeFrame(74103)) !== "0400000074210100", "74103 is not the 74100 frame");
+  assert(bytesToHex(encodeFrame(74105)) !== "0400000074210100", "74105 is not the 74100 frame");
+  assert(bytesToHex(encodeFrame(74106)) !== "0400000074210100", "74106 is not the 74100 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.heroList)) !== "0400000074210100", "4001 is not the 74100 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.illustratReward)) !== "0400000074210100", "4013 is not the 74100 frame");
+  assert(WIRE_PET_READONLY_TITLE === "宠物信息（真服只读）", "readonly pet title");
+  assert(WIRE_PET_UNSYNCED_TOAST === "真服未同步", "unsynced pet toast");
+  assert(WIRE_PET_EMPTY === "空表", "empty pet table label");
+  assert(
+    WIRE_PET_SIDE_EFFECT.indexOf("无写库") >= 0 &&
+      WIRE_PET_SIDE_EFFECT.indexOf("非空外层") >= 0 &&
+      WIRE_PET_SIDE_EFFECT.indexOf("可接受") >= 0 &&
+      WIRE_PET_SIDE_EFFECT.indexOf("空体安全") >= 0 &&
+      WIRE_PET_READONLY_NOTE.indexOf("74101") >= 0 &&
+      WIRE_PET_READONLY_NOTE.indexOf("74102") >= 0 &&
+      WIRE_PET_READONLY_NOTE.indexOf("74103") >= 0 &&
+      WIRE_PET_READONLY_NOTE.indexOf("74105") >= 0 &&
+      WIRE_PET_READONLY_NOTE.indexOf("74106") >= 0 &&
+      WIRE_PET_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_PET_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_PET_READONLY_NOTE.indexOf("4001") >= 0 &&
+      WIRE_PET_READONLY_NOTE.indexOf("4013") >= 0 &&
+      WIRE_PET_FIELD_NOTE.indexOf("pet_id") >= 0 &&
+      WIRE_PET_FIELD_NOTE.indexOf("sys_id") >= 0 &&
+      WIRE_PET_FIELD_NOTE.indexOf("hero_id") >= 0 &&
+      WIRE_PET_FIELD_NOTE.indexOf("level") >= 0 &&
+      WIRE_PET_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "pet page names pet_id sys_id hero_id and level and refuses writes"
+  );
+  assert(
+    decodeWirePet(new Uint8Array(0)) !== null &&
+      decodeWirePet(new Uint8Array(0))?.rows.length === 0 &&
+      formatWirePetHead(decodeWirePet(new Uint8Array(0)) || { rows: [], marks: [] }) === "空表",
+    "empty 74100 body is synced and does not invent zeros"
+  );
+  assert(decodeWirePet(new Uint8Array([0x80])) === null, "bad 74100 ignored");
+  assert(decodeWirePet(fieldBytes(1, new Uint8Array([0x80]))) === null, "74100 row blob that fails is not an empty table");
+  const petMissingSnap = decodeWirePet(petMissing);
+  assert(
+    petMissingSnap !== null &&
+      petMissingSnap.rows.length === 1 &&
+      petMissingSnap.rows[0].petId === 8 &&
+      petMissingSnap.rows[0].sysId === null &&
+      petMissingSnap.rows[0].heroId === null &&
+      petMissingSnap.rows[0].level === null &&
+      formatWirePetLine(petMissingSnap.rows[0]) === "pet_id=8 / sys_id=无 / hero_id=无 / level=无",
+    "missing 74100 numbers stay blank"
+  );
+  assert(
+    loggedPet !== null &&
+      loggedPet.rows.length === 2 &&
+      loggedPet.rows[0].petId === 11 &&
+      loggedPet.rows[0].sysId === 22 &&
+      loggedPet.rows[0].heroId === 16 &&
+      loggedPet.rows[0].level === 3 &&
+      loggedPet.rows[1].petId === null &&
+      loggedPet.rows[1].sysId === 0 &&
+      loggedPet.rows[1].heroId === null &&
+      loggedPet.rows[1].level === null &&
+      loggedPet.marks.length === 1 &&
+      loggedPet.marks[0].field === 5 &&
+      formatWirePetLine(loggedPet.rows[1]) === "pet_id=无 / sys_id=0 / hero_id=无 / level=无 / 字段6=4" &&
+      formatWirePetHead(loggedPet) === "2 条 / 字段5=9" &&
+      wirePetNote(loggedPet).indexOf(WIRE_PET_SIDE_EFFECT) >= 0 &&
+      wirePetNote(loggedPet).indexOf("不写金币") >= 0 &&
+      wirePetNote(loggedPet).indexOf("不写钻石") >= 0,
+    "74100 sample keeps pet_id sys_id hero_id and level and does not fill missing numbers with 0"
+  );
+  const petSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.petInfoList, petOuterOnly), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    petSticky.frames.length === 2 &&
+      petSticky.frames[0].cmdId === 74100 &&
+      petSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWirePet(petSticky.frames[0].body)?.rows.length === 0 &&
+      decodeWirePet(petSticky.frames[0].body)?.marks.length === 1,
+    "sticky 74100 frame stops at its length prefix"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -4542,6 +4649,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.prophetSummon, prophetBody));
       roleSockets[0].push(encodeFrame(WireCmd.heroJewel, jewelBody));
       roleSockets[0].push(encodeFrame(WireCmd.illustratReward, illustratBody));
+      roleSockets[0].push(encodeFrame(WireCmd.petInfoList, petBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -4560,6 +4668,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasProphet() && WireSession.prophet === null, "prophet stays unsynced before the city role");
       assert(!WireSession.hasJewel() && WireSession.jewel === null, "jewel stays unsynced before the city role");
       assert(!WireSession.hasIllustrat() && WireSession.illustrat === null, "illustrat stays unsynced before the city role");
+      assert(!WireSession.hasPet() && WireSession.pet === null, "pet stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -4733,6 +4842,22 @@ async function checkWs(): Promise<void> {
         "flush writes the 4013 rows and leaves the 4101 jewels"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "4013 stays off the wallet");
+      assert(
+        WireSession.hasPet() &&
+          WireSession.pet !== null &&
+          WireSession.pet.rows.length === 2 &&
+          WireSession.pet.rows[0].petId === 11 &&
+          WireSession.pet.rows[0].sysId === 22 &&
+          WireSession.pet.rows[0].heroId === 16 &&
+          WireSession.pet.rows[0].level === 3 &&
+          WireSession.pet.rows[1].petId === null &&
+          WireSession.pet.rows[1].sysId === 0 &&
+          formatWirePetLine(WireSession.pet.rows[1]) === "pet_id=无 / sys_id=0 / hero_id=无 / level=无 / 字段6=4" &&
+          WireSession.illustrat !== null &&
+          WireSession.illustrat.rows.length === 2,
+        "flush writes the 74100 rows and leaves the 4013 rows"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "74100 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -4955,7 +5080,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 13, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 14, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -5009,6 +5134,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 4013 after 4101"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 13] as ArrayBuffer)) === "0400000074210100",
+        "pullIdle sends empty c2s 74100 after 4013"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -5021,12 +5150,14 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 13044") &&
           sawLog(lines, "发送 c2s 4101") &&
           sawLog(lines, "发送 c2s 4013") &&
+          sawLog(lines, "发送 c2s 74100") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
           sawLog(lines, "04000000f4320000") &&
           sawLog(lines, "0400000005100000") &&
           sawLog(lines, "04000000ad0f0000") &&
+          sawLog(lines, "0400000074210100") &&
           sawLog(lines, "0400000002520000") === false &&
           sawLog(lines, "发送 c2s 12020") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
@@ -5052,8 +5183,13 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 4106") === false &&
           sawLog(lines, "发送 c2s 4107") === false &&
           sawLog(lines, "发送 c2s 9001") === false &&
-          sawLog(lines, "发送 c2s 4014") === false,
-        "mail hero buy gold achievement arena seven day goal wish summon prophet jewel and illustrat pulls are logged"
+          sawLog(lines, "发送 c2s 4014") === false &&
+          sawLog(lines, "发送 c2s 74101") === false &&
+          sawLog(lines, "发送 c2s 74102") === false &&
+          sawLog(lines, "发送 c2s 74103") === false &&
+          sawLog(lines, "发送 c2s 74105") === false &&
+          sawLog(lines, "发送 c2s 74106") === false,
+        "mail hero buy gold achievement arena seven day goal wish summon prophet jewel illustrat and pet pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -5256,6 +5392,24 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.4014");
       assert(roleSockets[0].sent.length === sentBeforeIllustratOther, "4014 stays off the illustrat wire");
       assert(sawLog(lines, "未发送 wire.4014"), "illustrat push is not encoded as a claim");
+      roleNet.send(WIRE_PET_CMD);
+      const petSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(petSent as ArrayBuffer)) === "0400000074210100", "wire.74100 frame");
+      const sentBeforePetOther = roleSockets[0].sent.length;
+      roleNet.send("wire.74101");
+      roleNet.send("wire.74102");
+      roleNet.send("wire.74103");
+      roleNet.send("wire.74105");
+      roleNet.send("wire.74106");
+      assert(roleSockets[0].sent.length === sentBeforePetOther, "74101 74102 74103 74105 and 74106 stay off the pet wire");
+      assert(
+        sawLog(lines, "未发送 wire.74101") &&
+          sawLog(lines, "未发送 wire.74102") &&
+          sawLog(lines, "未发送 wire.74103") &&
+          sawLog(lines, "未发送 wire.74105") &&
+          sawLog(lines, "未发送 wire.74106"),
+        "pet upgrade carry unequip and pushes are not encoded"
+      );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
       assert(
@@ -5513,8 +5667,11 @@ async function checkWs(): Promise<void> {
           WireSession.heroes.length === 0 &&
           WireSession.illustrat !== null &&
           WireSession.illustrat.rows.length === 2 &&
-          WireSession.illustrat.rows[0].heroType === 102,
-        "non-empty 4101 without heroes stays synced and leaves 13044, 4001 and 4013"
+          WireSession.illustrat.rows[0].heroType === 102 &&
+          WireSession.pet !== null &&
+          WireSession.pet.rows.length === 2 &&
+          WireSession.pet.rows[0].petId === 11,
+        "non-empty 4101 without heroes stays synced and leaves 13044, 4001, 4013 and 74100"
       );
       assert(Session.gold === goldBeforeBadJewel && Session.diamond === diamondBeforeBadJewel, "outer-only 4101 does not write gold or diamonds");
       const goldBeforeBadIllustrat = Session.gold;
@@ -5552,10 +5709,52 @@ async function checkWs(): Promise<void> {
           WireSession.jewel !== null &&
           WireSession.jewel.marks[0].field === 4 &&
           WireSession.heroes !== null &&
-          WireSession.heroes.length === 0,
-        "non-empty 4013 without rows stays synced and leaves 4101 and 4001"
+          WireSession.heroes.length === 0 &&
+          WireSession.pet !== null &&
+          WireSession.pet.rows.length === 2 &&
+          WireSession.pet.rows[0].level === 3,
+        "non-empty 4013 without rows stays synced and leaves 4101, 4001 and 74100"
       );
       assert(Session.gold === goldBeforeBadIllustrat && Session.diamond === diamondBeforeBadIllustrat, "outer-only 4013 does not write gold or diamonds");
+      const goldBeforeBadPet = Session.gold;
+      const diamondBeforeBadPet = Session.diamond;
+      roleSockets[0].push(encodeFrame(WireCmd.petInfoList, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasPet() &&
+          WireSession.pet !== null &&
+          WireSession.pet.rows.length === 2 &&
+          WireSession.pet.rows[0].sysId === 22 &&
+          WireSession.illustrat !== null &&
+          WireSession.illustrat.marks.length === 1 &&
+          sawWire("74100 解不开"),
+        "bad 74100 keeps the rows and the 4013 rows"
+      );
+      assert(Session.gold === goldBeforeBadPet && Session.diamond === diamondBeforeBadPet, "bad 74100 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.petInfoList));
+      assert(
+        WireSession.hasPet() &&
+          WireSession.pet !== null &&
+          WireSession.pet.rows.length === 0 &&
+          formatWirePetHead(WireSession.pet) === "空表" &&
+          WireSession.illustrat !== null &&
+          WireSession.illustrat.marks.length === 1,
+        "empty 74100 body replaces the rows and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadPet && Session.diamond === diamondBeforeBadPet, "empty 74100 does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.petInfoList, petOuterOnly));
+      assert(
+        WireSession.hasPet() &&
+          WireSession.pet !== null &&
+          WireSession.pet.rows.length === 0 &&
+          WireSession.pet.marks.length === 1 &&
+          WireSession.pet.marks[0].field === 5 &&
+          WireSession.illustrat !== null &&
+          WireSession.illustrat.marks[0].field === 4 &&
+          WireSession.heroes !== null &&
+          WireSession.heroes.length === 0,
+        "non-empty 74100 without rows stays synced and leaves 4013 and 4001"
+      );
+      assert(Session.gold === goldBeforeBadPet && Session.diamond === diamondBeforeBadPet, "outer-only 74100 does not write gold or diamonds");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {
