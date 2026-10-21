@@ -437,7 +437,7 @@ export const WireCmd = {
    * unlockIds 是字段 1，repeated int32，已解锁阵法。不保证顺序。
    * 服侧 BattleHandler.queryFormation @CMD _3099；CmdCode._3099；FormationService.getFormation。
    * 不发 3097 解锁第二契约、3098 解锁阵法、3100 保存战斗队列。
-   * 不发 3102 查战报、3030 切磋。不做备选 3101。不做 20011。
+   * 不发 3102 查战报、3030 切磋。3101 副本队列另只读接在其后，勿合并。不做 20011。
    * 4601 有 page，硬禁。29001 有 page，硬禁。
    * 与 28107、75615 分开发，勿合并。本刀不重复拉 28107，也不重复拉 75615。
    * 服侧允许 getFormation 轻懒建（无记录则 add；未解锁阵法 id=1 则 unlock(1)+update）。
@@ -445,6 +445,21 @@ export const WireCmd = {
    * 不夹在 2001 和 3007 中间。不是契约 28107。不是神兵道具 75615。
    */
   formation: 3099,
+  /**
+   * c2s 空体。进主城、空 c2s 3099 之后发，只发一次。无 page。
+   * 整帧 `04 00 00 00 1D 0C 00 00`。3101 = 0x0C1D，小端 1D 0C 00 00。
+   * GReqLineUp / GResLineUp。空体，无 page。
+   * list 是字段 1，repeated PSLineUpData。assistance_unlock 是字段 2，optional bool。
+   * 服侧 BattleHandler.getLineUp @CMD _3101；CmdCode._3101；HeroLineUpService.getHeroLineUps / fillLineUp。
+   * 不发 3100 保存队列、3098 解锁阵法、3097 解锁第二契约、3030 切磋、3102 请求战报、3103 预计算战斗力。
+   * 3099 勿再发。不做备选 5001。不做 20011。
+   * 4601 有 page，硬禁。29001 有 page，硬禁。
+   * 与 3099 分开发，勿合并。本刀不重复拉 3099。
+   * 服侧允许 getHeroLineUps→fillLineUp 轻修复（formationId==0 则置 1 并轻修站位后 update；本路径不走 add）。
+   * 只读，无扣费、无领奖、不写养成。
+   * 不夹在 2001 和 3007 中间。不是阵法 3099。不是契约 28107。
+   */
+  lineUp: 3101,
 } as const;
 
 /**
