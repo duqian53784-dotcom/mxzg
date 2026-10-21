@@ -50,7 +50,9 @@ import { buildLimitedPage, LimitedPage } from "./LimitedPage";
 import { goal7BadJumpToast } from "../module/goal7/tasks";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildWireIdlePage, WireIdlePage } from "./WireIdlePage";
+import { buildWireBagPage, WireBagPage } from "./WireBagPage";
 import { buildWireMainlinePage, WireMainlinePage } from "./WireMainlinePage";
+import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
@@ -87,7 +89,7 @@ export class MainApp extends Component {
   private heroList: HeroListPage | null = null;
   private heroDetail: HeroDetailPage | null = null;
   private summon: SummonPage | null = null;
-  private bag: BagPage | null = null;
+  private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | null = null;
   private smith: SmithPage | null = null;
   private arena: ArenaPage | null = null;
@@ -230,6 +232,13 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
+    if (Session.source === "wire" && id === "bag") {
+      const net = this.cityNet();
+      if (net.state !== "connected") {
+        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+        return;
+      }
+    }
     if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish" || id === "cafe" || id === "gift" || id === "limited") && !this.ensureNet()) {
       return;
     }
@@ -435,14 +444,23 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。 */
   private blockWirePage(id: string): boolean {
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
     if (id === "mainline") return this.blockWireMainline();
+    if (id === "bag") return this.blockWireBag();
     GameLog.shared.info("MainApp", "wire skip " + id);
     this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 5001 就停在主城。空列表也算同步，放行后页面写「空背包」。 */
+  private blockWireBag(): boolean {
+    if (WireSession.hasBag()) return false;
+    GameLog.shared.info("MainApp", "wire bag unsynced");
+    this.shell?.showToast(WIRE_BAG_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -830,10 +848,14 @@ export class MainApp extends Component {
 
   /**
    * 主城和玩法都能进。opencondition 未开时只 Toast，和底栏锁一样。
-   * 没连上时不压页面。
+   * 没连上时不压页面。真服按 5001 是否到过，打开只读页或 Toast，不进 Mock 背包。
    */
   private openBag(): void {
     GameLog.shared.info("MainApp", "click bag");
+    if (Session.source === "wire") {
+      this.openWireBag();
+      return;
+    }
     if (this.blockWirePage("bag")) return;
     if (!this.allow("bag")) return;
     if (!this.ensureNet()) return;
@@ -841,7 +863,20 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
+  /** 未同步 Toast。已同步（含空背包）压入只读页，不走 bag.list。 */
+  private openWireBag(): void {
+    if (this.blockWirePage("bag")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("bag");
+    this.refreshChrome();
+  }
+
   private mountBag(): Node {
+    if (Session.source === "wire") return this.mountWireBag();
     this.bag?.dispose();
     const page = buildBagPage({
       showToast: (text) => this.shell?.showToast(text, 2200),
@@ -854,6 +889,16 @@ export class MainApp extends Component {
         this.heroList?.reload();
         this.smith?.reload();
       },
+      close: () => this.back(),
+    });
+    this.bag = page;
+    return page.node;
+  }
+
+  private mountWireBag(): Node {
+    this.bag?.dispose();
+    const page = buildWireBagPage({
+      alive: () => this.isValid,
       close: () => this.back(),
     });
     this.bag = page;

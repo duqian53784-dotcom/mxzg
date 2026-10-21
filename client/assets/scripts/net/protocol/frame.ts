@@ -40,6 +40,16 @@ export const WireCmd = {
    * s2c 只读 reward_time。不写金币。不是占位 idle.claim（1302）。
    */
   chapterItemReward: 3005,
+  /**
+   * c2s 空体。GReqBackPackList。进主城、空 c2s 2001 之后、空 c2s 3007 之前发。
+   * s2c 是背包整表。空包体是已同步的空背包。不是占位 bag.list（1601）。
+   */
+  backpackList: 5001,
+  /**
+   * 只在 s2c 见过的变更。GResBackpackGain。客户端不发。
+   * 合并进本地背包。type 只记日志。不写顶栏。不是占位 bag.use（1602）。
+   */
+  backpackGain: 5002,
 } as const;
 
 /**
