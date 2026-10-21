@@ -9,6 +9,8 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 浏览器 WebSocket，默认连本机桥 ws://127.0.0.1:13111/game（转到 TCP 9902）。
  * 线上只写 frame.ts 里的长度前缀帧：心跳 1004 空体、登录 1001、创角 1002。
  * 占位 cmd 没有日志里的帧时不发送。粘包按 TCP 帧切开。见 docs/h5-websocket.md。
+ * 登录后的推送（倩本机见过 28000、28103、20005、25001、23000、21013、50000）只记日志，
+ * 派发成 wire.<cmdId>。没有 .proto 名字，不猜 CmdId，单条处理失败也不丢掉后面的帧。
  */
 
 export interface WsSocketLike {
@@ -297,7 +299,11 @@ export class WsTransport implements ITransport {
     const inbound: WireInbound = { cmdId, frameLength, body, hex };
     const handler = this.messageHandler;
     if (!handler) return;
-    handler({ cmd: inboundCmd(cmdId), data: inbound });
+    try {
+      handler({ cmd: inboundCmd(cmdId), data: inbound });
+    } catch (err) {
+      GameLog.shared.error("Ws", "分发 s2c " + cmdId + " 失败 " + errText(err));
+    }
   }
 }
 

@@ -80,7 +80,7 @@ export function buildLoginPanel(
   const status = createLabel("准备登录", 20, { color: new Color(240, 240, 240, 255), width: 520 });
   place(status, root, 0, ws ? -148 : -156);
   const detail = ws
-    ? place(createLabel("进入游戏发登录 1001，不进主城", 18, { color: new Color(180, 196, 220, 255), width: 520 }), root, 0, -186)
+    ? place(createLabel("进入游戏发登录 1001。有角色就进主城", 18, { color: new Color(180, 196, 220, 255), width: 520 }), root, 0, -186)
     : null;
 
   const enterNode = createButton("进入游戏", handlers.onEnter, 280, 56);

@@ -6,8 +6,9 @@
  * 账号走 Proto.login / Proto.roleEnter；没有角色或点「创角」时再 Proto.roleCreate。
  * 默认仍是 NetClient → MockTransport，不需要服务器。
  * 预览地址加 ?transport=ws 才连本机桥 ws://127.0.0.1:13111/game（转到 TCP 9902）。
- * 打开后发心跳 1004，点登录再发 1001。不进真实主城。
- * 连不上会提示检查 start-local-server.bat 和 start-ws-bridge.bat，并可改走 Mock。
+ * 打开后发心跳 1004，点登录再发 1001。s2c 1001 有角色就进同一套主城壳。
+ * 空回包仍走创角 1002，再发一次 1001。金币钻石不从 Mock 填。
+ * 连不上会提示检查 start-local-all.bat（或分拆的启服 / 桥脚本），并可改走 Mock。
  *
  * Creator 里怎么挂（仓库不改 .scene，避免脚本 uuid 对不上）：
  * 1. 用 Creator 3.8.8 打开 client 工程
@@ -17,7 +18,7 @@
  * 5. 保存场景。项目启动场景保持 Boot，再点预览
  * 6. 控制台应出现 [Boot] stage=version / hot-update / config / login
  * 7. 选服后点「进入游戏」：Mock 登录成功后 director.loadScene("Main")
- *    地址带 ?transport=ws 时连本机桥 13111/game，发心跳 1004，点登录发 1001。成功也不进真实主城
+ *    地址带 ?transport=ws 时连本机桥 13111/game，发心跳 1004，点登录发 1001。有角色则进主城
  *    账号不是 mock、或点「创角」时先出创角面板（Proto.roleCreate）
  *    Main 场景可以是空的。若 Canvas 上没有 MainApp，这里会补挂
  * 8. 勾选 skipLogin 可跳过面板，仍用检查器里的账号进 Main
@@ -29,9 +30,17 @@ import { _decorator, Component, director, Node, sys, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
 import { listOpenEntries } from "../config/gates";
 import { NetClient } from "../net/NetClient";
+import { WireSession } from "../net/WireSession";
 import { WsTransport } from "../net/WsTransport";
 import { WIRE_HEARTBEAT_MS } from "../net/protocol/frame";
-import { summarizeCreateReply, summarizeLoginReply, uidFromAccount, wireBody } from "../net/protocol/wireLogin";
+import {
+  LoginReplySummary,
+  summarizeCreateReply,
+  summarizeLoginReply,
+  uidFromAccount,
+  wireBody,
+  wireRoleReady,
+} from "../net/protocol/wireLogin";
 import { NetState } from "../net/NetTypes";
 import {
   explainWireTimeout,
@@ -103,10 +112,10 @@ export class Boot extends Component {
       this.wsStateOff();
       this.wsStateOff = null;
     }
-    if (this.wsNet) {
-      this.wsNet.close();
-      this.wsNet = null;
-    }
+    const net = this.wsNet;
+    this.wsNet = null;
+    // 进主城时连接交给 WireSession，切场景不能把真服套接字关掉。
+    if (net && WireSession.net !== net) net.close();
     if (this.safeBinding) {
       this.safeBinding.dispose();
       this.safeBinding = null;
@@ -216,9 +225,7 @@ export class Boot extends Component {
   private onUseMock(panel: LoginPanelView): void {
     if (!this.alive || this.entering || this.authBusy) return;
     this.useWs = false;
-    this.wsEpoch += 1;
-    this.wsLive = false;
-    if (this.wsNet) this.wsNet.close();
+    this.dropWs();
     GameLog.shared.info("Boot", WS_MOCK_STATUS);
     this.showBootToast(WS_MOCK_STATUS);
     panel.setStatus(WS_MOCK_STATUS);
@@ -237,7 +244,7 @@ export class Boot extends Component {
     if (!opened) return;
     if (this.loginPanel) {
       this.loginPanel.setStatus(WS_OPEN_STATUS);
-      this.loginPanel.setDetail("点进入游戏发登录 1001。登录前可以没有 s2c 1004。不进主城。");
+      this.loginPanel.setDetail("点进入游戏发登录 1001。登录前可以没有 s2c 1004。有角色就进主城。");
       this.loginPanel.setBusy(false);
     }
     this.authBusy = false;
@@ -325,6 +332,11 @@ export class Boot extends Component {
     if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
     const summary = summarizeLoginReply(body);
     GameLog.shared.info("Boot", summary.status + " " + summary.detail);
+    if (wireRoleReady(summary) && summary.roleId !== null) {
+      if (create) GameLog.shared.info("Boot", "已有角色，未发创角 1002");
+      this.enterWireCity(account, serverId, summary.roleId, null, summary);
+      return;
+    }
     if (create && summary.empty) {
       const parent = panel.root.parent;
       setTimeout(() => {
@@ -467,7 +479,7 @@ export class Boot extends Component {
         account,
         serverName: Session.serverName,
         hadRole,
-        hint: wire ? "登录 1001 回包是空的。确认后只发创角 1002，不进主城。" : undefined,
+        hint: wire ? "登录 1001 回包是空的。确认后发创角 1002，再发一次 1001。有角色才进主城。" : undefined,
       }
     );
     this.createPanel = panel;
@@ -538,11 +550,14 @@ export class Boot extends Component {
       if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
       const again = summarizeLoginReply(wireBody(againMsg.data));
       GameLog.shared.info("Boot", "创角后 " + again.status + " " + again.detail);
-      const status = again.roleId !== null ? "角色 " + again.roleId + " 已在服务器" : again.status;
-      panel.setStatus(status);
+      if (wireRoleReady(again) && again.roleId !== null) {
+        this.enterWireCity(this.wsAccount, Session.serverId, again.roleId, name, again);
+        return;
+      }
+      panel.setStatus(again.status);
       panel.setBusy(false);
       this.authBusy = false;
-      this.showBootToast("不进主城");
+      this.showBootToast(again.status);
     } catch (err) {
       if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
       const kind = wireTimeoutKind(err);
@@ -594,6 +609,42 @@ export class Boot extends Component {
 
   private applyEntered(role: RoleEnterResp): void {
     Session.applyEnter(role);
+  }
+
+  /** 真服有角色：只记角色 id（创角时加上刚填的名字），然后走和 Mock 一样的进主城。 */
+  private enterWireCity(
+    account: string,
+    serverId: number,
+    roleId: number,
+    name: string | null,
+    summary: LoginReplySummary
+  ): void {
+    Session.applyWireRole({ account, serverId, roleId, name });
+    if (this.loginPanel) {
+      this.loginPanel.setStatus("进入主城…");
+      this.loginPanel.setDetail(summary.detail);
+      this.loginPanel.setBusy(false);
+    }
+    if (this.createPanel) {
+      this.createPanel.setStatus("进入主城…");
+      this.createPanel.setBusy(false);
+    }
+    this.showBootToast(summary.status);
+    this.logEntered("wire login ok");
+    if (this.wsNet) WireSession.hold(this.wsNet);
+    this.authBusy = false;
+    this.enterMain();
+  }
+
+  /** 改走 Mock 时关掉桥。进主城后的连接在 WireSession 里，这里也放下。 */
+  private dropWs(): void {
+    this.wsEpoch += 1;
+    this.wsLive = false;
+    const net = this.wsNet;
+    this.wsNet = null;
+    WireSession.release(net);
+    if (net) net.close();
+    else WireSession.close();
   }
 
   private logEntered(prefix: string): void {

@@ -1,5 +1,5 @@
 /**
- * B3–C15、基础商店、许愿池、咖啡馆、礼包、限时活动与 D2 WebSocket 传输自检（不启动 Creator）。
+ * B3–C15、基础商店、许愿池、咖啡馆、礼包、限时活动、D2 WebSocket 与 D3 进主城壳自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -442,8 +442,11 @@ import {
   decodeProtoFields,
   encodeObservedCreateBody,
   encodeObservedLoginBody,
+  summarizeLoginReply,
   uidFromAccount,
   varintField,
+  wireBody,
+  wireRoleReady,
 } from "../assets/scripts/net/protocol/wireLogin";
 import {
   DEFAULT_WS_URL,
@@ -2761,6 +2764,29 @@ function leFrame(cmd: number, size = 8): ArrayBuffer {
   return buf;
 }
 
+function joinFrames(frames: Uint8Array[]): Uint8Array {
+  let out = new Uint8Array(0);
+  for (let i = 0; i < frames.length; i++) out = concatBytes(out, frames[i]);
+  return out;
+}
+
+function fieldVarint(field: number, value: number): Uint8Array {
+  const parts: number[] = [];
+  appendVarint(parts, field << 3);
+  appendVarint(parts, value);
+  return Uint8Array.from(parts);
+}
+
+function appendVarint(parts: number[], value: number): void {
+  let n = Math.floor(value);
+  if (n < 0) n = 0;
+  while (n > 127) {
+    parts.push((n & 0x7f) | 0x80);
+    n = Math.floor(n / 128);
+  }
+  parts.push(n);
+}
+
 function hexToBytes(hex: string): Uint8Array {
   const out = new Uint8Array(hex.length / 2);
   for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
@@ -2962,6 +2988,103 @@ async function checkWs(): Promise<void> {
     sockets[0].serverClose(1006);
     assert(net.state === "closed", "peer close stops reconnect");
     assert(sawLog(lines, "已关闭 code=1006"), "close code");
+
+    const roleBody = concatBytes(fieldVarint(1, 1000002), fieldVarint(4, 28800));
+    const summary = summarizeLoginReply(roleBody);
+    assert(wireRoleReady(summary) && summary.roleId === 1000002, "role 1000002 is ready");
+    assert(summary.detail.indexOf("进入主城") >= 0 && summary.detail.indexOf("不进主城") < 0, "role copy enters city");
+    const emptyLogin = summarizeLoginReply(new Uint8Array(0));
+    assert(emptyLogin.empty && !wireRoleReady(emptyLogin) && emptyLogin.detail.indexOf("创角") >= 0, "empty 1001 stays on create");
+    const nameless = summarizeLoginReply(fieldVarint(4, 28800));
+    assert(!wireRoleReady(nameless) && nameless.detail.indexOf("不进主城") >= 0, "no role id stays out");
+
+    const snapAccount = Session.account;
+    const snapToken = Session.token;
+    const snapServerId = Session.serverId;
+    const snapServerName = Session.serverName;
+    const snapRole = Session.role;
+    const snapDay = Session.openDay;
+    const snapStage = Session.stageId;
+    const snapGold = Session.gold;
+    const snapDiamond = Session.diamond;
+    const snapSource = Session.source;
+    try {
+      Session.gold = 100;
+      Session.diamond = 20;
+      Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002, name: "  " });
+      assert(Session.source === "wire" && Session.gold === 0 && Session.diamond === 0, "wire drops mock wallet");
+      assert(Session.role?.name === "角色 1000002" && Session.role.level === 1, "wire name is the role id");
+      assert(formatNameLine() === "角色 1000002", "wire name line hides placeholder level");
+      assert(formatSubLine() === "真服 · 角色 1000002", "wire sub line");
+      assert(formatGoldLine() === "金币 未同步" && formatDiamondLine() === "钻石 未同步", "wire currency lines");
+      assert(formatHubIdentity() === "角色 1000002 · 真服", "wire hub");
+      Session.applyWireRole({ account: "111", serverId: 2, roleId: 1000002, name: "见习冒险家" });
+      assert(formatNameLine() === "见习冒险家" && Session.serverName === "提审", "create name is shown");
+      assert(formatGoldLine() === "金币 未同步", "typed name still unsynced");
+      Session.applyEnter({ roleId: 9, name: "甲", level: 2, gold: 3, diamond: 4 });
+      assert(Session.source === "mock" && formatGoldLine() === "金币 3" && formatNameLine() === "甲 Lv2", "mock enter restores numbers");
+    } finally {
+      Session.account = snapAccount;
+      Session.token = snapToken;
+      Session.serverId = snapServerId;
+      Session.serverName = snapServerName;
+      Session.role = snapRole;
+      Session.openDay = snapDay;
+      Session.stageId = snapStage;
+      Session.gold = snapGold;
+      Session.diamond = snapDiamond;
+      Session.source = snapSource;
+    }
+
+    lines.length = 0;
+    const floodSockets: FakeSocket[] = [];
+    const floodTransport = new WsTransport({
+      connectTimeoutMs: 200,
+      factory: () => {
+        const socket = new FakeSocket();
+        floodSockets.push(socket);
+        setTimeout(() => socket.open(), 0);
+        return socket;
+      },
+    });
+    const floodNet = new NetClient(floodTransport, {
+      heartbeatMs: 60000,
+      reconnectDelayMs: 20,
+      maxReconnect: 0,
+      requestTimeoutMs: 400,
+    });
+    await floodNet.connect(DEFAULT_WS_URL);
+    const seenFlood: string[] = [];
+    floodNet.subscribe("*", (msg) => seenFlood.push(msg.cmd));
+    const pendingLogin = floodNet.request("login", { account: "111", nowSec: 1 }, 400);
+    const big = new Uint8Array(200);
+    const flood = joinFrames([
+      encodeFrame(1001, roleBody),
+      encodeFrame(28000, new Uint8Array(8)),
+      encodeFrame(28103),
+      encodeFrame(20005),
+      encodeFrame(25001),
+      encodeFrame(23000),
+      encodeFrame(21013),
+      encodeFrame(50000, big),
+    ]);
+    floodSockets[0].push(flood);
+    const loginMsg = await pendingLogin;
+    const loginSummary = summarizeLoginReply(wireBody(loginMsg.data));
+    assert(loginSummary.roleId === 1000002, "login resolves to the role frame");
+    assert(seenFlood.indexOf("wire.28000") >= 0 && seenFlood.indexOf("wire.50000") >= 0, "pushes stay wire.* " + seenFlood.join(","));
+    assert(seenFlood.indexOf("login") >= 0, "1001 is still login");
+    assert(sawLog(lines, "收到 s2c 28000") && sawLog(lines, "收到 s2c 50000") && sawLog(lines, "收到 s2c 21013"), "flood logged");
+    let follow = 0;
+    const offBoom = floodNet.subscribe("*", (msg) => {
+      if (msg.cmd === "wire.50000") throw new Error("boom");
+      if (msg.cmd === "wire.21013") follow += 1;
+    });
+    floodSockets[0].push(joinFrames([encodeFrame(50000, new Uint8Array(180)), encodeFrame(21013)]));
+    offBoom();
+    assert(follow === 1, "frame after a bad handler still arrives");
+    assert(sawLog(lines, "分发 s2c 50000 失败"), "bad handler logged");
+    floodNet.close();
 
     if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "function") {
       const live = new WsTransport({ connectTimeoutMs: 400 });

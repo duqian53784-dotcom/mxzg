@@ -3,7 +3,7 @@
 > **来源：** 本文按 2026-10-19《项目分析与启动指南》写成。端口、密码、路径和命令只取那份分析，不另补。  
 > **D1 已在倩本机验证（2026-10-21，Asia/Shanghai）。** 双击 `scripts\start-local-server.bat`：`netstat` 见 TCP `11122`、TCP `9902`、WS `13101` 均在听，脚本打出「[启动成功]」。`PROJECT_PLAN.md` 里 D1 已勾选。  
 > **cross 默认不启。** 游戏服连 `127.0.0.1:11422` 失败、中心服「游戏服加载跨服失败」类日志是预期，不算启动失败。分析里 cross 曾因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败；单机只需 center + gameserver。  
-> **客户端默认仍走 Mock。** 预览加 `?transport=ws` 走本机桥 `ws://127.0.0.1:13111/game`（`scripts\start-ws-bridge.bat` 转到 TCP 9902），不直连 13101。步骤见 `docs/h5-websocket.md`。D2 勾选仍等倩本机验证。
+> **客户端默认仍走 Mock。** 预览加 `?transport=ws` 走本机桥 `ws://127.0.0.1:13111/game`（转到 TCP 9902），不直连 13101。日常双击一次 `scripts\start-local-all.bat`。只拉了客户端就刷新预览，不必重启服和桥。步骤见 `docs/h5-websocket.md`。D2 已在倩本机验证。
 
 `server/`、`config/` 是本机 junction，不在 Git 里。不要把 junction 背后的内容推进这个仓库。
 
@@ -19,6 +19,7 @@
 | 构建和启动的工作目录 | `F:\源码\mj\program\server`（与上面的 junction 是同一目录） |
 | 分析里的一键 bat | `F:\源码\mj\program\start-services.bat`（在 `program` 目录，不在 `server` 里） |
 | 本仓库一键启服 | 双击 `F:\project\mxzg\scripts\start-local-server.bat`。停止说明是 `scripts\stop-local-server.bat`。PowerShell 替代：`scripts/start-local-server.ps1`、`scripts/stop-local-server.ps1` |
+| 本仓库日常（服 + 桥） | 双击一次 `scripts\start-local-all.bat`。9902 已在听就跳过游戏服，13111 已在听就跳过桥。停桥并看游戏服怎么停：`scripts\stop-local-all.bat` |
 | 本仓库 WS 桥 | 游戏服起来之后双击 `scripts\start-ws-bridge.bat`。听 `ws://127.0.0.1:13111/game`，原字节转到 TCP `127.0.0.1:9902`。停止是 `scripts\stop-ws-bridge.bat`（不关游戏服）。13101 仍是游戏服自带口，D1 要看到它在听；H5 不要连它 |
 | JDK 1.8 | `C:\dev\jdk1.8`（Temurin 1.8.0_504） |
 | Maven 3.6.3 | `C:\dev\maven`（已配 `JAVA_HOME`、`MAVEN_HOME`、`PATH`） |
@@ -43,7 +44,7 @@
 - 编解码仍是明文对象。`?transport=ws` 不把 `encodeRequest` 的对象写到线上，只写旧桥日志里的长度前缀帧，经 `13111/game` 转到 TCP 9902。调用方继续用 `Proto.*` 走 Mock。
 - 细节见 `docs/protocol-stubs.md`、`docs/mock-replay.md`、`docs/h5-websocket.md`。
 
-D2 把本仓库 H5 接到这条桥，不改占位号，也不进主城。勾选仍等倩看到 `收到 s2c 1001`。
+D2 已在倩本机验证：`?transport=ws` 经桥 13111 看到 `收到 s2c 1001`。有角色会进主城壳，金币钻石仍不当成 Mock 进度。细节见 `docs/h5-websocket.md`。
 
 2026-10-19 另有一套旧 H5，目录是 `F:\FansGameX\mxzg-h5\客户端\web`。`serve.ps1` 听 `127.0.0.1:8080`，`dev-platform.ps1` 听 `127.0.0.1:18070`，页面上的 WebSocket `/game/9902` 由 `serve.ps1` 桥到游戏服 TCP `9902`。那是旧客户端。本仓库不启动那两个脚本，自己在 `scripts\start-ws-bridge.bat` 里做同样的字节转发，口改成 `13111/game`。
 
@@ -100,6 +101,24 @@ D2 把本仓库 H5 接到这条桥，不改占位号，也不进主城。勾选�
 
 不要在本 Git 仓库里找 `mxzg-server` 源码，GitHub 上没有这份服。
 
+## 日常：服和桥一起开
+
+第 3、4、5 节的构建和配置仍要先做完一次。之后每天双击一次：
+
+```
+F:\project\mxzg\scripts\start-local-all.bat
+```
+
+它另开一扇窗口跑 `start-local-server.bat`（center、gameserver 仍是各自的窗口），等到 TCP `9902` 后再另开一扇窗口跑 `start-ws-bridge.bat`。`9902` 已经在听就写明不再启动第二个游戏服。`13111` 已经在听就不再启动第二个桥。只拉了客户端代码时，这两边都留着，刷新 Creator 预览即可，不必重启。
+
+停桥，并打印游戏服原来的停止说明（不结束 center / gameserver，也不结束别的进程）：
+
+```
+F:\project\mxzg\scripts\stop-local-all.bat
+```
+
+PowerShell 替代是 `scripts/start-local-all.ps1` 和 `scripts/stop-local-all.ps1`。只要游戏服、不要桥时，仍用下面的 `start-local-server.bat`。
+
 ## 一键启服
 
 第 3、4 节的构建和配置仍要先做完一次。第 5 节的 `mvn -o dependency:copy-dependencies` 也要先做过，`target\lib` 里要已经有依赖。脚本放在本仓库，不放进 junction。
@@ -120,7 +139,7 @@ F:\project\mxzg\scripts\start-local-server.bat
 - 检查 `target\lib`，以及 `target\classes` 里的 properties 和启动类。中心服要有 `application.properties`、`database.properties`、`com\ayjs\mxzg\center\CenterBootstrap.class`。游戏服要有 `application.properties`、`database-game.properties`、`database-log.properties`、`com\ayjs\mxzg\gameserver\Bootstrap.class`。缺了就退出。不代做构建，不改配置，也不跑 `mvn`。
 - 端口已经在听就跳过，不另开一个进程。旧 `start-all.bat` 会 `taskkill`。这个 bat 默认不结束已有进程。窗口没了但仍占端口时用 Q7，脚本自己不执行。
 - `start "mxzg-center" cmd /k`，命令与第 5.1 节相同：`java -Xms512m -Xmx2048m -cp "target/classes;target/lib/*" com.ayjs.mxzg.center.CenterBootstrap`。等到 TCP `11122` 和 HTTP `9801`，再同样方式启动 `com.ayjs.mxzg.gameserver.Bootstrap`，等到 TCP `9902` 和 WS `13101`。分析没有写启动要等多久。两个端口共用最多约 180 秒（与 `start-local-server.ps1` 的上限相同）。
-- 默认不启 cross，不启 large-cross。不启旧 H5 的 `dev-platform.ps1` / `serve.ps1`，也不开浏览器。Creator 客户端仍走 Mock。D2 才接游戏服。
+- 默认不启 cross，不启 large-cross。不启旧 H5 的 `dev-platform.ps1` / `serve.ps1`，也不开浏览器。Creator 默认仍走 Mock。`?transport=ws` 才经 13111 桥接游戏服。
 - 起来之后按第 7 节检查。调用 `curl.exe`，最多 10 秒，并执行 `netstat -ano | findstr "11122 9902 13101"`：
 
 ```

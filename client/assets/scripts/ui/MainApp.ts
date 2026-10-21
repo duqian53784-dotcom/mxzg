@@ -27,6 +27,7 @@ import {
 } from "../core/Session";
 import { NetClient } from "../net/NetClient";
 import { NetState } from "../net/NetTypes";
+import { WireSession } from "../net/WireSession";
 import { Proto } from "../net/protocol";
 import { BagPage, buildBagPage } from "./BagPage";
 import { CityChrome, mountCityChrome, TabState } from "./CityChrome";
@@ -177,12 +178,15 @@ export class MainApp extends Component {
         " gold=" +
         Session.gold +
         " diamond=" +
-        Session.diamond
+        Session.diamond +
+        " source=" +
+        Session.source
     );
   }
 
   private onTab(id: string): void {
     GameLog.shared.info("MainApp", "tab " + id);
+    if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
     if ((id === "hero" || id === "summon" || id === "smith") && !this.ensureNet()) return;
     this.panels?.openRoot(id);
@@ -191,6 +195,7 @@ export class MainApp extends Component {
 
   private openChild(id: string): void {
     GameLog.shared.info("MainApp", "open " + id);
+    if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
     if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish" || id === "cafe" || id === "gift" || id === "limited") && !this.ensureNet()) {
       return;
@@ -275,7 +280,11 @@ export class MainApp extends Component {
     place(
       createButton("模拟断线", () => {
         GameLog.shared.info("MainApp", "click net-drop");
-        NetClient.shared.simulateDrop();
+        if (Session.source === "wire") {
+          this.shell?.showToast("真服连接留着。这颗按钮只模拟 Mock 断线", 2200);
+          return;
+        }
+        this.cityNet().simulateDrop();
         this.shell?.showToast("已模拟断线");
       }, 160, 48),
       page,
@@ -290,12 +299,14 @@ export class MainApp extends Component {
       0,
       -330
     );
-    const netNode = createLabel("网络 " + NetClient.shared.state, 20, {
+    const net = this.cityNet();
+    this.netState = net.state;
+    const netNode = createLabel("网络 " + net.state, 20, {
       color: new Color(160, 180, 210, 255),
       width: 680,
     });
     place(netNode, page, 0, -420);
-    NetClient.shared.onState((state) => {
+    net.onState((state) => {
       if (!this.isValid) return;
       if (netNode.isValid) setText(netNode, "网络 " + state);
       // 放弃重连时会先经过 reconnecting，再进 connecting，最后 closed。
@@ -366,12 +377,28 @@ export class MainApp extends Component {
   /** 打开关卡列表。战斗和结算在 MainlinePage 里，不改场景。 */
   private openMainline(): void {
     GameLog.shared.info("MainApp", "click mainline");
+    if (this.blockWirePage("mainline")) return;
     const net = NetClient.shared;
     if (net.state !== "connected") {
       this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
       return;
     }
     this.openChild("mainline");
+  }
+
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。 */
+  private blockWirePage(id: string): boolean {
+    if (Session.source !== "wire") return false;
+    if (id === "city" || id === "log") return false;
+    GameLog.shared.info("MainApp", "wire skip " + id);
+    this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
+    return true;
+  }
+
+  /** 顶栏网络字样。真服看留着的那条连接，Mock 仍看共享客户端。 */
+  private cityNet(): NetClient {
+    if (Session.source === "wire" && WireSession.net) return WireSession.net;
+    return NetClient.shared;
   }
 
   /** 底栏「英雄」「召唤」「铁匠铺」没连上时不进页面。详情走页面栈。 */
@@ -441,6 +468,7 @@ export class MainApp extends Component {
    */
   private openLogin7(): void {
     GameLog.shared.info("MainApp", "click login7");
+    if (this.blockWirePage("login7")) return;
     if (!this.allow("login7")) return;
     if (!this.ensureNet()) return;
     this.panels?.openChild("login7");
@@ -472,6 +500,7 @@ export class MainApp extends Component {
    */
   private openGoal7(): void {
     GameLog.shared.info("MainApp", "click goal7");
+    if (this.blockWirePage("goal7")) return;
     if (!this.allow("goal7")) return;
     if (!this.ensureNet()) return;
     this.panels?.openChild("goal7");
@@ -503,6 +532,7 @@ export class MainApp extends Component {
    */
   private openShop(): void {
     GameLog.shared.info("MainApp", "click shop");
+    if (this.blockWirePage("shop")) return;
     if (!this.allow("shop")) return;
     if (!this.ensureNet()) return;
     this.panels?.openChild("shop");
@@ -572,6 +602,7 @@ export class MainApp extends Component {
    */
   private openGift(): void {
     GameLog.shared.info("MainApp", "click gift");
+    if (this.blockWirePage("gift")) return;
     if (!this.allow("gift")) return;
     if (!this.ensureNet()) return;
     this.panels?.openChild("gift");
@@ -605,6 +636,7 @@ export class MainApp extends Component {
    */
   private openLimited(): void {
     GameLog.shared.info("MainApp", "click limited");
+    if (this.blockWirePage("limited")) return;
     if (!this.allow("limited")) return;
     if (!this.ensureNet()) return;
     this.panels?.openChild("limited");
@@ -634,6 +666,7 @@ export class MainApp extends Component {
   /** 七日目标的「前往」。压在当前页上面，返回仍回到目标列表。 */
   private jumpFromGoal(jump: string): void {
     GameLog.shared.info("MainApp", "goal7 jump " + jump);
+    if (this.blockWirePage(jump || "goal")) return;
     if (jump === "mainline") {
       this.openMainline();
       return;
@@ -734,6 +767,7 @@ export class MainApp extends Component {
    */
   private openBag(): void {
     GameLog.shared.info("MainApp", "click bag");
+    if (this.blockWirePage("bag")) return;
     if (!this.allow("bag")) return;
     if (!this.ensureNet()) return;
     this.panels?.openChild("bag");
@@ -765,6 +799,7 @@ export class MainApp extends Component {
    */
   private openMail(): void {
     GameLog.shared.info("MainApp", "click mail");
+    if (this.blockWirePage("mail")) return;
     if (!this.allow("mail")) return;
     if (!this.ensureNet()) return;
     this.panels?.openChild("mail");
@@ -796,6 +831,7 @@ export class MainApp extends Component {
   /** 挂机随时可进。时长和领取在 IdlePage 里，不改场景。 */
   private openIdle(): void {
     GameLog.shared.info("MainApp", "click idle");
+    if (this.blockWirePage("idle")) return;
     const net = NetClient.shared;
     if (net.state !== "connected") {
       this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -845,6 +881,7 @@ export class MainApp extends Component {
   }
 
   private stageButtonText(): string {
+    if (Session.source === "wire") return "主线 · 未同步";
     const stageId = Session.stageId >= 1 ? Session.stageId : 1;
     return "主线 · 第" + stageId + "关";
   }
@@ -906,6 +943,10 @@ export class MainApp extends Component {
 
   /** 只改本界面的开服天，方便看幻魔塔解锁。下一关结算会按 Mock 进度覆盖。 */
   private previewOpenDay(): void {
+    if (Session.source === "wire") {
+      this.shell?.showToast("真服开服天还没同步，这里不改", 2200);
+      return;
+    }
     Session.openDay = 30;
     GameLog.shared.info("MainApp", "preview open day 30");
     this.refreshHub();
@@ -1009,6 +1050,10 @@ export class MainApp extends Component {
     const shell = this.shell;
     const net = NetClient.shared;
     GameLog.shared.info("MainApp", "click empty-create");
+    if (Session.source === "wire") {
+      shell?.showToast("真服创角不从这里发，也不会改 Mock 钱包", 2200);
+      return;
+    }
     if (net.state !== "connected") {
       shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
       return;
@@ -1031,6 +1076,10 @@ export class MainApp extends Component {
   /** 主动关掉连接并 Toast「网络已断开」。模拟断线仍会重连，不走这里。 */
   private toastClosed(): void {
     GameLog.shared.info("MainApp", "click force-close");
+    if (Session.source === "wire") {
+      this.shell?.showToast("这颗按钮只测 Mock 断开。真服连接留着", 2200);
+      return;
+    }
     NetClient.shared.close();
     const text = errorText(ErrorCode.NET_CLOSED);
     GameLog.shared.error("MainApp", text);
@@ -1038,6 +1087,7 @@ export class MainApp extends Component {
   }
 
   private gateText(): string {
+    if (Session.source === "wire") return "真服已登录。等级、开服天、金币和钻石还没从同步包读入";
     const db = ConfigDb.current;
     const level = this.level();
     const day = this.day();
