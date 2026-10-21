@@ -253,6 +253,17 @@ export const WireCmd = {
    * 不夹在 2001 和 3007 中间。不是圣龙数据 59001。不是魔方数据 75501。
    */
   dragonCollection: 59010,
+  /**
+   * c2s 空体。进主城、空 c2s 59010 之后发，只发一次。无 page。
+   * 整帧 `04 00 00 00 d9 d6 00 00`。55001 = 0xD6D9，小端 d9 d6 00 00。
+   * GReqScanTitleList / GResScanTitleList。
+   * titles 是字段 1，repeated PSTitle。idx 是字段 1，end_time 是字段 2。
+   * end_time：-1 永久，0 未激活，时间戳为到期。
+   * Title.proto 仅 55001 读写对，同模块无写号。不做 34001。不做 20011。
+   * 服侧轻懒建：TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。
+   * 不夹在 2001 和 3007 中间。不是圣物图鉴 59010。不是圣龙数据 59001。
+   */
+  scanTitleList: 55001,
 } as const;
 
 /**
