@@ -99,8 +99,8 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
 
 /**
  * 把 NetClient 的明文 cmd 编成线上帧。
- * heartbeat → 1004 空体。login → 1001。role.create → 1002。
- * 别的 cmd 返回 null，调用方不得把占位包写到线上。
+ * heartbeat → 1004 空体。login → 1001。role.create → 1002。wire.2001 → 空的 c2s 2001。
+ * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -132,6 +132,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
         LOGIN_DEVICE +
         " 字段7=" +
         LOGIN_CHANNEL,
+    };
+  }
+  if (cmd === "wire.2001") {
+    return {
+      cmdId: WireCmd.roleProfile,
+      bytes: encodeFrame(WireCmd.roleProfile),
+      note: "空体",
     };
   }
   if (cmd === Cmd.roleCreate) {

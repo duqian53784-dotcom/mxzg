@@ -20,6 +20,11 @@ export const WireCmd = {
   heartbeat: 1004,
   /** 只在 s2c 见过。字段含义未从 .proto 证实，只记录。 */
   s2c1005: 1005,
+  /**
+   * c2s 空体。旧桥日志里登录后客户端会发这一帧，s2c 回角色资料。
+   * 不是占位表里的 tower.view（也占了数字 2001，只给 Mock）。
+   */
+  roleProfile: 2001,
 } as const;
 
 /**

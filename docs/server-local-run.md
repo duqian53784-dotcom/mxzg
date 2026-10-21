@@ -44,7 +44,7 @@
 - 编解码仍是明文对象。`?transport=ws` 不把 `encodeRequest` 的对象写到线上，只写旧桥日志里的长度前缀帧，经 `13111/game` 转到 TCP 9902。调用方继续用 `Proto.*` 走 Mock。
 - 细节见 `docs/protocol-stubs.md`、`docs/mock-replay.md`、`docs/h5-websocket.md`。
 
-D2 已在倩本机验证：`?transport=ws` 经桥 13111 看到 `收到 s2c 1001`。有角色会进主城壳，金币钻石仍不当成 Mock 进度。细节见 `docs/h5-websocket.md`。
+D2 已在倩本机验证：`?transport=ws` 经桥 13111 看到 `收到 s2c 1001`。有角色会进主城壳。s2c 2001 字段 9 同步角色名。金币钻石仍不当成 Mock 进度。细节见 `docs/h5-websocket.md`。
 
 2026-10-19 另有一套旧 H5，目录是 `F:\FansGameX\mxzg-h5\客户端\web`。`serve.ps1` 听 `127.0.0.1:8080`，`dev-platform.ps1` 听 `127.0.0.1:18070`，页面上的 WebSocket `/game/9902` 由 `serve.ps1` 桥到游戏服 TCP `9902`。那是旧客户端。本仓库不启动那两个脚本，自己在 `scripts\start-ws-bridge.bat` 里做同样的字节转发，口改成 `13111/game`。
 

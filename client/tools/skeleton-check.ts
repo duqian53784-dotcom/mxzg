@@ -448,6 +448,8 @@ import {
   wireBody,
   wireRoleReady,
 } from "../assets/scripts/net/protocol/wireLogin";
+import { decodeWireRole, WIRE_ROLE_CMD } from "../assets/scripts/net/protocol/wireProfile";
+import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
   explainWireTimeout,
@@ -2813,6 +2815,14 @@ function sawLog(lines: string[], part: string): boolean {
   return false;
 }
 
+function sawWire(part: string): boolean {
+  const recent = GameLog.shared.recent();
+  for (let i = 0; i < recent.length; i++) {
+    if (recent[i].tag === "Wire" && recent[i].message.indexOf(part) >= 0) return true;
+  }
+  return false;
+}
+
 async function checkWs(): Promise<void> {
   assert(CmdId.login === 1001 && CmdId.heartbeat === 1002, "placeholder ids stay put");
   assert(DEFAULT_WS_URL === "ws://127.0.0.1:13111/game", "default ws url is the local bridge");
@@ -2834,7 +2844,9 @@ async function checkWs(): Promise<void> {
   assert(WS_OPEN_STATUS.indexOf("1004") >= 0, "open copy");
   assert(WIRE_HEARTBEAT_MS === 25000, "heartbeat interval from the net log");
   assert(WireCmd.login === 1001 && WireCmd.heartbeat === 1004 && WireCmd.roleCreate === 1002, "wire ids");
+  assert(WireCmd.roleProfile === 2001 && CmdId.towerView === 2001, "online 2001 stays off the placeholder table");
   assert(bytesToHex(encodeFrame(WireCmd.heartbeat)) === "04000000ec030000", "heartbeat frame");
+  assert(bytesToHex(encodeFrame(WireCmd.roleProfile)) === "04000000d1070000", "empty c2s 2001 from the log");
   const loginBody = encodeObservedLoginBody(960011, 1792466798);
   assert(
     bytesToHex(loginBody) === "2a0a31373932343636373938108bcc3a080718023a0d6d787a672d7765622d3130303132086c6f63616c646576",
@@ -3034,6 +3046,10 @@ async function checkWs(): Promise<void> {
       Session.gold = snapGold;
       Session.diamond = snapDiamond;
       Session.source = snapSource;
+      Session.wireSync.name = false;
+      Session.wireSync.level = false;
+      Session.wireSync.gold = false;
+      Session.wireSync.diamond = false;
     }
 
     lines.length = 0;
@@ -3085,6 +3101,114 @@ async function checkWs(): Promise<void> {
     assert(follow === 1, "frame after a bad handler still arrives");
     assert(sawLog(lines, "分发 s2c 50000 失败"), "bad handler logged");
     floodNet.close();
+
+    // net-20261020：两份新号 s2c 2001（角色 1000002）和先登录的那份（字段 15=100）。字段 9 都是创角名。
+    const roleNew = hexToBytes(
+      "08001000200028e80730013800408cfcd2c3014a0fe8a781e4b9a0e58692e999a9e5aeb6508bb0dbd6065800608bb0dbd606680070008001afe4d7d606980100a00100a80100b00100b80100c80101d00100d80100e00100e80101f00100f80100800203"
+    );
+    const roleOld = hexToBytes(
+      "08001000200028e80730013800408cfcd2c3014a0fe8a781e4b9a0e58692e999a9e5aeb650b297d8d606580060b297d8d606680078648001afe4d7d606980100a00100a80100b00100b80100c80101d00100d80100e00100e80101f00100f80100800203"
+    );
+    const parsedNew = decodeWireRole(roleNew);
+    const parsedOld = decodeWireRole(roleOld);
+    assert(parsedNew !== null && parsedNew.name === "见习冒险家", "s2c 2001 field 9 is the created name");
+    assert(parsedOld !== null && parsedOld.name === "见习冒险家", "older 2001 still only yields the name");
+    assert(decodeWireRole(new Uint8Array(0)) === null, "empty 2001 ignored");
+    assert(decodeWireRole(roleNew.subarray(0, 8)) === null, "truncated 2001 ignored");
+    assert(decodeWireRole(new Uint8Array([0xff, 0xff, 0xff])) === null, "bad 2001 ignored");
+
+    const snapAccount2 = Session.account;
+    const snapToken2 = Session.token;
+    const snapServerId2 = Session.serverId;
+    const snapServerName2 = Session.serverName;
+    const snapRole2 = Session.role;
+    const snapDay2 = Session.openDay;
+    const snapStage2 = Session.stageId;
+    const snapGold2 = Session.gold;
+    const snapDiamond2 = Session.diamond;
+    const snapSource2 = Session.source;
+    let roleNet: NetClient | null = null;
+    try {
+      Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
+      Session.applyWireSync({ name: "见习冒险家", level: 4, gold: 8, diamond: 3 });
+      assert(formatNameLine() === "见习冒险家 Lv4", "known wire level is shown");
+      assert(formatGoldLine() === "金币 8" && formatDiamondLine() === "钻石 3", "known wire wallet is shown");
+      assert(formatHubIdentity() === "见习冒险家 Lv4 · 真服", "known wire hub");
+      Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
+      assert(formatNameLine() === "角色 1000002" && formatGoldLine() === "金币 未同步", "new wire login clears the wallet");
+      Session.applyWireSync({ name: parsedOld ? parsedOld.name : null });
+      assert(Session.wireSync.name && !Session.wireSync.gold && !Session.wireSync.level, "packet only marks the name");
+      assert(formatGoldLine() === "金币 未同步" && formatDiamondLine() === "钻石 未同步", "field 5 and 15 stay off the wallet");
+      Session.applyEnter({ roleId: 9, name: "甲", level: 2, gold: 3, diamond: 4 });
+      assert(Session.applyWireSync({ name: "见习冒险家", gold: 1 }) === false, "mock ignores wire sync");
+      assert(formatNameLine() === "甲 Lv2" && formatGoldLine() === "金币 3", "mock wallet unchanged");
+
+      Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
+      const kept = Session.role ? Session.role.name : "";
+      const roleSockets: FakeSocket[] = [];
+      const roleTransport = new WsTransport({
+        connectTimeoutMs: 200,
+        factory: () => {
+          const socket = new FakeSocket();
+          roleSockets.push(socket);
+          setTimeout(() => socket.open(), 0);
+          return socket;
+        },
+      });
+      roleNet = new NetClient(roleTransport, {
+        heartbeatMs: 60000,
+        reconnectDelayMs: 20,
+        maxReconnect: 0,
+        requestTimeoutMs: 400,
+      });
+      await roleNet.connect(DEFAULT_WS_URL);
+      Session.applyEnter({ roleId: 9, name: kept || "甲", level: 2, gold: 3, diamond: 4 });
+      WireSession.watch(roleNet);
+      roleSockets[0].push(encodeFrame(WireCmd.roleProfile, roleNew));
+      assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
+      Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
+      WireSession.flush();
+      assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
+      assert(!Session.wireSync.gold && formatGoldLine() === "金币 未同步", "flushed profile has no wallet");
+      let paints = 0;
+      const offPaint = WireSession.onSync(() => {
+        paints += 1;
+      });
+      const offBoom = WireSession.onSync(() => {
+        throw new Error("boom");
+      });
+      roleSockets[0].push(encodeFrame(WireCmd.roleProfile, roleOld));
+      offPaint();
+      offBoom();
+      assert(paints === 1 && Session.role?.name === "见习冒险家", "later 2001 refreshes once");
+      assert(sawWire("刷新顶栏失败"), "listener error stays inside the session");
+      lines.length = 0;
+      roleNet.send(WIRE_ROLE_CMD);
+      const sent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(sent as ArrayBuffer)) === "04000000d1070000", "pull sends empty c2s 2001");
+      assert(sawLog(lines, "发送 c2s 2001"), "pull is logged");
+      roleSockets[0].push(encodeFrame(WireCmd.roleProfile, new Uint8Array([0x80])));
+      assert(Session.role?.name === "见习冒险家" && sawWire("解不开"), "bad 2001 keeps the name");
+      if (roleNet) roleNet.close();
+      WireSession.close();
+    } finally {
+      if (roleNet) roleNet.close();
+      WireSession.close();
+      Session.account = snapAccount2;
+      Session.token = snapToken2;
+      Session.serverId = snapServerId2;
+      Session.serverName = snapServerName2;
+      Session.role = snapRole2;
+      Session.openDay = snapDay2;
+      Session.stageId = snapStage2;
+      Session.gold = snapGold2;
+      Session.diamond = snapDiamond2;
+      Session.source = snapSource2;
+      Session.wireSync.name = false;
+      Session.wireSync.level = false;
+      Session.wireSync.gold = false;
+      Session.wireSync.diamond = false;
+    }
 
     if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "function") {
       const live = new WsTransport({ connectTimeoutMs: 400 });
