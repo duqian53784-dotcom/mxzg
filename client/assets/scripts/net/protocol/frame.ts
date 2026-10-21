@@ -282,11 +282,24 @@ export const WireCmd = {
    * units 是字段 1，repeated PSBorderUnit。id 是字段 1，active_state 是字段 2。
    * 不发 32002 道具激活。不发 32003 使用/切换边框。
    * 32003 是服侧推送：当前框过期时服侧可能写 role.borderId 回落并另推。客户端不发，勿当拉包。
-   * 不做 4402 激活皮肤。不做 20011。29001 有 page，硬禁。
+   * 4402 另只读接在其后，勿合并。不做 20011。29001 有 page，硬禁。
    * 服侧轻懒建免费框可接受。
    * 不夹在 2001 和 3007 中间。不是头像列表 34001。不是称号列表 55001。
    */
   borderData: 32001,
+  /**
+   * c2s 空体。进主城、空 c2s 32001 之后发，只发一次。无 page。
+   * 整帧 `04 00 00 00 32 11 00 00`。4402 = 0x1132，小端 32 11 00 00。
+   * GReqHeroFashionList / GResHeroFashionList。空体，无 page。
+   * list 是字段 1，repeated PSFashionData。
+   * hero_type、fashion_id、level、status、end_time 按声明顺序是 1、2、3、4、5。
+   * status：0 永久，1 限时。
+   * 不发 4403 激活。不发 4404 替换/使用。不发 4405 皮肤升级。
+   * 4406 无实现，勿发。不做 4401 穿戴皮肤英雄列表。不做 20011。29001 有 page，硬禁。
+   * 服侧轻懒建 HeroFashion 可接受。过期限时皮剔除，并可能把英雄 fashionId 置 0。只读展示。无扣费，无领奖。
+   * 不夹在 2001 和 3007 中间。不是头像框数据 32001。不是头像列表 34001。
+   */
+  heroFashionList: 4402,
 } as const;
 
 /**
