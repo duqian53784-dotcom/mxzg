@@ -591,6 +591,19 @@ import {
   WIRE_SUMMON_UNSYNCED_TOAST,
   wireSummonNote,
 } from "../assets/scripts/net/protocol/wireSummon";
+import {
+  decodeWireProphet,
+  formatWireProphetHead,
+  formatWireProphetLine,
+  WIRE_PROPHET_CMD,
+  WIRE_PROPHET_EMPTY,
+  WIRE_PROPHET_FIELD_NOTE,
+  WIRE_PROPHET_READONLY_NOTE,
+  WIRE_PROPHET_READONLY_TITLE,
+  WIRE_PROPHET_SIDE_EFFECT,
+  WIRE_PROPHET_UNSYNCED_TOAST,
+  wireProphetNote,
+} from "../assets/scripts/net/protocol/wireProphet";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1303,6 +1316,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("arena") === "plays" && rootTabFor("log") === "city" && rootTabFor("smith") === "smith", "root tab");
   assert(rootTabFor("mainline") === "city", "mainline stays on city tab");
   assert(rootTabFor("buygold") === "city" && rootTabFor("achieve") === "city", "buy gold and achievement stay on the city tab");
+  assert(rootTabFor("prophet") === "city", "prophet stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -3633,6 +3647,11 @@ async function checkWs(): Promise<void> {
   const summonBody = concatBytes(concatBytes(fieldVarint(1, 2), fieldVarint(2, 5)), fieldVarint(6, 8));
   const summonZero = fieldVarint(1, 0);
   const summonOuterOnly = fieldVarint(4, 1);
+  const prophetLuckyA = concatBytes(fieldVarint(1, 1), fieldVarint(2, 3));
+  const prophetLuckyB = concatBytes(fieldVarint(2, 0), fieldVarint(6, 4));
+  const prophetBody = concatBytes(concatBytes(fieldBytes(1, prophetLuckyA), fieldBytes(1, prophetLuckyB)), fieldVarint(4, 9));
+  const prophetMissing = fieldBytes(1, fieldVarint(1, 2));
+  const prophetOuterOnly = fieldVarint(4, 1);
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -3784,6 +3803,84 @@ async function checkWs(): Promise<void> {
       decodeWireSummon(summonSticky.frames[0].body)?.freeTime === null &&
       decodeWireSummon(summonSticky.frames[0].body)?.marks.length === 1,
     "sticky 4004 frame stops at its length prefix"
+  );
+  const loggedProphet = decodeWireProphet(prophetBody);
+  assert(
+    WireCmd.prophetSummon === 13044 && CmdId.summonPull === 1501 && WireCmd.heroSummonCount === 4004,
+    "online 13044 stays off the placeholder summon id and off summon count 4004"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.prophetSummon)) === "04000000f4320000", "empty c2s 13044");
+  assert(bytesToHex(encodeFrame(13041)) !== "04000000f4320000", "13041 is not the 13044 frame");
+  assert(bytesToHex(encodeFrame(13042)) !== "04000000f4320000", "13042 is not the 13044 frame");
+  assert(bytesToHex(encodeFrame(13043)) !== "04000000f4320000", "13043 is not the 13044 frame");
+  assert(bytesToHex(encodeFrame(58007)) !== "04000000f4320000", "58007 is not the 13044 frame");
+  assert(bytesToHex(encodeFrame(4201)) !== "04000000f4320000", "4201 is not the 13044 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.heroSummonCount)) !== "04000000f4320000", "4004 is not the 13044 frame");
+  assert(WIRE_PROPHET_READONLY_TITLE === "先知召唤（真服只读）", "readonly prophet title");
+  assert(WIRE_PROPHET_UNSYNCED_TOAST === "真服未同步", "unsynced prophet toast");
+  assert(WIRE_PROPHET_EMPTY === "空表", "empty prophet table label");
+  assert(
+    WIRE_PROPHET_SIDE_EFFECT.indexOf("懒建") >= 0 &&
+      WIRE_PROPHET_SIDE_EFFECT.indexOf("HeroSummon") >= 0 &&
+      WIRE_PROPHET_SIDE_EFFECT.indexOf("levelResetTimes") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("不抽") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("不置换") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("不确认置换") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("13041") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("13042") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("13043") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("58007") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("4201") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_PROPHET_READONLY_NOTE.indexOf("4004") >= 0 &&
+      WIRE_PROPHET_FIELD_NOTE.indexOf("type") >= 0 &&
+      WIRE_PROPHET_FIELD_NOTE.indexOf("lucky") >= 0 &&
+      WIRE_PROPHET_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "prophet page names type and lucky and refuses the write cmds"
+  );
+  assert(
+    decodeWireProphet(new Uint8Array(0)) !== null &&
+      decodeWireProphet(new Uint8Array(0))?.luckys.length === 0 &&
+      formatWireProphetHead(decodeWireProphet(new Uint8Array(0)) || { luckys: [], marks: [] }) === "空表",
+    "empty 13044 body is synced and does not invent zeros"
+  );
+  assert(decodeWireProphet(new Uint8Array([0x80])) === null, "bad 13044 ignored");
+  assert(decodeWireProphet(fieldBytes(1, new Uint8Array([0x80]))) === null, "bad nested lucky does not become an empty table");
+  const prophetMissingSnap = decodeWireProphet(prophetMissing);
+  assert(
+    prophetMissingSnap !== null &&
+      prophetMissingSnap.luckys.length === 1 &&
+      formatWireProphetLine(prophetMissingSnap.luckys[0]) === "type=2 / lucky=无",
+    "missing lucky stays blank and is not written as 0"
+  );
+  assert(
+    loggedProphet !== null &&
+      loggedProphet.luckys.length === 2 &&
+      loggedProphet.luckys[0].type === 1 &&
+      loggedProphet.luckys[0].lucky === 3 &&
+      loggedProphet.luckys[1].type === null &&
+      loggedProphet.luckys[1].lucky === 0 &&
+      loggedProphet.luckys[1].marks.length === 1 &&
+      loggedProphet.luckys[1].marks[0].field === 6 &&
+      loggedProphet.marks.length === 1 &&
+      loggedProphet.marks[0].field === 4 &&
+      formatWireProphetLine(loggedProphet.luckys[0]) === "type=1 / lucky=3" &&
+      formatWireProphetLine(loggedProphet.luckys[1]) === "type=无 / lucky=0 / 字段6=4" &&
+      formatWireProphetHead(loggedProphet) === "2 条 / 字段4=9" &&
+      wireProphetNote(loggedProphet).indexOf(WIRE_PROPHET_SIDE_EFFECT) >= 0 &&
+      wireProphetNote(loggedProphet).indexOf("不写金币") >= 0 &&
+      wireProphetNote(loggedProphet).indexOf("不写钻石") >= 0,
+    "13044 sample keeps type and lucky and does not fill missing type with 0"
+  );
+  const prophetSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.prophetSummon, prophetOuterOnly), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    prophetSticky.frames.length === 2 &&
+      prophetSticky.frames[0].cmdId === 13044 &&
+      prophetSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireProphet(prophetSticky.frames[0].body)?.luckys.length === 0 &&
+      decodeWireProphet(prophetSticky.frames[0].body)?.marks.length === 1,
+    "sticky 13044 frame stops at its length prefix"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -4239,6 +4336,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.sevenDayTarget, goalBody));
       roleSockets[0].push(encodeFrame(WireCmd.blessingPool, wishBody));
       roleSockets[0].push(encodeFrame(WireCmd.heroSummonCount, summonBody));
+      roleSockets[0].push(encodeFrame(WireCmd.prophetSummon, prophetBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -4253,6 +4351,8 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasSevenDay() && WireSession.sevenDay === null, "seven day stays unsynced before the city role");
       assert(!WireSession.hasGoal7() && WireSession.goal7 === null, "goal7 stays unsynced before the city role");
       assert(!WireSession.hasWish() && WireSession.wish === null, "wish stays unsynced before the city role");
+      assert(!WireSession.hasSummon() && WireSession.summon === null, "summon stays unsynced before the city role");
+      assert(!WireSession.hasProphet() && WireSession.prophet === null, "prophet stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -4382,6 +4482,20 @@ async function checkWs(): Promise<void> {
         "flush writes the 4004 counts and leaves the 27001 pool and the 4001 roster"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "4004 stays off the wallet");
+      assert(
+        WireSession.hasProphet() &&
+          WireSession.prophet !== null &&
+          WireSession.prophet.luckys.length === 2 &&
+          WireSession.prophet.luckys[0].type === 1 &&
+          WireSession.prophet.luckys[0].lucky === 3 &&
+          WireSession.prophet.luckys[1].type === null &&
+          WireSession.prophet.luckys[1].lucky === 0 &&
+          formatWireProphetLine(WireSession.prophet.luckys[1]) === "type=无 / lucky=0 / 字段6=4" &&
+          WireSession.summon !== null &&
+          WireSession.summon.freeTime === 2,
+        "flush writes the 13044 luckys and leaves the 4004 counts"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "13044 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -4604,7 +4718,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 10, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 11, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -4646,6 +4760,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 4004 after 27001"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 10] as ArrayBuffer)) === "04000000f4320000",
+        "pullIdle sends empty c2s 13044 after 4004"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -4655,9 +4773,11 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 21010") &&
           sawLog(lines, "发送 c2s 27001") &&
           sawLog(lines, "发送 c2s 4004") &&
+          sawLog(lines, "发送 c2s 13044") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
+          sawLog(lines, "04000000f4320000") &&
           sawLog(lines, "0400000002520000") === false &&
           sawLog(lines, "发送 c2s 12020") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
@@ -4672,8 +4792,11 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 4002") === false &&
           sawLog(lines, "发送 c2s 4005") === false &&
           sawLog(lines, "发送 c2s 58001") === false &&
-          sawLog(lines, "发送 c2s 58007") === false,
-        "mail hero buy gold achievement arena seven day goal wish and summon pulls are logged"
+          sawLog(lines, "发送 c2s 58007") === false &&
+          sawLog(lines, "发送 c2s 13041") === false &&
+          sawLog(lines, "发送 c2s 13042") === false &&
+          sawLog(lines, "发送 c2s 13043") === false,
+        "mail hero buy gold achievement arena seven day goal wish summon and prophet pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -4826,6 +4949,26 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.58007") &&
           sawLog(lines, "未发送 summon.pull"),
         "summon pull and cumulative reward are not encoded"
+      );
+      roleNet.send(WIRE_PROPHET_CMD);
+      const prophetSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(prophetSent as ArrayBuffer)) === "04000000f4320000", "wire.13044 frame");
+      const sentBeforeProphetOther = roleSockets[0].sent.length;
+      roleNet.send("wire.13041");
+      roleNet.send("wire.13042");
+      roleNet.send("wire.13043");
+      roleNet.send("wire.58007");
+      roleNet.send("wire.4201");
+      roleNet.send(Cmd.summonPull);
+      assert(roleSockets[0].sent.length === sentBeforeProphetOther, "13041 13042 13043 58007 4201 and summon.pull stay off the prophet wire");
+      assert(
+        sawLog(lines, "未发送 wire.13041") &&
+          sawLog(lines, "未发送 wire.13042") &&
+          sawLog(lines, "未发送 wire.13043") &&
+          sawLog(lines, "未发送 wire.58007") &&
+          sawLog(lines, "未发送 wire.4201") &&
+          sawLog(lines, "未发送 summon.pull"),
+        "prophet draw replace and confirm are not encoded"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -4988,6 +5131,50 @@ async function checkWs(): Promise<void> {
         "non-empty 4004 without counts stays synced and leaves 27001"
       );
       assert(Session.gold === goldBeforeBadSummon && Session.diamond === diamondBeforeBadSummon, "outer-only 4004 does not write gold or diamonds");
+      assert(
+        WireSession.hasProphet() &&
+          WireSession.prophet !== null &&
+          WireSession.prophet.luckys.length === 2 &&
+          WireSession.prophet.luckys[0].lucky === 3,
+        "4004 replacements leave the 13044 luckys"
+      );
+      const goldBeforeBadProphet = Session.gold;
+      const diamondBeforeBadProphet = Session.diamond;
+      roleSockets[0].push(encodeFrame(WireCmd.prophetSummon, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasProphet() &&
+          WireSession.prophet !== null &&
+          WireSession.prophet.luckys.length === 2 &&
+          WireSession.prophet.luckys[1].lucky === 0 &&
+          WireSession.summon !== null &&
+          WireSession.summon.marks.length === 1 &&
+          sawWire("13044 解不开"),
+        "bad 13044 keeps the luckys and the 4004 counts"
+      );
+      assert(Session.gold === goldBeforeBadProphet && Session.diamond === diamondBeforeBadProphet, "bad 13044 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.prophetSummon));
+      assert(
+        WireSession.hasProphet() &&
+          WireSession.prophet !== null &&
+          WireSession.prophet.luckys.length === 0 &&
+          formatWireProphetHead(WireSession.prophet) === "空表" &&
+          WireSession.summon !== null &&
+          WireSession.summon.marks.length === 1,
+        "empty 13044 body replaces the luckys and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadProphet && Session.diamond === diamondBeforeBadProphet, "empty 13044 does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.prophetSummon, prophetOuterOnly));
+      assert(
+        WireSession.hasProphet() &&
+          WireSession.prophet !== null &&
+          WireSession.prophet.luckys.length === 0 &&
+          WireSession.prophet.marks.length === 1 &&
+          WireSession.prophet.marks[0].field === 4 &&
+          WireSession.summon !== null &&
+          WireSession.summon.marks[0].field === 4,
+        "non-empty 13044 without luckys stays synced and leaves 4004"
+      );
+      assert(Session.gold === goldBeforeBadProphet && Session.diamond === diamondBeforeBadProphet, "outer-only 13044 does not write gold or diamonds");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {
