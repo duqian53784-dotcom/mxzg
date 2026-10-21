@@ -618,6 +618,19 @@ import {
   WIRE_JEWEL_UNSYNCED_TOAST,
   wireJewelNote,
 } from "../assets/scripts/net/protocol/wireJewel";
+import {
+  decodeWireIllustrat,
+  formatWireIllustratHead,
+  formatWireIllustratLine,
+  WIRE_ILLUSTRAT_CMD,
+  WIRE_ILLUSTRAT_EMPTY,
+  WIRE_ILLUSTRAT_FIELD_NOTE,
+  WIRE_ILLUSTRAT_READONLY_NOTE,
+  WIRE_ILLUSTRAT_READONLY_TITLE,
+  WIRE_ILLUSTRAT_SIDE_EFFECT,
+  WIRE_ILLUSTRAT_UNSYNCED_TOAST,
+  wireIllustratNote,
+} from "../assets/scripts/net/protocol/wireIllustrat";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1332,6 +1345,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("buygold") === "city" && rootTabFor("achieve") === "city", "buy gold and achievement stay on the city tab");
   assert(rootTabFor("prophet") === "city", "prophet stays on the city tab");
   assert(rootTabFor("jewel") === "city", "jewel stays on the city tab");
+  assert(rootTabFor("illustrat") === "city", "illustrat stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -3674,6 +3688,11 @@ async function checkWs(): Promise<void> {
   const jewelBody = concatBytes(concatBytes(fieldBytes(1, jewelHeroA), fieldBytes(1, jewelHeroB)), fieldVarint(4, 3));
   const jewelMissing = fieldBytes(1, fieldBytes(2, fieldVarint(1, 8)));
   const jewelOuterOnly = fieldVarint(4, 1);
+  const illustratRowA = concatBytes(fieldVarint(1, 102), fieldVarint(2, 5));
+  const illustratRowB = concatBytes(fieldVarint(2, 0), fieldVarint(6, 4));
+  const illustratBody = concatBytes(concatBytes(fieldBytes(1, illustratRowA), fieldBytes(1, illustratRowB)), fieldVarint(4, 3));
+  const illustratMissing = fieldBytes(1, fieldVarint(1, 8));
+  const illustratOuterOnly = fieldVarint(4, 1);
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -3996,6 +4015,75 @@ async function checkWs(): Promise<void> {
       decodeWireJewel(jewelSticky.frames[0].body)?.heroes.length === 0 &&
       decodeWireJewel(jewelSticky.frames[0].body)?.marks.length === 1,
     "sticky 4101 frame stops at its length prefix"
+  );
+  const loggedIllustrat = decodeWireIllustrat(illustratBody);
+  assert(
+    WireCmd.illustratReward === 4013 && WireCmd.heroList === 4001 && WireCmd.heroJewel === 4101,
+    "online 4013 stays off the hero list 4001 and jewel 4101"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.illustratReward)) === "04000000ad0f0000", "empty c2s 4013");
+  assert(bytesToHex(encodeFrame(4014)) !== "04000000ad0f0000", "4014 is not the 4013 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.heroList)) !== "04000000ad0f0000", "4001 is not the 4013 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.heroJewel)) !== "04000000ad0f0000", "4101 is not the 4013 frame");
+  assert(WIRE_ILLUSTRAT_READONLY_TITLE === "英雄图鉴（真服只读）", "readonly illustrat title");
+  assert(WIRE_ILLUSTRAT_UNSYNCED_TOAST === "真服未同步", "unsynced illustrat toast");
+  assert(WIRE_ILLUSTRAT_EMPTY === "空表", "empty illustrat table label");
+  assert(
+    WIRE_ILLUSTRAT_SIDE_EFFECT.indexOf("懒建") >= 0 &&
+      WIRE_ILLUSTRAT_SIDE_EFFECT.indexOf("可接受") >= 0 &&
+      WIRE_ILLUSTRAT_SIDE_EFFECT.indexOf("空体安全") >= 0 &&
+      WIRE_ILLUSTRAT_READONLY_NOTE.indexOf("不把 4013 当领奖") >= 0 &&
+      WIRE_ILLUSTRAT_READONLY_NOTE.indexOf("不发 4014") >= 0 &&
+      WIRE_ILLUSTRAT_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_ILLUSTRAT_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_ILLUSTRAT_READONLY_NOTE.indexOf("4001") >= 0 &&
+      WIRE_ILLUSTRAT_READONLY_NOTE.indexOf("4101") >= 0 &&
+      WIRE_ILLUSTRAT_FIELD_NOTE.indexOf("hero_type") >= 0 &&
+      WIRE_ILLUSTRAT_FIELD_NOTE.indexOf("star") >= 0 &&
+      WIRE_ILLUSTRAT_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "illustrat page names hero_type and star and refuses 4014"
+  );
+  assert(
+    decodeWireIllustrat(new Uint8Array(0)) !== null &&
+      decodeWireIllustrat(new Uint8Array(0))?.rows.length === 0 &&
+      formatWireIllustratHead(decodeWireIllustrat(new Uint8Array(0)) || { rows: [], marks: [] }) === "空表",
+    "empty 4013 body is synced and does not invent zeros"
+  );
+  assert(decodeWireIllustrat(new Uint8Array([0x80])) === null, "bad 4013 ignored");
+  assert(decodeWireIllustrat(fieldBytes(1, new Uint8Array([0x80]))) === null, "4013 row blob that fails is not an empty table");
+  const illustratMissingSnap = decodeWireIllustrat(illustratMissing);
+  assert(
+    illustratMissingSnap !== null &&
+      illustratMissingSnap.rows.length === 1 &&
+      illustratMissingSnap.rows[0].heroType === 8 &&
+      illustratMissingSnap.rows[0].star === null &&
+      formatWireIllustratLine(illustratMissingSnap.rows[0]) === "hero_type=8 / star=无",
+    "missing 4013 star stays blank"
+  );
+  assert(
+    loggedIllustrat !== null &&
+      loggedIllustrat.rows.length === 2 &&
+      loggedIllustrat.rows[0].heroType === 102 &&
+      loggedIllustrat.rows[0].star === 5 &&
+      loggedIllustrat.rows[1].heroType === null &&
+      loggedIllustrat.rows[1].star === 0 &&
+      loggedIllustrat.marks.length === 1 &&
+      loggedIllustrat.marks[0].field === 4 &&
+      formatWireIllustratLine(loggedIllustrat.rows[1]) === "hero_type=无 / star=0 / 字段6=4" &&
+      formatWireIllustratHead(loggedIllustrat) === "2 条 / 字段4=3" &&
+      wireIllustratNote(loggedIllustrat).indexOf(WIRE_ILLUSTRAT_SIDE_EFFECT) >= 0 &&
+      wireIllustratNote(loggedIllustrat).indexOf("不写金币") >= 0 &&
+      wireIllustratNote(loggedIllustrat).indexOf("不写钻石") >= 0,
+    "4013 sample keeps hero_type and star and does not fill missing hero_type with 0"
+  );
+  const illustratSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.illustratReward, illustratOuterOnly), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    illustratSticky.frames.length === 2 &&
+      illustratSticky.frames[0].cmdId === 4013 &&
+      illustratSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireIllustrat(illustratSticky.frames[0].body)?.rows.length === 0 &&
+      decodeWireIllustrat(illustratSticky.frames[0].body)?.marks.length === 1,
+    "sticky 4013 frame stops at its length prefix"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -4453,6 +4541,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.heroSummonCount, summonBody));
       roleSockets[0].push(encodeFrame(WireCmd.prophetSummon, prophetBody));
       roleSockets[0].push(encodeFrame(WireCmd.heroJewel, jewelBody));
+      roleSockets[0].push(encodeFrame(WireCmd.illustratReward, illustratBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -4470,6 +4559,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasSummon() && WireSession.summon === null, "summon stays unsynced before the city role");
       assert(!WireSession.hasProphet() && WireSession.prophet === null, "prophet stays unsynced before the city role");
       assert(!WireSession.hasJewel() && WireSession.jewel === null, "jewel stays unsynced before the city role");
+      assert(!WireSession.hasIllustrat() && WireSession.illustrat === null, "illustrat stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -4629,6 +4719,20 @@ async function checkWs(): Promise<void> {
         "flush writes the 4101 jewels and leaves the 13044 luckys"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "4101 stays off the wallet");
+      assert(
+        WireSession.hasIllustrat() &&
+          WireSession.illustrat !== null &&
+          WireSession.illustrat.rows.length === 2 &&
+          WireSession.illustrat.rows[0].heroType === 102 &&
+          WireSession.illustrat.rows[0].star === 5 &&
+          WireSession.illustrat.rows[1].heroType === null &&
+          WireSession.illustrat.rows[1].star === 0 &&
+          formatWireIllustratLine(WireSession.illustrat.rows[1]) === "hero_type=无 / star=0 / 字段6=4" &&
+          WireSession.jewel !== null &&
+          WireSession.jewel.heroes.length === 2,
+        "flush writes the 4013 rows and leaves the 4101 jewels"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "4013 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -4851,7 +4955,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 12, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 13, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -4901,6 +5005,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 4101 after 13044"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 12] as ArrayBuffer)) === "04000000ad0f0000",
+        "pullIdle sends empty c2s 4013 after 4101"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -4912,11 +5020,13 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 4004") &&
           sawLog(lines, "发送 c2s 13044") &&
           sawLog(lines, "发送 c2s 4101") &&
+          sawLog(lines, "发送 c2s 4013") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
           sawLog(lines, "04000000f4320000") &&
           sawLog(lines, "0400000005100000") &&
+          sawLog(lines, "04000000ad0f0000") &&
           sawLog(lines, "0400000002520000") === false &&
           sawLog(lines, "发送 c2s 12020") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
@@ -4941,8 +5051,9 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 4105") === false &&
           sawLog(lines, "发送 c2s 4106") === false &&
           sawLog(lines, "发送 c2s 4107") === false &&
-          sawLog(lines, "发送 c2s 9001") === false,
-        "mail hero buy gold achievement arena seven day goal wish summon prophet and jewel pulls are logged"
+          sawLog(lines, "发送 c2s 9001") === false &&
+          sawLog(lines, "发送 c2s 4014") === false,
+        "mail hero buy gold achievement arena seven day goal wish summon prophet jewel and illustrat pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -5138,6 +5249,13 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.9001"),
         "jewel replace unequip and compose are not encoded"
       );
+      roleNet.send(WIRE_ILLUSTRAT_CMD);
+      const illustratSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(illustratSent as ArrayBuffer)) === "04000000ad0f0000", "wire.4013 frame");
+      const sentBeforeIllustratOther = roleSockets[0].sent.length;
+      roleNet.send("wire.4014");
+      assert(roleSockets[0].sent.length === sentBeforeIllustratOther, "4014 stays off the illustrat wire");
+      assert(sawLog(lines, "未发送 wire.4014"), "illustrat push is not encoded as a claim");
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
       assert(
@@ -5392,10 +5510,52 @@ async function checkWs(): Promise<void> {
           WireSession.prophet !== null &&
           WireSession.prophet.marks[0].field === 4 &&
           WireSession.heroes !== null &&
-          WireSession.heroes.length === 0,
-        "non-empty 4101 without heroes stays synced and leaves 13044 and 4001"
+          WireSession.heroes.length === 0 &&
+          WireSession.illustrat !== null &&
+          WireSession.illustrat.rows.length === 2 &&
+          WireSession.illustrat.rows[0].heroType === 102,
+        "non-empty 4101 without heroes stays synced and leaves 13044, 4001 and 4013"
       );
       assert(Session.gold === goldBeforeBadJewel && Session.diamond === diamondBeforeBadJewel, "outer-only 4101 does not write gold or diamonds");
+      const goldBeforeBadIllustrat = Session.gold;
+      const diamondBeforeBadIllustrat = Session.diamond;
+      roleSockets[0].push(encodeFrame(WireCmd.illustratReward, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasIllustrat() &&
+          WireSession.illustrat !== null &&
+          WireSession.illustrat.rows.length === 2 &&
+          WireSession.illustrat.rows[0].star === 5 &&
+          WireSession.jewel !== null &&
+          WireSession.jewel.marks.length === 1 &&
+          sawWire("4013 解不开"),
+        "bad 4013 keeps the rows and the 4101 jewels"
+      );
+      assert(Session.gold === goldBeforeBadIllustrat && Session.diamond === diamondBeforeBadIllustrat, "bad 4013 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.illustratReward));
+      assert(
+        WireSession.hasIllustrat() &&
+          WireSession.illustrat !== null &&
+          WireSession.illustrat.rows.length === 0 &&
+          formatWireIllustratHead(WireSession.illustrat) === "空表" &&
+          WireSession.jewel !== null &&
+          WireSession.jewel.marks.length === 1,
+        "empty 4013 body replaces the rows and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadIllustrat && Session.diamond === diamondBeforeBadIllustrat, "empty 4013 does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.illustratReward, illustratOuterOnly));
+      assert(
+        WireSession.hasIllustrat() &&
+          WireSession.illustrat !== null &&
+          WireSession.illustrat.rows.length === 0 &&
+          WireSession.illustrat.marks.length === 1 &&
+          WireSession.illustrat.marks[0].field === 4 &&
+          WireSession.jewel !== null &&
+          WireSession.jewel.marks[0].field === 4 &&
+          WireSession.heroes !== null &&
+          WireSession.heroes.length === 0,
+        "non-empty 4013 without rows stays synced and leaves 4101 and 4001"
+      );
+      assert(Session.gold === goldBeforeBadIllustrat && Session.diamond === diamondBeforeBadIllustrat, "outer-only 4013 does not write gold or diamonds");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {

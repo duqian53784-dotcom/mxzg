@@ -38,6 +38,8 @@ import { buildSummonPage, SummonPage } from "./SummonPage";
 import { buildWireSummonPage, WireSummonPage } from "./WireSummonPage";
 import { buildWireProphetPage, WireProphetPage } from "./WireProphetPage";
 import { buildWireJewelPage, WireJewelPage } from "./WireJewelPage";
+import { buildWireIllustratPage, WireIllustratPage } from "./WireIllustratPage";
+import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -103,6 +105,7 @@ const ACHIEVE_FILL = new Color(72, 96, 160, 255);
 const BUYGOLD_FILL = new Color(176, 144, 48, 255);
 const PROPHET_FILL = new Color(92, 64, 148, 255);
 const JEWEL_FILL = new Color(32, 122, 118, 255);
+const ILLUSTRAT_FILL = new Color(148, 92, 48, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -117,6 +120,7 @@ export class MainApp extends Component {
   private summon: SummonPage | WireSummonPage | null = null;
   private prophet: WireProphetPage | null = null;
   private jewel: WireJewelPage | null = null;
+  private illustrat: WireIllustratPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -163,6 +167,8 @@ export class MainApp extends Component {
     this.prophet = null;
     this.jewel?.dispose();
     this.jewel = null;
+    this.illustrat?.dispose();
+    this.illustrat = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -276,7 +282,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -322,6 +328,7 @@ export class MainApp extends Component {
     if (id === "summon") return this.mountSummon();
     if (id === "prophet") return this.mountProphet();
     if (id === "jewel") return this.mountJewel();
+    if (id === "illustrat") return this.mountIllustrat();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -364,6 +371,7 @@ export class MainApp extends Component {
     place(createButton("点金", () => this.openBuyGold(), 200, 44, BUYGOLD_FILL, 18), page, 110, -248);
     place(createButton("先知召唤", () => this.openProphet(), 200, 44, PROPHET_FILL, 18), page, -110, -308);
     place(createButton("英雄宝石", () => this.openJewel(), 200, 44, JEWEL_FILL, 18), page, 110, -308);
+    place(createButton("英雄图鉴", () => this.openIllustrat(), 200, 44, ILLUSTRAT_FILL, 18), page, 0, -368);
     place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, -40);
     place(
       createButton("公告", () => {
@@ -390,13 +398,13 @@ export class MainApp extends Component {
       190,
       -40
     );
-    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -360);
+    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -428);
 
     this.gateNode = place(
       createLabel(this.gateText(), 20, { color: GATE_COLOR, width: 680, height: 72 }),
       page,
       0,
-      -440
+      -500
     );
     const net = this.cityNet();
     this.netState = net.state;
@@ -404,7 +412,7 @@ export class MainApp extends Component {
       color: new Color(160, 180, 210, 255),
       width: 680,
     });
-    place(netNode, page, 0, -530);
+    place(netNode, page, 0, -580);
     net.onState((state) => {
       if (!this.isValid) return;
       if (netNode.isValid) setText(netNode, "网络 " + state);
@@ -504,7 +512,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。英雄图鉴收到 4013 时另走只读页，不发 4014。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
   private blockWirePage(id: string): boolean {
     if (id === "achieve") return this.blockWireAchievement();
     if (id === "buygold") return this.blockWireBuyGold();
@@ -515,6 +523,7 @@ export class MainApp extends Component {
     if (id === "summon") return this.blockWireSummon();
     if (id === "prophet") return this.blockWireProphet();
     if (id === "jewel") return this.blockWireJewel();
+    if (id === "illustrat") return this.blockWireIllustrat();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -591,6 +600,14 @@ export class MainApp extends Component {
     if (Session.source === "wire" && WireSession.hasJewel()) return false;
     GameLog.shared.info("MainApp", "wire jewel unsynced");
     this.shell?.showToast(WIRE_JEWEL_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 4013 就停在主城。空表也算同步。不领奖，不发 4014。Mock 主城这颗按钮同样只 Toast，不改原来的英雄页。 */
+  private blockWireIllustrat(): boolean {
+    if (Session.source === "wire" && WireSession.hasIllustrat()) return false;
+    GameLog.shared.info("MainApp", "wire illustrat unsynced");
+    this.shell?.showToast(WIRE_ILLUSTRAT_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -839,6 +856,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.jewel = page;
+    return page.node;
+  }
+
+  /** 真服英雄图鉴。未同步 Toast。已同步压入只读页，不领奖，不发 4014，不写金币。不走底栏英雄。 */
+  private openIllustrat(): void {
+    GameLog.shared.info("MainApp", "click illustrat");
+    if (this.blockWirePage("illustrat")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("illustrat");
+    this.refreshChrome();
+  }
+
+  private mountIllustrat(): Node {
+    this.illustrat?.dispose();
+    const page = buildWireIllustratPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.illustrat = page;
     return page.node;
   }
 
@@ -1545,6 +1585,10 @@ export class MainApp extends Component {
     if (id === "jewel") {
       this.jewel?.dispose();
       this.jewel = null;
+    }
+    if (id === "illustrat") {
+      this.illustrat?.dispose();
+      this.illustrat = null;
     }
     if (id === "bag") {
       this.bag?.dispose();

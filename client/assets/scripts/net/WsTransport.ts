@@ -22,7 +22,8 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 空的 c2s 27001 拉许愿池。s2c 27001 由 WireSession 按 GResBlessingPoolList 读，不写顶栏。不发 27002、27003、27004。不发 4201。
  * 空的 c2s 4004 拉召唤次数。s2c 4004 由 WireSession 按 GResHeroSummonCount 读 free_time、senior_free_time，不写顶栏。不发 4002、4005。不做 58001、58007。不是英雄列表 4001。
  * 空的 c2s 13044 拉先知召唤幸运值。s2c 13044 由 WireSession 按 GResProphetSummonInfo 读 luckys 的 type、lucky，不写顶栏。不发 13041、13042、13043。不做 58007、4201。不是召唤次数 4004。
- * 空的 c2s 4101 拉英雄宝石。s2c 4101 由 WireSession 按 GResHeroJewel 读 hero_id、jewel_id、place、jewel_type，不写顶栏。不发 4102、4103、4104、4105、4106、4107。不做 9001。不是英雄列表 4001，也不是 13044。别的号不猜。
+ * 空的 c2s 4101 拉英雄宝石。s2c 4101 由 WireSession 按 GResHeroJewel 读 hero_id、jewel_id、place、jewel_type，不写顶栏。不发 4102、4103、4104、4105、4106、4107。不做 9001。不是英雄列表 4001，也不是 13044。
+ * 空的 c2s 4013 拉英雄图鉴。s2c 4013 由 WireSession 按 GResIllustratReward 读 list 的 hero_type、star，不写顶栏。名字像领奖，实为查看。不发 4014。4014 仅 s2c 推送。不是英雄列表 4001，也不是 4101。别的号不猜。
  * 单条处理失败也不丢掉后面的帧。
  */
 
