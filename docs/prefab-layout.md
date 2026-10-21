@@ -536,3 +536,45 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 `Title` / `Note` / `Status` / `Empty` / `Unsynced` 与 `WIRE_ACTIVITY_READONLY_TITLE` / `WIRE_ACTIVITY_READONLY_NOTE` / `WIRE_ACTIVITY_FIELD_NOTE` / `WIRE_ACTIVITY_EMPTY` / `WIRE_ACTIVITY_UNSYNCED_TOAST` 相同。`Stamp` 是 `formatWireActivityStamp` 在 status 为 1、time 缺失时的句子（`time` 写成 `无`，不补 0）。行文案是 `formatWireActivityLine`。日志三例是 idx 1 / 2 / 3、num 都是 0，所以 `Row_0` … `Row_2` 为 `idx=1 / num=0`、`idx=2 / num=0`、`idx=3 / num=0`。后面七行按同一句式续到 `idx=10 / num=0`，把 `VISIBLE_ROWS` 的窗口填满。节点锚点在中心、放在 x=0，行 Label 水平对齐为左，宽 640，和 `align: "left"` 一致。
 
 没有 stamp 时 `render()` 的 `top` 是 320，行在 `320 − i×44`，空表也在 320。这份预制按这个坐标摆 `Row_*`、`Empty` 和 `More`（`More` 的 y 是 `320 − 10×44 = -120`）。已同步而且 `formatWireActivityStamp` 有字时，Stamp 占 y=320，然后 `top -= 44`，空表和行从 276 起，每行仍隔 44。运行时溢出文案是 `还有 N 条`；预制里的 `还有 2 条` 只是占位。`BtnBack` 用蓝色按钮，字号走 `createButton` 默认 24。
+
+## Achievement / 成就（未接线）
+
+只有真服只读页一份 Prefab。对齐 `WireAchievementPage.ts` 的 `WireAchievementController.build()` / `render()`，以及 `wireAchievement.ts` 的 s2c **12010** / `GResAchievementList`（`WIRE_ACHIEVEMENT_CMD = "wire.12010"`）。成就只读：不领奖，不改 state，不写金币。仓内没有 Mock 成就页，这一份不另造。
+
+打开或同步会在服上懒建未接取的首链成就。页上必须带着侧效提示 `WIRE_ACHIEVEMENT_SIDE_EFFECT`（`打开/同步可能在服上补成就`），节点 `SideEffect`，默认显示。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| WireAchievementPage | `prefabs/ui/achievement/WireAchievementPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/achievement/WireAchievementPage.prefab`（目录 `achievement/`）
+- **状态**：**未接** Boot、`MainApp`、`WireAchievementPage.ts`，以及任何 `USE_*_PREFAB`。不改协议。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` / `render()` 一致）。`ListHost`、`Rows` 都放在 (0, 0) 且铺满 720×1280，子节点的 y 就是代码里的页面坐标。
+- 代码根节点名是 `WireAchievementPage`，容器是小写 `list-host` / `rows`。预制根同名，容器用下面表里的 PascalCase，方便在编辑器里对位置。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid（`@f9941`）。Prefab 目录里没有 PNG。没有成就专用图集：页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；返回用 `button_btn-blue-big`。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 运行时 `render()` 会拆掉并重建 `rows`。Prefab 里的空表、行和溢出是编辑器预览，不是代码去克隆的模板。`SideEffect`、`Title`、`Note`、`FieldNote` 是 `build()` 层，不随列表隐藏。
+- 再生：`python3 client/tools/gen_achievement_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `WireAchievementPage.ts` 的坐标和 `wireAchievement.ts` 的文案、`formatWireAchievementLine`）
+
+### WireAchievementPage（真服只读，12010）
+
+根 `WireAchievementPage`。`VISIBLE_ROWS = 22`。默认是未同步占位，对应 `WireSession.achievements == null`：只显示 `Unsynced`，空表、二十二行和溢出都是 `_active: false`。`SideEffect` 始终显示。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | 深蓝 `(8, 16, 32)` |
+| `Title` | (0, 520) | 680×48 | `成就记录（真服只读）` |
+| `SideEffect` | (0, 470) | 640×36 | `打开/同步可能在服上补成就`（默认显示，TITLE 色） |
+| `Note` | (0, 430) | 640×32 | `只读。不领奖，不改 state，不写金币` |
+| `FieldNote` | (0, 396) | 640×28 | `idx 任务号，process 进度，state 即 hadReward` |
+| `ListHost` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows/Unsynced` | (0, 320) | 640×44 | `真服未同步`（默认显示） |
+| `ListHost/Rows/Empty` | (0, 320) | 640×44 | `空成就表`（`_active: false`） |
+| `ListHost/Rows/Row_0` … `Row_21` | (0, 340 − i×28) | 640×26 | `idx=1 / process=0 / state=0` 起，左对齐，`_active: false` |
+| `ListHost/Rows/More` | (0, -276) | 640×28 | `还有 3 条`（`_active: false`） |
+| `BtnBack` | (0, -520) | 240×48 | `返回`（蓝） |
+
+`Title` / `SideEffect` / `Note` / `FieldNote` / `Empty` / `Unsynced` 与 `WIRE_ACHIEVEMENT_READONLY_TITLE` / `WIRE_ACHIEVEMENT_SIDE_EFFECT` / `WIRE_ACHIEVEMENT_READONLY_NOTE` / `WIRE_ACHIEVEMENT_FIELD_NOTE` / `WIRE_ACHIEVEMENT_EMPTY` / `WIRE_ACHIEVEMENT_UNSYNCED_TOAST` 相同。行文案是 `formatWireAchievementLine`。预览从 `idx=1 / process=0 / state=0` 续到 `idx=22 / process=0 / state=0`，把 `VISIBLE_ROWS` 的窗口填满。缺字段时 `numText` 写 `无`，不补 0；这二十二行是有数的样例。节点锚点在中心、放在 x=0，行 Label 水平对齐为左，宽 640，和 `align: "left"` 一致。
+
+未同步时 `render()` 只放 `Unsynced`（y=320）就返回，不画空表和行。已同步且任务表为空时，在同一位置放 `空成就表`。有任务时 `top = 340`、`step = 28`，行在 `340 − i×28`，最多 22 行。`More` 的 y 是 `340 − 22×28 = -276`。运行时溢出文案是 `还有 N 条`；预制里的 `还有 3 条` 只是占位。`BtnBack` 用蓝色按钮，字号走 `createButton` 默认 24。字号：标题 36，侧效 22，说明 20，字段说明 18，未同步和空表 28，行 20，溢出 18。
