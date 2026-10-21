@@ -437,6 +437,14 @@ import {
   WireSpaceTimeAdventurePiece,
   WireSpaceTimeAdventureSnapshot,
 } from "./protocol/wireSpaceTimeAdventure";
+import {
+  decodeWireMagicTowerRoad,
+  WIRE_MAGIC_TOWER_ROAD_CMD,
+  wireMagicTowerRoadNote,
+  WireMagicTowerRoadMark,
+  WireMagicTowerRoadPiece,
+  WireMagicTowerRoadSnapshot,
+} from "./protocol/wireMagicTowerRoad";
 import { wireBody } from "./protocol/wireLogin";
 
 /**
@@ -445,7 +453,7 @@ import { wireBody } from "./protocol/wireLogin";
  * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3004、wire.3005、wire.15000、wire.4001、wire.17000、wire.12010、wire.18001、wire.22000、wire.22002、wire.21010、wire.21013、wire.27001、wire.4004、wire.13044、wire.4101、wire.4013、wire.74100、wire.51001、wire.20001、wire.20012、wire.70001、wire.73001、wire.74300、wire.68001、wire.75501、wire.59001、wire.59010、wire.55001、wire.34001、wire.32001 、wire.4402、wire.4401、wire.4201、wire.74104、wire.28100、wire.28200、wire.75601、wire.75606、wire.75615、wire.28107 、wire.3099、wire.3101、wire.20101 、wire.3203 、wire.4044 、wire.13010 、wire.12020 、wire.26002 和 wire.26001。
  * 登录成功后先发空的 c2s 2001（日志里的拉角色资料）。pullRoleProfile 紧接着发空的 c2s 5001。
  * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。pullIdle 在 3004 之后再发空的 c2s 15000，然后 c2s 4001 page=1，再发空的 c2s 17000，再发空的 c2s 12010，再发空的 c2s 18001，再发空的 c2s 22000，再发空的 c2s 21010，再发空的 c2s 27001，再发空的 c2s 4004，再发空的 c2s 13044，再发空的 c2s 4101，再发空的 c2s 4013，再发空的 c2s 74100，再发空的 c2s 51001，再发空的 c2s 20001，再发空的 c2s 20012，再发空的 c2s 70001，再发空的 c2s 73001，再发空的 c2s 74300，再发空的 c2s 68001，再发空的 c2s 75501，再发空的 c2s 59001，再发空的 c2s 59010，再发空的 c2s 55001，再发空的 c2s 34001，再发空的 c2s 32001，再发空的 c2s 4402，再发空的 c2s 4401，再发空的 c2s 4201，再发空的 c2s 74104，再发空的 c2s 28100，再发空的 c2s 28200，再发空的 c2s 75601，再发空的 c2s 75606，再发空的 c2s 75615，再发空的 c2s 28107，再发空的 c2s 3099，再发空的 c2s 3101，再发空的 c2s 20101，再发空的 c2s 3203，再发空的 c2s 4044，再发空的 c2s 13010，再发空的 c2s 12020，再发空的 c2s 26002，再发空的 c2s 26001。
- * 相对顺序是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001 → 20001 → 20012 → 70001 → 73001 → 74300 → 68001 → 75501 → 59001 → 59010 → 55001 → 34001 → 32001 → 4402 → 4401 → 4201 → 74104 → 28100 → 28200 → 75601 → 75606 → 75615 → 28107 → 3099 → 3101 → 20101 → 3203 → 4044 → 13010 → 12020 → 26002 → 26001 → 61001 → 62001 → 63001 → 69001 → 74001 → 74120。不等 s2c 2001。51001 在 74100 之后发一次，20001 接在 51001 之后，20012 接在 20001 之后，70001 接在 20012 之后，73001 接在 70001 之后，74300 接在 73001 之后，68001 接在 74300 之后，75501 接在 68001 之后，59001 接在 75501 之后，59010 接在 59001 之后，55001 接在 59010 之后，34001 接在 55001 之后，32001 接在 34001 之后，4402 接在 32001 之后，4401 接在 4402 之后，4201 接在 4401 之后，74104 接在 4201 之后，28100 接在 74104 之后，28200 接在 28100 之后，75601 接在 28200 之后，75606 接在 75601 之后，75615 接在 75606 之后，28107 接在 75615 之后，3099 接在 28107 之后，3101 接在 3099 之后，20101 接在 3101 之后，3203 接在 20101 之后，4044 接在 3203 之后，13010 接在 4044 之后，12020 接在 13010 之后，26002 接在 12020 之后，26001 接在 26002 之后。不夹在 2001 和 3007 中间。11005、58017 仍不发。不做 3007 的加发。
+ * 相对顺序是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001 → 20001 → 20012 → 70001 → 73001 → 74300 → 68001 → 75501 → 59001 → 59010 → 55001 → 34001 → 32001 → 4402 → 4401 → 4201 → 74104 → 28100 → 28200 → 75601 → 75606 → 75615 → 28107 → 3099 → 3101 → 20101 → 3203 → 4044 → 13010 → 12020 → 26002 → 26001 → 61001 → 62001 → 63001 → 69001 → 74001 → 74120 → 76542。不等 s2c 2001。51001 在 74100 之后发一次，20001 接在 51001 之后，20012 接在 20001 之后，70001 接在 20012 之后，73001 接在 70001 之后，74300 接在 73001 之后，68001 接在 74300 之后，75501 接在 68001 之后，59001 接在 75501 之后，59010 接在 59001 之后，55001 接在 59010 之后，34001 接在 55001 之后，32001 接在 34001 之后，4402 接在 32001 之后，4401 接在 4402 之后，4201 接在 4401 之后，74104 接在 4201 之后，28100 接在 74104 之后，28200 接在 28100 之后，75601 接在 28200 之后，75606 接在 75601 之后，75615 接在 75606 之后，28107 接在 75615 之后，3099 接在 28107 之后，3101 接在 3099 之后，20101 接在 3101 之后，3203 接在 20101 之后，4044 接在 3203 之后，13010 接在 4044 之后，12020 接在 13010 之后，26002 接在 12020 之后，26001 接在 26002 之后。不夹在 2001 和 3007 中间。11005、58017 仍不发。不做 3007 的加发。
  * 不发 5010，也不发 5004–5009、5011–5013。不发邮件领取、已读、删除。不发英雄升级。空 c2s 20001 只读，不发 20018，不发 20004、20010。空 c2s 20012 只读，不发 20013，不做 13260。空 c2s 70001 只读，不发 70002、70003、70004、70005、70006。70007、70008 仅推送，不当拉包请求。不做 20011。空 c2s 73001 只读，不发 73002、73003、73004。73002 有懒建和日刷写库，不当纯只读。本号无写库。不做 20011。空 c2s 74300 只读，不发 74301 升级/升阶、74302 装备/卸/换、74303 重置。74304 是推送，勿发、勿当拉包。本号无写库。不做 20011。与 74100 同城养成段。空 c2s 68001 只读，无 page。不发 68002 激活元素、68003 点亮星盘、68004 重置、68006 激活星盘。68005 是更新星数常量，勿当拉包。轻懒建，首次 load 可能 astrolabeDao.add 空行，无扣费、无领奖、无日刷写库，管理员认定可接受。不做 20011。空 c2s 75501 只读，无 page。不发 75502 添加、75503 卸下、75504 开格子、75505 清 cd。75506 是等级推送，勿当拉包。轻懒建，首次 get 可能 doCreate + tweakCubeDao.add，建免费槽并按战力塞供奉，无扣费、无领奖，管理员认定可接受，同星盘。不做 34001。不做 20011。空 c2s 59001 只读，无 page。handler scanDragonInfo 不读 msg。不发 59002 放源石、59003 提升鉴定、59005 加速鉴定、59006 鉴定领奖、59007 提升圣龙等级、59008 圣物替换、59009 调顺序、59011、59012 升星、59013 分解。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。轻懒建，首次 dragonDao.add。无扣费，无领奖。不做 34001。不做 20011。空 c2s 55001 只读，无 page。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。34001 是另只读，单独在 55001 之后拉包，勿与 55001 合并。不发 34002。34003 是解锁推送，勿发、勿当拉包。32001 另只读接在其后。不做 20011。34001 只读，无 page。轻懒建，RoleHeadPortraitService.select 无记录则 dao.add 默认解锁头。无扣费，无领奖，不改当前头像。不点金。不发 12020，不领奖。不发 18002、18003、18005、18007、18008。不发 22001。22002 只收。不发 21011、21012。21013 只收。不发 27002、27003、27004。4201 是英雄祈愿空体，接在 4401 之后。不发 4202。74104 另只读接在其后，勿合并。不发 4002、4005。不做 58001、58007。4004 不是 4001。不发 13041、13042、13043。13044 不是 4004。不发 4102、4103、4104、4105、4106、4107。不做 9001。4101 不是 4001，也不是 13044。不发 4014。4014 仅 s2c 推送。不把 4013 当领奖再发写号。4013 不是 4001，也不是 4101。不发 74101 升级、74102 携带、74103 卸下。74105、74106 仅 s2c 推送，不主动发。74100 不是 4001，也不是 4013。51001 无写操作号。20101 是进行中活动，另帧挂在 3101 之后，不发 20102。空 c2s 4402 只读，无 page。GReqHeroFashionList 空体。不发 4403 激活、4404 替换/使用、4405 皮肤升级。4406 无实现，勿发。4401 穿戴皮肤英雄列表另只读接在其后，勿合并。不做 20011。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮剔除，并可能把英雄 fashionId 置 0。只读展示。无扣费，无领奖。挂在 32001 之后。
  * s2c 2001 按 Role.proto：字段 9 角色名、字段 6 等级、字段 2 金币、字段 1 宝石（顶栏钻石）。
  * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。
@@ -842,6 +850,11 @@ export class WireSession {
    * 空包体是已同步，字段保持缺省，不是未同步，也不写成 0。
    */
   static spaceTimeAdventure: WireSpaceTimeAdventureSnapshot | null = null;
+  /**
+   * 收到的 s2c 76542。null 表示这次进主城还没收到 76542。
+   * 空包体是已同步，字段保持缺省，不是未同步，也不写成 0。
+   */
+  static magicTowerRoad: WireMagicTowerRoadSnapshot | null = null;
 
   private static watched: NetClient | null = null;
   private static offProfile: (() => void) | null = null;
@@ -903,6 +916,7 @@ export class WireSession {
   private static offRechargeDaysB: (() => void) | null = null;
   private static offTimeTower: (() => void) | null = null;
   private static offSpaceTimeAdventure: (() => void) | null = null;
+  private static offMagicTowerRoad: (() => void) | null = null;
   private static pending: WireRoleProfile | null = null;
   private static pendingChapter: WireChapterProgress | null = null;
   private static pendingIdle: WireIdleSnapshot | null = null;
@@ -1017,6 +1031,8 @@ export class WireSession {
   private static pendingTimeTower: WireTimeTowerSnapshot | null = null;
   /** null 表示登录过程里还没看到 74120。空包体的字段保持缺省。 */
   private static pendingSpaceTimeAdventure: WireSpaceTimeAdventureSnapshot | null = null;
+  /** null 表示登录过程里还没看到 76542。空包体的字段保持缺省。 */
+  private static pendingMagicTowerRoad: WireMagicTowerRoadSnapshot | null = null;
   private static listeners = new Set<() => void>();
 
   /** 套接字一开就听。登录回包里如果已经夹着 2001、5001、3007 或 3004，先记下，等角色写入后再套上。 */
@@ -1081,7 +1097,8 @@ export class WireSession {
       this.offHeroPalace &&
       this.offRechargeDaysB &&
       this.offTimeTower &&
-      this.offSpaceTimeAdventure
+      this.offSpaceTimeAdventure &&
+      this.offMagicTowerRoad
     ) {
       return;
     }
@@ -1146,6 +1163,7 @@ export class WireSession {
     this.offRechargeDaysB = net.subscribe(WIRE_RECHARGE_DAYS_B_CMD, (msg) => this.onRechargeDaysB(msg.data));
     this.offTimeTower = net.subscribe(WIRE_TIME_TOWER_CMD, (msg) => this.onTimeTower(msg.data));
     this.offSpaceTimeAdventure = net.subscribe(WIRE_SPACE_TIME_ADVENTURE_CMD, (msg) => this.onSpaceTimeAdventure(msg.data));
+    this.offMagicTowerRoad = net.subscribe(WIRE_MAGIC_TOWER_ROAD_CMD, (msg) => this.onMagicTowerRoad(msg.data));
   }
 
   static hold(net: NetClient): void {
@@ -1218,6 +1236,7 @@ export class WireSession {
     this.rechargeDaysB = null;
     this.timeTower = null;
     this.spaceTimeAdventure = null;
+    this.magicTowerRoad = null;
   }
 
   /** 只放下引用。调用方自己 close。 */
@@ -1283,6 +1302,7 @@ export class WireSession {
       this.pendingRechargeDaysB = null;
       this.pendingTimeTower = null;
       this.pendingSpaceTimeAdventure = null;
+      this.pendingMagicTowerRoad = null;
       this.resetHeroGather();
       this.nowIdx = null;
       this.maxIdx = null;
@@ -1343,6 +1363,7 @@ export class WireSession {
     this.rechargeDaysB = null;
     this.timeTower = null;
     this.spaceTimeAdventure = null;
+    this.magicTowerRoad = null;
     }
   }
 
@@ -1408,6 +1429,7 @@ export class WireSession {
       this.pendingRechargeDaysB = null;
       this.pendingTimeTower = null;
       this.pendingSpaceTimeAdventure = null;
+      this.pendingMagicTowerRoad = null;
     this.resetHeroGather();
     this.nowIdx = null;
     this.maxIdx = null;
@@ -1468,6 +1490,7 @@ export class WireSession {
     this.rechargeDaysB = null;
     this.timeTower = null;
     this.spaceTimeAdventure = null;
+    this.magicTowerRoad = null;
     if (net) net.close();
   }
 
@@ -1536,12 +1559,13 @@ export class WireSession {
     this.commitRechargeDaysB();
     this.commitTimeTower();
     this.commitSpaceTimeAdventure();
+    this.commitMagicTowerRoad();
   }
 
   /**
    * 空的 c2s 2001，紧接着空的 c2s 5001。
    * Boot 仍只调用这一处再调用 pullChapter / pullIdle，所以不改 Boot.ts。
-   * 相对顺序因此是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001 → 20001 → 20012 → 70001 → 73001 → 74300 → 68001 → 75501 → 59001 → 59010 → 55001 → 34001 → 32001 → 4402 → 4401 → 4201 → 74104 → 28100 → 28200 → 75601 → 75606 → 75615 → 28107 → 3099 → 3101 → 20101 → 3203 → 4044 → 13010 → 12020 → 26002 → 26001 → 61001 → 62001 → 63001 → 69001 → 74001 → 74120。
+   * 相对顺序因此是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001 → 20001 → 20012 → 70001 → 73001 → 74300 → 68001 → 75501 → 59001 → 59010 → 55001 → 34001 → 32001 → 4402 → 4401 → 4201 → 74104 → 28100 → 28200 → 75601 → 75606 → 75615 → 28107 → 3099 → 3101 → 20101 → 3203 → 4044 → 13010 → 12020 → 26002 → 26001 → 61001 → 62001 → 63001 → 69001 → 74001 → 74120 → 76542。
    * 15000、4001、17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100、51001、20001、20012、70001、73001、74300、68001、75501、59001、59010、55001、34001、32001、4402、4401、4201、74104 、28100、28200、75601、75606、75615、28107、3099、3101、20101、3203、4044、13010、12020、26002 和 26001 在 pullIdle 里，跟在 3004 后面。4001 带 page=1，不是空体。17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100、51001、20001、20012、70001、73001、74300、68001、75501、59001、59010、55001、34001、32001、4402、4401、4201、74104 、28100、28200、75601、75606、75615、28107、3099、3101、20101、3203、4044、13010、12020、26002 和 26001 是空体。20101 的空帧是 04000000854e0000。3203 的空帧是 04000000830c0000。4044 的空帧是 04000000cc0f0000。13010 的空帧是 04000000d2320000，不是启动链 12010。12020 的空帧是 04000000f42e0000，不是启动链 12010，也不是 12021。26002 的空帧是 0400000092650000，不是 26001，也不是启动链 12010，也不是 12020。26001 的空帧是 0400000091650000，不是 26002，也不是启动链 12010，也不是 12020。75606 的空帧是 0400000056270100，不是 75607。75615 的空帧是 040000005f270100，不是 75607。
    */
   static pullRoleProfile(): void {
@@ -1645,6 +1669,7 @@ export class WireSession {
     this.pullRechargeDaysB();
     this.pullTimeTower();
     this.pullSpaceTimeAdventure();
+    this.pullMagicTowerRoad();
   }
 
   /** 空的 c2s 15000。没有包体。不发领取和删除。 */
@@ -2252,16 +2277,28 @@ export class WireSession {
     return this.timeTower !== null;
   }
 
-  /** 空的 c2s 74120。GReqSpaceTimeAdventureInfo 没有包体，没有 page。只在 74001 之后发一次。整帧 0400000088210100。不重复拉 74001。不发 74123。不发 74124。不发 74125。不发 74126。不发 74127。不发 74128。不发 74129。不发 74131。不发 74142。不发 74147。不发 74148。不发 74149。不夹发 74121。不夹发 74122。不做 76501。不做 73002。不做 71001。不做 20011。不是时空魔塔 74001。不是积天豪礼2 69001。不是英雄殿堂 63001。不是神迹遗物 62001。不是周末礼包 61001。不是每月福利列表 26001。不是每日福利列表 26002。不是每日任务列表 12020。5001、51001、68001、70001 已有，勿重复。74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 74001 分开发，勿合并。本刀不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。轻懒建（首次 spaceTimeInfoDao.add）可接受。体力 regainEnergy 写回可接受。商店过期清空 shopItems 可接受。无扣费，无领奖，无探索写，无购买写。 */
+  /** 空的 c2s 74120。GReqSpaceTimeAdventureInfo 没有包体，没有 page。只在 74001 之后发一次。整帧 0400000088210100。不重复拉 74001。不发 74123。不发 74124。不发 74125。不发 74126。不发 74127。不发 74128。不发 74129。不发 74131。不发 74142。不发 74147。不发 74148。不发 74149。不夹发 74121。不夹发 74122。不做 76501。不做 73002。不做 71001。不做 20011。不是时空魔塔 74001。不是积天豪礼2 69001。不是英雄殿堂 63001。不是神迹遗物 62001。不是周末礼包 61001。不是每月福利列表 26001。不是每日福利列表 26002。不是每日任务列表 12020。5001、51001、68001、70001 已有，勿重复。74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 74001 分开发，勿合并。本刀不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。轻懒建（首次 spaceTimeInfoDao.add）可接受。体力 regainEnergy 写回可接受。商店过期清空 shopItems 可接受。无扣费，无领奖，无探索写，无购买写。76542 斩魔之路另帧，挂在其后，勿合并。 */
   static pullSpaceTimeAdventure(): void {
     const net = this.net || this.watched;
     if (!net || net.state !== "connected") return;
     net.send(WIRE_SPACE_TIME_ADVENTURE_CMD);
   }
 
-  /** 收到过 s2c 74120（含空包体）才算同步。解不开的包不算。74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099、74121、74122、74123、74124、74125、74126、74127、74128、74129、74131、74142、74147、74148、74149、76501、73002、71001、12010、20011、5001、51001、68001、70001、4601、29001 单独到不算。 */
+  /** 收到过 s2c 74120（含空包体）才算同步。解不开的包不算。74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099、74121、74122、74123、74124、74125、74126、74127、74128、74129、74131、74142、74147、74148、74149、76542、76543、76544、76502、76503、76504、76505、76506、76541、76501、75001、73002、71001、12010、20011、5001、51001、68001、70001、4601、29001 单独到不算。 */
   static hasSpaceTimeAdventure(): boolean {
     return this.spaceTimeAdventure !== null;
+  }
+
+  /** 空的 c2s 76542。GReqMagicTowerRoadInfo 没有包体，没有 page。只在 74120 之后发一次。整帧 04000000fe2a0100。不重复拉 74120。不发 76543。不发 76544。不发 76502。不发 76503。不发 76504。不发 76505。不发 76506。不发 76541。不发 76501。不夹发 74121。不夹发 74122。不做 75001。不做 73002。不做 71001。不做 20011。不是时空冒险 74120。不是时空魔塔 74001。不是积天豪礼2 69001。不是英雄殿堂 63001。不是神迹遗物 62001。不是周末礼包 61001。不是每月福利列表 26001。不是每日福利列表 26002。不是每日任务列表 12020。5001、51001、68001、70001 已有，勿重复。74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 74120 分开发，勿合并。本刀不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。轻懒建（magicTowerRoadDao.add if missing）可接受。无每次更新。无扣费，无领奖，无挑战写。 */
+  static pullMagicTowerRoad(): void {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return;
+    net.send(WIRE_MAGIC_TOWER_ROAD_CMD);
+  }
+
+  /** 收到过 s2c 76542（含空包体）才算同步。解不开的包不算。74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099、76543、76544、76502、76503、76504、76505、76506、76541、76501、74121、74122、75001、73002、71001、12010、20011、5001、51001、68001、70001、4601、29001 单独到不算。 */
+  static hasMagicTowerRoad(): boolean {
+    return this.magicTowerRoad !== null;
   }
 
   /** 空的 c2s 3005。没连上时返回 false，调用方 Toast。 */
@@ -3485,6 +3522,26 @@ export class WireSession {
     this.commitSpaceTimeAdventure();
   }
 
+  private static onMagicTowerRoad(data: unknown): void {
+    let snap: WireMagicTowerRoadSnapshot | null = null;
+    try {
+      snap = decodeWireMagicTowerRoad(wireBody(data));
+    } catch (err) {
+      GameLog.shared.error("Wire", "s2c 76542 解不开 " + (err instanceof Error ? err.message : "未知错误"));
+      return;
+    }
+    if (!snap) {
+      GameLog.shared.info("Wire", "s2c 76542 解不开，斩魔之路不改");
+      return;
+    }
+    this.pendingMagicTowerRoad = copyMagicTowerRoad(snap);
+    if (Session.source !== "wire" || !Session.role) {
+      GameLog.shared.info("Wire", "s2c 76542 先记下：" + wireMagicTowerRoadNote(snap));
+      return;
+    }
+    this.commitMagicTowerRoad();
+  }
+
   /** 只收。不建表，不改已经有的七日目标，也不发奖。 */
   private static onGoal7Push(_data: unknown): void {
     GameLog.shared.info("Wire", "s2c 21013 只收，七日目标不改，不发奖");
@@ -4170,6 +4227,17 @@ export class WireSession {
     this.emit();
   }
 
+  private static commitMagicTowerRoad(): void {
+    const snap = this.pendingMagicTowerRoad;
+    if (!snap) return;
+    if (Session.source !== "wire" || !Session.role) return;
+    const next = copyMagicTowerRoad(snap);
+    this.pendingMagicTowerRoad = null;
+    this.magicTowerRoad = next;
+    GameLog.shared.info("Wire", "s2c 76542 " + wireMagicTowerRoadNote(next));
+    this.emit();
+  }
+
   private static commitIdle(): void {
     const snapshot = this.pendingIdle;
     if (!snapshot || !wireIdleHasTime(snapshot)) return;
@@ -4433,6 +4501,10 @@ export class WireSession {
     if (this.offSpaceTimeAdventure) {
       this.offSpaceTimeAdventure();
       this.offSpaceTimeAdventure = null;
+    }
+    if (this.offMagicTowerRoad) {
+      this.offMagicTowerRoad();
+      this.offMagicTowerRoad = null;
     }
   }
 }
@@ -5369,6 +5441,31 @@ function copySpaceTimePiece(piece: WireSpaceTimeAdventurePiece): WireSpaceTimeAd
 }
 
 function copySpaceTimeMark(mark: WireSpaceTimeAdventureMark): WireSpaceTimeAdventureMark {
+  return { field: mark.field, text: mark.text };
+}
+
+function copyMagicTowerRoad(snap: WireMagicTowerRoadSnapshot): WireMagicTowerRoadSnapshot {
+  return {
+    normalList: copyMagicTowerPieces(snap.normalList),
+    kingList: copyMagicTowerPieces(snap.kingList),
+    state: snap.state,
+    marks: snap.marks.map(copyMagicTowerMark),
+  };
+}
+
+function copyMagicTowerPieces(list: WireMagicTowerRoadPiece[] | null): WireMagicTowerRoadPiece[] | null {
+  if (!list) return null;
+  const next: WireMagicTowerRoadPiece[] = [];
+  for (let i = 0; i < list.length; i++) next.push(copyMagicTowerPiece(list[i]));
+  return next;
+}
+
+function copyMagicTowerPiece(piece: WireMagicTowerRoadPiece): WireMagicTowerRoadPiece {
+  if (piece.kind === "num") return { kind: "num", value: piece.value };
+  return { kind: "row", marks: piece.marks.map(copyMagicTowerMark) };
+}
+
+function copyMagicTowerMark(mark: WireMagicTowerRoadMark): WireMagicTowerRoadMark {
   return { field: mark.field, text: mark.text };
 }
 
