@@ -3,6 +3,8 @@
  *
  * 阶段：version → hot-update 占位 → 读表 → 登录门（或跳过）→ Main。
  * 登录是本组件在 Canvas 上生成的面板，不另建 Login 场景。
+ * 默认 USE_LOGIN_PREFAB / USE_CREATE_ROLE_PREFAB 挂 assets/prefabs 里的界面。
+ * 改成 false 仍走 buildLoginPanel / buildCreateRolePanel，代码 UI 不删。
  * 账号走 Proto.login / Proto.roleEnter；没有角色或点「创角」时再 Proto.roleCreate。
  * 默认仍是 NetClient → MockTransport，不需要服务器。
  * 预览地址加 ?transport=ws 才连本机桥 ws://127.0.0.1:13111/game（转到 TCP 9902）。
@@ -55,8 +57,9 @@ import {
 } from "../net/transportSelect";
 import { Proto } from "../net/protocol";
 import { RoleEnterResp } from "../net/protocol/types";
-import { buildCreateRolePanel, CreateRolePanelView } from "../ui/CreateRolePanel";
-import { buildLoginPanel, LoginPanelView } from "../ui/LoginPanel";
+import { buildCreateRolePanel, CreateRolePanelView, mountCreateRolePrefab } from "../ui/CreateRolePanel";
+import { buildLoginPanel, LoginPanelView, mountLoginPrefab } from "../ui/LoginPanel";
+import { CREATE_ROLE_PREFAB_PATH, LOGIN_PREFAB_PATH } from "../ui/prefabLoad";
 import { MainApp } from "../ui/MainApp";
 import { bindSafeArea, SafeAreaBinding } from "../ui/SafeArea";
 import { Toast } from "../ui/Toast";
@@ -69,6 +72,12 @@ import { Session } from "./Session";
 const { ccclass, property } = _decorator;
 
 const CLIENT_VERSION = "0.1.0-mock";
+
+/** 默认挂 Login Prefab。false 时仍走 buildLoginPanel，和接 Prefab 之前一样。 */
+export const USE_LOGIN_PREFAB = true;
+
+/** 默认挂 CreateRole Prefab。false 时仍走 buildCreateRolePanel。 */
+export const USE_CREATE_ROLE_PREFAB = true;
 
 @ccclass("Boot")
 export class Boot extends Component {
@@ -89,6 +98,8 @@ export class Boot extends Component {
   private authBusy = false;
   private loginPanel: LoginPanelView | null = null;
   private createPanel: CreateRolePanelView | null = null;
+  /** destroyAuthPanels 递增。过期的 Prefab 加载不再挂到画面上。 */
+  private authEpoch = 0;
   private alive = true;
   private useWs = false;
   private wsChoice: TransportChoice = readPreviewTransport();
@@ -184,25 +195,45 @@ export class Boot extends Component {
   private showLogin(parent: Node): void {
     this.authBusy = false;
     this.destroyAuthPanels();
+    const epoch = this.authEpoch;
     GameLog.shared.info("Boot", "stage=login");
     const stored = loadLoginPrefs(this.prefStore());
     const account = resolveAccount(stored?.account, this.account);
     const serverId = stored?.serverId ?? Session.serverId;
-    const panel = buildLoginPanel(
-      parent,
-      {
-        onEnter: () => {
-          void this.onLoginClicked(panel, false);
-        },
-        onCreate: () => {
-          void this.onLoginClicked(panel, true);
-        },
-        onMock: () => {
-          this.onUseMock(panel);
-        },
+    const options = {
+      account,
+      serverId,
+      mode: this.useWs ? ("ws" as const) : ("mock" as const),
+      wsUrl: this.wsChoice.wsUrl,
+    };
+    const slot: { panel: LoginPanelView | null } = { panel: null };
+    const handlers = {
+      onEnter: () => {
+        const panel = slot.panel;
+        if (panel) void this.onLoginClicked(panel, false);
       },
-      { account, serverId, mode: this.useWs ? "ws" : "mock", wsUrl: this.wsChoice.wsUrl }
-    );
+      onCreate: () => {
+        const panel = slot.panel;
+        if (panel) void this.onLoginClicked(panel, true);
+      },
+      onMock: () => {
+        const panel = slot.panel;
+        if (panel) this.onUseMock(panel);
+      },
+    };
+    if (!USE_LOGIN_PREFAB) {
+      this.finishLogin(buildLoginPanel(parent, handlers, options), slot, account);
+      return;
+    }
+    void this.mountLoginFromPrefab(parent, handlers, options, epoch, slot, account);
+  }
+
+  private finishLogin(
+    panel: LoginPanelView,
+    slot: { panel: LoginPanelView | null },
+    account: string
+  ): void {
+    slot.panel = panel;
     this.loginPanel = panel;
     if (this.useWs) {
       panel.setStatus("正在连接 " + this.wsChoice.wsUrl);
@@ -211,6 +242,38 @@ export class Boot extends Component {
       return;
     }
     panel.setStatus("账号 " + account);
+  }
+
+  private async mountLoginFromPrefab(
+    parent: Node,
+    handlers: { onEnter: () => void; onCreate: () => void; onMock?: () => void },
+    options: { account: string; serverId: number; mode: "mock" | "ws"; wsUrl?: string },
+    epoch: number,
+    slot: { panel: LoginPanelView | null },
+    account: string
+  ): Promise<void> {
+    const loading = createLabel("加载登录界面…", 28);
+    place(loading, parent, 0, 40);
+    let panel: LoginPanelView | null = null;
+    try {
+      panel = await mountLoginPrefab(parent, handlers, options);
+      if (!this.isValid || epoch !== this.authEpoch) {
+        panel.root.destroy();
+        return;
+      }
+      GameLog.shared.info("Boot", "login prefab " + LOGIN_PREFAB_PATH);
+    } catch (err) {
+      if (!this.isValid || epoch !== this.authEpoch) return;
+      GameLog.shared.error("Boot", "login prefab " + messageOf(err) + "，改用代码 UI");
+      panel = buildLoginPanel(parent, handlers, options);
+    } finally {
+      if (loading.isValid) loading.destroy();
+    }
+    if (!panel || !this.isValid || epoch !== this.authEpoch) {
+      if (panel) panel.root.destroy();
+      return;
+    }
+    this.finishLogin(panel, slot, account);
   }
 
   private async onLoginClicked(panel: LoginPanelView, create: boolean): Promise<void> {
@@ -461,29 +524,67 @@ export class Boot extends Component {
 
   private showCreate(parent: Node, account: string, hadRole: boolean, wire = false): void {
     this.authBusy = false;
+    const epoch = this.authEpoch;
     GameLog.shared.info("Boot", "stage=create account=" + account + " server=" + Session.serverName);
-    const panel = buildCreateRolePanel(
-      parent,
-      {
-        onConfirm: () => {
-          void this.onCreateConfirmed(panel);
-        },
-        onBack: () => {
-          if (this.authBusy) return;
-          this.authBusy = true;
-          setTimeout(() => {
-            if (!this.isValid) return;
-            this.showLogin(parent);
-          }, 0);
-        },
+    const options = {
+      account,
+      serverName: Session.serverName,
+      hadRole,
+      hint: wire ? "登录 1001 回包是空的。确认后发创角 1002，再发一次 1001。有角色才进主城。" : undefined,
+    };
+    const slot: { panel: CreateRolePanelView | null } = { panel: null };
+    const handlers = {
+      onConfirm: () => {
+        const panel = slot.panel;
+        if (panel) void this.onCreateConfirmed(panel);
       },
-      {
-        account,
-        serverName: Session.serverName,
-        hadRole,
-        hint: wire ? "登录 1001 回包是空的。确认后发创角 1002，再发一次 1001。有角色才进主城。" : undefined,
+      onBack: () => {
+        if (this.authBusy) return;
+        this.authBusy = true;
+        setTimeout(() => {
+          if (!this.isValid) return;
+          this.showLogin(parent);
+        }, 0);
+      },
+    };
+    if (!USE_CREATE_ROLE_PREFAB) {
+      const panel = buildCreateRolePanel(parent, handlers, options);
+      slot.panel = panel;
+      this.createPanel = panel;
+      return;
+    }
+    void this.mountCreateFromPrefab(parent, handlers, options, epoch, slot);
+  }
+
+  private async mountCreateFromPrefab(
+    parent: Node,
+    handlers: { onConfirm: () => void; onBack: () => void },
+    options: { account: string; serverName: string; hadRole: boolean; hint?: string },
+    epoch: number,
+    slot: { panel: CreateRolePanelView | null }
+  ): Promise<void> {
+    const loading = createLabel("加载创角界面…", 28);
+    place(loading, parent, 0, 40);
+    let panel: CreateRolePanelView | null = null;
+    try {
+      panel = await mountCreateRolePrefab(parent, handlers, options);
+      if (!this.isValid || epoch !== this.authEpoch) {
+        panel.root.destroy();
+        return;
       }
-    );
+      GameLog.shared.info("Boot", "create prefab " + CREATE_ROLE_PREFAB_PATH);
+    } catch (err) {
+      if (!this.isValid || epoch !== this.authEpoch) return;
+      GameLog.shared.error("Boot", "create prefab " + messageOf(err) + "，改用代码 UI");
+      panel = buildCreateRolePanel(parent, handlers, options);
+    } finally {
+      if (loading.isValid) loading.destroy();
+    }
+    if (!panel || !this.isValid || epoch !== this.authEpoch) {
+      if (panel) panel.root.destroy();
+      return;
+    }
+    slot.panel = panel;
     this.createPanel = panel;
   }
 
@@ -679,6 +780,7 @@ export class Boot extends Component {
   }
 
   private destroyAuthPanels(): void {
+    this.authEpoch += 1;
     if (this.loginPanel) {
       this.loginPanel.root.destroy();
       this.loginPanel = null;

@@ -1,5 +1,6 @@
 ﻿/**
  * 主城壳（C2）。Canvas 下用代码生成顶栏、底栏和面板，不需要美术。
+ * 顶栏底栏默认 USE_CITY_CHROME_PREFAB。false 时仍 mountCityChrome，代码 UI 不删。
  * 从 Boot 进来时，若场景上没挂本组件，Boot 会 addComponent。
  * 单独预览 Main：把 MainApp 挂到 Main 场景的 Canvas 上。
  * 顶栏和底栏在 UIShell 的 chrome 层，不进页面栈。系统面板走 PanelNav。
@@ -30,7 +31,8 @@ import { NetState } from "../net/NetTypes";
 import { WireSession } from "../net/WireSession";
 import { Proto } from "../net/protocol";
 import { BagPage, buildBagPage } from "./BagPage";
-import { CityChrome, mountCityChrome, TabState } from "./CityChrome";
+import { CityChrome, mountCityChrome, mountCityChromePrefab, TabState } from "./CityChrome";
+import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
 import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage } from "./HeroPage";
 import { buildSummonPage, SummonPage } from "./SummonPage";
 import { buildMailPage, MailPage } from "./MailPage";
@@ -53,6 +55,9 @@ import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
+
+/** 默认挂 CityChrome Prefab。false 时仍走 mountCityChrome，和接 Prefab 之前一样。 */
+export const USE_CITY_CHROME_PREFAB = true;
 
 const { ccclass } = _decorator;
 
@@ -163,7 +168,24 @@ export class MainApp extends Component {
     }
     if (!this.isValid || !this.shell) return;
     const shell = this.shell;
-    this.chrome = mountCityChrome(shell.chromeLayer, (id) => this.onTab(id));
+    const onTab = (id: string) => this.onTab(id);
+    if (!USE_CITY_CHROME_PREFAB) {
+      this.chrome = mountCityChrome(shell.chromeLayer, onTab);
+    } else {
+      try {
+        this.chrome = await mountCityChromePrefab(shell.chromeLayer, onTab);
+        if (!this.isValid || !this.shell) {
+          if (this.chrome) this.chrome.root.destroy();
+          this.chrome = null;
+          return;
+        }
+        GameLog.shared.info("MainApp", "city chrome prefab " + CITY_CHROME_PREFAB_PATH);
+      } catch (err) {
+        if (!this.isValid || !this.shell) return;
+        GameLog.shared.error("MainApp", "city chrome prefab " + messageOf(err) + "，改用代码 UI");
+        this.chrome = mountCityChrome(shell.chromeLayer, onTab);
+      }
+    }
     this.panels = new PanelNav<Node>(
       shell,
       (id) => this.buildPage(id),

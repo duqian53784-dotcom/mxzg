@@ -5,5 +5,10 @@
   "uuid": "ebe3123c-896d-4fb8-8fa1-613d47ef2538",
   "files": [],
   "subMetas": {},
-  "userData": {}
+  "userData": {
+    "isBundle": true,
+    "bundleName": "prefabs",
+    "priority": 1,
+    "bundleConfigID": "default"
+  }
 }

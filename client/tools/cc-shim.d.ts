@@ -123,4 +123,26 @@ declare module "cc" {
   export const resources: {
     load(path: string, type: unknown, cb: (err: Error | null, asset: JsonAsset | null) => void): void;
   };
+
+  export class Prefab {}
+
+  export class Sprite {
+    color: Color;
+  }
+
+  export function instantiate(original: Prefab | Node): Node;
+
+  export namespace AssetManager {
+    export interface Bundle {
+      load(path: string, type: unknown, cb: (err: Error | null, asset: Prefab | null) => void): void;
+    }
+  }
+
+  export const assetManager: {
+    loadBundle(name: string, cb: (err: Error | null, bundle: AssetManager.Bundle | null) => void): void;
+    loadAny(
+      request: string | { uuid?: string },
+      cb: (err: Error | null, asset: Prefab | null) => void
+    ): void;
+  };
 }
