@@ -2,8 +2,9 @@
  * 主城地图层。挂在主城页面里，顶栏和底栏仍是 CityChrome。
  * 视差底板用 resources/ui/maps/map-bg-city-*，建筑和活动图标用 resources/ui/city。
  * 点击只回调 atom，由 MainApp 走已有的 PanelNav，不另开一套导航。
+ * 地图内容比设计画面宽，拖动是预期。根上的 Mask 把子节点裁在 viewW×viewH 里。
  */
-import { Button, Color, EventTouch, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
+import { Button, Color, EventTouch, Mask, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
 import { GateSnapshot } from "../config/nav";
 import { ConfigLoader } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
@@ -58,6 +59,9 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   const rootUi = root.addComponent(UITransform);
   rootUi.setContentSize(layout.viewW, layout.viewH);
   rootUi.setAnchorPoint(0.5, 0.5);
+  // 先定好画面尺寸再挂 Mask。矩形裁切跟这块 UITransform 走，活动图标也在根上，一并落在画面内。
+  const mask = root.addComponent(Mask);
+  mask.type = Mask.Type.GRAPHICS_RECT;
   root.parent = parent;
 
   const parallax = uiNode("CityParallax");
