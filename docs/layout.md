@@ -6,4 +6,4 @@
 
 ## Prefab 与资源分目录（P0）
 
-见 [prefab-layout.md](./prefab-layout.md)。界面 Prefab 在 client/assets/prefabs/ui/，素材在 client/assets/resources/。
+见 [prefab-layout.md](./prefab-layout.md)。界面 Prefab 在 client/assets/prefabs/ui/，素材在 client/assets/resources/。全屏底图批次对照见 [asset-batch-map-bg.md](./asset-batch-map-bg.md)。
