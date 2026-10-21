@@ -56,6 +56,12 @@ export const WireCmd = {
    * 仓库里没有 Mail.proto。字段见 wireMail.ts。
    */
   mailList: 15000,
+  /**
+   * c2s 空体。进主城、空 c2s 15000 之后发。
+   * s2c 带回英雄 id 和名字。空包体是已同步的空名册。不是占位 hero.list（1401）。
+   * 仓库里没有 Hero.proto。字段见 wireHero.ts。不发升级。
+   */
+  heroList: 18001,
 } as const;
 
 /**
