@@ -936,6 +936,20 @@ import {
   WIRE_OCCUPATION_UNSYNCED_TOAST,
   wireOccupationNote,
 } from "../assets/scripts/net/protocol/wireOccupation";
+import {
+  decodeWireRoleShenBin,
+  formatWireRoleShenBinHead,
+  formatWireRoleShenBinLine,
+  SHENBIN_ESSENCE,
+  WIRE_ROLE_SHENBIN_CMD,
+  WIRE_ROLE_SHENBIN_EMPTY,
+  WIRE_ROLE_SHENBIN_FIELD_NOTE,
+  WIRE_ROLE_SHENBIN_READONLY_NOTE,
+  WIRE_ROLE_SHENBIN_READONLY_TITLE,
+  WIRE_ROLE_SHENBIN_SIDE_EFFECT,
+  WIRE_ROLE_SHENBIN_UNSYNCED_TOAST,
+  wireRoleShenBinNote,
+} from "../assets/scripts/net/protocol/wireRoleShenBin";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1673,6 +1687,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("fetterFashion") === "city", "fetter fashion stays on the city tab");
   assert(rootTabFor("shenBin") === "city", "shen bin stays on the city tab");
   assert(rootTabFor("occupation") === "city", "occupation stays on the city tab");
+  assert(rootTabFor("roleShenBin") === "city", "role shen bin stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -7564,7 +7579,6 @@ async function checkWs(): Promise<void> {
     "wire.75607",
     "wire.75608",
     "wire.75609",
-    "wire.75615",
     "wire.75619",
     "wire.20011",
     "wire.4601",
@@ -7781,7 +7795,6 @@ async function checkWs(): Promise<void> {
     "wire.75603",
     "wire.75604",
     "wire.75605",
-    "wire.75615",
     "wire.75619",
     "wire.20011",
     "wire.4601",
@@ -7957,6 +7970,207 @@ async function checkWs(): Promise<void> {
       bytesToHex(encodeFrame(75606)).indexOf("57270100") < 0 &&
       bytesToHex(encodeFrame(75607)).indexOf("57270100") >= 0,
     "75606 empty frame carries 56 27 01 00 and not the 75607 cmd byte"
+  );
+  assert(
+    WireCmd.roleShenBin === 75615 &&
+      WireCmd.roleShenBin !== WireCmd.occupation &&
+      WireCmd.roleShenBin !== WireCmd.shenBin,
+    "online 75615 stays off occupation 75606 and shen bin 75601"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.roleShenBin)) === "040000005f270100", "empty c2s 75615");
+  assert(bytesToHex(encodeFrame(75615)) === "040000005f270100", "empty c2s 75615 hex");
+  assert(bytesToHex(encodeFrame(75615)) !== "0400000056270100", "75615 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(75615)) !== "0400000057270100", "75615 is not the 75607 frame");
+  assert(bytesToHex(encodeFrame(75615)) !== "0400000051270100", "75615 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(75602)) !== "040000005f270100", "75602 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(75603)) !== "040000005f270100", "75603 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(75604)) !== "040000005f270100", "75604 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(75605)) !== "040000005f270100", "75605 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(75607)) !== "040000005f270100", "75607 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(75608)) !== "040000005f270100", "75608 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(75609)) !== "040000005f270100", "75609 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(75619)) !== "040000005f270100", "75619 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(28107)) !== "040000005f270100", "28107 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "040000005f270100", "20011 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "040000005f270100", "4601 is not the 75615 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "040000005f270100", "29001 is not the 75615 frame");
+  const bannedRoleShenBinCmds = [
+    "wire.75602",
+    "wire.75603",
+    "wire.75604",
+    "wire.75605",
+    "wire.75619",
+    "wire.75607",
+    "wire.75608",
+    "wire.75609",
+    "wire.28107",
+    "wire.20011",
+    "wire.4601",
+    "wire.29001",
+  ];
+  for (let i = 0; i < bannedRoleShenBinCmds.length; i++) {
+    assert(encodeWireMessage({ cmd: bannedRoleShenBinCmds[i] }) === null, bannedRoleShenBinCmds[i] + " is not encoded");
+  }
+  assert(
+    encodeWireMessage({ cmd: WIRE_ROLE_SHENBIN_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_ROLE_SHENBIN_CMD })?.bytes || new Uint8Array(0)) === "040000005f270100" &&
+      bytesToHex(encodeWireMessage({ cmd: "wire.75607" }) || new Uint8Array(0)) !== "0400000057270100",
+    "wire.75615 encodes the empty frame and wire.75607 is not encoded"
+  );
+  assert(encodeWireMessage({ cmd: "wire.75607" }) === null, "75607 is not encoded as the role shen bin pull");
+  assert(encodeWireMessage({ cmd: "wire.75608" }) === null, "75608 push is not encoded as the role shen bin c2s");
+  assert(encodeWireMessage({ cmd: "wire.28107" }) === null, "28107 is not encoded as a role shen bin alternative");
+  assert(WIRE_ROLE_SHENBIN_CMD === "wire.75615", "role shen bin wire cmd");
+  assert(SHENBIN_ESSENCE === 902048, "shen bin essence item type");
+  assert(WIRE_ROLE_SHENBIN_READONLY_TITLE === "神兵道具（真服只读）", "readonly role shen bin title");
+  assert(WIRE_ROLE_SHENBIN_UNSYNCED_TOAST === "真服未同步", "unsynced role shen bin toast");
+  assert(WIRE_ROLE_SHENBIN_EMPTY === "空神兵道具", "empty role shen bin label");
+  assert(
+    WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("getOrCreate") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("knighthoodId") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("只读拼包") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("75606") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("040000005f270100") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("75602") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("75603") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("75604") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("75605") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("75619") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("75607") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("75608") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("75609") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("28107") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_ROLE_SHENBIN_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("item_type") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("itemNum") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("902048") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("精华") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("无合成") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("装备") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("分解") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("晋升") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_ROLE_SHENBIN_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_ROLE_SHENBIN_FIELD_NOTE.indexOf("item_type") >= 0 &&
+      WIRE_ROLE_SHENBIN_FIELD_NOTE.indexOf("itemNum") >= 0 &&
+      WIRE_ROLE_SHENBIN_FIELD_NOTE.indexOf("902048") >= 0 &&
+      WIRE_ROLE_SHENBIN_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_ROLE_SHENBIN_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "role shen bin page names item_type itemNum and refuses compose equip decompose promote"
+  );
+  const roleItem = concatBytes(fieldVarint(1, 902048), concatBytes(fieldVarint(2, 3), fieldVarint(8, 1)));
+  const roleBody = concatBytes(fieldBytes(1, roleItem), fieldVarint(9, 1));
+  const roleTypeOnly = fieldBytes(1, fieldVarint(1, 902048));
+  const roleNumZero = fieldBytes(1, fieldVarint(2, 0));
+  const roleNumNeg = fieldBytes(1, fieldNeg1(2));
+  const roleNumWide = fieldBytes(1, fieldVarint(2, 1099511627776));
+  const roleMaterial = fieldBytes(1, concatBytes(fieldVarint(1, 11), fieldVarint(2, 4)));
+  const roleEmptyItem = fieldBytes(1, new Uint8Array(0));
+  const roleBadItem = fieldBytes(1, new Uint8Array([0x80]));
+  const roleOuter = fieldVarint(9, 1);
+  const emptyRoleItem = { itemType: null, itemNum: null, marks: [] as { field: number; text: string }[] };
+  assert(
+    decodeWireRoleShenBin(new Uint8Array(0)) !== null &&
+      decodeWireRoleShenBin(new Uint8Array(0))?.items.length === 0 &&
+      formatWireRoleShenBinHead(decodeWireRoleShenBin(new Uint8Array(0)) || { items: [], marks: [] }) ===
+        "roleShenBins=" + WIRE_ROLE_SHENBIN_EMPTY,
+    "empty 75615 body is synced and does not invent zero"
+  );
+  assert(decodeWireRoleShenBin(null) === null, "null 75615 body is not a snapshot");
+  assert(decodeWireRoleShenBin(new Uint8Array([0x80])) === null, "bad 75615 ignored");
+  assert(decodeWireRoleShenBin(roleBadItem) === null, "75615 item that fails is not an empty table");
+  const roleTypeSnap = decodeWireRoleShenBin(roleTypeOnly);
+  assert(
+    roleTypeSnap !== null &&
+      roleTypeSnap.items.length === 1 &&
+      roleTypeSnap.items[0].itemType === 902048 &&
+      roleTypeSnap.items[0].itemNum === null &&
+      formatWireRoleShenBinLine(roleTypeSnap.items[0]) === "item_type=902048（精华） / itemNum=无",
+    "present 75615 essence does not invent itemNum"
+  );
+  const roleNumZeroSnap = decodeWireRoleShenBin(roleNumZero);
+  assert(
+    roleNumZeroSnap !== null &&
+      roleNumZeroSnap.items[0].itemNum === 0 &&
+      roleNumZeroSnap.items[0].itemType === null &&
+      formatWireRoleShenBinLine(roleNumZeroSnap.items[0]) === "item_type=无 / itemNum=0",
+    "present 75615 itemNum zero stays zero and does not invent item_type"
+  );
+  const roleNumNegSnap = decodeWireRoleShenBin(roleNumNeg);
+  assert(
+    roleNumNegSnap !== null &&
+      roleNumNegSnap.items[0].itemNum === -1 &&
+      formatWireRoleShenBinLine(roleNumNegSnap.items[0]) === "item_type=无 / itemNum=-1",
+    "75615 itemNum -1 stays -1"
+  );
+  const roleNumWideSnap = decodeWireRoleShenBin(roleNumWide);
+  assert(
+    roleNumWideSnap !== null &&
+      roleNumWideSnap.items[0].itemNum === 1099511627776 &&
+      formatWireRoleShenBinLine(roleNumWideSnap.items[0]) === "item_type=无 / itemNum=1099511627776",
+    "75615 itemNum keeps the wide integer"
+  );
+  const roleMaterialSnap = decodeWireRoleShenBin(roleMaterial);
+  assert(
+    roleMaterialSnap !== null &&
+      roleMaterialSnap.items[0].itemType === 11 &&
+      roleMaterialSnap.items[0].itemNum === 4 &&
+      formatWireRoleShenBinLine(roleMaterialSnap.items[0]) === "item_type=11 / itemNum=4",
+    "75615 shenBinMap material stays the raw item_type"
+  );
+  const roleEmptyItemSnap = decodeWireRoleShenBin(roleEmptyItem);
+  assert(
+    roleEmptyItemSnap !== null &&
+      roleEmptyItemSnap.items.length === 1 &&
+      roleEmptyItemSnap.items[0].itemType === null &&
+      roleEmptyItemSnap.items[0].itemNum === null &&
+      formatWireRoleShenBinLine(roleEmptyItemSnap.items[0] || emptyRoleItem) === "item_type=无 / itemNum=无",
+    "present 75615 empty roleShenBins row stays present and does not invent zero"
+  );
+  const loggedRole = decodeWireRoleShenBin(roleBody);
+  assert(
+    loggedRole !== null &&
+      loggedRole.items.length === 1 &&
+      loggedRole.items[0].itemType === 902048 &&
+      loggedRole.items[0].itemNum === 3 &&
+      loggedRole.marks.length === 1 &&
+      loggedRole.marks[0].field === 9 &&
+      formatWireRoleShenBinHead(loggedRole) === "roleShenBins=1 条 / 字段9=1" &&
+      formatWireRoleShenBinLine(loggedRole.items[0]) === "item_type=902048（精华） / itemNum=3 / 字段8=1" &&
+      wireRoleShenBinNote(loggedRole).indexOf(WIRE_ROLE_SHENBIN_SIDE_EFFECT) >= 0 &&
+      wireRoleShenBinNote(loggedRole).indexOf("不写金币") >= 0 &&
+      wireRoleShenBinNote(loggedRole).indexOf("不写钻石") >= 0,
+    "75615 sample keeps essence itemNum and does not fill a missing number with 0"
+  );
+  assert(
+    decodeWireRoleShenBin(roleOuter) !== null &&
+      decodeWireRoleShenBin(roleOuter)?.items.length === 0 &&
+      formatWireRoleShenBinHead(decodeWireRoleShenBin(roleOuter) || { items: [], marks: [] }) ===
+        "roleShenBins=" + WIRE_ROLE_SHENBIN_EMPTY + " / 字段9=1",
+    "non-empty 75615 without roleShenBins stays synced and does not invent zero"
+  );
+  const roleSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.roleShenBin, roleBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    roleSticky.frames.length === 2 &&
+      roleSticky.frames[0].cmdId === 75615 &&
+      roleSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireRoleShenBin(roleSticky.frames[0].body)?.items[0].itemType === 902048 &&
+      decodeWireRoleShenBin(roleSticky.frames[0].body)?.items[0].itemNum === 3,
+    "sticky 75615 frame stops at its length prefix"
+  );
+  assert(
+    bytesToHex(encodeFrame(75615)).indexOf("5f270100") >= 0 &&
+      bytesToHex(encodeFrame(75615)).indexOf("57270100") < 0 &&
+      bytesToHex(encodeFrame(75615)).indexOf("56270100") < 0,
+    "75615 empty frame carries 5f 27 01 00 and not the 75606 or 75607 cmd byte"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -9068,7 +9282,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 35, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 36, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -9214,6 +9428,18 @@ async function checkWs(): Promise<void> {
         "pullIdle 75606 frame is not the 75607 cmd"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 35] as ArrayBuffer)) === "040000005f270100",
+        "pullIdle sends empty c2s 75615 after 75606"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 35] as ArrayBuffer)) !== "0400000057270100",
+        "pullIdle 75615 frame is not the 75607 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 35] as ArrayBuffer)) !== "0400000056270100",
+        "pullIdle 75615 frame is not merged into 75606"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -9248,10 +9474,12 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 28200") &&
           sawLog(lines, "发送 c2s 75601") &&
           sawLog(lines, "发送 c2s 75606") &&
+          sawLog(lines, "发送 c2s 75615") &&
           sawLog(lines, "04000000c46d0000") &&
           sawLog(lines, "04000000286e0000") &&
           sawLog(lines, "0400000051270100") &&
           sawLog(lines, "0400000056270100") &&
+          sawLog(lines, "040000005f270100") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -9335,7 +9563,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 75607") === false &&
           sawLog(lines, "发送 c2s 75608") === false &&
           sawLog(lines, "发送 c2s 75609") === false &&
-          sawLog(lines, "发送 c2s 75615") === false &&
           sawLog(lines, "发送 c2s 75619") === false &&
           sawLog(lines, "0400000057270100") === false &&
           sawLog(lines, "发送 c2s 74105") === false &&
@@ -10076,14 +10303,13 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.75607");
       roleNet.send("wire.75608");
       roleNet.send("wire.75609");
-      roleNet.send("wire.75615");
       roleNet.send("wire.75619");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeShenBinOther,
-        "75602 75603 75604 75605 75607 75608 75609 75615 75619 20011 4601 and 29001 stay off the shen bin wire"
+        "75602 75603 75604 75605 75607 75608 75609 75619 20011 4601 and 29001 stay off the shen bin wire"
       );
       assert(
         sawLog(lines, "未发送 wire.75602") &&
@@ -10093,7 +10319,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.75607") &&
           sawLog(lines, "未发送 wire.75608") &&
           sawLog(lines, "未发送 wire.75609") &&
-          sawLog(lines, "未发送 wire.75615") &&
           sawLog(lines, "未发送 wire.75619") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
@@ -10127,21 +10352,19 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.75603");
       roleNet.send("wire.75604");
       roleNet.send("wire.75605");
-      roleNet.send("wire.75615");
       roleNet.send("wire.75619");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeOccupationOther,
-        "75607 75608 75609 75602 75603 75604 75605 75615 75619 20011 4601 and 29001 stay off the occupation wire"
+        "75607 75608 75609 75602 75603 75604 75605 75619 20011 4601 and 29001 stay off the occupation wire"
       );
       assert(
         sawLog(lines, "未发送 wire.75607") &&
           sawLog(lines, "未发送 wire.75608") &&
           sawLog(lines, "未发送 wire.75609") &&
           sawLog(lines, "未发送 wire.75602") &&
-          sawLog(lines, "未发送 wire.75615") &&
           sawLog(lines, "未发送 wire.75619") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
@@ -10160,6 +10383,58 @@ async function checkWs(): Promise<void> {
         roleSockets[0].sent.length === sentAfterShenAlone + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000056270100",
         "sending 75606 does not also send 75601 or 75607"
+      );
+      const sentBeforeRoleShenBin = roleSockets[0].sent.length;
+      roleNet.send(WIRE_ROLE_SHENBIN_CMD);
+      const roleShenSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(roleShenSent as ArrayBuffer)) === "040000005f270100", "wire.75615 frame");
+      assert(bytesToHex(new Uint8Array(roleShenSent as ArrayBuffer)) !== "0400000057270100", "wire.75615 frame is not 75607");
+      assert(bytesToHex(new Uint8Array(roleShenSent as ArrayBuffer)) !== "0400000056270100", "wire.75615 frame is not 75606");
+      assert(roleSockets[0].sent.length === sentBeforeRoleShenBin + 1, "75615 is its own frame and is not merged into 75606");
+      const sentBeforeRoleShenBinOther = roleSockets[0].sent.length;
+      roleNet.send("wire.75602");
+      roleNet.send("wire.75603");
+      roleNet.send("wire.75604");
+      roleNet.send("wire.75605");
+      roleNet.send("wire.75619");
+      roleNet.send("wire.75607");
+      roleNet.send("wire.75608");
+      roleNet.send("wire.75609");
+      roleNet.send("wire.28107");
+      roleNet.send("wire.20011");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.29001");
+      assert(
+        roleSockets[0].sent.length === sentBeforeRoleShenBinOther,
+        "75602 75603 75604 75605 75619 75607 75608 75609 28107 20011 4601 and 29001 stay off the role shen bin wire"
+      );
+      assert(
+        sawLog(lines, "未发送 wire.75602") &&
+          sawLog(lines, "未发送 wire.75603") &&
+          sawLog(lines, "未发送 wire.75604") &&
+          sawLog(lines, "未发送 wire.75605") &&
+          sawLog(lines, "未发送 wire.75619") &&
+          sawLog(lines, "未发送 wire.75607") &&
+          sawLog(lines, "未发送 wire.75608") &&
+          sawLog(lines, "未发送 wire.75609") &&
+          sawLog(lines, "未发送 wire.28107") &&
+          sawLog(lines, "未发送 wire.20011") &&
+          sawLog(lines, "未发送 wire.4601") &&
+          sawLog(lines, "未发送 wire.29001"),
+        "role shen bin writes occupation writes 75608-as-c2s 28107 20011 4601 and 29001 are not encoded"
+      );
+      roleNet.send(WIRE_OCCUPATION_CMD);
+      assert(
+        roleSockets[0].sent.length === sentBeforeRoleShenBinOther + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000056270100",
+        "sending 75606 does not also send 75615"
+      );
+      const sentAfterOccupationAlone = roleSockets[0].sent.length;
+      roleNet.send(WIRE_ROLE_SHENBIN_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterOccupationAlone + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "040000005f270100",
+        "sending 75615 does not also send 75606 or 75607"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -12404,6 +12679,95 @@ async function checkWs(): Promise<void> {
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
         "75607 75608 75609 75602 75603 75604 75605 75615 75619 4601 29001 20011 and 75601 do not replace the 75606 list"
+      );
+      assert(
+        WireSession.hasRoleShenBin() &&
+          WireSession.roleShenBin !== null &&
+          WireSession.roleShenBin.items.length === 0 &&
+          WireSession.roleShenBin.marks.length === 1 &&
+          WireSession.roleShenBin.marks[0].field === 1 &&
+          WireSession.roleShenBin.marks[0].text === "4" &&
+          WireSession.occupation !== null &&
+          WireSession.occupation.info !== null &&
+          WireSession.occupation.info.ocId === 3,
+        "75615 scalar field 1 is a mark and does not invent a roleShenBins row or replace 75606"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.roleShenBin));
+      assert(
+        WireSession.hasRoleShenBin() &&
+          WireSession.roleShenBin !== null &&
+          WireSession.roleShenBin.items.length === 0 &&
+          formatWireRoleShenBinHead(WireSession.roleShenBin) === "roleShenBins=" + WIRE_ROLE_SHENBIN_EMPTY &&
+          WireSession.occupation !== null &&
+          WireSession.occupation.info !== null &&
+          WireSession.occupation.info.ocId === 3 &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos[0].coreLv === 0 &&
+          WireSession.shenBin.infos[0].fighting === 15 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 75615 body clears roleShenBins without writing zero and stays synced"
+      );
+      const roleSessionItem = concatBytes(fieldVarint(1, 902048), fieldVarint(2, 3));
+      roleSockets[0].push(encodeFrame(WireCmd.roleShenBin, fieldBytes(1, roleSessionItem)));
+      assert(
+        WireSession.hasRoleShenBin() &&
+          WireSession.roleShenBin !== null &&
+          WireSession.roleShenBin.items.length === 1 &&
+          WireSession.roleShenBin.items[0].itemType === 902048 &&
+          WireSession.roleShenBin.items[0].itemNum === 3 &&
+          formatWireRoleShenBinLine(WireSession.roleShenBin.items[0]) === "item_type=902048（精华） / itemNum=3" &&
+          wireRoleShenBinNote(WireSession.roleShenBin).indexOf(WIRE_ROLE_SHENBIN_SIDE_EFFECT) >= 0 &&
+          wireRoleShenBinNote(WireSession.roleShenBin).indexOf("不写金币") >= 0 &&
+          wireRoleShenBinNote(WireSession.roleShenBin).indexOf("不写钻石") >= 0 &&
+          WireSession.occupation !== null &&
+          WireSession.occupation.info.ocId === 3 &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos[0].fighting === 15 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "75615 sample keeps essence itemNum and leaves 75606 and 75601"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.roleShenBin, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasRoleShenBin() &&
+          WireSession.roleShenBin !== null &&
+          WireSession.roleShenBin.items.length === 1 &&
+          WireSession.roleShenBin.items[0].itemType === 902048 &&
+          WireSession.roleShenBin.items[0].itemNum === 3 &&
+          WireSession.occupation !== null &&
+          WireSession.occupation.info.ocId === 3 &&
+          sawWire("75615 解不开"),
+        "bad 75615 keeps the role shen bin list and the 75606 record"
+      );
+      roleSockets[0].push(encodeFrame(75602, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(75603, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(75604, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(75605, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(75607));
+      roleSockets[0].push(encodeFrame(75608, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(75609, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(75619, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(28107, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 5)));
+      roleSockets[0].push(encodeFrame(WireCmd.occupation, occSessionBody));
+      roleSockets[0].push(encodeFrame(WireCmd.shenBin, shenBody));
+      assert(
+        WireSession.hasRoleShenBin() &&
+          WireSession.roleShenBin !== null &&
+          WireSession.roleShenBin.items.length === 1 &&
+          WireSession.roleShenBin.items[0].itemType === 902048 &&
+          WireSession.roleShenBin.items[0].itemNum === 3 &&
+          WireSession.occupation !== null &&
+          WireSession.occupation.info !== null &&
+          WireSession.occupation.info.ocId === 3 &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos[0].coreLv === 0 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "75602 75603 75604 75605 75607 75608 75609 75619 28107 4601 29001 20011 75606 and 75601 do not replace the 75615 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
