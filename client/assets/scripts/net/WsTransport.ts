@@ -35,7 +35,8 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 空的 c2s 75501 拉魔方数据。无 page。s2c 75501 由 WireSession 按 GResTweakCube 读 rank_hero、open_count、trench 的 index、hero_id、last_change_time，不写顶栏。不发 75502 添加、75503 卸下、75504 开格子、75505 清 cd。75506 是等级推送，勿发、勿当拉包请求。轻懒建，首次 get 可能 doCreate + tweakCubeDao.add，建免费槽并按战力塞供奉，无扣费、无领奖，管理员认定可接受，同星盘。不做 34001。不做 20011。挂在 68001 之后。不回落 Mock。
  * 空的 c2s 59001 拉圣龙数据。无 page。s2c 59001 由 WireSession 按 GResDragonScanInfo 读 identify_level、attr_level、identities 的 type、start_time、level、speed_add、slots 的 id、sys_id、privilege_end_time，不写顶栏。不发 59002 放源石、59003 提升鉴定、59005 加速鉴定、59006 鉴定领奖、59007 提升圣龙等级、59008 圣物替换、59009 调顺序、59011、59012 升星、59013 分解。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。轻懒建，首次 dragonDao.add，无扣费、无领奖。不做 34001。不做 20011。挂在 75501 之后。不回落 Mock。
  * 空的 c2s 59010 拉圣物图鉴。无 page。s2c 59010 由 WireSession 按 GResDragonCollection 读 repeated int32 sys_id，不写顶栏。不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。勿与 59001 合并成一个请求。轻懒建，与 59001 同 getDragon / dragonDao.add，无扣费、无领奖。不做 34001。不做 20011。挂在 59001 之后。不回落 Mock。
- * 空的 c2s 55001 拉称号列表。无 page。s2c 55001 由 WireSession 按 GResScanTitleList 读 repeated PSTitle 的 idx、end_time，不写顶栏。end_time：-1 永久，0 未激活，时间戳为到期。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add，无扣费、无领奖、无日刷。不做 34001。不做 20011。挂在 59010 之后。不回落 Mock。
+ * 空的 c2s 55001 拉称号列表。无 page。s2c 55001 由 WireSession 按 GResScanTitleList 读 repeated PSTitle 的 idx、end_time，不写顶栏。end_time：-1 永久，0 未激活，时间戳为到期。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add，无扣费、无领奖、无日刷。34001 另只读接在其后。不做 20011。挂在 59010 之后。不回落 Mock。
+ * 空的 c2s 34001 拉头像列表。无 page。整帧 04000000d1840000。s2c 34001 由 WireSession 按 GResHeadPortraitList 读 repeated int32 idx_list，不写顶栏。不发 34002 更换头像。34003 是解锁推送，勿发、勿当拉包。不做 32001。不做 20011。轻懒建，RoleHeadPortraitService.select 无记录则 dao.add 默认解锁头，无扣费、无领奖、不改当前头像。挂在 55001 之后。不回落 Mock。
  * 单条处理失败也不丢掉后面的帧。
  */
 
