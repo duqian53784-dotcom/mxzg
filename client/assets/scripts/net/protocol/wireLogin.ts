@@ -23,15 +23,16 @@
  * 进主城后另外几帧也在这里编：空的 c2s 2001（wire.2001）、空的 c2s 5001（wire.5001）、
  * 空的 c2s 3007（wire.3007）、空的 c2s 3004（wire.3004）、空的 c2s 15000（wire.15000）、
  * c2s 4001 page=1（wire.4001，包体 `08 01`）、空的 c2s 17000（wire.17000）、空的 c2s 12010（wire.12010）、
- * 空的 c2s 18001（wire.18001，GReqPvpData）。
+ * 空的 c2s 18001（wire.18001，GReqPvpData）、空的 c2s 22000（wire.22000，GReqSevenDayLoginData）。
  * 挂机页领取再编空的 c2s 3005（wire.3005）。
- * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。
- * 不编 12020。
+ * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。
+ * 不编 12020。不编 22001，也不编 22002。
  * 3002 不编。5002 只收不发。5004–5009、5010、5011–5013 不编。
  * 邮件领取、已读、删除不编。占位 mail.* 仍是 1701–1705。
  * 英雄升级不编。占位 hero.list / hero.upgrade 仍是 1401 / 1402。
  * 不编空的 4001，也不编 12020。占位 login7.* 仍是 2201–2203，领取不编。成就不领奖。
  * 空的 18001 要编。不编 18002、18003、18005、18007、18008。
+ * 空的 22000 要编。22002 只收，不当成 c2s。
  */
 import { NetMessage } from "../NetTypes";
 import { Cmd } from "./cmds";
@@ -39,6 +40,7 @@ import { bytesToHex, encodeFrame, WireCmd } from "./frame";
 import { WIRE_ACHIEVEMENT_CMD } from "./wireAchievement";
 import { WIRE_ACTIVITY_CMD } from "./wireActivity";
 import { WIRE_PVP_CMD } from "./wirePvp";
+import { WIRE_SEVEN_CMD } from "./wireSevenDay";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
 const LOGIN_FIELD1 = 7;
@@ -125,6 +127,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.17000 → 空的 c2s 17000（点金 GResBuyGoldLog，不点金）。
  * wire.12010 → 空的 c2s 12010（成就 GResAchievementList，不领奖）。不编 12020。
  * wire.18001 → 空的 c2s 18001（竞技场 GReqPvpData / GResPvpData）。不编 18002、18003、18005、18007、18008。
+ * wire.22000 → 空的 c2s 22000（七日登录 GReqSevenDayLoginData / GResSevenDayLoginData）。不编 22001。不编 22002。
  * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
  * 占位 idle.query / idle.claim 仍是 1301 / 1302，和这两帧不是一回事。
  * 占位 bag.list / bag.use 仍是 1601 / 1602。3002 / 3010 不编码。
@@ -132,6 +135,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * 占位 mail.list / mail.read / mail.claim / mail.claimAll / mail.delete 仍是 1701–1705。领取和删除不编码。
  * 占位 hero.list / hero.upgrade 仍是 1401 / 1402。升级不编码。18001 不是英雄。
  * 占位 login7.view / login7.claim / login7.advance 仍是 2201–2203。领取不编码。wire.12020 不编码。
+ * wire.22001、wire.22002 不编码。22002 是 s2c 推送。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -233,6 +237,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.pvpData,
       bytes: encodeFrame(WireCmd.pvpData),
+      note: "空体",
+    };
+  }
+  if (cmd === WIRE_SEVEN_CMD) {
+    return {
+      cmdId: WireCmd.sevenDayLogin,
+      bytes: encodeFrame(WireCmd.sevenDayLogin),
       note: "空体",
     };
   }
