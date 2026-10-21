@@ -79,6 +79,7 @@ import { buildWireHeroPalacePage, WireHeroPalacePage } from "./WireHeroPalacePag
 import { buildWireRechargeDaysBPage, WireRechargeDaysBPage } from "./WireRechargeDaysBPage";
 import { buildWireTimeTowerPage, WireTimeTowerPage } from "./WireTimeTowerPage";
 import { buildWireSpaceTimeAdventurePage, WireSpaceTimeAdventurePage } from "./WireSpaceTimeAdventurePage";
+import { buildWireMagicTowerRoadPage, WireMagicTowerRoadPage } from "./WireMagicTowerRoadPage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -119,6 +120,7 @@ import { WIRE_HERO_PALACE_UNSYNCED_TOAST } from "../net/protocol/wireHeroPalace"
 import { WIRE_RECHARGE_DAYS_B_UNSYNCED_TOAST } from "../net/protocol/wireRechargeDaysB";
 import { WIRE_TIME_TOWER_UNSYNCED_TOAST } from "../net/protocol/wireTimeTower";
 import { WIRE_SPACE_TIME_ADVENTURE_UNSYNCED_TOAST } from "../net/protocol/wireSpaceTimeAdventure";
+import { WIRE_MAGIC_TOWER_ROAD_UNSYNCED_TOAST } from "../net/protocol/wireMagicTowerRoad";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -226,6 +228,7 @@ const HERO_PALACE_FILL = new Color(96, 72, 120, 255);
 const RECHARGE_DAYS_B_FILL = new Color(168, 96, 56, 255);
 const TIME_TOWER_FILL = new Color(88, 72, 148, 255);
 const SPACE_TIME_ADVENTURE_FILL = new Color(72, 120, 148, 255);
+const MAGIC_TOWER_ROAD_FILL = new Color(120, 72, 96, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -280,6 +283,7 @@ export class MainApp extends Component {
   private rechargeDaysB: WireRechargeDaysBPage | null = null;
   private timeTower: WireTimeTowerPage | null = null;
   private spaceTimeAdventure: WireSpaceTimeAdventurePage | null = null;
+  private magicTowerRoad: WireMagicTowerRoadPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -411,6 +415,8 @@ export class MainApp extends Component {
     this.timeTower = null;
     this.spaceTimeAdventure?.dispose();
     this.spaceTimeAdventure = null;
+    this.magicTowerRoad?.dispose();
+    this.magicTowerRoad = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -524,7 +530,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -610,6 +616,7 @@ export class MainApp extends Component {
     if (id === "rechargeDaysB") return this.mountRechargeDaysB();
     if (id === "timeTower") return this.mountTimeTower();
     if (id === "spaceTimeAdventure") return this.mountSpaceTimeAdventure();
+    if (id === "magicTowerRoad") return this.mountMagicTowerRoad();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -731,6 +738,7 @@ export class MainApp extends Component {
     place(createButton("积天豪礼2", () => this.openRechargeDaysB(), 160, 32, RECHARGE_DAYS_B_FILL, 14), page, -200, 308);
     place(createButton("时空魔塔", () => this.openTimeTower(), 160, 32, TIME_TOWER_FILL, 14), page, 200, 354);
     place(createButton("时空冒险", () => this.openSpaceTimeAdventure(), 160, 32, SPACE_TIME_ADVENTURE_FILL, 14), page, 0, 400);
+    place(createButton("斩魔之路", () => this.openMagicTowerRoad(), 160, 32, MAGIC_TOWER_ROAD_FILL, 14), page, -200, 400);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -951,6 +959,7 @@ export class MainApp extends Component {
     if (id === "rechargeDaysB") return this.blockWireRechargeDaysB();
     if (id === "timeTower") return this.blockWireTimeTower();
     if (id === "spaceTimeAdventure") return this.blockWireSpaceTimeAdventure();
+    if (id === "magicTowerRoad") return this.blockWireMagicTowerRoad();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -1347,6 +1356,14 @@ export class MainApp extends Component {
     if (Session.source === "wire" && WireSession.hasSpaceTimeAdventure()) return false;
     GameLog.shared.info("MainApp", "wire space time adventure unsynced");
     this.shell?.showToast(WIRE_SPACE_TIME_ADVENTURE_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 76542 就停在主城。空包体也算同步。不重复拉 74120。不发 76543。不发 76544。不发 76502。不发 76503。不发 76504。不发 76505。不发 76506。不发 76541。不发 76501。不夹发 74121。不夹发 74122。不做 75001。不做 73002。不做 71001。不做 20011。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。74120 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireMagicTowerRoad(): boolean {
+    if (Session.source === "wire" && WireSession.hasMagicTowerRoad()) return false;
+    GameLog.shared.info("MainApp", "wire magic tower road unsynced");
+    this.shell?.showToast(WIRE_MAGIC_TOWER_ROAD_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -2518,6 +2535,29 @@ export class MainApp extends Component {
     return page.node;
   }
 
+  /** 真服斩魔之路。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 normal_list、king_list、state。无领奖、无王者购买入口。不重复拉 74120。不发 76543。不发 76544。不发 76502。不发 76503。不发 76504。不发 76505。不发 76506。不发 76541。不发 76501。不夹发 74121。不夹发 74122。不做 75001。不做 73002。不做 71001。不做 20011。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 74120 分开发，勿合并。本刀不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  private openMagicTowerRoad(): void {
+    GameLog.shared.info("MainApp", "click magic tower road");
+    if (this.blockWirePage("magicTowerRoad")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("magicTowerRoad");
+    this.refreshChrome();
+  }
+
+  private mountMagicTowerRoad(): Node {
+    this.magicTowerRoad?.dispose();
+    const page = buildWireMagicTowerRoadPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.magicTowerRoad = page;
+    return page.node;
+  }
+
   /** 真服点金。未同步 Toast。已同步压入只读页，不点金，不写金币。不走七日登录。 */
   private openBuyGold(): void {
     GameLog.shared.info("MainApp", "click buygold");
@@ -3381,6 +3421,10 @@ export class MainApp extends Component {
     if (id === "spaceTimeAdventure") {
       this.spaceTimeAdventure?.dispose();
       this.spaceTimeAdventure = null;
+    }
+    if (id === "magicTowerRoad") {
+      this.magicTowerRoad?.dispose();
+      this.magicTowerRoad = null;
     }
     if (id === "bag") {
       this.bag?.dispose();
