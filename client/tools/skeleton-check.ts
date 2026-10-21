@@ -1034,6 +1034,20 @@ import {
   WIRE_HERO_LEVEL_RESET_TIMES_UNSYNCED_TOAST,
   wireHeroLevelResetTimesNote,
 } from "../assets/scripts/net/protocol/wireHeroLevelResetTimes";
+import {
+  decodeWireSignInList,
+  formatWireSignInListLine,
+  WIRE_SIGN_IN_LIST_BANNED_CMDS,
+  WIRE_SIGN_IN_LIST_CMD,
+  WIRE_SIGN_IN_LIST_EMPTY,
+  WIRE_SIGN_IN_LIST_FIELD_NOTE,
+  WIRE_SIGN_IN_LIST_FRAME,
+  WIRE_SIGN_IN_LIST_READONLY_NOTE,
+  WIRE_SIGN_IN_LIST_READONLY_TITLE,
+  WIRE_SIGN_IN_LIST_SIDE_EFFECT,
+  WIRE_SIGN_IN_LIST_UNSYNCED_TOAST,
+  wireSignInListNote,
+} from "../assets/scripts/net/protocol/wireSignInList";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1778,6 +1792,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("runningPromotion") === "city", "running promotion stays on the city tab");
   assert(rootTabFor("towerReward") === "city", "tower reward stays on the city tab");
   assert(rootTabFor("heroLevelResetTimes") === "city", "hero level reset times stays on the city tab");
+  assert(rootTabFor("signInList") === "city", "sign in list stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -9235,7 +9250,9 @@ async function checkWs(): Promise<void> {
     assert(encodeWireMessage({ cmd: WIRE_HERO_LEVEL_RESET_TIMES_BANNED_CMDS[i] }) === null, WIRE_HERO_LEVEL_RESET_TIMES_BANNED_CMDS[i] + " is not encoded");
   }
   assert(encodeWireMessage({ cmd: "wire.4043" }) === null, "4043 level reset write is not encoded");
-  assert(encodeWireMessage({ cmd: "wire.13010" }) === null, "13010 is not encoded");
+  assert(encodeWireMessage({ cmd: "wire.13010" }) !== null, "13010 stays encoded by its own module and is not reissued as 4044");
+  assert(encodeWireMessage({ cmd: "wire.13011" }) === null, "13011 sign-in claim is not encoded");
+  assert(encodeWireMessage({ cmd: "wire.12020" }) === null, "12020 is not encoded");
   assert(encodeWireMessage({ cmd: "wire.5001" }) !== null, "5001 stays encoded by its own module and is not reissued as 4044");
   assert(encodeWireMessage({ cmd: "wire.51001" }) !== null, "51001 stays encoded by its own module and is not reissued as 4044");
   assert(encodeWireMessage({ cmd: "wire.3203" }) !== null, "3203 stays encoded by its own module and is not reissued as 4044");
@@ -9356,6 +9373,204 @@ async function checkWs(): Promise<void> {
       bytesToHex(encodeFrame(4044)).indexOf("39c70000") < 0 &&
       bytesToHex(encodeFrame(4044)).indexOf("89130000") < 0,
     "4044 empty frame carries cc 0f 00 00 and not the 3203, 4043, 51001 or 5001 cmd byte"
+  );
+  assert(
+    WireCmd.signInList === 13010 &&
+      WireCmd.signInList !== WireCmd.heroLevelResetTimes &&
+      WireCmd.signInList !== WireCmd.achievementList &&
+      WireCmd.signInList !== WireCmd.towerReward &&
+      WireCmd.signInList !== WireCmd.runningPromotion &&
+      WireCmd.signInList !== WireCmd.lineUp &&
+      WireCmd.signInList !== WireCmd.formation &&
+      WireCmd.signInList !== WireCmd.worldLevel &&
+      WireCmd.signInList !== WireCmd.backpackList,
+    "online 13010 stays off 4044, boot 12010, tower 3203, running promotion 20101, lineup 3101, formation 3099, world 51001 and bag 5001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.signInList)) === WIRE_SIGN_IN_LIST_FRAME, "empty c2s 13010");
+  assert(bytesToHex(encodeFrame(13010)) === "04000000d2320000", "empty c2s 13010 hex");
+  assert(WIRE_SIGN_IN_LIST_FRAME === "04000000d2320000", "13010 frame constant");
+  assert(bytesToHex(encodeFrame(13010)) !== "04000000ea2e0000", "13010 is not the boot 12010 frame");
+  assert(bytesToHex(encodeFrame(13010)) !== "04000000cc0f0000", "13010 is not the 4044 frame");
+  assert(bytesToHex(encodeFrame(13010)) !== "04000000830c0000", "13010 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(13010)) !== "04000000854e0000", "13010 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(13010)) !== "040000001d0c0000", "13010 is not the 3101 frame");
+  assert(bytesToHex(encodeFrame(13010)) !== "040000001b0c0000", "13010 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(13010)) !== "0400000039c70000", "13010 is not the 51001 frame");
+  assert(bytesToHex(encodeFrame(13010)) !== "0400000089130000", "13010 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(13011)) === "04000000d3320000" && bytesToHex(encodeFrame(13011)) !== "04000000d2320000", "13011 is not the 13010 frame");
+  assert(bytesToHex(encodeFrame(12020)) === "04000000f42e0000" && bytesToHex(encodeFrame(12020)) !== "04000000d2320000", "12020 is not the 13010 frame");
+  assert(bytesToHex(encodeFrame(12010)) === "04000000ea2e0000" && bytesToHex(encodeFrame(12010)) !== "04000000d2320000", "12010 is not the 13010 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000d2320000", "20011 is not the 13010 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "04000000d2320000", "4601 is not the 13010 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "04000000d2320000", "29001 is not the 13010 frame");
+  for (let i = 0; i < WIRE_SIGN_IN_LIST_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_BANNED_CMDS[i] }) === null, WIRE_SIGN_IN_LIST_BANNED_CMDS[i] + " is not encoded");
+  }
+  assert(encodeWireMessage({ cmd: "wire.5001" }) !== null, "5001 stays encoded by its own module and is not reissued as 13010");
+  assert(encodeWireMessage({ cmd: "wire.51001" }) !== null, "51001 stays encoded by its own module and is not reissued as 13010");
+  assert(encodeWireMessage({ cmd: "wire.4044" }) !== null, "4044 stays encoded by its own module and is not reissued as 13010");
+  assert(encodeWireMessage({ cmd: "wire.3203" }) !== null, "3203 stays encoded by its own module and is not reissued as 13010");
+  assert(encodeWireMessage({ cmd: "wire.20101" }) !== null, "20101 stays encoded by its own module and is not reissued as 13010");
+  assert(encodeWireMessage({ cmd: "wire.12010" }) !== null, "12010 stays encoded by its own module and is not reissued as 13010");
+  assert(
+    encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) === "04000000d2320000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000cc0f0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000ea2e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000d3320000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000f42e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000830c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000854e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "040000001d0c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "040000001b0c0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "0400000039c70000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "0400000089130000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "040000002b4e0000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "04000000f9110000" &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_SIGN_IN_LIST_CMD })?.bytes || new Uint8Array(0)) !== "0400000049710000",
+    "wire.13010 encodes the empty frame and is not 4044, 12010, 13011, 12020, 3203, 20101, 3101, 3099, 51001, 5001, 20011, 4601 or 29001"
+  );
+  assert(WIRE_SIGN_IN_LIST_CMD === "wire.13010", "sign in list wire cmd");
+  assert(WIRE_SIGN_IN_LIST_READONLY_TITLE === "签到列表（真服只读）", "readonly sign in list title");
+  assert(WIRE_SIGN_IN_LIST_UNSYNCED_TOAST === "真服未同步", "unsynced sign in list toast");
+  assert(WIRE_SIGN_IN_LIST_EMPTY === "已同步空表", "empty sign in list label");
+  assert(
+    WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("getSignday") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("跨日") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("跨月") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("04000000d2320000") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("13011") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("12020") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("12010") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("5001") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("51001") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("4044") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("3203") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("20101") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("3101") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("3099") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("不重复拉 4044") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("不重复拉 3203") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("不重复拉 20101") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("不重复拉 3101") >= 0 &&
+      WIRE_SIGN_IN_LIST_SIDE_EFFECT.indexOf("不重复拉 3099") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("days") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("isSignIn") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("month") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("charged") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("newServer") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("不发 13011") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("12010") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_SIGN_IN_LIST_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_SIGN_IN_LIST_FIELD_NOTE.indexOf("days") >= 0 &&
+      WIRE_SIGN_IN_LIST_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_SIGN_IN_LIST_FIELD_NOTE.indexOf("只展示实际出现的字段") >= 0,
+    "sign in list page names the present fields and refuses the claim cmd and the banned cmds"
+  );
+  const signInEmpty = decodeWireSignInList(new Uint8Array(0));
+  assert(
+    signInEmpty !== null &&
+      signInEmpty.days === null &&
+      signInEmpty.isSignIn === null &&
+      signInEmpty.month === null &&
+      signInEmpty.charged === null &&
+      signInEmpty.newServer === null &&
+      formatWireSignInListLine(signInEmpty) === WIRE_SIGN_IN_LIST_EMPTY,
+    "empty 13010 body is synced and does not invent zero"
+  );
+  assert(decodeWireSignInList(null) === null, "null 13010 body is not a snapshot");
+  assert(decodeWireSignInList(new Uint8Array([0x80])) === null, "bad 13010 ignored");
+  const signInZero = decodeWireSignInList(fieldVarint(2, 0));
+  assert(
+    signInZero !== null &&
+      signInZero.days === null &&
+      signInZero.isSignIn === 0 &&
+      signInZero.month === null &&
+      formatWireSignInListLine(signInZero) === "isSignIn=0",
+    "present 13010 zero stays zero and omits absent fields"
+  );
+  const signInNeg = decodeWireSignInList(fieldNeg1(3));
+  assert(
+    signInNeg !== null &&
+      signInNeg.month === -1 &&
+      signInNeg.days === null &&
+      formatWireSignInListLine(signInNeg) === "month=-1",
+    "13010 month -1 stays -1"
+  );
+  const signInDays = decodeWireSignInList(concatBytes(concatBytes(fieldVarint(1, 1), fieldVarint(1, 0)), concatBytes(fieldVarint(4, 1), fieldVarint(5, 0))));
+  assert(
+    signInDays !== null &&
+      signInDays.days !== null &&
+      signInDays.days.length === 2 &&
+      signInDays.days[0] === 1 &&
+      signInDays.days[1] === 0 &&
+      signInDays.isSignIn === null &&
+      signInDays.month === null &&
+      signInDays.charged === 1 &&
+      signInDays.newServer === 0 &&
+      formatWireSignInListLine(signInDays) === "days=1,0 / charged=1 / newServer=0",
+    "13010 keeps present days including zero and omits absent fields"
+  );
+  const signInPacked = decodeWireSignInList(fieldBytes(1, Uint8Array.from([1, 0])));
+  assert(
+    signInPacked !== null &&
+      signInPacked.days !== null &&
+      signInPacked.days[0] === 1 &&
+      signInPacked.days[1] === 0 &&
+      formatWireSignInListLine(signInPacked) === "days=1,0",
+    "13010 packed days keeps 1 and 0"
+  );
+  const signInPackedEmpty = decodeWireSignInList(fieldBytes(1, new Uint8Array(0)));
+  assert(
+    signInPackedEmpty !== null &&
+      signInPackedEmpty.days !== null &&
+      signInPackedEmpty.days.length === 0 &&
+      formatWireSignInListLine(signInPackedEmpty) === "days=空",
+    "13010 empty packed days stays an empty list"
+  );
+  assert(decodeWireSignInList(fieldBytes(1, new Uint8Array([0x80]))) === null, "13010 packed days that will not decode is ignored");
+  const signInOuter = decodeWireSignInList(fieldVarint(9, 1));
+  assert(
+    signInOuter !== null &&
+      signInOuter.days === null &&
+      signInOuter.isSignIn === null &&
+      formatWireSignInListLine(signInOuter) === "字段9=1",
+    "non-empty 13010 without known fields stays synced and does not invent zero"
+  );
+  const signInSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.signInList, fieldVarint(2, 0)), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    signInSticky.frames.length === 2 &&
+      signInSticky.frames[0].cmdId === 13010 &&
+      signInSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireSignInList(signInSticky.frames[0].body)?.isSignIn === 0,
+    "sticky 13010 frame stops at its length prefix"
+  );
+  assert(
+    wireSignInListNote(signInZero || { days: null, isSignIn: null, month: null, charged: null, newServer: null, marks: [] }).indexOf(WIRE_SIGN_IN_LIST_SIDE_EFFECT) >= 0 &&
+      wireSignInListNote(signInZero || { days: null, isSignIn: null, month: null, charged: null, newServer: null, marks: [] }).indexOf("不写金币") >= 0 &&
+      wireSignInListNote(signInZero || { days: null, isSignIn: null, month: null, charged: null, newServer: null, marks: [] }).indexOf("不写钻石") >= 0,
+    "13010 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
+    bytesToHex(encodeFrame(13010)).indexOf("d2320000") >= 0 &&
+      bytesToHex(encodeFrame(13010)).indexOf("d3320000") < 0 &&
+      bytesToHex(encodeFrame(13010)).indexOf("ea2e0000") < 0 &&
+      bytesToHex(encodeFrame(13010)).indexOf("cc0f0000") < 0 &&
+      bytesToHex(encodeFrame(13010)).indexOf("39c70000") < 0 &&
+      bytesToHex(encodeFrame(13010)).indexOf("89130000") < 0,
+    "13010 empty frame carries d2 32 00 00 and not the 13011, 12010, 4044, 51001 or 5001 cmd byte"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -10467,7 +10682,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 42, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 43, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -10748,6 +10963,50 @@ async function checkWs(): Promise<void> {
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 41] as ArrayBuffer)) !== "04000000d2320000",
         "pullIdle 4044 frame is not the 13010 cmd"
       );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) === "04000000d2320000",
+        "pullIdle sends empty c2s 13010 after 4044"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "04000000cc0f0000",
+        "pullIdle 13010 frame is not merged into 4044"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "04000000854e0000",
+        "pullIdle 13010 frame is not the 20101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "040000001d0c0000",
+        "pullIdle 13010 frame is not the 3101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "040000001b0c0000",
+        "pullIdle 13010 frame is not the 3099 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "0400000089130000",
+        "pullIdle 13010 frame is not the 5001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "0400000039c70000",
+        "pullIdle 13010 frame is not the 51001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "04000000cb0f0000",
+        "pullIdle 13010 frame is not the 4043 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "04000000d3320000",
+        "pullIdle 13010 frame is not the 13011 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "04000000f42e0000",
+        "pullIdle 13010 frame is not the 12020 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 42] as ArrayBuffer)) !== "04000000ea2e0000",
+        "pullIdle 13010 frame is not the boot 12010 cmd"
+      );
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -10756,6 +11015,8 @@ async function checkWs(): Promise<void> {
         let runningFrames = 0;
         let towerFrames = 0;
         let resetTimesFrames = 0;
+        let signInFrames = 0;
+        let bootAchieveFrames = 0;
         let bannedFrames = 0;
         const bannedHex: Record<string, boolean> = {
           "04000000820c0000": true,
@@ -10765,12 +11026,13 @@ async function checkWs(): Promise<void> {
           "04000000940c0000": true,
           "04000000800c0000": true,
           "04000000cb0f0000": true,
-          "04000000d2320000": true,
+          "04000000d3320000": true,
+          "04000000f42e0000": true,
           "040000002b4e0000": true,
           "04000000f9110000": true,
           "0400000049710000": true,
         };
-        for (let i = 0; i < 42; i++) {
+        for (let i = 0; i < 43; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -10779,6 +11041,8 @@ async function checkWs(): Promise<void> {
           if (hex === "04000000854e0000") runningFrames += 1;
           if (hex === "04000000830c0000") towerFrames += 1;
           if (hex === "04000000cc0f0000") resetTimesFrames += 1;
+          if (hex === "04000000d2320000") signInFrames += 1;
+          if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
           if (bannedHex[hex]) bannedFrames += 1;
         }
         assert(
@@ -10789,8 +11053,10 @@ async function checkWs(): Promise<void> {
             runningFrames === 1 &&
             towerFrames === 1 &&
             resetTimesFrames === 1 &&
+            signInFrames === 1 &&
+            bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once and 4044 once, keeps 51001 once, and does not repeat 5001 or encode 3202 3204 3205 3206 3220 3200 4043 13010 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once and 13010 once, keeps 12010 once and 51001 once, and does not repeat 5001 or encode 3202 3204 3205 3206 3220 3200 4043 13011 12020 20011 4601 29001"
         );
       }
       assert(
@@ -10870,10 +11136,12 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000830c0000") &&
           sawLog(lines, "发送 c2s 4044") &&
           sawLog(lines, "04000000cc0f0000") &&
+          sawLog(lines, "发送 c2s 13010") &&
+          sawLog(lines, "04000000d2320000") &&
           sawLog(lines, "发送 c2s 4043") === false &&
           sawLog(lines, "04000000cb0f0000") === false &&
-          sawLog(lines, "发送 c2s 13010") === false &&
-          sawLog(lines, "04000000d2320000") === false &&
+          sawLog(lines, "发送 c2s 13011") === false &&
+          sawLog(lines, "04000000d3320000") === false &&
           sawLog(lines, "发送 c2s 3202") === false &&
           sawLog(lines, "发送 c2s 3204") === false &&
           sawLog(lines, "发送 c2s 3205") === false &&
@@ -14825,6 +15093,108 @@ async function checkWs(): Promise<void> {
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
         "4043 13010 20011 5001 51001 4601 29001 3203 20101 3101 and 3099 do not replace the 4044 times"
+      );
+      assert(
+        WireSession.hasSignInList() &&
+          WireSession.signInList !== null &&
+          WireSession.signInList.days !== null &&
+          WireSession.signInList.days.length === 1 &&
+          WireSession.signInList.days[0] === 9 &&
+          WireSession.signInList.isSignIn === null &&
+          WireSession.signInList.month === null &&
+          WireSession.signInList.charged === null &&
+          WireSession.signInList.newServer === null &&
+          formatWireSignInListLine(WireSession.signInList) === "days=9" &&
+          WireSession.heroLevelResetTimes !== null &&
+          WireSession.heroLevelResetTimes.times === -1 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "13010 days=9 omits absent fields and leaves the 4044 times"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.signInList));
+      assert(
+        WireSession.hasSignInList() &&
+          WireSession.signInList !== null &&
+          WireSession.signInList.days === null &&
+          formatWireSignInListLine(WireSession.signInList) === WIRE_SIGN_IN_LIST_EMPTY &&
+          wireSignInListNote(WireSession.signInList).indexOf(WIRE_SIGN_IN_LIST_SIDE_EFFECT) >= 0 &&
+          wireSignInListNote(WireSession.signInList).indexOf("不写金币") >= 0 &&
+          WireSession.heroLevelResetTimes !== null &&
+          WireSession.heroLevelResetTimes.times === -1 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 13010 clears to 已同步空表 and does not write gold or diamond"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.signInList, fieldVarint(2, 0)));
+      assert(
+        WireSession.signInList !== null &&
+          WireSession.signInList.isSignIn === 0 &&
+          WireSession.signInList.days === null &&
+          formatWireSignInListLine(WireSession.signInList) === "isSignIn=0",
+        "13010 present zero stays zero"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.signInList, fieldNeg1(3)));
+      assert(
+        WireSession.signInList !== null &&
+          WireSession.signInList.month === -1 &&
+          WireSession.signInList.days === null &&
+          formatWireSignInListLine(WireSession.signInList) === "month=-1" &&
+          WireSession.heroLevelResetTimes !== null &&
+          WireSession.heroLevelResetTimes.times === -1,
+        "13010 month -1 stays -1 and leaves the 4044 times"
+      );
+      roleSockets[0].push(
+        encodeFrame(
+          WireCmd.signInList,
+          concatBytes(concatBytes(fieldVarint(1, 1), fieldVarint(1, 0)), concatBytes(fieldVarint(4, 1), fieldVarint(5, 0)))
+        )
+      );
+      assert(
+        WireSession.signInList !== null &&
+          WireSession.signInList.days !== null &&
+          WireSession.signInList.days[0] === 1 &&
+          WireSession.signInList.days[1] === 0 &&
+          WireSession.signInList.isSignIn === null &&
+          WireSession.signInList.month === null &&
+          WireSession.signInList.charged === 1 &&
+          WireSession.signInList.newServer === 0 &&
+          formatWireSignInListLine(WireSession.signInList) === "days=1,0 / charged=1 / newServer=0",
+        "13010 sample keeps present zero and omits absent fields"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.signInList, new Uint8Array([0x80])));
+      assert(
+        WireSession.signInList !== null &&
+          WireSession.signInList.days !== null &&
+          WireSession.signInList.days[0] === 1 &&
+          WireSession.signInList.charged === 1 &&
+          sawWire("13010 解不开"),
+        "bad 13010 keeps the previous sign in list"
+      );
+      roleSockets[0].push(encodeFrame(13011, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(12020, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(5001, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(51001, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(4044, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(3203, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(20101, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(3101, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(3099, fieldVarint(1, 8)));
+      roleSockets[0].push(encodeFrame(12010, fieldVarint(1, 8)));
+      assert(
+        WireSession.hasSignInList() &&
+          WireSession.signInList !== null &&
+          WireSession.signInList.days !== null &&
+          WireSession.signInList.days[0] === 1 &&
+          WireSession.signInList.days[1] === 0 &&
+          WireSession.signInList.charged === 1 &&
+          WireSession.signInList.newServer === 0 &&
+          formatWireSignInListLine(WireSession.signInList) === "days=1,0 / charged=1 / newServer=0" &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "13011 12020 20011 5001 51001 4601 29001 4044 3203 20101 3101 3099 and 12010 do not replace the 13010 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
