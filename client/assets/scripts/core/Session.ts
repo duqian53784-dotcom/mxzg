@@ -21,10 +21,15 @@ export class Session {
   static openDay = 1;
   /** 下一关。主城「主线」用它发 stage.enter。 */
   static stageId = 1;
-  /** Mock 钱包。道具 id 1 金币、id 2 钻石。没进角色时是 0。wire 时保持 0，界面写未同步。 */
+  /** Mock 钱包。道具 id 1 金币、id 2 钻石。没进角色时是 0。wire 在对应标记为真之前，界面写未同步，不读这里的 0。 */
   static gold = 0;
   static diamond = 0;
   static source: SessionSource = "mock";
+  /**
+   * 真服顶栏哪些格子已经从包里写过。
+   * 角色名可以来自 s2c 2001 字段 9。等级、金币、钻石在 net-20261020 里对不上，保持 false。
+   */
+  static wireSync = { name: false, level: false, gold: false, diamond: false };
 
   static setServer(id: number): void {
     const server = findServer(id);
@@ -48,12 +53,13 @@ export class Session {
     this.gold = nonNegativeInt(role.gold);
     this.diamond = nonNegativeInt(role.diamond);
     this.source = "mock";
+    this.clearWireSync();
   }
 
   /**
    * 真服 s2c 1001 有角色 id 时写入。
    * 不填 Mock 起步金币 100 / 钻石 20。等级和关卡界面上标成未同步。
-   * name 只有创角面板刚提交的名字；1001 已证明的字段里没有角色名。
+   * name 只有创角面板刚提交的名字。s2c 1001 没有角色名，名字等 s2c 2001 字段 9。
    */
   static applyWireRole(input: { account: string; serverId: number; roleId: number; name?: string | null }): void {
     this.account = input.account;
@@ -70,11 +76,52 @@ export class Session {
     this.gold = 0;
     this.diamond = 0;
     this.source = "wire";
+    this.clearWireSync();
+  }
+
+  /**
+   * 真服同步包里已经能确定的顶栏格子。没进 wire 角色时不改。
+   * 调用方不要把 Mock 的 100 / 20 传进来。等级、金币、钻石目前没有包能填，接口留着，顶栏才能在以后写上时刷新。
+   */
+  static applyWireSync(patch: {
+    name?: string | null;
+    level?: number | null;
+    gold?: number | null;
+    diamond?: number | null;
+  }): boolean {
+    if (this.source !== "wire" || !this.role) return false;
+    if (typeof patch.name === "string") {
+      const name = patch.name.trim();
+      if (name) {
+        this.role.name = name;
+        this.wireSync.name = true;
+      }
+    }
+    if (typeof patch.level === "number" && isFinite(patch.level) && patch.level >= 1) {
+      this.role.level = Math.floor(patch.level);
+      this.wireSync.level = true;
+    }
+    if (typeof patch.gold === "number" && isFinite(patch.gold) && patch.gold >= 0) {
+      this.gold = Math.floor(patch.gold);
+      this.wireSync.gold = true;
+    }
+    if (typeof patch.diamond === "number" && isFinite(patch.diamond) && patch.diamond >= 0) {
+      this.diamond = Math.floor(patch.diamond);
+      this.wireSync.diamond = true;
+    }
+    return true;
   }
 
   static applyCurrencies(gold?: number, diamond?: number): void {
     if (typeof gold === "number" && isFinite(gold)) this.gold = nonNegativeInt(gold);
     if (typeof diamond === "number" && isFinite(diamond)) this.diamond = nonNegativeInt(diamond);
+  }
+
+  private static clearWireSync(): void {
+    this.wireSync.name = false;
+    this.wireSync.level = false;
+    this.wireSync.gold = false;
+    this.wireSync.diamond = false;
   }
 }
 
@@ -83,11 +130,14 @@ function nonNegativeInt(value: number | undefined): number {
   return Math.max(0, Math.floor(value));
 }
 
-/** 主城顶栏左侧第一行：角色名和等级。真服不显示占位 Lv1。 */
+/** 主城顶栏左侧第一行：角色名和等级。真服只有同步过等级才写 Lv，不把占位 1 显示出来。 */
 export function formatNameLine(): string {
   if (!Session.account) return "未登录";
   const name = Session.role?.name || "未命名";
-  if (Session.source === "wire") return name;
+  if (Session.source === "wire") {
+    if (Session.wireSync.level && Session.role) return name + " Lv" + Session.role.level;
+    return name;
+  }
   const level = Session.role?.level ?? 1;
   return name + " Lv" + level;
 }
@@ -105,12 +155,12 @@ export function formatSubLine(): string {
 }
 
 export function formatGoldLine(): string {
-  if (Session.source === "wire") return "金币 未同步";
+  if (Session.source === "wire" && !Session.wireSync.gold) return "金币 未同步";
   return "金币 " + Session.gold;
 }
 
 export function formatDiamondLine(): string {
-  if (Session.source === "wire") return "钻石 未同步";
+  if (Session.source === "wire" && !Session.wireSync.diamond) return "钻石 未同步";
   return "钻石 " + Session.diamond;
 }
 
@@ -118,7 +168,10 @@ export function formatDiamondLine(): string {
 export function formatHubIdentity(): string {
   if (!Session.account) return "未登录（请从 Boot 进入）";
   const name = Session.role?.name || "未命名";
-  if (Session.source === "wire") return name + " · 真服";
+  if (Session.source === "wire") {
+    if (Session.wireSync.level && Session.role) return name + " Lv" + Session.role.level + " · 真服";
+    return name + " · 真服";
+  }
   const level = Session.role?.level ?? 1;
   const server = Session.serverName || "未选服";
   return name + " Lv" + level + " · " + server;

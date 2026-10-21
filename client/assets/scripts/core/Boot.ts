@@ -276,6 +276,8 @@ export class Boot extends Component {
     }
     if (!this.alive || epoch !== this.wsEpoch) return false;
     this.wsLive = true;
+    // 登录回包可能和 2001 粘在同一条消息里。先听着，进主城再写进 Session。
+    WireSession.watch(net);
     return true;
   }
 
@@ -620,6 +622,11 @@ export class Boot extends Component {
     summary: LoginReplySummary
   ): void {
     Session.applyWireRole({ account, serverId, roleId, name });
+    if (this.wsNet) {
+      WireSession.hold(this.wsNet);
+      WireSession.flush();
+      WireSession.pullRoleProfile();
+    }
     if (this.loginPanel) {
       this.loginPanel.setStatus("进入主城…");
       this.loginPanel.setDetail(summary.detail);
@@ -631,7 +638,6 @@ export class Boot extends Component {
     }
     this.showBootToast(summary.status);
     this.logEntered("wire login ok");
-    if (this.wsNet) WireSession.hold(this.wsNet);
     this.authBusy = false;
     this.enterMain();
   }

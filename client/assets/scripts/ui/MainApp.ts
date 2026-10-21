@@ -98,6 +98,7 @@ export class MainApp extends Component {
   private mainButton: Node | null = null;
   private logLabel: Node | null = null;
   private offLog: (() => void) | null = null;
+  private offWire: (() => void) | null = null;
   private netState: NetState = NetClient.shared.state;
 
   start() {
@@ -107,6 +108,7 @@ export class MainApp extends Component {
   }
 
   onDestroy() {
+    this.detachWire();
     this.detachLog();
     this.mainline?.dispose();
     this.mainline = null;
@@ -166,7 +168,14 @@ export class MainApp extends Component {
       (id) => this.noteClose(id)
     );
     this.panels.start(this.buildCity());
+    this.detachWire();
+    this.offWire = WireSession.onSync(() => {
+      if (!this.isValid) return;
+      this.refreshHub();
+    });
     this.refreshChrome();
+    const goldText = Session.source === "wire" && !Session.wireSync.gold ? "未同步" : String(Session.gold);
+    const diamondText = Session.source === "wire" && !Session.wireSync.diamond ? "未同步" : String(Session.diamond);
     GameLog.shared.info(
       "MainApp",
       "city ready account=" +
@@ -176,9 +185,9 @@ export class MainApp extends Component {
         " server=" +
         (Session.serverName || "(none)") +
         " gold=" +
-        Session.gold +
+        goldText +
         " diamond=" +
-        Session.diamond +
+        diamondText +
         " source=" +
         Session.source
     );
@@ -1037,6 +1046,13 @@ export class MainApp extends Component {
     }
   }
 
+  private detachWire(): void {
+    if (this.offWire) {
+      this.offWire();
+      this.offWire = null;
+    }
+  }
+
   private detachLog(): void {
     if (this.offLog) {
       this.offLog();
@@ -1087,7 +1103,15 @@ export class MainApp extends Component {
   }
 
   private gateText(): string {
-    if (Session.source === "wire") return "真服已登录。等级、开服天、金币和钻石还没从同步包读入";
+    if (Session.source === "wire") {
+      const name = Session.wireSync.name ? "角色名已同步。" : "角色名还没有从 s2c 2001 读到。";
+      const missing: string[] = [];
+      if (!Session.wireSync.level) missing.push("等级");
+      missing.push("开服天");
+      if (!Session.wireSync.gold) missing.push("金币");
+      if (!Session.wireSync.diamond) missing.push("钻石");
+      return "真服已登录。" + name + missing.join("、") + "仍是未同步";
+    }
     const db = ConfigDb.current;
     const level = this.level();
     const day = this.day();
