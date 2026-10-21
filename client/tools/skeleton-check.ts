@@ -922,6 +922,20 @@ import {
   WIRE_SHENBIN_UNSYNCED_TOAST,
   wireShenBinNote,
 } from "../assets/scripts/net/protocol/wireShenBin";
+import {
+  decodeWireOccupation,
+  formatWireOccupationHead,
+  formatWireOccupationLine,
+  WIRE_OCCUPATION_CMD,
+  WIRE_OCCUPATION_EMPTY,
+  WIRE_OCCUPATION_EMPTY_TASKS,
+  WIRE_OCCUPATION_FIELD_NOTE,
+  WIRE_OCCUPATION_READONLY_NOTE,
+  WIRE_OCCUPATION_READONLY_TITLE,
+  WIRE_OCCUPATION_SIDE_EFFECT,
+  WIRE_OCCUPATION_UNSYNCED_TOAST,
+  wireOccupationNote,
+} from "../assets/scripts/net/protocol/wireOccupation";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1658,6 +1672,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("fetterData") === "city", "fetter data stays on the city tab");
   assert(rootTabFor("fetterFashion") === "city", "fetter fashion stays on the city tab");
   assert(rootTabFor("shenBin") === "city", "shen bin stays on the city tab");
+  assert(rootTabFor("occupation") === "city", "occupation stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -7546,8 +7561,10 @@ async function checkWs(): Promise<void> {
     "wire.75603",
     "wire.75604",
     "wire.75605",
-    "wire.75606",
+    "wire.75607",
+    "wire.75608",
     "wire.75609",
+    "wire.75615",
     "wire.75619",
     "wire.20011",
     "wire.4601",
@@ -7731,6 +7748,215 @@ async function checkWs(): Promise<void> {
     decodeWireShenBin(fetterFashionUnpacked)?.infos.length === 0 &&
       (decodeWireShenBin(fetterFashionUnpacked)?.marks.length || 0) > 0,
     "28200 active_type varints are not 75601 rows"
+  );
+  assert(
+    WireCmd.occupation === 75606 &&
+      WireCmd.occupation !== WireCmd.shenBin &&
+      WireCmd.occupation !== WireCmd.fetterFashion,
+    "online 75606 stays off shen bin 75601 and fetter fashion 28200"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.occupation)) === "0400000056270100", "empty c2s 75606");
+  assert(bytesToHex(encodeFrame(75606)) === "0400000056270100", "empty c2s 75606 hex");
+  assert(bytesToHex(encodeFrame(75607)) === "0400000057270100", "75607 empty frame is the other cmd byte");
+  assert(bytesToHex(encodeFrame(WireCmd.occupation)) !== "0400000057270100", "75606 is not the 75607 frame");
+  assert(bytesToHex(encodeFrame(75606)) !== bytesToHex(encodeFrame(75607)), "75606 cmd bytes are not 75607");
+  assert(bytesToHex(encodeFrame(WireCmd.occupation)) !== "0400000051270100", "75606 is not the 75601 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.occupation)) !== "04000000286e0000", "75606 is not the 28200 frame");
+  assert(bytesToHex(encodeFrame(75608)) !== "0400000056270100", "75608 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(75609)) !== "0400000056270100", "75609 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(75602)) !== "0400000056270100", "75602 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(75603)) !== "0400000056270100", "75603 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(75604)) !== "0400000056270100", "75604 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(75605)) !== "0400000056270100", "75605 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(75615)) !== "0400000056270100", "75615 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(75619)) !== "0400000056270100", "75619 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "0400000056270100", "20011 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "0400000056270100", "4601 is not the 75606 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "0400000056270100", "29001 is not the 75606 frame");
+  const bannedOccupationCmds = [
+    "wire.75607",
+    "wire.75608",
+    "wire.75609",
+    "wire.75602",
+    "wire.75603",
+    "wire.75604",
+    "wire.75605",
+    "wire.75615",
+    "wire.75619",
+    "wire.20011",
+    "wire.4601",
+    "wire.29001",
+  ];
+  for (let i = 0; i < bannedOccupationCmds.length; i++) {
+    assert(encodeWireMessage({ cmd: bannedOccupationCmds[i] }) === null, bannedOccupationCmds[i] + " is not encoded");
+  }
+  assert(
+    encodeWireMessage({ cmd: WIRE_OCCUPATION_CMD }) !== null &&
+      bytesToHex(encodeWireMessage({ cmd: WIRE_OCCUPATION_CMD })?.bytes || new Uint8Array(0)) === "0400000056270100" &&
+      bytesToHex(encodeWireMessage({ cmd: "wire.75607" }) || new Uint8Array(0)) !== "0400000057270100",
+    "wire.75606 encodes the empty frame and wire.75607 is not encoded"
+  );
+  assert(encodeWireMessage({ cmd: "wire.75607" }) === null, "75607 is not encoded even though the body is the same empty GReqGetOccupationInfo");
+  assert(encodeWireMessage({ cmd: "wire.75608" }) === null, "75608 push is not encoded as c2s");
+  assert(WIRE_OCCUPATION_CMD === "wire.75606", "occupation wire cmd");
+  assert(WIRE_OCCUPATION_READONLY_TITLE === "职级信息（真服只读）", "readonly occupation title");
+  assert(WIRE_OCCUPATION_UNSYNCED_TOAST === "真服未同步", "unsynced occupation toast");
+  assert(WIRE_OCCUPATION_EMPTY === "空职级", "empty occupation label");
+  assert(WIRE_OCCUPATION_EMPTY_TASKS === "空任务", "empty occupation task label");
+  assert(
+    WIRE_OCCUPATION_SIDE_EFFECT.indexOf("getOrCreate") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("75601") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("0400000056270100") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("75607") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("75608") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("75609") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("75602") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("75603") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("75604") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("75605") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("75615") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("75619") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_OCCUPATION_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("oc_id") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("taskInfos") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("taskId") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("targetCount") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("condition") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("complete_type") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("无晋升") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("手动完成") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("75607") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_OCCUPATION_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_OCCUPATION_FIELD_NOTE.indexOf("oc_id") >= 0 &&
+      WIRE_OCCUPATION_FIELD_NOTE.indexOf("taskId") >= 0 &&
+      WIRE_OCCUPATION_FIELD_NOTE.indexOf("targetCount") >= 0 &&
+      WIRE_OCCUPATION_FIELD_NOTE.indexOf("condition") >= 0 &&
+      WIRE_OCCUPATION_FIELD_NOTE.indexOf("complete_type") >= 0 &&
+      WIRE_OCCUPATION_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_OCCUPATION_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "occupation page names oc_id taskInfos and refuses promote and manual complete"
+  );
+  const occTask = concatBytes(
+    concatBytes(fieldVarint(1, 7), fieldVarint(2, 0)),
+    concatBytes(fieldVarint(3, 0), concatBytes(fieldVarint(4, 1), fieldVarint(8, 1)))
+  );
+  const occInfo = concatBytes(fieldVarint(1, 3), concatBytes(fieldBytes(2, occTask), fieldVarint(9, 1)));
+  const occBody = concatBytes(fieldBytes(1, occInfo), fieldVarint(9, 2));
+  const occIdOnly = fieldBytes(1, fieldVarint(1, 1));
+  const occTargetZero = fieldBytes(1, fieldBytes(2, fieldVarint(2, 0)));
+  const occCondText = fieldBytes(1, fieldBytes(2, fieldBytes(3, new TextEncoder().encode("通关"))));
+  const occCompleteNeg = fieldBytes(1, fieldBytes(2, fieldNeg1(4)));
+  const occEmptyInfo = fieldBytes(1, new Uint8Array(0));
+  const occBadTask = fieldBytes(1, fieldBytes(2, new Uint8Array([0x80])));
+  const occOuter = fieldVarint(9, 1);
+  const emptyOccTask = { taskId: null, targetCount: null, condition: null, completeType: null, marks: [] as { field: number; text: string }[] };
+  assert(
+    decodeWireOccupation(new Uint8Array(0)) !== null &&
+      decodeWireOccupation(new Uint8Array(0))?.info === null &&
+      formatWireOccupationHead(decodeWireOccupation(new Uint8Array(0)) || { info: null, marks: [] }) ===
+        "occupationInfo=" + WIRE_OCCUPATION_EMPTY,
+    "empty 75606 body is synced and does not invent zero"
+  );
+  assert(decodeWireOccupation(null) === null, "null 75606 body is not a snapshot");
+  assert(decodeWireOccupation(new Uint8Array([0x80])) === null, "bad 75606 ignored");
+  assert(decodeWireOccupation(occBadTask) === null, "75606 task that fails is not an empty table");
+  const occIdSnap = decodeWireOccupation(occIdOnly);
+  assert(
+    occIdSnap !== null &&
+      occIdSnap.info !== null &&
+      occIdSnap.info?.ocId === 1 &&
+      occIdSnap.info?.tasks.length === 0 &&
+      formatWireOccupationHead(occIdSnap) === "oc_id=1 / taskInfos=" + WIRE_OCCUPATION_EMPTY_TASKS,
+    "present 75606 oc_id does not invent tasks"
+  );
+  const occTargetSnap = decodeWireOccupation(occTargetZero);
+  assert(
+    occTargetSnap !== null &&
+      occTargetSnap.info !== null &&
+      occTargetSnap.info?.ocId === null &&
+      occTargetSnap.info?.tasks.length === 1 &&
+      occTargetSnap.info?.tasks[0].targetCount === 0 &&
+      occTargetSnap.info?.tasks[0].taskId === null &&
+      formatWireOccupationLine(occTargetSnap.info?.tasks[0] || emptyOccTask) ===
+        "taskId=无 / targetCount=0 / condition=无 / complete_type=无",
+    "present 75606 targetCount zero stays zero and does not invent taskId"
+  );
+  const occCondSnap = decodeWireOccupation(occCondText);
+  assert(
+    occCondSnap !== null &&
+      occCondSnap.info?.tasks[0].condition === "通关" &&
+      occCondSnap.info?.tasks[0].taskId === null &&
+      formatWireOccupationLine(occCondSnap.info?.tasks[0] || emptyOccTask) ===
+        "taskId=无 / targetCount=无 / condition=通关 / complete_type=无",
+    "present 75606 condition text stays text"
+  );
+  const occNegSnap = decodeWireOccupation(occCompleteNeg);
+  assert(
+    occNegSnap !== null &&
+      occNegSnap.info?.tasks[0].completeType === -1 &&
+      formatWireOccupationLine(occNegSnap.info?.tasks[0] || emptyOccTask) ===
+        "taskId=无 / targetCount=无 / condition=无 / complete_type=-1",
+    "75606 complete_type -1 stays -1"
+  );
+  const occEmptyInfoSnap = decodeWireOccupation(occEmptyInfo);
+  assert(
+    occEmptyInfoSnap !== null &&
+      occEmptyInfoSnap.info !== null &&
+      occEmptyInfoSnap.info?.ocId === null &&
+      occEmptyInfoSnap.info?.tasks.length === 0 &&
+      formatWireOccupationHead(occEmptyInfoSnap) === "oc_id=无 / taskInfos=" + WIRE_OCCUPATION_EMPTY_TASKS,
+    "present 75606 empty occupationInfo stays present and does not invent oc_id"
+  );
+  const loggedOcc = decodeWireOccupation(occBody);
+  assert(
+    loggedOcc !== null &&
+      loggedOcc.info !== null &&
+      loggedOcc.info?.ocId === 3 &&
+      loggedOcc.info?.tasks.length === 1 &&
+      loggedOcc.info?.tasks[0].taskId === 7 &&
+      loggedOcc.info?.tasks[0].targetCount === 0 &&
+      loggedOcc.info?.tasks[0].condition === "0" &&
+      loggedOcc.info?.tasks[0].completeType === 1 &&
+      loggedOcc.marks.length === 1 &&
+      loggedOcc.marks[0].field === 9 &&
+      formatWireOccupationHead(loggedOcc) === "oc_id=3 / taskInfos=1 条 / 字段9=1 / 字段9=2" &&
+      formatWireOccupationLine(loggedOcc.info?.tasks[0] || emptyOccTask) ===
+        "taskId=7 / targetCount=0 / condition=0 / complete_type=1 / 字段8=1" &&
+      wireOccupationNote(loggedOcc).indexOf(WIRE_OCCUPATION_SIDE_EFFECT) >= 0 &&
+      wireOccupationNote(loggedOcc).indexOf("不写金币") >= 0 &&
+      wireOccupationNote(loggedOcc).indexOf("不写钻石") >= 0,
+    "75606 sample keeps oc_id task zero condition zero complete_type and does not fill a missing number with 0"
+  );
+  assert(
+    decodeWireOccupation(occOuter) !== null &&
+      decodeWireOccupation(occOuter)?.info === null &&
+      formatWireOccupationHead(decodeWireOccupation(occOuter) || { info: null, marks: [] }) ===
+        "occupationInfo=" + WIRE_OCCUPATION_EMPTY + " / 字段9=1",
+    "non-empty 75606 without occupationInfo stays synced and does not invent zero"
+  );
+  const occSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.occupation, occBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    occSticky.frames.length === 2 &&
+      occSticky.frames[0].cmdId === 75606 &&
+      occSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireOccupation(occSticky.frames[0].body)?.info?.ocId === 3 &&
+      decodeWireOccupation(occSticky.frames[0].body)?.info?.tasks[0].targetCount === 0,
+    "sticky 75606 frame stops at its length prefix"
+  );
+  assert(
+    bytesToHex(encodeFrame(75606)).indexOf("56270100") >= 0 &&
+      bytesToHex(encodeFrame(75606)).indexOf("57270100") < 0 &&
+      bytesToHex(encodeFrame(75607)).indexOf("57270100") >= 0,
+    "75606 empty frame carries 56 27 01 00 and not the 75607 cmd byte"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -8842,7 +9068,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 34, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 35, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -8980,6 +9206,14 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 75601 after 28200"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 34] as ArrayBuffer)) === "0400000056270100",
+        "pullIdle sends empty c2s 75606 after 75601"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 34] as ArrayBuffer)) !== "0400000057270100",
+        "pullIdle 75606 frame is not the 75607 cmd"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -9013,9 +9247,11 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 28100") &&
           sawLog(lines, "发送 c2s 28200") &&
           sawLog(lines, "发送 c2s 75601") &&
+          sawLog(lines, "发送 c2s 75606") &&
           sawLog(lines, "04000000c46d0000") &&
           sawLog(lines, "04000000286e0000") &&
           sawLog(lines, "0400000051270100") &&
+          sawLog(lines, "0400000056270100") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -9096,9 +9332,12 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 75603") === false &&
           sawLog(lines, "发送 c2s 75604") === false &&
           sawLog(lines, "发送 c2s 75605") === false &&
-          sawLog(lines, "发送 c2s 75606") === false &&
+          sawLog(lines, "发送 c2s 75607") === false &&
+          sawLog(lines, "发送 c2s 75608") === false &&
           sawLog(lines, "发送 c2s 75609") === false &&
+          sawLog(lines, "发送 c2s 75615") === false &&
           sawLog(lines, "发送 c2s 75619") === false &&
+          sawLog(lines, "0400000057270100") === false &&
           sawLog(lines, "发送 c2s 74105") === false &&
           sawLog(lines, "发送 c2s 74106") === false &&
           sawLog(lines, "发送 c2s 70002") === false &&
@@ -9834,23 +10073,27 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.75603");
       roleNet.send("wire.75604");
       roleNet.send("wire.75605");
-      roleNet.send("wire.75606");
+      roleNet.send("wire.75607");
+      roleNet.send("wire.75608");
       roleNet.send("wire.75609");
+      roleNet.send("wire.75615");
       roleNet.send("wire.75619");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeShenBinOther,
-        "75602 75603 75604 75605 75606 75609 75619 20011 4601 and 29001 stay off the shen bin wire"
+        "75602 75603 75604 75605 75607 75608 75609 75615 75619 20011 4601 and 29001 stay off the shen bin wire"
       );
       assert(
         sawLog(lines, "未发送 wire.75602") &&
           sawLog(lines, "未发送 wire.75603") &&
           sawLog(lines, "未发送 wire.75604") &&
           sawLog(lines, "未发送 wire.75605") &&
-          sawLog(lines, "未发送 wire.75606") &&
+          sawLog(lines, "未发送 wire.75607") &&
+          sawLog(lines, "未发送 wire.75608") &&
           sawLog(lines, "未发送 wire.75609") &&
+          sawLog(lines, "未发送 wire.75615") &&
           sawLog(lines, "未发送 wire.75619") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
@@ -9869,6 +10112,54 @@ async function checkWs(): Promise<void> {
         roleSockets[0].sent.length === sentAfterFashionAlone + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000051270100",
         "sending 75601 does not also send 28200 or 28100"
+      );
+      const sentBeforeOccupation = roleSockets[0].sent.length;
+      roleNet.send(WIRE_OCCUPATION_CMD);
+      const occSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(occSent as ArrayBuffer)) === "0400000056270100", "wire.75606 frame");
+      assert(bytesToHex(new Uint8Array(occSent as ArrayBuffer)) !== "0400000057270100", "wire.75606 frame is not 75607");
+      assert(roleSockets[0].sent.length === sentBeforeOccupation + 1, "75606 is its own frame and is not merged into 75601");
+      const sentBeforeOccupationOther = roleSockets[0].sent.length;
+      roleNet.send("wire.75607");
+      roleNet.send("wire.75608");
+      roleNet.send("wire.75609");
+      roleNet.send("wire.75602");
+      roleNet.send("wire.75603");
+      roleNet.send("wire.75604");
+      roleNet.send("wire.75605");
+      roleNet.send("wire.75615");
+      roleNet.send("wire.75619");
+      roleNet.send("wire.20011");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.29001");
+      assert(
+        roleSockets[0].sent.length === sentBeforeOccupationOther,
+        "75607 75608 75609 75602 75603 75604 75605 75615 75619 20011 4601 and 29001 stay off the occupation wire"
+      );
+      assert(
+        sawLog(lines, "未发送 wire.75607") &&
+          sawLog(lines, "未发送 wire.75608") &&
+          sawLog(lines, "未发送 wire.75609") &&
+          sawLog(lines, "未发送 wire.75602") &&
+          sawLog(lines, "未发送 wire.75615") &&
+          sawLog(lines, "未发送 wire.75619") &&
+          sawLog(lines, "未发送 wire.20011") &&
+          sawLog(lines, "未发送 wire.4601") &&
+          sawLog(lines, "未发送 wire.29001"),
+        "occupation promote manual complete push and the banned cmds are not encoded"
+      );
+      roleNet.send(WIRE_SHENBIN_CMD);
+      assert(
+        roleSockets[0].sent.length === sentBeforeOccupationOther + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000051270100",
+        "sending 75601 does not also send 75606"
+      );
+      const sentAfterShenAlone = roleSockets[0].sent.length;
+      roleNet.send(WIRE_OCCUPATION_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterShenAlone + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000056270100",
+        "sending 75606 does not also send 75601 or 75607"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -12027,6 +12318,92 @@ async function checkWs(): Promise<void> {
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
         "75602 75603 75604 75605 75606 75609 75619 4601 29001 20011 and 28200 do not replace the 75601 list"
+      );
+      assert(
+        WireSession.hasOccupation() &&
+          WireSession.occupation !== null &&
+          WireSession.occupation.info === null &&
+          WireSession.occupation.marks.length === 1 &&
+          WireSession.occupation.marks[0].field === 1 &&
+          WireSession.occupation.marks[0].text === "3" &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos[0].fighting === 15 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "75606 scalar field 1 does not invent an occupation row or replace 75601"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.occupation));
+      assert(
+        WireSession.hasOccupation() &&
+          WireSession.occupation !== null &&
+          WireSession.occupation.info === null &&
+          formatWireOccupationHead(WireSession.occupation) === "occupationInfo=" + WIRE_OCCUPATION_EMPTY &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos[0].coreLv === 0 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 75606 body clears occupationInfo without writing zero and stays synced"
+      );
+      const occSessionTask = concatBytes(fieldVarint(1, 7), concatBytes(fieldVarint(2, 0), fieldVarint(4, 1)));
+      const occSessionBody = fieldBytes(1, concatBytes(fieldVarint(1, 3), fieldBytes(2, occSessionTask)));
+      roleSockets[0].push(encodeFrame(WireCmd.occupation, occSessionBody));
+      assert(
+        WireSession.hasOccupation() &&
+          WireSession.occupation !== null &&
+          WireSession.occupation.info !== null &&
+          WireSession.occupation.info.ocId === 3 &&
+          WireSession.occupation.info.tasks.length === 1 &&
+          WireSession.occupation.info.tasks[0].taskId === 7 &&
+          WireSession.occupation.info.tasks[0].targetCount === 0 &&
+          WireSession.occupation.info.tasks[0].condition === null &&
+          WireSession.occupation.info.tasks[0].completeType === 1 &&
+          formatWireOccupationHead(WireSession.occupation) === "oc_id=3 / taskInfos=1 条" &&
+          formatWireOccupationLine(WireSession.occupation.info.tasks[0]) ===
+            "taskId=7 / targetCount=0 / condition=无 / complete_type=1" &&
+          wireOccupationNote(WireSession.occupation).indexOf(WIRE_OCCUPATION_SIDE_EFFECT) >= 0 &&
+          wireOccupationNote(WireSession.occupation).indexOf("不写金币") >= 0 &&
+          wireOccupationNote(WireSession.occupation).indexOf("不写钻石") >= 0 &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos[0].fighting === 15 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "75606 sample keeps oc_id targetCount zero and leaves 75601"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.occupation, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasOccupation() &&
+          WireSession.occupation !== null &&
+          WireSession.occupation.info !== null &&
+          WireSession.occupation.info.ocId === 3 &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos.length === 1 &&
+          sawWire("75606 解不开"),
+        "bad 75606 keeps the occupation list and the 75601 record"
+      );
+      roleSockets[0].push(encodeFrame(75607));
+      roleSockets[0].push(encodeFrame(75608, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(75609, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(75602, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(75603, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(75604, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(75605, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(75615, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(75619, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(WireCmd.shenBin, shenBody));
+      assert(
+        WireSession.hasOccupation() &&
+          WireSession.occupation !== null &&
+          WireSession.occupation.info !== null &&
+          WireSession.occupation.info.ocId === 3 &&
+          WireSession.occupation.info.tasks[0].targetCount === 0 &&
+          WireSession.shenBin !== null &&
+          WireSession.shenBin.infos[0].coreLv === 0 &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "75607 75608 75609 75602 75603 75604 75605 75615 75619 4601 29001 20011 and 75601 do not replace the 75606 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
