@@ -41,6 +41,7 @@ import { ArenaPage, buildArenaPage } from "./ArenaPage";
 import { buildTowerPage, TowerPage } from "./TowerPage";
 import { buildDailyGoldPage, DailyGoldPage } from "./DailyGoldPage";
 import { buildLogin7Page, Login7Page } from "./Login7Page";
+import { buildWireActivityPage, WireActivityPage } from "./WireActivityPage";
 import { buildGoal7Page, Goal7Page } from "./Goal7Page";
 import { buildShopPage, ShopPage } from "./ShopPage";
 import { buildWishPage, WishPage } from "./WishPage";
@@ -57,6 +58,7 @@ import { buildWireMainlinePage, WireMainlinePage } from "./WireMainlinePage";
 import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
 import { WIRE_HERO_UNSYNCED_TOAST } from "../net/protocol/wireHero";
 import { WIRE_MAIL_UNSYNCED_TOAST } from "../net/protocol/wireMail";
+import { WIRE_ACTIVITY_UNSYNCED_TOAST } from "../net/protocol/wireActivity";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
@@ -99,7 +101,7 @@ export class MainApp extends Component {
   private arena: ArenaPage | null = null;
   private tower: TowerPage | null = null;
   private daily: DailyGoldPage | null = null;
-  private login7: Login7Page | null = null;
+  private login7: Login7Page | WireActivityPage | null = null;
   private goal7: Goal7Page | null = null;
   private shop: ShopPage | null = null;
   private wish: WishPage | null = null;
@@ -242,14 +244,18 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "login7")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
         return;
       }
     }
-    if ((id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish" || id === "cafe" || id === "gift" || id === "limited") && !this.ensureNet()) {
+    if (
+      Session.source !== "wire" &&
+      (id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish" || id === "cafe" || id === "gift" || id === "limited") &&
+      !this.ensureNet()
+    ) {
       return;
     }
     this.panels?.openChild(id);
@@ -454,7 +460,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。七日入口收到 17000 时另走只读页。 */
   private blockWirePage(id: string): boolean {
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
@@ -464,6 +470,7 @@ export class MainApp extends Component {
     if (id === "mail") return this.blockWireMail();
     if (id === "hero") return this.blockWireHero();
     if (id === "hero-detail") return this.blockWireHeroDetail();
+    if (id === "login7") return this.blockWireActivity();
     GameLog.shared.info("MainApp", "wire skip " + id);
     this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
     return true;
@@ -490,6 +497,14 @@ export class MainApp extends Component {
     if (WireSession.hasHero()) return false;
     GameLog.shared.info("MainApp", "wire hero unsynced");
     this.shell?.showToast(WIRE_HERO_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 17000 就停在主城。空表也算同步，放行后页面写「已同步空表」。 */
+  private blockWireActivity(): boolean {
+    if (WireSession.hasActivity()) return false;
+    GameLog.shared.info("MainApp", "wire activity unsynced");
+    this.shell?.showToast(WIRE_ACTIVITY_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -604,12 +619,23 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "click login7");
     if (this.blockWirePage("login7")) return;
     if (!this.allow("login7")) return;
+    if (Session.source === "wire") {
+      const net = this.cityNet();
+      if (net.state !== "connected") {
+        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+        return;
+      }
+      this.panels?.openChild("login7");
+      this.refreshChrome();
+      return;
+    }
     if (!this.ensureNet()) return;
     this.panels?.openChild("login7");
     this.refreshChrome();
   }
 
   private mountLogin7(): Node {
+    if (Session.source === "wire") return this.mountWireActivity();
     this.login7?.dispose();
     const page = buildLogin7Page({
       showToast: (text) => this.shell?.showToast(text, 2400),
@@ -622,6 +648,16 @@ export class MainApp extends Component {
         this.refreshChrome();
         this.bag?.reload();
       },
+      close: () => this.back(),
+    });
+    this.login7 = page;
+    return page.node;
+  }
+
+  private mountWireActivity(): Node {
+    this.login7?.dispose();
+    const page = buildWireActivityPage({
+      alive: () => this.isValid,
       close: () => this.back(),
     });
     this.login7 = page;

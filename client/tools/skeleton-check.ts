@@ -498,6 +498,18 @@ import {
   WIRE_HERO_UNSYNCED_TOAST,
   wireHeroNote,
 } from "../assets/scripts/net/protocol/wireHero";
+import {
+  decodeWireActivity,
+  formatWireActivityLine,
+  formatWireActivityStamp,
+  WIRE_ACTIVITY_CMD,
+  WIRE_ACTIVITY_EMPTY,
+  WIRE_ACTIVITY_FIELD_NOTE,
+  WIRE_ACTIVITY_READONLY_NOTE,
+  WIRE_ACTIVITY_READONLY_TITLE,
+  WIRE_ACTIVITY_UNSYNCED_TOAST,
+  wireActivityNote,
+} from "../assets/scripts/net/protocol/wireActivity";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -3147,6 +3159,60 @@ async function checkWs(): Promise<void> {
   assert(moreHeroes !== null && moreHeroes.sendStatus === 0 && moreHeroes.page === 1 && moreHeroes.entries.length === 1, "send_status 0 keeps the page");
   const heroIdOnly = decodeWireHeroList(gresHeroList({ heroes: [resHeroData({ id: 9 })], status: 1, page: 1 }));
   assert(heroIdOnly !== null && formatWireHeroLine(heroIdOnly.entries[0]) === "类型未解 · id 9", "hero without a type keeps the id");
+  const activityBody = hexToBytes("08011090fadad6061a04080110001a04080210001a0408031000");
+  assert(
+    WireCmd.activityProgress === 17000 && CmdId.login7View === 2201 && CmdId.login7Claim === 2202 && CmdId.login7Advance === 2203,
+    "online 17000 stays off the placeholder login7 ids"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.activityProgress)) === "0400000068420000", "empty c2s 17000");
+  assert(WIRE_ACTIVITY_READONLY_TITLE === "活动进度（真服只读）", "readonly activity title");
+  assert(WIRE_ACTIVITY_EMPTY === "已同步空表" && WIRE_ACTIVITY_UNSYNCED_TOAST === "真服未同步", "activity empty is not the unsynced toast");
+  assert(
+    WIRE_ACTIVITY_READONLY_NOTE.indexOf("不领取") >= 0 &&
+      WIRE_ACTIVITY_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_ACTIVITY_FIELD_NOTE.indexOf("外层字段1") >= 0 &&
+      WIRE_ACTIVITY_FIELD_NOTE.indexOf("外层字段2") >= 0,
+    "activity page refuses claim and keeps field numbers"
+  );
+  assert(decodeWireActivity(new Uint8Array(0)) !== null && decodeWireActivity(new Uint8Array(0))?.rows.length === 0, "empty 17000 is a synced empty table");
+  assert(decodeWireActivity(new Uint8Array([0x80])) === null, "bad 17000 ignored");
+  assert(decodeWireActivity(fieldVarint(1, 1)) === null, "non-empty 17000 without rows stays unsynced");
+  assert(decodeWireActivity(fieldBytes(3, new Uint8Array([0x80]))) === null, "bad nested row does not become an empty table");
+  const loggedActivity = decodeWireActivity(activityBody);
+  assert(
+    loggedActivity !== null &&
+      loggedActivity.field1 === 1 &&
+      loggedActivity.field2 === 1792458000 &&
+      loggedActivity.rows.length === 3 &&
+      loggedActivity.rows[0].field1 === 1 &&
+      loggedActivity.rows[0].field2 === 0 &&
+      loggedActivity.rows[1].field1 === 2 &&
+      loggedActivity.rows[2].field1 === 3 &&
+      loggedActivity.rows[2].field2 === 0,
+    "17000 sample keeps field numbers"
+  );
+  assert(
+    loggedActivity !== null &&
+      formatWireActivityLine(loggedActivity.rows[0]) === "字段1=1 / 字段2=0" &&
+      formatWireActivityLine(loggedActivity.rows[1]) === "字段1=2 / 字段2=0" &&
+      formatWireActivityLine(loggedActivity.rows[2]) === "字段1=3 / 字段2=0" &&
+      formatWireActivityStamp(loggedActivity.field2) === "外层字段2=1792458000",
+    "activity lines show field numbers and the raw outer field 2"
+  );
+  assert(
+    loggedActivity !== null &&
+      wireActivityNote(loggedActivity).indexOf("外层字段1=1") >= 0 &&
+      wireActivityNote(loggedActivity).indexOf("不写金币") >= 0 &&
+      formatWireActivityLine(loggedActivity.rows[0]).indexOf("已领") < 0 &&
+      formatWireActivityLine(loggedActivity.rows[0]).indexOf("七日") < 0 &&
+      (formatWireActivityStamp(loggedActivity.field2) || "").indexOf("开服") < 0,
+    "activity copy stays on field numbers"
+  );
+  const activityFieldOnly = decodeWireActivity(fieldBytes(3, fieldVarint(1, 2)));
+  assert(
+    activityFieldOnly !== null && formatWireActivityLine(activityFieldOnly.rows[0]) === "字段1=2 / 字段2=无",
+    "missing row field stays blank instead of zero"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -3587,6 +3653,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.backpackList));
       roleSockets[0].push(encodeFrame(WireCmd.mailList, mailSample));
       roleSockets[0].push(encodeFrame(WireCmd.heroList, heroRoster));
+      roleSockets[0].push(encodeFrame(WireCmd.activityProgress, activityBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -3595,6 +3662,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasBag() && WireSession.bagItems === null, "bag stays unsynced before the city role");
       assert(!WireSession.hasMail() && WireSession.mailEntries === null, "mail stays unsynced before the city role");
       assert(!WireSession.hasHero() && WireSession.heroes === null, "hero stays unsynced before the city role");
+      assert(!WireSession.hasActivity() && WireSession.activity === null, "activity stays unsynced before the city role");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
       Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
@@ -3632,6 +3700,16 @@ async function checkWs(): Promise<void> {
         "flush writes the 4001 heroes"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "4001 stays off the wallet");
+      assert(
+        WireSession.hasActivity() &&
+          WireSession.activity !== null &&
+          WireSession.activity.field1 === 1 &&
+          WireSession.activity.field2 === 1792458000 &&
+          WireSession.activity.rows.length === 3 &&
+          formatWireActivityLine(WireSession.activity.rows[0]) === "字段1=1 / 字段2=0",
+        "flush writes the 17000 rows"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "17000 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -3788,6 +3866,21 @@ async function checkWs(): Promise<void> {
         "empty GResHeroList replaces the roster and stays synced"
       );
       assert(Session.gold === 40, "empty roster does not write gold");
+      roleSockets[0].push(encodeFrame(WireCmd.activityProgress, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasActivity() &&
+          WireSession.activity !== null &&
+          WireSession.activity.rows.length === 3 &&
+          sawWire("17000 解不开"),
+        "bad 17000 keeps the table"
+      );
+      assert(Session.gold === 40 && Session.diamond === 0, "bad 17000 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.activityProgress));
+      assert(
+        WireSession.hasActivity() && WireSession.activity !== null && WireSession.activity.rows.length === 0,
+        "empty 17000 replaces the table and stays synced"
+      );
+      assert(Session.gold === 40, "empty 17000 does not write gold");
       lines.length = 0;
       const sentBeforePull = roleSockets[0].sent.length;
       WireSession.pullRoleProfile();
@@ -3817,7 +3910,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 3, "idle pull sends 3004 then 15000 then 4001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 4, "idle pull sends 3004 then 15000 then 4001 then 17000");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -3831,8 +3924,15 @@ async function checkWs(): Promise<void> {
         "pullIdle sends c2s 4001 page 1 after 15000"
       );
       assert(
-        sawLog(lines, "发送 c2s 15000") && sawLog(lines, "发送 c2s 4001") && sawLog(lines, "发送 c2s 18001") === false,
-        "mail and hero pulls are logged"
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 3] as ArrayBuffer)) === "0400000068420000",
+        "pullIdle sends empty c2s 17000 after 4001"
+      );
+      assert(
+        sawLog(lines, "发送 c2s 15000") &&
+          sawLog(lines, "发送 c2s 4001") &&
+          sawLog(lines, "发送 c2s 17000") &&
+          sawLog(lines, "发送 c2s 18001") === false,
+        "mail hero and activity pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -3863,6 +3963,22 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.18001") &&
           sawLog(lines, "未发送 wire.18002"),
         "hero upgrade is not encoded"
+      );
+      roleNet.send(WIRE_ACTIVITY_CMD);
+      const activitySent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(activitySent as ArrayBuffer)) === "0400000068420000", "wire.17000 frame");
+      const sentBeforeActivityOther = roleSockets[0].sent.length;
+      roleNet.send(Cmd.login7View);
+      roleNet.send(Cmd.login7Claim);
+      roleNet.send(Cmd.login7Advance);
+      roleNet.send("wire.18001");
+      assert(roleSockets[0].sent.length === sentBeforeActivityOther, "login7 placeholders stay off the wire");
+      assert(
+        sawLog(lines, "未发送 login7.view") &&
+          sawLog(lines, "未发送 login7.claim") &&
+          sawLog(lines, "未发送 login7.advance") &&
+          sawLog(lines, "未发送 wire.18001"),
+        "activity claim is not encoded"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
