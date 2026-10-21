@@ -10664,7 +10664,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 3205") === false &&
           sawLog(lines, "发送 c2s 3206") === false &&
           sawLog(lines, "发送 c2s 3220") === false &&
-          sawLog(lines, "发送 c2s 3200") === false &&
+          sawLog(lines, "发送 c2s 3200 帧") === false &&
           sawLog(lines, "发送 c2s 4044") === false &&
           sawLog(lines, "发送 c2s 3012") === false &&
           sawLog(lines, "发送 c2s 19001") === false &&
