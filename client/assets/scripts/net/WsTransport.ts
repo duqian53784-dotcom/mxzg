@@ -6,7 +6,7 @@ import { bytesToHex, concatBytes, decodeFrames, exactBuffer } from "./protocol/f
 import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } from "./protocol/wireLogin";
 
 /**
- * 浏览器 WebSocket，默认连本机游戏服 ws://127.0.0.1:13101。
+ * 浏览器 WebSocket，默认连本机桥 ws://127.0.0.1:13111/game（转到 TCP 9902）。
  * 线上只写 frame.ts 里的长度前缀帧：心跳 1004 空体、登录 1001、创角 1002。
  * 占位 cmd 没有日志里的帧时不发送。粘包按 TCP 帧切开。见 docs/h5-websocket.md。
  */
