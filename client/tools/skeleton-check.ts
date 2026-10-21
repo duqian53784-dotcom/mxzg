@@ -701,6 +701,19 @@ import {
   WIRE_FIRST_UNSYNCED_TOAST,
   wireFirstNote,
 } from "../assets/scripts/net/protocol/wireFirstRecharge";
+import {
+  decodeWireReiki,
+  formatWireReikiHead,
+  formatWireReikiLine,
+  WIRE_REIKI_CMD,
+  WIRE_REIKI_EMPTY,
+  WIRE_REIKI_FIELD_NOTE,
+  WIRE_REIKI_READONLY_NOTE,
+  WIRE_REIKI_READONLY_TITLE,
+  WIRE_REIKI_SIDE_EFFECT,
+  WIRE_REIKI_UNSYNCED_TOAST,
+  wireReikiNote,
+} from "../assets/scripts/net/protocol/wireReiki";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1420,6 +1433,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("world") === "city", "world level stays on the city tab");
   assert(rootTabFor("promotion") === "city", "promotion list stays on the city tab");
   assert(rootTabFor("firstRecharge") === "city", "first recharge stays on the city tab");
+  assert(rootTabFor("reiki") === "city", "reiki equip stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -3966,6 +3980,14 @@ async function checkWs(): Promise<void> {
   const firstValueMissing = fieldBytes(3, fieldVarint(1, 2));
   const firstWide = fieldBytes(3, fieldVarint(2, 1099511627776));
   const firstOuterOnly = fieldVarint(7, 2);
+  const reikiRowA = concatBytes(concatBytes(fieldVarint(1, 16), fieldVarint(2, 22)), fieldVarint(3, 7));
+  const reikiRowB = concatBytes(fieldVarint(2, 0), fieldVarint(6, 4));
+  const reikiBody = concatBytes(concatBytes(fieldBytes(1, reikiRowA), fieldBytes(1, reikiRowB)), fieldVarint(5, 9));
+  const reikiMissing = fieldBytes(1, fieldVarint(1, 8));
+  const reikiZero = fieldBytes(1, fieldVarint(1, 0));
+  const reikiWide = fieldBytes(1, fieldVarint(3, 1099511627776));
+  const reikiOuterOnly = fieldVarint(5, 1);
+  const reikiPush = fieldBytes(1, fieldVarint(1, 99));
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -4710,6 +4732,126 @@ async function checkWs(): Promise<void> {
   );
   assert(decodeWireFirstRecharge(fieldBytes(2, new Uint8Array([0x80]))) === null, "20012 claimed blob that will not decode is ignored");
   assert(decodeWireFirstRecharge(fieldBytes(3, new Uint8Array([0x80]))) === null, "20012 reward blob that will not decode is ignored");
+  const loggedReiki = decodeWireReiki(reikiBody);
+  assert(WireCmd.reikiEquipData === 70001 && WireCmd.firstRecharge === 20012 && WireCmd.roleProfile === 2001, "online 70001 stays off 20012 and role profile 2001");
+  assert(WireCmd.reikiEquipData !== WireCmd.promotionList && WireCmd.reikiEquipData !== WireCmd.worldLevel, "70001 stays off 20001 and 51001");
+  assert(bytesToHex(encodeFrame(WireCmd.reikiEquipData)) === "0400000071110100", "empty c2s 70001");
+  assert(bytesToHex(encodeFrame(70002)) === "0400000072110100", "70002 activate frame stays distinct");
+  assert(bytesToHex(encodeFrame(70003)) === "0400000073110100", "70003 wear frame stays distinct");
+  assert(bytesToHex(encodeFrame(70004)) === "0400000074110100", "70004 unequip frame stays distinct");
+  assert(bytesToHex(encodeFrame(70005)) === "0400000075110100", "70005 convert frame stays distinct");
+  assert(bytesToHex(encodeFrame(70006)) === "0400000076110100", "70006 compose frame stays distinct");
+  assert(bytesToHex(encodeFrame(70007)) === "0400000077110100", "70007 push frame stays distinct");
+  assert(bytesToHex(encodeFrame(70008)) === "0400000078110100", "70008 push frame stays distinct");
+  assert(bytesToHex(encodeFrame(20011)) === "040000002b4e0000", "20011 stays off the 70001 frame");
+  assert(bytesToHex(encodeFrame(70002)) !== "0400000071110100", "70002 is not the 70001 frame");
+  assert(bytesToHex(encodeFrame(70003)) !== "0400000071110100", "70003 is not the 70001 frame");
+  assert(bytesToHex(encodeFrame(70004)) !== "0400000071110100", "70004 is not the 70001 frame");
+  assert(bytesToHex(encodeFrame(70005)) !== "0400000071110100", "70005 is not the 70001 frame");
+  assert(bytesToHex(encodeFrame(70006)) !== "0400000071110100", "70006 is not the 70001 frame");
+  assert(bytesToHex(encodeFrame(70007)) !== "0400000071110100", "70007 is not the 70001 frame");
+  assert(bytesToHex(encodeFrame(70008)) !== "0400000071110100", "70008 is not the 70001 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "0400000071110100", "20011 is not the 70001 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.firstRecharge)) !== "0400000071110100", "20012 is not the 70001 frame");
+  assert(WIRE_REIKI_READONLY_TITLE === "灵器数据（真服只读）", "readonly reiki title");
+  assert(WIRE_REIKI_UNSYNCED_TOAST === "真服未同步", "unsynced reiki toast");
+  assert(WIRE_REIKI_EMPTY === "空列表", "empty reiki list label");
+  assert(
+    WIRE_REIKI_SIDE_EFFECT.indexOf("20012") >= 0 &&
+      WIRE_REIKI_SIDE_EFFECT.indexOf("70002") >= 0 &&
+      WIRE_REIKI_SIDE_EFFECT.indexOf("70003") >= 0 &&
+      WIRE_REIKI_SIDE_EFFECT.indexOf("70004") >= 0 &&
+      WIRE_REIKI_SIDE_EFFECT.indexOf("70005") >= 0 &&
+      WIRE_REIKI_SIDE_EFFECT.indexOf("70006") >= 0 &&
+      WIRE_REIKI_SIDE_EFFECT.indexOf("70007") >= 0 &&
+      WIRE_REIKI_SIDE_EFFECT.indexOf("70008") >= 0 &&
+      WIRE_REIKI_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_REIKI_READONLY_NOTE.indexOf("不发 70002") >= 0 &&
+      WIRE_REIKI_READONLY_NOTE.indexOf("70003") >= 0 &&
+      WIRE_REIKI_READONLY_NOTE.indexOf("70004") >= 0 &&
+      WIRE_REIKI_READONLY_NOTE.indexOf("70005") >= 0 &&
+      WIRE_REIKI_READONLY_NOTE.indexOf("70006") >= 0 &&
+      WIRE_REIKI_READONLY_NOTE.indexOf("不当拉包请求") >= 0 &&
+      WIRE_REIKI_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_REIKI_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_REIKI_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_REIKI_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_REIKI_FIELD_NOTE.indexOf("hero_id") >= 0 &&
+      WIRE_REIKI_FIELD_NOTE.indexOf("sys_id") >= 0 &&
+      WIRE_REIKI_FIELD_NOTE.indexOf("reiki_equip_id") >= 0 &&
+      WIRE_REIKI_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "reiki page names list fields and refuses activate wear unequip convert compose and 20011"
+  );
+  assert(
+    decodeWireReiki(new Uint8Array(0)) !== null &&
+      decodeWireReiki(new Uint8Array(0))?.rows.length === 0 &&
+      formatWireReikiHead(decodeWireReiki(new Uint8Array(0)) || { rows: [], marks: [] }) === "空列表",
+    "empty 70001 body is synced and does not invent zero"
+  );
+  assert(decodeWireReiki(new Uint8Array([0x80])) === null, "bad 70001 ignored");
+  const reikiMissingSnap = decodeWireReiki(reikiMissing);
+  assert(
+    reikiMissingSnap !== null &&
+      reikiMissingSnap.rows.length === 1 &&
+      reikiMissingSnap.rows[0].heroId === 8 &&
+      reikiMissingSnap.rows[0].sysId === null &&
+      reikiMissingSnap.rows[0].reikiEquipId === null &&
+      formatWireReikiLine(reikiMissingSnap.rows[0]) === "hero_id=8 / sys_id=无 / reiki_equip_id=无",
+    "missing 70001 sys_id and reiki_equip_id stay blank"
+  );
+  assert(
+    decodeWireReiki(reikiZero) !== null &&
+      decodeWireReiki(reikiZero)?.rows.length === 1 &&
+      decodeWireReiki(reikiZero)?.rows[0].heroId === 0 &&
+      decodeWireReiki(reikiZero)?.rows[0].sysId === null &&
+      decodeWireReiki(reikiZero)?.rows[0].reikiEquipId === null &&
+      formatWireReikiLine((decodeWireReiki(reikiZero) || { rows: [], marks: [] }).rows[0]) ===
+        "hero_id=0 / sys_id=无 / reiki_equip_id=无",
+    "present 70001 zero stays zero and does not fill the other ids"
+  );
+  const reikiWideSnap = decodeWireReiki(reikiWide);
+  assert(
+    reikiWideSnap !== null &&
+      reikiWideSnap.rows.length === 1 &&
+      reikiWideSnap.rows[0].heroId === null &&
+      reikiWideSnap.rows[0].sysId === null &&
+      reikiWideSnap.rows[0].reikiEquipId === 1099511627776,
+    "70001 reiki_equip_id keeps the wide int64 and does not invent hero_id"
+  );
+  assert(
+    loggedReiki !== null &&
+      loggedReiki.rows.length === 2 &&
+      loggedReiki.rows[0].heroId === 16 &&
+      loggedReiki.rows[0].sysId === 22 &&
+      loggedReiki.rows[0].reikiEquipId === 7 &&
+      loggedReiki.rows[1].heroId === null &&
+      loggedReiki.rows[1].sysId === 0 &&
+      loggedReiki.rows[1].reikiEquipId === null &&
+      loggedReiki.marks.length === 1 &&
+      loggedReiki.marks[0].field === 5 &&
+      formatWireReikiHead(loggedReiki) === "2 条 / 字段5=9" &&
+      formatWireReikiLine(loggedReiki.rows[0]) === "hero_id=16 / sys_id=22 / reiki_equip_id=7" &&
+      formatWireReikiLine(loggedReiki.rows[1]) === "hero_id=无 / sys_id=0 / reiki_equip_id=无 / 字段6=4" &&
+      wireReikiNote(loggedReiki).indexOf(WIRE_REIKI_SIDE_EFFECT) >= 0 &&
+      wireReikiNote(loggedReiki).indexOf("不写金币") >= 0 &&
+      wireReikiNote(loggedReiki).indexOf("不写钻石") >= 0,
+    "70001 sample keeps hero_id sys_id and reiki_equip_id and does not fill missing numbers with 0"
+  );
+  const reikiSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.reikiEquipData, reikiBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    reikiSticky.frames.length === 2 &&
+      reikiSticky.frames[0].cmdId === 70001 &&
+      reikiSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireReiki(reikiSticky.frames[0].body)?.rows[0].heroId === 16,
+    "sticky 70001 frame stops at its length prefix"
+  );
+  assert(decodeWireReiki(fieldBytes(1, new Uint8Array([0x80]))) === null, "70001 list blob that will not decode is ignored");
+  assert(
+    decodeWireReiki(reikiOuterOnly) !== null &&
+      decodeWireReiki(reikiOuterOnly)?.rows.length === 0 &&
+      formatWireReikiHead(decodeWireReiki(reikiOuterOnly) || { rows: [], marks: [] }) === "空列表 / 字段5=1",
+    "non-empty 70001 without list stays synced and does not invent a row"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -5193,6 +5335,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasWorld() && WireSession.world === null, "world level stays unsynced before the city role");
       assert(!WireSession.hasPromotion() && WireSession.promotion === null, "promotion stays unsynced before the city role");
       assert(!WireSession.hasFirstRecharge() && WireSession.firstRecharge === null, "first recharge stays unsynced before the city role");
+      assert(!WireSession.hasReiki() && WireSession.reiki === null, "reiki stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -5429,6 +5572,25 @@ async function checkWs(): Promise<void> {
       );
       assert(Session.gold === 0 && Session.diamond === 0, "20012 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
+      roleSockets[0].push(encodeFrame(WireCmd.reikiEquipData, reikiBody));
+      assert(
+        WireSession.hasReiki() &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.rows.length === 2 &&
+          WireSession.reiki.rows[0].heroId === 16 &&
+          WireSession.reiki.rows[0].sysId === 22 &&
+          WireSession.reiki.rows[0].reikiEquipId === 7 &&
+          WireSession.reiki.rows[1].heroId === null &&
+          WireSession.reiki.rows[1].sysId === 0 &&
+          WireSession.reiki.rows[1].reikiEquipId === null &&
+          formatWireReikiLine(WireSession.reiki.rows[0]) === "hero_id=16 / sys_id=22 / reiki_equip_id=7" &&
+          formatWireReikiLine(WireSession.reiki.rows[1]) === "hero_id=无 / sys_id=0 / reiki_equip_id=无 / 字段6=4" &&
+          formatWireReikiHead(WireSession.reiki) === "2 条 / 字段5=9" &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.recharge === 6,
+        "s2c 70001 writes the reiki list and leaves the 20012 record"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "70001 stays off the wallet");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
       assert(Session.wireSync.level && Session.role?.level === 1 && formatNameLine() === "见习冒险家 Lv1", "flush writes field 6");
@@ -5673,7 +5835,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 17, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 18, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -5743,6 +5905,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 20012 after 20001"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 17] as ArrayBuffer)) === "0400000071110100",
+        "pullIdle sends empty c2s 70001 after 20012"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -5759,6 +5925,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 51001") &&
           sawLog(lines, "发送 c2s 20001") &&
           sawLog(lines, "发送 c2s 20012") &&
+          sawLog(lines, "发送 c2s 70001") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -5769,6 +5936,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000039c70000") &&
           sawLog(lines, "04000000214e0000") &&
           sawLog(lines, "040000002c4e0000") &&
+          sawLog(lines, "0400000071110100") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -5806,7 +5974,15 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 74102") === false &&
           sawLog(lines, "发送 c2s 74103") === false &&
           sawLog(lines, "发送 c2s 74105") === false &&
-          sawLog(lines, "发送 c2s 74106") === false,
+          sawLog(lines, "发送 c2s 74106") === false &&
+          sawLog(lines, "发送 c2s 70002") === false &&
+          sawLog(lines, "发送 c2s 70003") === false &&
+          sawLog(lines, "发送 c2s 70004") === false &&
+          sawLog(lines, "发送 c2s 70005") === false &&
+          sawLog(lines, "发送 c2s 70006") === false &&
+          sawLog(lines, "发送 c2s 70007") === false &&
+          sawLog(lines, "发送 c2s 70008") === false &&
+          sawLog(lines, "发送 c2s 20011") === false,
         "mail hero buy gold achievement arena seven day goal wish summon prophet jewel illustrat pet and world pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
@@ -6059,6 +6235,30 @@ async function checkWs(): Promise<void> {
       assert(
         sawLog(lines, "未发送 wire.20013") && sawLog(lines, "未发送 wire.13260"),
         "first recharge claim and the alternate cmd are not encoded"
+      );
+      roleNet.send(WIRE_REIKI_CMD);
+      const reikiSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(reikiSent as ArrayBuffer)) === "0400000071110100", "wire.70001 frame");
+      const sentBeforeReikiOther = roleSockets[0].sent.length;
+      roleNet.send("wire.70002");
+      roleNet.send("wire.70003");
+      roleNet.send("wire.70004");
+      roleNet.send("wire.70005");
+      roleNet.send("wire.70006");
+      roleNet.send("wire.70007");
+      roleNet.send("wire.70008");
+      roleNet.send("wire.20011");
+      assert(roleSockets[0].sent.length === sentBeforeReikiOther, "70002-70008 and 20011 stay off the reiki wire");
+      assert(
+        sawLog(lines, "未发送 wire.70002") &&
+          sawLog(lines, "未发送 wire.70003") &&
+          sawLog(lines, "未发送 wire.70004") &&
+          sawLog(lines, "未发送 wire.70005") &&
+          sawLog(lines, "未发送 wire.70006") &&
+          sawLog(lines, "未发送 wire.70007") &&
+          sawLog(lines, "未发送 wire.70008") &&
+          sawLog(lines, "未发送 wire.20011"),
+        "reiki activate wear unequip convert compose and pushes are not encoded"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -6544,6 +6744,67 @@ async function checkWs(): Promise<void> {
           WireSession.promotion !== null &&
           WireSession.promotion.marks[0].field === 7,
         "non-empty 20012 without rewards stays synced and leaves 20001"
+      );
+      const goldBeforeBadReiki = Session.gold;
+      const diamondBeforeBadReiki = Session.diamond;
+      roleSockets[0].push(encodeFrame(70007, reikiPush));
+      roleSockets[0].push(encodeFrame(70008, reikiPush));
+      assert(
+        WireSession.hasReiki() &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.rows.length === 2 &&
+          WireSession.reiki.rows[0].heroId === 16 &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.recharge === null,
+        "70007 and 70008 pushes do not replace the 70001 list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.reikiEquipData, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasReiki() &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.rows.length === 2 &&
+          WireSession.reiki.rows[0].heroId === 16 &&
+          WireSession.reiki.rows[0].reikiEquipId === 7 &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.marks.length === 1 &&
+          sawWire("70001 解不开"),
+        "bad 70001 keeps the reiki list and the 20012 record"
+      );
+      assert(Session.gold === goldBeforeBadReiki && Session.diamond === diamondBeforeBadReiki, "bad 70001 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.reikiEquipData));
+      assert(
+        WireSession.hasReiki() &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.rows.length === 0 &&
+          formatWireReikiHead(WireSession.reiki) === "空列表" &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.marks[0].field === 7,
+        "empty 70001 body clears the list without writing zero and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadReiki && Session.diamond === diamondBeforeBadReiki, "empty 70001 does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.reikiEquipData, reikiMissing));
+      assert(
+        WireSession.hasReiki() &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.rows.length === 1 &&
+          WireSession.reiki.rows[0].heroId === 8 &&
+          WireSession.reiki.rows[0].sysId === null &&
+          WireSession.reiki.rows[0].reikiEquipId === null &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.marks[0].field === 7,
+        "70001 without sys_id and reiki_equip_id stays blank and leaves 20012"
+      );
+      assert(Session.gold === goldBeforeBadReiki && Session.diamond === diamondBeforeBadReiki, "missing 70001 field does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.reikiEquipData, reikiOuterOnly));
+      assert(
+        WireSession.hasReiki() &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.rows.length === 0 &&
+          WireSession.reiki.marks.length === 1 &&
+          WireSession.reiki.marks[0].field === 5 &&
+          WireSession.firstRecharge !== null &&
+          WireSession.firstRecharge.marks[0].field === 7,
+        "non-empty 70001 without list stays synced and leaves 20012"
       );
       if (roleNet) roleNet.close();
       WireSession.close();

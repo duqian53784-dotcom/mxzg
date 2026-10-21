@@ -34,8 +34,9 @@
  * 空的 c2s 51001（wire.51001，世界等级 GReqWorldLevel / GResWorldLevel。level 是字段 1。不编 20101。不夹在 2001 和 3007 中间）。
  * 空的 c2s 20001（wire.20001，基金列表 GReqPromotionList / GResPromotionList。is_buy_foundation 是字段 1，foundation_reward_record 是字段 2。不编 20018。不编 20004、20010。不做 3007。挂在 51001 之后）。
  * 空的 c2s 20012（wire.20012，超值首充 GReqFirstRecharge / GResFirstRecharge。recharge 是字段 1，list 是字段 2 已领 idx，can_reward 是字段 3。不编 20013。不做 13260。挂在 20001 之后）。
+ * 空的 c2s 70001（wire.70001，灵器数据 GReqReikiEquipData / GResReikiEquipData。list 是字段 1，PSReikiEquipData 的 hero_id、sys_id、reiki_equip_id。不编 70002、70003、70004、70005、70006。不编 70007、70008。不做 20011。挂在 20012 之后）。
  * 挂机页领取再编空的 c2s 3005（wire.3005）。
- * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。4004 见 wireSummon.ts。13044 见 wireProphet.ts。4101 见 wireJewel.ts。4013 见 wireIllustrat.ts。74100 见 wirePet.ts。51001 见 wireWorld.ts。20001 见 wirePromotion.ts。20012 见 wireFirstRecharge.ts。
+ * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。4004 见 wireSummon.ts。13044 见 wireProphet.ts。4101 见 wireJewel.ts。4013 见 wireIllustrat.ts。74100 见 wirePet.ts。51001 见 wireWorld.ts。20001 见 wirePromotion.ts。20012 见 wireFirstRecharge.ts。70001 见 wireReiki.ts。
  * 不编 12020。不编 22001，也不编 22002。不编 21011、21012。不编 21013。旧号 21000 / 21001 不编。
  * 3002 不编。5002 只收不发。5004–5009、5010、5011–5013 不编。
  * 邮件领取、已读、删除不编。占位 mail.* 仍是 1701–1705。
@@ -53,6 +54,7 @@
  * 空的 51001 要编。不编 20101。本模块无写操作号。不夹在 2001 和 3007 中间。
  * 空的 20001 要编。不编 20018。不编 20004、20010。不做 3007。挂在 51001 之后。不是角色资料 2001。
  * 空的 20012 要编。不编 20013。不做 13260。挂在 20001 之后。不是基金列表 20001。
+ * 空的 70001 要编。不编 70002、70003、70004、70005、70006。不编 70007、70008。70007、70008 是 s2c 推送，不当拉包请求。不做 20011。挂在 20012 之后。不是超值首充 20012。
  */
 import { NetMessage } from "../NetTypes";
 import { Cmd } from "./cmds";
@@ -71,6 +73,7 @@ import { WIRE_PET_CMD } from "./wirePet";
 import { WIRE_WORLD_CMD } from "./wireWorld";
 import { WIRE_PROMOTION_CMD } from "./wirePromotion";
 import { WIRE_FIRST_CMD } from "./wireFirstRecharge";
+import { WIRE_REIKI_CMD } from "./wireReiki";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
 const LOGIN_FIELD1 = 7;
@@ -168,6 +171,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.51001 → 空的 c2s 51001（世界等级 GReqWorldLevel / GResWorldLevel）。不编 20101。
  * wire.20001 → 空的 c2s 20001（基金列表 GReqPromotionList / GResPromotionList）。不编 20018。不编 20004、20010。不做 3007。不是角色资料 2001。
  * wire.20012 → 空的 c2s 20012（超值首充 GReqFirstRecharge / GResFirstRecharge）。不编 20013。不做 13260。不是基金列表 20001。
+ * wire.70001 → 空的 c2s 70001（灵器数据 GReqReikiEquipData / GResReikiEquipData）。不编 70002、70003、70004、70005、70006。不编 70007、70008。不做 20011。不是超值首充 20012。
  * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
  * 占位 idle.query / idle.claim 仍是 1301 / 1302，和这两帧不是一回事。
  * 占位 bag.list / bag.use 仍是 1601 / 1602。3002 / 3010 不编码。
@@ -189,6 +193,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.20101 不编码。51001 只编码空体。本模块无写操作号。
  * wire.20018、wire.20004、wire.20010 不编码。20001 只编码空体。不做 3007。
  * wire.20013、wire.13260 不编码。20012 只编码空体。不做 13260。
+ * wire.70002、wire.70003、wire.70004、wire.70005、wire.70006、wire.70007、wire.70008、wire.20011 不编码。70001 只编码空体。70007、70008 是 s2c 推送。不做 20011。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -367,6 +372,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.firstRecharge,
       bytes: encodeFrame(WireCmd.firstRecharge),
+      note: "空体",
+    };
+  }
+  if (cmd === WIRE_REIKI_CMD) {
+    return {
+      cmdId: WireCmd.reikiEquipData,
+      bytes: encodeFrame(WireCmd.reikiEquipData),
       note: "空体",
     };
   }
