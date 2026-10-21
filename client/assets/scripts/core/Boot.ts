@@ -5,8 +5,9 @@
  * 登录是本组件在 Canvas 上生成的面板，不另建 Login 场景。
  * 账号走 Proto.login / Proto.roleEnter；没有角色或点「创角」时再 Proto.roleCreate。
  * 默认仍是 NetClient → MockTransport，不需要服务器。
- * 预览地址加 ?transport=ws 才连 ws://127.0.0.1:13101。打开后发心跳 1004，点登录再发 1001。不进真实主城。
- * 连不上会提示检查 scripts/start-local-server.bat，并可改走 Mock。
+ * 预览地址加 ?transport=ws 才连本机桥 ws://127.0.0.1:13111/game（转到 TCP 9902）。
+ * 打开后发心跳 1004，点登录再发 1001。不进真实主城。
+ * 连不上会提示检查 start-local-server.bat 和 start-ws-bridge.bat，并可改走 Mock。
  *
  * Creator 里怎么挂（仓库不改 .scene，避免脚本 uuid 对不上）：
  * 1. 用 Creator 3.8.8 打开 client 工程
@@ -16,7 +17,7 @@
  * 5. 保存场景。项目启动场景保持 Boot，再点预览
  * 6. 控制台应出现 [Boot] stage=version / hot-update / config / login
  * 7. 选服后点「进入游戏」：Mock 登录成功后 director.loadScene("Main")
- *    地址带 ?transport=ws 时连本机 13101，发心跳 1004，点登录发 1001。成功也不进真实主城
+ *    地址带 ?transport=ws 时连本机桥 13111/game，发心跳 1004，点登录发 1001。成功也不进真实主城
  *    账号不是 mock、或点「创角」时先出创角面板（Proto.roleCreate）
  *    Main 场景可以是空的。若 Canvas 上没有 MainApp，这里会补挂
  * 8. 勾选 skipLogin 可跳过面板，仍用检查器里的账号进 Main
@@ -33,6 +34,7 @@ import { WIRE_HEARTBEAT_MS } from "../net/protocol/frame";
 import { summarizeCreateReply, summarizeLoginReply, uidFromAccount, wireBody } from "../net/protocol/wireLogin";
 import { NetState } from "../net/NetTypes";
 import {
+  explainWireTimeout,
   readPreviewTransport,
   TransportChoice,
   WS_CLOSE_STATUS,
@@ -210,7 +212,7 @@ export class Boot extends Component {
     await this.onMockLoginClicked(panel, create);
   }
 
-  /** 关掉 13101 上的套接字，再用原来的 Mock 登录进主城。失败不把预览打崩。 */
+  /** 关掉桥上的套接字，再用原来的 Mock 登录进主城。失败不把预览打崩。 */
   private onUseMock(panel: LoginPanelView): void {
     if (!this.alive || this.entering || this.authBusy) return;
     this.useWs = false;
@@ -235,7 +237,7 @@ export class Boot extends Component {
     if (!opened) return;
     if (this.loginPanel) {
       this.loginPanel.setStatus(WS_OPEN_STATUS);
-      this.loginPanel.setDetail("点进入游戏发登录 1001。账号填数字 uid。不进主城。");
+      this.loginPanel.setDetail("点进入游戏发登录 1001。登录前可以没有 s2c 1004。不进主城。");
       this.loginPanel.setBusy(false);
     }
     this.authBusy = false;
@@ -299,12 +301,22 @@ export class Boot extends Component {
       body = wireBody(msg.data);
     } catch (err) {
       if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
-      const text = messageOf(err);
-      GameLog.shared.error("Boot", "登录 1001 " + text);
-      if (this.loginPanel) {
-        this.loginPanel.setStatus(text);
-        this.loginPanel.setDetail("可再点一次，或改走 Mock");
-        this.loginPanel.setBusy(false);
+      const kind = wireTimeoutKind(err);
+      const text = kind ? kind + " 请求超时" : messageOf(err);
+      if (kind) {
+        const detail = this.noteWsTimeout(kind);
+        if (this.loginPanel) {
+          this.loginPanel.setStatus(text);
+          this.loginPanel.setDetail(detail);
+          this.loginPanel.setBusy(false);
+        }
+      } else {
+        GameLog.shared.error("Boot", "登录 1001 " + text);
+        if (this.loginPanel) {
+          this.loginPanel.setStatus(text);
+          this.loginPanel.setDetail("可再点一次，或改走 Mock");
+          this.loginPanel.setBusy(false);
+        }
       }
       this.authBusy = false;
       this.showBootToast(text);
@@ -533,13 +545,34 @@ export class Boot extends Component {
       this.showBootToast("不进主城");
     } catch (err) {
       if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
-      const text = messageOf(err);
-      GameLog.shared.error("Boot", "创角 1002 " + text);
-      panel.setStatus(text);
+      const kind = wireTimeoutKind(err);
+      const text = kind ? kind + " 请求超时" : messageOf(err);
+      if (kind) {
+        panel.setStatus(text);
+        this.noteWsTimeout(kind);
+      } else {
+        GameLog.shared.error("Boot", "创角 1002 " + text);
+        panel.setStatus(text);
+      }
       panel.setBusy(false);
       this.authBusy = false;
       this.showBootToast(text);
     }
+  }
+
+  /** 超时把最近的 Ws 行写进 GameLog，面板只留一行标志。返回这行标志。 */
+  private noteWsTimeout(kind: string): string {
+    const messages: string[] = [];
+    const recent = GameLog.shared.recent();
+    for (let i = 0; i < recent.length; i++) {
+      if (recent[i].tag === "Ws") messages.push(recent[i].message);
+    }
+    const report = explainWireTimeout(messages);
+    GameLog.shared.error("Boot", kind + " 请求超时。" + report.summary);
+    for (let i = 0; i < report.tail.length; i++) {
+      GameLog.shared.warn("Boot", "超时前 " + report.tail[i]);
+    }
+    return report.detail;
   }
 
   private async loginAccount(account: string, serverId: number): Promise<RoleEnterResp> {
@@ -663,4 +696,12 @@ export class Boot extends Component {
     GameLog.shared.warn("Boot", "Canvas not found, parent UI on " + this.node.name);
     return this.node;
   }
+}
+
+/** NetClient 把 cmd 放在 GameError.detail。只有超时才换成长说明。 */
+function wireTimeoutKind(err: unknown): string | null {
+  if (!(err instanceof GameError) || err.code !== ErrorCode.NET_TIMEOUT) return null;
+  if (err.detail === "role.create") return "创角 1002";
+  if (err.detail === "login") return "登录 1001";
+  return "请求";
 }

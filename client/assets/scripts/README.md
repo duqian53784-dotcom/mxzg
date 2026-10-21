@@ -1,7 +1,7 @@
 ﻿# scripts
 
 - `core/` 启动、会话（Boot、Session）
-- `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、可选 WsTransport（`?transport=ws` 连 13101，心跳 1004 和登录 1001）、P0 协议 stub（`net/protocol/`，占位号仍只给 Mock）
+- `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、可选 WsTransport（`?transport=ws` 连本机桥 `13111/game`，心跳 1004 和登录 1001）、P0 协议 stub（`net/protocol/`，占位号仍只给 Mock）
 - `config/` JSON 读表
 - `module/` 业务系统（`mainline/` 主线战报和推关调试，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场，`tower/` 幻境之塔，`daily/` 日常金币副本，`login7/` 七日登录，`goal7/` 七日目标，`shop/` 基础商店，`wish/` 低级许愿池，`cafe/` 咖啡馆招待，`gift/` 礼包骨架，`limited/` 限时活动）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
@@ -31,11 +31,11 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 
 ## 本机 WebSocket（D2，可选）
 
-默认不要走这里。服已经用 `scripts/start-local-server.bat` 拉起来、并且 13101 在听时，预览地址改成：
+默认不要走这里。服已经用 `scripts/start-local-server.bat` 拉起来、并且 TCP 9902 在听之后，再双击 `scripts/start-ws-bridge.bat`，预览地址改成：
 
 `http://127.0.0.1:7456/?transport=ws`
 
-面板会去连 `ws://127.0.0.1:13101`。打开后 GameLog 里应有心跳 `c2s 1004`。账号填数字 uid 再点进入游戏，会发登录 `1001` 并记下回包。不进真实主城。失败时点 **改走 Mock** 仍进原来的主城。说明见 `docs/h5-websocket.md`。
+面板会去连 `ws://127.0.0.1:13111/game`。不要连游戏服自带的 13101。打开后 GameLog 里应有心跳 `c2s 1004`。账号填数字 uid 再点进入游戏，会发登录 `1001` 并记下回包。登录前可以没有心跳回包。不进真实主城。失败时点 **改走 Mock** 仍进原来的主城。说明见 `docs/h5-websocket.md`。
 
 ## 协议 stub（B5）
 

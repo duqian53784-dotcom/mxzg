@@ -3,7 +3,7 @@
 > **来源：** 本文按 2026-10-19《项目分析与启动指南》写成。端口、密码、路径和命令只取那份分析，不另补。  
 > **D1 已在倩本机验证（2026-10-21，Asia/Shanghai）。** 双击 `scripts\start-local-server.bat`：`netstat` 见 TCP `11122`、TCP `9902`、WS `13101` 均在听，脚本打出「[启动成功]」。`PROJECT_PLAN.md` 里 D1 已勾选。  
 > **cross 默认不启。** 游戏服连 `127.0.0.1:11422` 失败、中心服「游戏服加载跨服失败」类日志是预期，不算启动失败。分析里 cross 曾因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败；单机只需 center + gameserver。  
-> **客户端默认仍走 Mock。** 预览加 `?transport=ws` 连 WebSocket **13101**，打开后发心跳 1004，点登录发 1001。步骤见 `docs/h5-websocket.md`。D2 勾选仍等倩本机验证。
+> **客户端默认仍走 Mock。** 预览加 `?transport=ws` 走本机桥 `ws://127.0.0.1:13111/game`（`scripts\start-ws-bridge.bat` 转到 TCP 9902），不直连 13101。步骤见 `docs/h5-websocket.md`。D2 勾选仍等倩本机验证。
 
 `server/`、`config/` 是本机 junction，不在 Git 里。不要把 junction 背后的内容推进这个仓库。
 
@@ -19,6 +19,7 @@
 | 构建和启动的工作目录 | `F:\源码\mj\program\server`（与上面的 junction 是同一目录） |
 | 分析里的一键 bat | `F:\源码\mj\program\start-services.bat`（在 `program` 目录，不在 `server` 里） |
 | 本仓库一键启服 | 双击 `F:\project\mxzg\scripts\start-local-server.bat`。停止说明是 `scripts\stop-local-server.bat`。PowerShell 替代：`scripts/start-local-server.ps1`、`scripts/stop-local-server.ps1` |
+| 本仓库 WS 桥 | 游戏服起来之后双击 `scripts\start-ws-bridge.bat`。听 `ws://127.0.0.1:13111/game`，原字节转到 TCP `127.0.0.1:9902`。停止是 `scripts\stop-ws-bridge.bat`（不关游戏服）。13101 仍是游戏服自带口，D1 要看到它在听；H5 不要连它 |
 | JDK 1.8 | `C:\dev\jdk1.8`（Temurin 1.8.0_504） |
 | Maven 3.6.3 | `C:\dev\maven`（已配 `JAVA_HOME`、`MAVEN_HOME`、`PATH`） |
 | MySQL 8.0.29 | `C:\dev\mysql`（Windows 服务 `MySQL80`，开机自启） |
@@ -39,12 +40,12 @@
 
 - Boot 走 `mock://`，`MockTransport` 里一份 `MockGameSession`。
 - 协议在 `client/assets/scripts/net/protocol/`。`CmdId` 是客户端占位号，**不是**旧服消息号。限时活动是 `2801`–`2804`，同样是占位。心跳占位是 **1002**。旧桥日志里的心跳是 **1004**，不要混。
-- 编解码仍是明文对象。`?transport=ws` 只打开套接字，**不把** `encodeRequest` 的对象写到 13101。调用方继续用 `Proto.*` 走 Mock。
+- 编解码仍是明文对象。`?transport=ws` 不把 `encodeRequest` 的对象写到线上，只写旧桥日志里的长度前缀帧，经 `13111/game` 转到 TCP 9902。调用方继续用 `Proto.*` 走 Mock。
 - 细节见 `docs/protocol-stubs.md`、`docs/mock-replay.md`、`docs/h5-websocket.md`。
 
-D2 才把本仓库 H5 接到游戏服 WebSocket `13101`。在那之前不要改连接、占位号或场景。
+D2 把本仓库 H5 接到这条桥，不改占位号，也不进主城。勾选仍等倩看到 `收到 s2c 1001`。
 
-2026-10-19 另有一套旧 H5，目录是 `F:\FansGameX\mxzg-h5\客户端\web`。`serve.ps1` 听 `127.0.0.1:8080`，`dev-platform.ps1` 听 `127.0.0.1:18070`，页面上的 WebSocket `/game/9902` 由 `serve.ps1` 桥到游戏服 TCP `9902`。那是旧客户端。本仓库 D2 用分析里的 WS `13101`，不走这套桥。
+2026-10-19 另有一套旧 H5，目录是 `F:\FansGameX\mxzg-h5\客户端\web`。`serve.ps1` 听 `127.0.0.1:8080`，`dev-platform.ps1` 听 `127.0.0.1:18070`，页面上的 WebSocket `/game/9902` 由 `serve.ps1` 桥到游戏服 TCP `9902`。那是旧客户端。本仓库不启动那两个脚本，自己在 `scripts\start-ws-bridge.bat` 里做同样的字节转发，口改成 `13111/game`。
 
 ## 建议的联调顺序
 
@@ -366,7 +367,7 @@ java -Xms512m -Xmx2048m -cp "target/classes;target/lib/*" com.ayjs.mxzg.gameserv
 | cross | `com.ayjs.mxzg.cross.CrossBootstrap` | 模板 `9801` | 分析只写「配置」 | 无 |
 | large-cross | `com.ayjs.mxzg.largecross.LargeCrossBootstrap` | 模板 `9801` | 分析未单列监听口；模板里 gameserver 去连的是 `11422` | 无 |
 
-本仓库 H5 以后接的是游戏服 WS `13101`（D2）。D1 不改客户端。center 给 gameserver / cross 连的口是 TCP `11122`。
+本仓库 H5 的 `?transport=ws` 接 `scripts\start-ws-bridge.bat`（`13111/game` → TCP `9902`），不直连游戏服 WS `13101`。D1 的成功标准仍包含 13101 在听。center 给 gameserver / cross 连的口是 TCP `11122`。
 
 ## 7. 验证
 

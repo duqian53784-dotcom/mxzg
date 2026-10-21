@@ -17,6 +17,7 @@ export { WsTransport, readObservedCmdId } from "./WsTransport";
 export {
   DEFAULT_WS_URL,
   TransportConfig,
+  explainWireTimeout,
   parseTransportSearch,
   readPreviewTransport,
   WS_CLOSE_STATUS,
@@ -26,6 +27,7 @@ export {
   WS_OPEN_STATUS,
   WS_OPEN_TOAST,
 } from "./transportSelect";
+export type { WireTimeoutReport } from "./transportSelect";
 
 export interface NetClientOptions {
   heartbeatMs?: number;

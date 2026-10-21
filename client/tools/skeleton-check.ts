@@ -447,6 +447,7 @@ import {
 } from "../assets/scripts/net/protocol/wireLogin";
 import {
   DEFAULT_WS_URL,
+  explainWireTimeout,
   parseTransportSearch,
   readPreviewTransport,
   TransportConfig,
@@ -2788,7 +2789,7 @@ function sawLog(lines: string[], part: string): boolean {
 
 async function checkWs(): Promise<void> {
   assert(CmdId.login === 1001 && CmdId.heartbeat === 1002, "placeholder ids stay put");
-  assert(DEFAULT_WS_URL === "ws://127.0.0.1:13101", "default ws url");
+  assert(DEFAULT_WS_URL === "ws://127.0.0.1:13111/game", "default ws url is the local bridge");
   assert(TransportConfig.defaultKind === "mock", "config default is mock");
   const plain = parseTransportSearch("");
   assert(plain.kind === "mock" && plain.wsUrl === DEFAULT_WS_URL, "empty search is mock");
@@ -2803,6 +2804,7 @@ async function checkWs(): Promise<void> {
   const junk = parseTransportSearch("?transport=tcp&ws=http://127.0.0.1:13101");
   assert(junk.kind === "mock" && junk.wsUrl === DEFAULT_WS_URL, "bad scheme ignored");
   assert(WS_DOWN_STATUS.indexOf("服未启动") >= 0 && WS_DOWN_LOG.indexOf("start-local-server.bat") >= 0, "down copy");
+  assert(WS_DOWN_LOG.indexOf("start-ws-bridge.bat") >= 0 && WS_DOWN_LOG.indexOf("13111") >= 0 && WS_DOWN_LOG.indexOf("不要直连 13101") >= 0, "down copy names the bridge");
   assert(WS_OPEN_STATUS.indexOf("1004") >= 0, "open copy");
   assert(WIRE_HEARTBEAT_MS === 25000, "heartbeat interval from the net log");
   assert(WireCmd.login === 1001 && WireCmd.heartbeat === 1004 && WireCmd.roleCreate === 1002, "wire ids");
@@ -2815,6 +2817,18 @@ async function checkWs(): Promise<void> {
   const capturedA = hexToBytes("080718023a0d6d787a672d7765622d313030312a0a31373932343634393031106f32086c6f63616c646576");
   const fieldsA = decodeProtoFields(capturedA);
   assert(varintField(fieldsA, 1) === 7 && varintField(fieldsA, 2) === 111 && varintField(fieldsA, 3) === 2, "login sample A ints");
+  assert(textField(fieldsA, 5) === "1792464901" && textField(fieldsA, 6) === "localdev" && textField(fieldsA, 7) === "mxzg-web-1001", "login sample A strings");
+  const encoded111 = encodeObservedLoginBody(111, 1792464901);
+  const fields111 = decodeProtoFields(encoded111);
+  assert(
+    varintField(fields111, 1) === 7 &&
+      varintField(fields111, 2) === 111 &&
+      varintField(fields111, 3) === 2 &&
+      textField(fields111, 5) === "1792464901" &&
+      textField(fields111, 6) === "localdev" &&
+      textField(fields111, 7) === "mxzg-web-1001",
+    "uid 111 fields match the log"
+  );
   assert(uidFromAccount("960011") === 960011 && uidFromAccount("mock") === null && uidFromAccount("0") === null, "uid parse");
   const created = encodeObservedCreateBody("见习冒险家");
   const createdFields = decodeProtoFields(created || new Uint8Array(0));
@@ -2832,6 +2846,20 @@ async function checkWs(): Promise<void> {
   assert(readObservedCmdId(exactCopy(encodeFrame(1004))) === 1004, "legacy heartbeat bytes");
   assert(readObservedCmdId(exactCopy(encodeFrame(1001, loginBody))) === 1001, "legacy login bytes");
   assert(readObservedCmdId(leFrame(1002, 7)) === null, "short frame");
+  const silentWait = explainWireTimeout(["发送 c2s 1004 帧长 8", "发送 c2s 1001 帧长 53"]);
+  assert(silentWait.detail.indexOf("s2c=无") >= 0 && silentWait.detail.indexOf("心跳1004回包=无") >= 0 && silentWait.detail.indexOf("登录1001回包=无") >= 0, "silent flags");
+  assert(silentWait.summary.indexOf("start-ws-bridge.bat") >= 0 && silentWait.summary.indexOf("13101") >= 0, "silent hint");
+  assert(silentWait.tail.length === 2, "short tail kept");
+  const beatOnly = explainWireTimeout(["发送 c2s 1004 帧长 8", "收到 s2c 1004 帧长 15", "发送 c2s 1001 帧长 53"]);
+  assert(beatOnly.detail.indexOf("心跳1004回包=有") >= 0 && beatOnly.detail.indexOf("登录1001回包=无") >= 0, "beat without login");
+  const other = explainWireTimeout(["发送 c2s 1001 帧长 53", "收到 s2c 1005 帧长 8"]);
+  assert(other.detail.indexOf("s2c=有") >= 0 && other.detail.indexOf("心跳1004回包=无") >= 0, "1005 is not heartbeat");
+  const manyWs: string[] = [];
+  for (let i = 0; i < 8; i++) manyWs.push("收到 s2c 1005 帧长 1 " + i);
+  const trimmedWait = explainWireTimeout(manyWs);
+  assert(trimmedWait.tail.length === 6 && trimmedWait.tail[5].indexOf("7") >= 0, "tail is last 6");
+  const noSend = explainWireTimeout([]);
+  assert(noSend.summary.indexOf("没有发出登录 1001") >= 0 && noSend.tail.length === 0, "empty log");
 
   const host = globalThis as { location?: { search?: string }; parent?: { location?: { search?: string } } };
   const prevLocation = host.location;
@@ -2858,7 +2886,7 @@ async function checkWs(): Promise<void> {
       factory: () => refused,
     });
     let refusedText = "";
-    const refusedPromise = refusedTransport.connect("ws://127.0.0.1:13101");
+    const refusedPromise = refusedTransport.connect(DEFAULT_WS_URL);
     setTimeout(() => refused.fail(), 0);
     try {
       await refusedPromise;
@@ -2877,7 +2905,7 @@ async function checkWs(): Promise<void> {
     });
     let timeoutText = "";
     try {
-      await hungTransport.connect("ws://127.0.0.1:13101");
+      await hungTransport.connect(DEFAULT_WS_URL);
     } catch (err) {
       timeoutText = messageOf(err);
     }
@@ -2905,9 +2933,9 @@ async function checkWs(): Promise<void> {
       maxReconnect: 0,
       requestTimeoutMs: 200,
     });
-    await net.connect("ws://127.0.0.1:13101");
+    await net.connect(DEFAULT_WS_URL);
     assert(net.state === "connected" && sockets.length === 1, "ws connected");
-    assert(sawLog(lines, "已打开 ws://127.0.0.1:13101"), "open log");
+    assert(sawLog(lines, "已打开 " + DEFAULT_WS_URL), "open log");
     assert(sockets[0].sent.length === 1, "heartbeat goes out on open");
     assert(bytesToHex(new Uint8Array(sockets[0].sent[0] as ArrayBuffer)) === "04000000ec030000", "open heartbeat bytes");
     net.send("login", { account: "960011", nowSec: 1792466798 });

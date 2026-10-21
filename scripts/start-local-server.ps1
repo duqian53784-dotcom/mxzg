@@ -291,7 +291,7 @@ $ok13101 = Test-PortListening -Port 13101
 if ($ok11122 -and $ok9902 -and $ok13101) {
     Write-Host '[启动成功] TCP 11122、TCP 9902、WS 13101 都在听。'
     Write-Host '没启动 cross 时，游戏服连 127.0.0.1:11422 失败、中心服跨服加载失败是预期，不算启动失败。'
-    Write-Host '客户端仍走 Mock。下一项是 D2：本仓库 H5 接 WS 13101。'
+    Write-Host '客户端仍走 Mock。下一项是 D2：再双击 scripts\start-ws-bridge.bat，预览打开 transport=ws。不要直连 13101。'
     Write-StopHint
     exit 0
 }
