@@ -448,7 +448,14 @@ import {
   wireBody,
   wireRoleReady,
 } from "../assets/scripts/net/protocol/wireLogin";
-import { decodeWireChapter, formatWireMainline, WIRE_CHAPTER_CMD } from "../assets/scripts/net/protocol/wireChapter";
+import {
+  decodeWireChapter,
+  formatWireChapterIdx,
+  formatWireMainline,
+  WIRE_CHAPTER_CMD,
+  WIRE_MAINLINE_READONLY_NOTE,
+  WIRE_MAINLINE_READONLY_TITLE,
+} from "../assets/scripts/net/protocol/wireChapter";
 import {
   decodeWireIdle,
   decodeWireIdleClaim,
@@ -2871,6 +2878,12 @@ async function checkWs(): Promise<void> {
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
   assert(formatWireMainline(4, 9) === "主线 · 当前 4 / 最高 9", "both idx on the label");
+  assert(WIRE_MAINLINE_READONLY_TITLE === "主线（真服只读）", "readonly chapter title");
+  assert(WIRE_MAINLINE_READONLY_NOTE === "本轮不发进关协议，不挑战", "readonly chapter note");
+  assert(formatWireChapterIdx("now", null) === "当前 idx 未同步", "missing now_idx on the page");
+  assert(formatWireChapterIdx("max", null) === "最高 idx 未同步", "missing max_idx on the page");
+  assert(formatWireChapterIdx("max", 0) === "最高 idx 0", "max_idx 0 stays on the page");
+  assert(formatWireChapterIdx("now", 4) === "当前 idx 4", "now_idx on the page");
   const loginBody = encodeObservedLoginBody(960011, 1792466798);
   assert(
     bytesToHex(loginBody) === "2a0a31373932343636373938108bcc3a080718023a0d6d787a672d7765622d3130303132086c6f63616c646576",
@@ -3295,6 +3308,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.chapterItemList, idleBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
+      assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
       assert(WireSession.rewardTime === null && WireSession.maxRewardTime === null, "3004 waits until the city role exists");
       assert(!WireSession.hasIdle(), "idle entry stays unsynced before the city role");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
@@ -3304,6 +3318,7 @@ async function checkWs(): Promise<void> {
       WireSession.flush();
       assert(WireSession.nowIdx === null && WireSession.maxIdx === 0, "flush writes max_idx 0 from the log");
       assert(WireSession.mainlineLabel() === "主线 · 最高 0", "city label leaves 未同步");
+      assert(WireSession.hasChapter(), "max_idx 0 opens the readonly page");
       assert(
         WireSession.rewardTime === 1792464848 && WireSession.maxRewardTime === 28800 && WireSession.hasIdle(),
         "flush writes 3004 times"

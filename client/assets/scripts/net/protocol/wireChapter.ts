@@ -16,12 +16,13 @@
  * 字段 4 extra_reward_id 三例都没有。这一轮不读。
  *
  * 主城按钮按解开的 idx 写，不改成 Mock 的「第 N 关」，也不写 Session.stageId：
- * - 两个都没有：主线 · 未同步
+ * - 两个都没有：主线 · 未同步。点按钮仍 Toast，不打开页。
  * - 只有 now_idx：主线 · 当前 N
  * - 只有 max_idx：主线 · 最高 M
  * - 两个都有：主线 · 当前 N / 最高 M
  * 数字前面有空格。日志三例是「主线 · 最高 0」。
- * 点按钮仍 Toast，不打开 Mock 关卡页。
+ * 至少有一个 idx（含 max_idx=0）时，点按钮打开代码页「主线（真服只读）」。
+ * 缺的 idx 在页上写「未同步」。不打开 Mock 关卡页，不发 3002 / 3010，不挑战、不结算。
  */
 import { decodeProtoFields, ProtoField } from "./wireLogin";
 
@@ -58,6 +59,22 @@ export function decodeWireChapter(body: Uint8Array | null | undefined): WireChap
 
 export function wireChapterHasIdx(progress: WireChapterProgress): boolean {
   return progress.nowIdx !== null || progress.maxIdx !== null;
+}
+
+/** 真服只读页标题。不是 Mock 关卡列表。 */
+export const WIRE_MAINLINE_READONLY_TITLE = "主线（真服只读）";
+
+/** 真服只读页说明。这一页不发进关，也不放挑战。 */
+export const WIRE_MAINLINE_READONLY_NOTE = "本轮不发进关协议，不挑战";
+
+/**
+ * 只读页上的一行。kind=now 是字段 2，kind=max 是字段 3。
+ * 没有这个字段写「未同步」。0 仍写 0。
+ */
+export function formatWireChapterIdx(kind: "now" | "max", idx: number | null): string {
+  const name = kind === "now" ? "当前 idx" : "最高 idx";
+  if (idx === null) return name + " 未同步";
+  return name + " " + idx;
 }
 
 /** 只列出这一包带上的 idx。没出现的字段不写「未同步」。 */

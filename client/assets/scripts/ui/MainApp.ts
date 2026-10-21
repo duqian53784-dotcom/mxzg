@@ -48,6 +48,7 @@ import { buildLimitedPage, LimitedPage } from "./LimitedPage";
 import { goal7BadJumpToast } from "../module/goal7/tasks";
 import { buildIdlePage, IdlePage } from "./IdlePage";
 import { buildWireIdlePage, WireIdlePage } from "./WireIdlePage";
+import { buildWireMainlinePage, WireMainlinePage } from "./WireMainlinePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
@@ -76,7 +77,7 @@ export class MainApp extends Component {
   private panels: PanelNav<Node> | null = null;
   private chrome: CityChrome | null = null;
   private built = false;
-  private mainline: MainlinePage | null = null;
+  private mainline: MainlinePage | WireMainlinePage | null = null;
   private idle: IdlePage | WireIdlePage | null = null;
   private heroList: HeroListPage | null = null;
   private heroDetail: HeroDetailPage | null = null;
@@ -384,9 +385,13 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 打开关卡列表。战斗和结算在 MainlinePage 里，不改场景。 */
+  /** 打开关卡列表。战斗和结算在 MainlinePage 里，不改场景。真服有 idx 时另开只读页，不发进关。 */
   private openMainline(): void {
     GameLog.shared.info("MainApp", "click mainline");
+    if (Session.source === "wire") {
+      this.openWireMainline();
+      return;
+    }
     if (this.blockWirePage("mainline")) return;
     const net = NetClient.shared;
     if (net.state !== "connected") {
@@ -396,12 +401,33 @@ export class MainApp extends Component {
     this.openChild("mainline");
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。 */
+  /** 两个 idx 都没有就 Toast。有任意一个则压入只读页，不走 Mock 的 stage.enter。 */
+  private openWireMainline(): void {
+    if (this.blockWirePage("mainline")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("mainline");
+    this.refreshChrome();
+  }
+
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。 */
   private blockWirePage(id: string): boolean {
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
+    if (id === "mainline") return this.blockWireMainline();
     GameLog.shared.info("MainApp", "wire skip " + id);
+    this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
+    return true;
+  }
+
+  /** 两个 idx 都没有就停在主城。有任意一个（含 max_idx=0）则放行，页面用 WireMainlinePage。 */
+  private blockWireMainline(): boolean {
+    if (WireSession.hasChapter()) return false;
+    GameLog.shared.info("MainApp", "wire mainline unsynced");
     this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
     return true;
   }
@@ -903,6 +929,7 @@ export class MainApp extends Component {
   }
 
   private mountMainline(): Node {
+    if (Session.source === "wire") return this.mountWireMainline();
     this.mainline?.dispose();
     const page = buildMainlinePage({
       level: () => this.level(),
@@ -916,6 +943,16 @@ export class MainApp extends Component {
       onProgress: () => {
         if (this.isValid) this.refreshHub();
       },
+      close: () => this.back(),
+    });
+    this.mainline = page;
+    return page.node;
+  }
+
+  private mountWireMainline(): Node {
+    this.mainline?.dispose();
+    const page = buildWireMainlinePage({
+      alive: () => this.isValid,
       close: () => this.back(),
     });
     this.mainline = page;

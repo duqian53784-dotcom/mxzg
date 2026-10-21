@@ -37,7 +37,9 @@ import { wireBody } from "./protocol/wireLogin";
  * 再发空的 c2s 3004（挂机奖励列表）。不等 s2c 2001，也不夹那一长串别的号。
  * s2c 2001 按 Role.proto：字段 9 角色名、字段 6 等级、字段 2 金币、字段 1 宝石（顶栏钻石）。
  * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。
- * 不写 Session.stageId，主城按钮用 mainlineLabel()。点按钮仍不打开 Mock 关卡页。
+ * 不写 Session.stageId，主城按钮用 mainlineLabel()。
+ * 至少有一个 idx 时点按钮打开只读代码页；两个都没有仍 Toast。
+ * 不打开 Mock 关卡页，不发 3002 / 3010。
  * s2c 3004 按 Battle.proto：字段 1 reward_time、字段 2 max_reward_time。缺的不写成 0。
  * 不写 Session.gold。挂机页用 rewardTime / maxRewardTime。没有这两项时主城挂机只 Toast。
  * s2c 3005 只改 reward_time。没有奖励清单，不改金币和钻石。
@@ -170,6 +172,11 @@ export class WireSession {
   /** 主城「主线」按钮。还没有 now_idx / max_idx 时是「主线 · 未同步」。 */
   static mainlineLabel(): string {
     return formatWireMainline(this.nowIdx, this.maxIdx);
+  }
+
+  /** 主城主线入口。两个 idx 都没出现过就不打开只读页。max_idx=0 算有。 */
+  static hasChapter(): boolean {
+    return wireChapterHasIdx({ nowIdx: this.nowIdx, maxIdx: this.maxIdx });
   }
 
   /**
