@@ -57,11 +57,12 @@ export const WireCmd = {
    */
   mailList: 15000,
   /**
-   * c2s 空体。进主城、空 c2s 15000 之后发。
-   * s2c 带回英雄 id 和名字。空包体是已同步的空名册。不是占位 hero.list（1401）。
-   * 仓库里没有 Hero.proto。字段见 wireHero.ts。不发升级。
+   * c2s GReqHeroList。必须带 page，进主城发 page=1。
+   * 整帧 `06 00 00 00 a1 0f 00 00 08 01`。禁止空体：page 缺省 0 时服端负下标。
+   * s2c 是 GResHeroList。不是占位 hero.list（1401）。
+   * 18001 是竞技场战斗匹配，本刀不发，也不当成英雄。
    */
-  heroList: 18001,
+  heroList: 4001,
 } as const;
 
 /**

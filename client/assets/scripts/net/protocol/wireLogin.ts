@@ -22,16 +22,18 @@
  *
  * 进主城后另外几帧也在这里编：空的 c2s 2001（wire.2001）、空的 c2s 5001（wire.5001）、
  * 空的 c2s 3007（wire.3007）、空的 c2s 3004（wire.3004）、空的 c2s 15000（wire.15000）、
- * 空的 c2s 18001（wire.18001）。
+ * c2s 4001 page=1（wire.4001，包体 `08 01`）。
  * 挂机页领取再编空的 c2s 3005（wire.3005）。
- * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。18001 见 wireHero.ts。
+ * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。
  * 3002 不编。5002 只收不发。5004–5009、5010、5011–5013 不编。
  * 邮件领取、已读、删除不编。占位 mail.* 仍是 1701–1705。
  * 英雄升级不编。占位 hero.list / hero.upgrade 仍是 1401 / 1402。
+ * 不编空的 4001，也不编 18001。
  */
 import { NetMessage } from "../NetTypes";
 import { Cmd } from "./cmds";
 import { bytesToHex, encodeFrame, WireCmd } from "./frame";
+import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
 const LOGIN_FIELD1 = 7;
 const LOGIN_FIELD3 = 2;
@@ -113,13 +115,13 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.3007 → 空的 c2s 3007（主线关卡进度）。
  * wire.3004 → 空的 c2s 3004（挂机奖励列表）。wire.3005 → 空的 c2s 3005（领取挂机）。
  * wire.15000 → 空的 c2s 15000（邮件列表）。
- * wire.18001 → 空的 c2s 18001（英雄列表）。
+ * wire.4001 → c2s 4001，GReqHeroList.page（缺省按 1，不会编成 0）。
  * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
  * 占位 idle.query / idle.claim 仍是 1301 / 1302，和这两帧不是一回事。
  * 占位 bag.list / bag.use 仍是 1601 / 1602。3002 / 3010 不编码。
  * 5002 不编码。5004–5009、5010、5011–5013 不编码。
  * 占位 mail.list / mail.read / mail.claim / mail.claimAll / mail.delete 仍是 1701–1705。领取和删除不编码。
- * 占位 hero.list / hero.upgrade 仍是 1401 / 1402。升级不编码。
+ * 占位 hero.list / hero.upgrade 仍是 1401 / 1402。升级不编码。wire.18001 不编码。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -195,11 +197,12 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
       note: "空体",
     };
   }
-  if (cmd === "wire.18001") {
+  if (cmd === WIRE_HERO_CMD) {
+    const page = readWireHeroPage(msg.data);
     return {
       cmdId: WireCmd.heroList,
-      bytes: encodeFrame(WireCmd.heroList),
-      note: "空体",
+      bytes: encodeFrame(WireCmd.heroList, encodeWireHeroListBody(page)),
+      note: "page=" + page,
     };
   }
   if (cmd === Cmd.roleCreate) {
