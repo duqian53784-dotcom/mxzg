@@ -46,6 +46,16 @@ declare module "cc" {
     start(): void;
   }
 
+  export class Mask {
+    static Type: {
+      GRAPHICS_RECT: number;
+      GRAPHICS_ELLIPSE: number;
+      GRAPHICS_STENCIL: number;
+      SPRITE_STENCIL: number;
+    };
+    type: number;
+  }
+
   export class UITransform {
     setContentSize(width: number, height: number): void;
     setAnchorPoint(x: number, y: number): void;

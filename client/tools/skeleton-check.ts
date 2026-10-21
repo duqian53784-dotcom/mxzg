@@ -1495,6 +1495,15 @@ function checkCityMap(): void {
     if (layout.activities[i].y < lowestAct) lowestAct = layout.activities[i].y;
   }
   assert(lowestAct > 400, "activity strip stays above the buildings");
+  assert(layout.viewW === 720 && layout.viewH === 1280 && layout.contentW === 1500, "view stays 720x1280 and the map stays 1500");
+  const iconHalf = 17;
+  for (let i = 0; i < layout.activities.length; i++) {
+    const spot = layout.activities[i];
+    assert(
+      Math.abs(spot.x) + iconHalf <= layout.viewW * 0.5 && Math.abs(spot.y) + iconHalf <= layout.viewH * 0.5,
+      "activity icons stay inside the view"
+    );
+  }
   assert(layout.scroll === -390 && layout.minScroll === -780 && layout.maxScroll === 0, "map starts centered");
   assert(layout.nodes.filter((node) => node.parallax).length === 4, "four parallax layers");
   const speeds: number[] = [];
