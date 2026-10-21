@@ -30,6 +30,16 @@ export const WireCmd = {
    * s2c 回 now_idx / max_idx。占位表里没有 3007。不是 stage.enter。
    */
   chapterData: 3007,
+  /**
+   * c2s 空体。Battle.proto 的 GReqChapterItemList。进主城、空 c2s 3007 之后发。
+   * s2c 回 reward_time / max_reward_time。不是占位 idle.query（1301）。
+   */
+  chapterItemList: 3004,
+  /**
+   * c2s 空体。Battle.proto 的 GReqChapterItemReward。挂机页点领取才发。
+   * s2c 只读 reward_time。不写金币。不是占位 idle.claim（1302）。
+   */
+  chapterItemReward: 3005,
 } as const;
 
 /**

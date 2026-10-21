@@ -47,6 +47,7 @@ import { buildGiftPage, GiftPage } from "./GiftPage";
 import { buildLimitedPage, LimitedPage } from "./LimitedPage";
 import { goal7BadJumpToast } from "../module/goal7/tasks";
 import { buildIdlePage, IdlePage } from "./IdlePage";
+import { buildWireIdlePage, WireIdlePage } from "./WireIdlePage";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
@@ -76,7 +77,7 @@ export class MainApp extends Component {
   private chrome: CityChrome | null = null;
   private built = false;
   private mainline: MainlinePage | null = null;
-  private idle: IdlePage | null = null;
+  private idle: IdlePage | WireIdlePage | null = null;
   private heroList: HeroListPage | null = null;
   private heroDetail: HeroDetailPage | null = null;
   private summon: SummonPage | null = null;
@@ -395,12 +396,21 @@ export class MainApp extends Component {
     this.openChild("mainline");
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。 */
   private blockWirePage(id: string): boolean {
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
+    if (id === "idle") return this.blockWireIdle();
     GameLog.shared.info("MainApp", "wire skip " + id);
     this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
+    return true;
+  }
+
+  /** 没有 3004 的时间就停在主城。有数据则放行，页面用 WireIdlePage，不进 Mock 挂机。 */
+  private blockWireIdle(): boolean {
+    if (WireSession.hasIdle()) return false;
+    GameLog.shared.info("MainApp", "wire idle unsynced");
+    this.shell?.showToast("真服挂机未同步", 2200);
     return true;
   }
 
@@ -837,9 +847,20 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 挂机随时可进。时长和领取在 IdlePage 里，不改场景。 */
+  /** 挂机随时可进。Mock 的时长和领取在 IdlePage 里。真服走 3004，不改场景。 */
   private openIdle(): void {
     GameLog.shared.info("MainApp", "click idle");
+    if (Session.source === "wire") {
+      if (this.blockWirePage("idle")) return;
+      const net = this.cityNet();
+      if (net.state !== "connected") {
+        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+        return;
+      }
+      this.panels?.openChild("idle");
+      this.refreshChrome();
+      return;
+    }
     if (this.blockWirePage("idle")) return;
     const net = NetClient.shared;
     if (net.state !== "connected") {
@@ -850,6 +871,7 @@ export class MainApp extends Component {
   }
 
   private mountIdle(): Node {
+    if (Session.source === "wire") return this.mountWireIdle();
     this.idle?.dispose();
     const page = buildIdlePage({
       stageId: () => (Session.stageId >= 1 ? Session.stageId : 1),
@@ -863,6 +885,17 @@ export class MainApp extends Component {
       onProgress: () => {
         if (this.isValid) this.refreshHub();
       },
+      close: () => this.back(),
+    });
+    this.idle = page;
+    return page.node;
+  }
+
+  private mountWireIdle(): Node {
+    this.idle?.dispose();
+    const page = buildWireIdlePage({
+      showToast: (text) => this.shell?.showToast(text, 2400),
+      alive: () => this.isValid,
       close: () => this.back(),
     });
     this.idle = page;

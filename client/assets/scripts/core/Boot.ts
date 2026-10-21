@@ -628,6 +628,7 @@ export class Boot extends Component {
       WireSession.flush();
       WireSession.pullRoleProfile();
       WireSession.pullChapter();
+      WireSession.pullIdle();
     }
     if (this.loginPanel) {
       this.loginPanel.setStatus("进入主城…");
