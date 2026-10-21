@@ -24,9 +24,10 @@
  * 空的 c2s 3007（wire.3007）、空的 c2s 3004（wire.3004）、空的 c2s 15000（wire.15000）、
  * c2s 4001 page=1（wire.4001，包体 `08 01`）、空的 c2s 17000（wire.17000）、空的 c2s 12010（wire.12010）、
  * 空的 c2s 18001（wire.18001，GReqPvpData）、空的 c2s 22000（wire.22000，GReqSevenDayLoginData）、
- * 空的 c2s 21010（wire.21010，GReqSevenDayTargetList）。
+ * 空的 c2s 21010（wire.21010，GReqSevenDayTargetList）、
+ * 空的 c2s 27001（wire.27001，许愿池 GResBlessingPoolList）。
  * 挂机页领取再编空的 c2s 3005（wire.3005）。
- * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。
+ * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。
  * 不编 12020。不编 22001，也不编 22002。不编 21011、21012。不编 21013。旧号 21000 / 21001 不编。
  * 3002 不编。5002 只收不发。5004–5009、5010、5011–5013 不编。
  * 邮件领取、已读、删除不编。占位 mail.* 仍是 1701–1705。
@@ -35,6 +36,7 @@
  * 空的 18001 要编。不编 18002、18003、18005、18007、18008。
  * 空的 22000 要编。22002 只收，不当成 c2s。
  * 空的 21010 要编。21013 只收，不当成 c2s。不编 21011、21012。
+ * 空的 27001 要编。不编 27002、27003、27004。不编 4201。
  */
 import { NetMessage } from "../NetTypes";
 import { Cmd } from "./cmds";
@@ -44,6 +46,7 @@ import { WIRE_ACTIVITY_CMD } from "./wireActivity";
 import { WIRE_PVP_CMD } from "./wirePvp";
 import { WIRE_GOAL7_CMD } from "./wireGoal7";
 import { WIRE_SEVEN_CMD } from "./wireSevenDay";
+import { WIRE_WISH_CMD } from "./wireWish";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
 const LOGIN_FIELD1 = 7;
@@ -132,6 +135,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.18001 → 空的 c2s 18001（竞技场 GReqPvpData / GResPvpData）。不编 18002、18003、18005、18007、18008。
  * wire.22000 → 空的 c2s 22000（七日登录 GReqSevenDayLoginData / GResSevenDayLoginData）。不编 22001。不编 22002。
  * wire.21010 → 空的 c2s 21010（七日目标 GReqSevenDayTargetList / GResSevenDayTargetList）。不编 21011、21012。不编 21013。
+ * wire.27001 → 空的 c2s 27001（许愿池 GResBlessingPoolList）。不编 27002、27003、27004。不编 4201。
  * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
  * 占位 idle.query / idle.claim 仍是 1301 / 1302，和这两帧不是一回事。
  * 占位 bag.list / bag.use 仍是 1601 / 1602。3002 / 3010 不编码。
@@ -142,6 +146,8 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.22001、wire.22002 不编码。22002 是 s2c 推送。
  * 占位 goal7.view / goal7.claim 仍是 2301 / 2302。领取不编码。
  * wire.21011、wire.21012、wire.21013 不编码。21013 是 s2c。wire.21000、wire.21001 不编码。
+ * 占位 wish.view / wish.draw 仍是 2501 / 2502。刷新、抽奖和幸运领奖不编码。
+ * wire.27002、wire.27003、wire.27004、wire.4201 不编码。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -257,6 +263,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.sevenDayTarget,
       bytes: encodeFrame(WireCmd.sevenDayTarget),
+      note: "空体",
+    };
+  }
+  if (cmd === WIRE_WISH_CMD) {
+    return {
+      cmdId: WireCmd.blessingPool,
+      bytes: encodeFrame(WireCmd.blessingPool),
       note: "空体",
     };
   }

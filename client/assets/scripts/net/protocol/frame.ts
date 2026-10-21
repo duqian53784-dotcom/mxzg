@@ -100,6 +100,14 @@ export const WireCmd = {
    * 不是占位 goal7.view（2301）。
    */
   sevenDayTarget: 21010,
+  /**
+   * c2s 空体。进主城、空 c2s 21010 之后发。
+   * 整帧 `04 00 00 00 79 69 00 00`。27001 = 0x6979，小端 79 69 00 00。
+   * GReq 没有字段。s2c 是 GResBlessingPoolList。
+   * 不发 27002 刷新、27003 抽奖、27004 幸运领奖。备选 4201 本刀不发。
+   * 可能懒建或跨日写库，无扣费。不是占位 wish.view（2501）。
+   */
+  blessingPool: 27001,
 } as const;
 
 /**
