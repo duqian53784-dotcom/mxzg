@@ -53,6 +53,7 @@ import { buildWireDragonPage, WireDragonPage } from "./WireDragonPage";
 import { buildWireDragonCollectionPage, WireDragonCollectionPage } from "./WireDragonCollectionPage";
 import { buildWireTitlePage, WireTitlePage } from "./WireTitlePage";
 import { buildWireHeadPortraitPage, WireHeadPortraitPage } from "./WireHeadPortraitPage";
+import { buildWireBorderPage, WireBorderPage } from "./WireBorderPage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -67,6 +68,7 @@ import { WIRE_DRAGON_UNSYNCED_TOAST } from "../net/protocol/wireDragon";
 import { WIRE_DRAGON_COLLECTION_UNSYNCED_TOAST } from "../net/protocol/wireDragonCollection";
 import { WIRE_TITLE_UNSYNCED_TOAST } from "../net/protocol/wireTitle";
 import { WIRE_HEAD_PORTRAIT_UNSYNCED_TOAST } from "../net/protocol/wireHeadPortrait";
+import { WIRE_BORDER_UNSYNCED_TOAST } from "../net/protocol/wireBorder";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -148,6 +150,7 @@ const DRAGON_FILL = new Color(92, 64, 140, 255);
 const DRAGON_COLLECTION_FILL = new Color(120, 84, 48, 255);
 const TITLE_LIST_FILL = new Color(176, 132, 64, 255);
 const HEAD_PORTRAIT_FILL = new Color(168, 96, 112, 255);
+const BORDER_FILL = new Color(64, 96, 136, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -176,6 +179,7 @@ export class MainApp extends Component {
   private dragonCollection: WireDragonCollectionPage | null = null;
   private titleList: WireTitlePage | null = null;
   private headPortrait: WireHeadPortraitPage | null = null;
+  private borderData: WireBorderPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -255,6 +259,8 @@ export class MainApp extends Component {
     this.titleList = null;
     this.headPortrait?.dispose();
     this.headPortrait = null;
+    this.borderData?.dispose();
+    this.borderData = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -368,7 +374,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -428,6 +434,7 @@ export class MainApp extends Component {
     if (id === "dragonCollection") return this.mountDragonCollection();
     if (id === "titleList") return this.mountTitleList();
     if (id === "headPortrait") return this.mountHeadPortrait();
+    if (id === "borderData") return this.mountBorder();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -523,6 +530,7 @@ export class MainApp extends Component {
     place(createButton("圣物图鉴", () => this.openDragonCollection(), 160, 32, DRAGON_COLLECTION_FILL, 14), page, -200, -198);
     place(createButton("称号列表", () => this.openTitleList(), 160, 32, TITLE_LIST_FILL, 14), page, 0, -198);
     place(createButton("头像列表", () => this.openHeadPortrait(), 160, 32, HEAD_PORTRAIT_FILL, 14), page, 200, -198);
+    place(createButton("头像框数据", () => this.openBorder(), 160, 32, BORDER_FILL, 14), page, -200, -152);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -692,7 +700,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。英雄图鉴收到 4013 时另走只读页，不发 4014。宠物信息收到 74100 时另走只读页，不发 74101、74102、74103。世界等级收到 51001 时另走只读页，不做 20101。基金列表收到 20001 时另走只读页，不发 20018，不发 20004、20010，不做 3007。超值首充收到 20012 时另走只读页，不发 20013，不做 13260。灵器数据收到 70001 时另走只读页，不发 70002、70003、70004、70005、70006，70007、70008 不当拉包请求，不做 20011。浮空岛时间收到 73001 时另走只读页，不发 73002、73003、73004，不做 20011。图腾信息收到 74300 时另走只读页，不发 74301、74302、74303。74304 是推送，勿发、勿当拉包。不做 20011。星盘数据收到 68001 时另走只读页，不发 68002、68003、68004、68006。68005 是更新星数常量，勿当拉包。不做 20011。魔方数据收到 75501 时另走只读页，不发 75502、75503、75504、75505。75506 是等级推送，勿当拉包。不做 34001。不做 20011。圣龙数据收到 59001 时另走只读页，不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。不做 34001。不做 20011。圣物图鉴收到 59010 时另走只读页，不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。勿与 59001 合并成一个请求。不做 34001。不做 20011。称号列表收到 55001 时另走只读页。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。34001 是另只读，单独在 55001 之后拉包，勿与 55001 合并。头像列表收到 34001 时另走只读页。不发 34002 更换头像。34003 是解锁推送，勿发、勿当拉包。不做 32001。不做 20011。轻懒建，RoleHeadPortraitService.select 无记录则 dao.add 默认解锁头。无扣费，无领奖，不改当前头像。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。英雄图鉴收到 4013 时另走只读页，不发 4014。宠物信息收到 74100 时另走只读页，不发 74101、74102、74103。世界等级收到 51001 时另走只读页，不做 20101。基金列表收到 20001 时另走只读页，不发 20018，不发 20004、20010，不做 3007。超值首充收到 20012 时另走只读页，不发 20013，不做 13260。灵器数据收到 70001 时另走只读页，不发 70002、70003、70004、70005、70006，70007、70008 不当拉包请求，不做 20011。浮空岛时间收到 73001 时另走只读页，不发 73002、73003、73004，不做 20011。图腾信息收到 74300 时另走只读页，不发 74301、74302、74303。74304 是推送，勿发、勿当拉包。不做 20011。星盘数据收到 68001 时另走只读页，不发 68002、68003、68004、68006。68005 是更新星数常量，勿当拉包。不做 20011。魔方数据收到 75501 时另走只读页，不发 75502、75503、75504、75505。75506 是等级推送，勿当拉包。不做 34001。不做 20011。圣龙数据收到 59001 时另走只读页，不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。不做 34001。不做 20011。圣物图鉴收到 59010 时另走只读页，不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。勿与 59001 合并成一个请求。不做 34001。不做 20011。称号列表收到 55001 时另走只读页。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。34001 是另只读，单独在 55001 之后拉包，勿与 55001 合并。头像列表收到 34001 时另走只读页。不发 34002 更换头像。34003 是解锁推送，勿发、勿当拉包。32001 另只读接在其后。不做 20011。轻懒建，RoleHeadPortraitService.select 无记录则 dao.add 默认解锁头。无扣费，无领奖，不改当前头像。头像框数据收到 32001 时另走只读页。不发 32002 道具激活。不发 32003 使用/切换边框。32003 是服侧推送，勿当拉包。不做 4402。29001 有 page，硬禁。不做 20011。轻懒建免费框可接受。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
   private blockWirePage(id: string): boolean {
     if (id === "achieve") return this.blockWireAchievement();
     if (id === "buygold") return this.blockWireBuyGold();
@@ -717,6 +725,7 @@ export class MainApp extends Component {
     if (id === "dragonCollection") return this.blockWireDragonCollection();
     if (id === "titleList") return this.blockWireTitleList();
     if (id === "headPortrait") return this.blockWireHeadPortrait();
+    if (id === "borderData") return this.blockWireBorder();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -900,11 +909,19 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 34001 就停在主城。空包体也算同步。不发 34002。34003 不当拉包。不做 32001。不做 20011。55001 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  /** 没收到过 s2c 34001 就停在主城。空包体也算同步。不发 34002。34003 不当拉包。32001 另只读接在其后。不做 20011。55001 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
   private blockWireHeadPortrait(): boolean {
     if (Session.source === "wire" && WireSession.hasHeadPortrait()) return false;
     GameLog.shared.info("MainApp", "wire head portrait unsynced");
     this.shell?.showToast(WIRE_HEAD_PORTRAIT_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 32001 就停在主城。空包体也算同步。不发 32002。不发 32003。32003 不当拉包。不做 4402。29001 有 page，硬禁。不做 20011。34001 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireBorder(): boolean {
+    if (Session.source === "wire" && WireSession.hasBorder()) return false;
+    GameLog.shared.info("MainApp", "wire border unsynced");
+    this.shell?.showToast(WIRE_BORDER_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -1455,7 +1472,7 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 真服头像列表。未同步 Toast。已同步压入只读页。idx_list 是已解锁头像 id。无更换入口。不发 34002。34003 不当拉包。不做 32001。不做 20011。 */
+  /** 真服头像列表。未同步 Toast。已同步压入只读页。idx_list 是已解锁头像 id。无更换入口。不发 34002。34003 不当拉包。32001 另只读接在其后。不做 20011。 */
   private openHeadPortrait(): void {
     GameLog.shared.info("MainApp", "click head portrait");
     if (this.blockWirePage("headPortrait")) return;
@@ -1475,6 +1492,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.headPortrait = page;
+    return page.node;
+  }
+
+  /** 真服头像框数据。未同步 Toast。已同步压入只读页。units 是 id、active_state。无激活、切换入口。不发 32002。不发 32003。32003 不当拉包。不做 4402。29001 有 page，硬禁。不做 20011。 */
+  private openBorder(): void {
+    GameLog.shared.info("MainApp", "click border data");
+    if (this.blockWirePage("borderData")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("borderData");
+    this.refreshChrome();
+  }
+
+  private mountBorder(): Node {
+    this.borderData?.dispose();
+    const page = buildWireBorderPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.borderData = page;
     return page.node;
   }
 
@@ -2237,6 +2277,10 @@ export class MainApp extends Component {
     if (id === "headPortrait") {
       this.headPortrait?.dispose();
       this.headPortrait = null;
+    }
+    if (id === "borderData") {
+      this.borderData?.dispose();
+      this.borderData = null;
     }
     if (id === "bag") {
       this.bag?.dispose();

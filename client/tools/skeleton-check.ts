@@ -818,6 +818,19 @@ import {
   WIRE_HEAD_PORTRAIT_UNSYNCED_TOAST,
   wireHeadPortraitNote,
 } from "../assets/scripts/net/protocol/wireHeadPortrait";
+import {
+  decodeWireBorder,
+  formatWireBorderHead,
+  formatWireBorderLine,
+  WIRE_BORDER_CMD,
+  WIRE_BORDER_EMPTY,
+  WIRE_BORDER_FIELD_NOTE,
+  WIRE_BORDER_READONLY_NOTE,
+  WIRE_BORDER_READONLY_TITLE,
+  WIRE_BORDER_SIDE_EFFECT,
+  WIRE_BORDER_UNSYNCED_TOAST,
+  wireBorderNote,
+} from "../assets/scripts/net/protocol/wireBorder";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1546,6 +1559,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("dragonCollection") === "city", "dragon collection stays on the city tab");
   assert(rootTabFor("titleList") === "city", "title list stays on the city tab");
   assert(rootTabFor("headPortrait") === "city", "head portrait list stays on the city tab");
+  assert(rootTabFor("borderData") === "city", "border data stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -4193,6 +4207,21 @@ async function checkWs(): Promise<void> {
   const portraitOuterOnly = fieldVarint(8, 1);
   const portraitWide = fieldVarint(1, 1099511627776);
   const emptyPortrait = { idxList: [] as number[], marks: [] as { field: number; text: string }[] };
+  const borderOn = fieldBytes(1, concatBytes(fieldVarint(1, 3), fieldVarint(2, 1)));
+  const borderZero = fieldBytes(1, concatBytes(fieldVarint(1, 0), fieldVarint(2, 0)));
+  const borderMissingState = fieldBytes(1, fieldVarint(1, 4));
+  const borderMissingId = fieldBytes(1, fieldVarint(2, 1));
+  const borderWide = fieldBytes(1, concatBytes(fieldVarint(1, 1), fieldVarint(2, 1099511627776)));
+  const borderNeg = fieldBytes(1, concatBytes(fieldVarint(1, 6), fieldNeg1(2)));
+  const borderBody = concatBytes(
+    concatBytes(concatBytes(borderOn, borderZero), concatBytes(borderMissingState, borderMissingId)),
+    concatBytes(borderNeg, fieldVarint(8, 1))
+  );
+  const borderOuterOnly = fieldVarint(8, 1);
+  const emptyBorder = {
+    units: [] as { id: number | null; activeState: number | null; marks: { field: number; text: string }[] }[],
+    marks: [] as { field: number; text: string }[],
+  };
   const emptyTitle = {
     titles: [] as { idx: number | null; endTime: number | null; marks: { field: number; text: string }[] }[],
     marks: [] as { field: number; text: string }[],
@@ -6191,6 +6220,141 @@ async function checkWs(): Promise<void> {
       decodeWireDragonCollection(portraitUnpacked)?.sysIds[0] === 8,
     "34001 body is not the 55001 snapshot and a 55001 title blob is not treated as this request"
   );
+  const loggedBorder = decodeWireBorder(borderBody);
+  assert(
+    WireCmd.borderData === 32001 && WireCmd.headPortraitList === 34001 && WireCmd.scanTitleList === 55001,
+    "online 32001 stays off 34001 and 55001"
+  );
+  assert(
+    WireCmd.borderData !== WireCmd.roleProfile && WireCmd.borderData !== WireCmd.headPortraitList,
+    "32001 stays off 2001 and is not the 34001 cmd"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.borderData)) === "04000000017d0000", "empty c2s 32001");
+  assert(bytesToHex(encodeFrame(WireCmd.borderData)) !== "04000000d1840000", "32001 is not the 34001 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.headPortraitList)) !== "04000000017d0000", "34001 is not the 32001 frame");
+  assert(bytesToHex(encodeFrame(32002)) !== "04000000017d0000", "32002 is not the 32001 frame");
+  assert(bytesToHex(encodeFrame(32003)) !== "04000000017d0000", "32003 is not the 32001 frame");
+  assert(bytesToHex(encodeFrame(4402)) !== "04000000017d0000", "4402 is not the 32001 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "04000000017d0000", "29001 is not the 32001 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000017d0000", "20011 is not the 32001 frame");
+  assert(WIRE_BORDER_READONLY_TITLE === "头像框数据（真服只读）", "readonly border title");
+  assert(WIRE_BORDER_UNSYNCED_TOAST === "真服未同步", "unsynced border toast");
+  assert(WIRE_BORDER_EMPTY === "空头像框", "empty border label");
+  assert(
+    WIRE_BORDER_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_BORDER_SIDE_EFFECT.indexOf("role.borderId") >= 0 &&
+      WIRE_BORDER_SIDE_EFFECT.indexOf("32003") >= 0 &&
+      WIRE_BORDER_SIDE_EFFECT.indexOf("32002") >= 0 &&
+      WIRE_BORDER_SIDE_EFFECT.indexOf("4402") >= 0 &&
+      WIRE_BORDER_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_BORDER_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_BORDER_SIDE_EFFECT.indexOf("34001") >= 0 &&
+      WIRE_BORDER_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_BORDER_READONLY_NOTE.indexOf("无激活") >= 0 &&
+      WIRE_BORDER_READONLY_NOTE.indexOf("32002") >= 0 &&
+      WIRE_BORDER_READONLY_NOTE.indexOf("32003") >= 0 &&
+      WIRE_BORDER_READONLY_NOTE.indexOf("4402") >= 0 &&
+      WIRE_BORDER_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_BORDER_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_BORDER_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_BORDER_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_BORDER_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_BORDER_FIELD_NOTE.indexOf("id") >= 0 &&
+      WIRE_BORDER_FIELD_NOTE.indexOf("active_state") >= 0 &&
+      WIRE_BORDER_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "border page names id and active_state and refuses the write cmds"
+  );
+  assert(
+    decodeWireBorder(new Uint8Array(0)) !== null &&
+      decodeWireBorder(new Uint8Array(0))?.units.length === 0 &&
+      formatWireBorderHead(decodeWireBorder(new Uint8Array(0)) || emptyBorder) === "units=空头像框",
+    "empty 32001 body is synced and does not invent zero"
+  );
+  assert(decodeWireBorder(new Uint8Array([0x80])) === null, "bad 32001 ignored");
+  const borderZeroSnap = decodeWireBorder(borderZero);
+  assert(
+    borderZeroSnap !== null &&
+      borderZeroSnap.units.length === 1 &&
+      borderZeroSnap.units[0].id === 0 &&
+      borderZeroSnap.units[0].activeState === 0 &&
+      formatWireBorderLine(borderZeroSnap.units[0]) === "id=0 / active_state=0",
+    "present 32001 zero stays zero"
+  );
+  const borderMissingSnap = decodeWireBorder(borderMissingState);
+  assert(
+    borderMissingSnap !== null &&
+      borderMissingSnap.units.length === 1 &&
+      borderMissingSnap.units[0].id === 4 &&
+      borderMissingSnap.units[0].activeState === null &&
+      formatWireBorderLine(borderMissingSnap.units[0]) === "id=4 / active_state=无",
+    "missing 32001 active_state stays blank and does not invent zero"
+  );
+  const borderMissingIdSnap = decodeWireBorder(borderMissingId);
+  assert(
+    borderMissingIdSnap !== null &&
+      borderMissingIdSnap.units[0].id === null &&
+      borderMissingIdSnap.units[0].activeState === 1 &&
+      formatWireBorderLine(borderMissingIdSnap.units[0]) === "id=无 / active_state=1",
+    "missing 32001 id stays blank and does not invent zero"
+  );
+  const borderNegSnap = decodeWireBorder(borderNeg);
+  assert(
+    borderNegSnap !== null &&
+      borderNegSnap.units[0].id === 6 &&
+      borderNegSnap.units[0].activeState === null &&
+      formatWireBorderLine(borderNegSnap.units[0]).indexOf("active_state=无") >= 0 &&
+      formatWireBorderLine(borderNegSnap.units[0]).indexOf("-1") >= 0,
+    "32001 active_state -1 is not written as zero"
+  );
+  const borderWideSnap = decodeWireBorder(borderWide);
+  assert(
+    borderWideSnap !== null &&
+      borderWideSnap.units.length === 1 &&
+      borderWideSnap.units[0].activeState === 1099511627776 &&
+      formatWireBorderLine(borderWideSnap.units[0]) === "id=1 / active_state=1099511627776",
+    "32001 active_state keeps the wide integer and does not invent another id"
+  );
+  assert(
+    loggedBorder !== null &&
+      loggedBorder.units.length === 5 &&
+      loggedBorder.units[0].id === 3 &&
+      loggedBorder.units[0].activeState === 1 &&
+      loggedBorder.units[1].id === 0 &&
+      loggedBorder.units[1].activeState === 0 &&
+      loggedBorder.units[2].activeState === null &&
+      loggedBorder.units[3].id === null &&
+      loggedBorder.units[4].activeState === null &&
+      loggedBorder.marks.length === 1 &&
+      loggedBorder.marks[0].field === 8 &&
+      formatWireBorderHead(loggedBorder) === "units=5 条 / 字段8=1" &&
+      formatWireBorderLine(loggedBorder.units[0]) === "id=3 / active_state=1" &&
+      formatWireBorderLine(loggedBorder.units[1]) === "id=0 / active_state=0" &&
+      wireBorderNote(loggedBorder).indexOf(WIRE_BORDER_SIDE_EFFECT) >= 0 &&
+      wireBorderNote(loggedBorder).indexOf("不写金币") >= 0 &&
+      wireBorderNote(loggedBorder).indexOf("不写钻石") >= 0,
+    "32001 sample keeps id and active_state including zero and does not fill missing numbers with 0"
+  );
+  const borderSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.borderData, borderBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    borderSticky.frames.length === 2 &&
+      borderSticky.frames[0].cmdId === 32001 &&
+      borderSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireBorder(borderSticky.frames[0].body)?.units.length === 5,
+    "sticky 32001 frame stops at its length prefix"
+  );
+  assert(decodeWireBorder(fieldBytes(1, new Uint8Array([0x80]))) === null, "32001 unit blob that will not decode is ignored");
+  assert(
+    decodeWireBorder(borderOuterOnly) !== null &&
+      decodeWireBorder(borderOuterOnly)?.units.length === 0 &&
+      formatWireBorderHead(decodeWireBorder(borderOuterOnly) || emptyBorder) === "units=空头像框 / 字段8=1",
+    "non-empty 32001 without units stays synced and does not invent zero"
+  );
+  assert(
+    decodeWireBorder(portraitUnpacked)?.units.length === 0 &&
+      decodeWireBorder(borderOn)?.units.length === 1 &&
+      decodeWireBorder(borderOn)?.units[0].id === 3,
+    "34001 idx varints are not border units and a border unit keeps id"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -6680,6 +6844,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasAstrolabe() && WireSession.astrolabe === null, "astrolabe stays unsynced before the city role");
       assert(!WireSession.hasTweakCube() && WireSession.tweakCube === null, "tweak cube stays unsynced before the city role");
       assert(!WireSession.hasDragon() && WireSession.dragon === null, "dragon stays unsynced before the city role");
+      assert(!WireSession.hasBorder() && WireSession.border === null, "border stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -7299,7 +7464,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 26, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 27, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -7405,6 +7570,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 34001 after 55001"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 26] as ArrayBuffer)) === "04000000017d0000",
+        "pullIdle sends empty c2s 32001 after 34001"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -7430,6 +7599,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 59010") &&
           sawLog(lines, "发送 c2s 55001") &&
           sawLog(lines, "发送 c2s 34001") &&
+          sawLog(lines, "发送 c2s 32001") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -7449,6 +7619,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000082e60000") &&
           sawLog(lines, "04000000d9d60000") &&
           sawLog(lines, "04000000d1840000") &&
+          sawLog(lines, "04000000017d0000") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -7514,7 +7685,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 75506") === false &&
           sawLog(lines, "发送 c2s 34002") === false &&
           sawLog(lines, "发送 c2s 34003") === false &&
-          sawLog(lines, "发送 c2s 32001") === false &&
+          sawLog(lines, "发送 c2s 32002") === false &&
+          sawLog(lines, "发送 c2s 32003") === false &&
+          sawLog(lines, "发送 c2s 4402") === false &&
+          sawLog(lines, "发送 c2s 29001") === false &&
           sawLog(lines, "发送 c2s 59002") === false &&
           sawLog(lines, "发送 c2s 59003") === false &&
           sawLog(lines, "发送 c2s 59005") === false &&
@@ -7867,9 +8041,8 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.75506");
       roleNet.send("wire.34002");
       roleNet.send("wire.34003");
-      roleNet.send("wire.32001");
       roleNet.send("wire.20011");
-      assert(roleSockets[0].sent.length === sentBeforeCubeOther, "75502 75503 75504 75505 75506 34002 34003 32001 and 20011 stay off the tweak cube wire");
+      assert(roleSockets[0].sent.length === sentBeforeCubeOther, "75502 75503 75504 75505 75506 34002 34003 and 20011 stay off the tweak cube wire");
       assert(
         sawLog(lines, "未发送 wire.75502") &&
           sawLog(lines, "未发送 wire.75503") &&
@@ -7878,7 +8051,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.75506") &&
           sawLog(lines, "未发送 wire.34002") &&
           sawLog(lines, "未发送 wire.34003") &&
-          sawLog(lines, "未发送 wire.32001") &&
           sawLog(lines, "未发送 wire.20011"),
         "tweak cube add unequip open clear and the 75506 level push are not encoded"
       );
@@ -7898,11 +8070,10 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.59013");
       roleNet.send("wire.34002");
       roleNet.send("wire.34003");
-      roleNet.send("wire.32001");
       roleNet.send("wire.20011");
       assert(
         roleSockets[0].sent.length === sentBeforeDragonOther,
-        "59002 59003 59005-59009 59011-59013 34002 34003 32001 and 20011 stay off the dragon wire"
+        "59002 59003 59005-59009 59011-59013 34002 34003 and 20011 stay off the dragon wire"
       );
       assert(
         sawLog(lines, "未发送 wire.59002") &&
@@ -7917,7 +8088,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.59013") &&
           sawLog(lines, "未发送 wire.34002") &&
           sawLog(lines, "未发送 wire.34003") &&
-          sawLog(lines, "未发送 wire.32001") &&
           sawLog(lines, "未发送 wire.20011"),
         "dragon write cmds are not encoded"
       );
@@ -7938,15 +8108,13 @@ async function checkWs(): Promise<void> {
       const sentBeforeTitleOther = roleSockets[0].sent.length;
       roleNet.send("wire.34002");
       roleNet.send("wire.34003");
-      roleNet.send("wire.32001");
       roleNet.send("wire.20011");
-      assert(roleSockets[0].sent.length === sentBeforeTitleOther, "34002 34003 32001 and 20011 stay off the title wire");
+      assert(roleSockets[0].sent.length === sentBeforeTitleOther, "34002 34003 and 20011 stay off the title wire");
       assert(
         sawLog(lines, "未发送 wire.34002") &&
           sawLog(lines, "未发送 wire.34003") &&
-          sawLog(lines, "未发送 wire.32001") &&
           sawLog(lines, "未发送 wire.20011"),
-        "title list does not encode 34002 34003 32001 or 20011"
+        "title list does not encode 34002 34003 or 20011"
       );
       roleNet.send(WIRE_HEAD_PORTRAIT_CMD);
       const portraitSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -7965,6 +8133,35 @@ async function checkWs(): Promise<void> {
         roleSockets[0].sent.length === sentAfterTitle + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000082e60000",
         "sending 59010 does not also send 55001"
+      );
+      const sentAfterCollectionAgain = roleSockets[0].sent.length;
+      roleNet.send(WIRE_BORDER_CMD);
+      const borderSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(borderSent as ArrayBuffer)) === "04000000017d0000", "wire.32001 frame");
+      assert(roleSockets[0].sent.length === sentAfterCollectionAgain + 1, "32001 is its own frame and is not merged into 34001");
+      const sentBeforeBorderOther = roleSockets[0].sent.length;
+      roleNet.send("wire.32002");
+      roleNet.send("wire.32003");
+      roleNet.send("wire.4402");
+      roleNet.send("wire.29001");
+      roleNet.send("wire.20011");
+      assert(
+        roleSockets[0].sent.length === sentBeforeBorderOther,
+        "32002 32003 4402 29001 and 20011 stay off the border wire"
+      );
+      assert(
+        sawLog(lines, "未发送 wire.32002") &&
+          sawLog(lines, "未发送 wire.32003") &&
+          sawLog(lines, "未发送 wire.4402") &&
+          sawLog(lines, "未发送 wire.29001") &&
+          sawLog(lines, "未发送 wire.20011"),
+        "border activate switch skin and the paged 29001 are not encoded"
+      );
+      roleNet.send(WIRE_HEAD_PORTRAIT_CMD);
+      assert(
+        roleSockets[0].sent.length === sentBeforeBorderOther + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "04000000d1840000",
+        "sending 34001 does not also send 32001"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -9139,6 +9336,7 @@ async function checkWs(): Promise<void> {
           WireSession.titleList.titles.length === 0,
         "earlier 34001 s2c wrote the unlocked idx and did not replace the title list"
       );
+      assert(WireSession.hasBorder() === false, "34001 alone does not sync the border data");
       const goldBeforeBadPortrait = Session.gold;
       const diamondBeforeBadPortrait = Session.diamond;
       roleSockets[0].push(encodeFrame(34002, fieldVarint(1, 9)));
@@ -9152,8 +9350,14 @@ async function checkWs(): Promise<void> {
           WireSession.headPortrait.idxList.length === 1 &&
           WireSession.headPortrait.idxList[0] === 3 &&
           WireSession.titleList !== null &&
-          WireSession.titleList.titles.length === 5,
-        "34002 34003 32001 20011 and 55001 do not replace the 34001 record"
+          WireSession.titleList.titles.length === 5 &&
+          WireSession.hasBorder() &&
+          WireSession.border !== null &&
+          WireSession.border.units.length === 0 &&
+          WireSession.border.marks.length === 1 &&
+          WireSession.border.marks[0].field === 1 &&
+          WireSession.border.marks[0].text === "9",
+        "34002 34003 20011 and 55001 do not replace the 34001 record and 32001 writes its own snapshot"
       );
       roleSockets[0].push(encodeFrame(WireCmd.headPortraitList, new Uint8Array([0x80])));
       assert(
@@ -9248,6 +9452,118 @@ async function checkWs(): Promise<void> {
           WireSession.dragonCollection !== null &&
           WireSession.dragonCollection.sysIds[0] === 8,
         "non-empty 34001 without idx_list stays synced and leaves 55001 and 59010"
+      );
+      const goldBeforeBadBorder = Session.gold;
+      const diamondBeforeBadBorder = Session.diamond;
+      roleSockets[0].push(encodeFrame(32002, fieldVarint(1, 7)));
+      roleSockets[0].push(encodeFrame(32003, fieldVarint(1, 7)));
+      roleSockets[0].push(encodeFrame(4402, fieldVarint(1, 7)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 7)));
+      roleSockets[0].push(encodeFrame(WireCmd.headPortraitList, portraitZero));
+      assert(
+        WireSession.hasBorder() &&
+          WireSession.border !== null &&
+          WireSession.border.units.length === 0 &&
+          WireSession.border.marks[0].field === 1 &&
+          WireSession.headPortrait !== null &&
+          WireSession.headPortrait.idxList.length === 1 &&
+          WireSession.headPortrait.idxList[0] === 0,
+        "32002 32003 4402 29001 20011 and 34001 do not replace the 32001 record"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.borderData, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasBorder() &&
+          WireSession.border !== null &&
+          WireSession.border.marks[0].field === 1 &&
+          WireSession.headPortrait !== null &&
+          WireSession.headPortrait.idxList[0] === 0 &&
+          sawWire("32001 解不开"),
+        "bad 32001 keeps the border record and the 34001 record"
+      );
+      assert(
+        Session.gold === goldBeforeBadBorder && Session.diamond === diamondBeforeBadBorder,
+        "bad 32001 stays off the wallet"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.borderData));
+      assert(
+        WireSession.hasBorder() &&
+          WireSession.border !== null &&
+          WireSession.border.units.length === 0 &&
+          formatWireBorderHead(WireSession.border) === "units=空头像框" &&
+          WireSession.headPortrait !== null &&
+          WireSession.headPortrait.idxList[0] === 0,
+        "empty 32001 body clears units without writing zero and stays synced"
+      );
+      assert(
+        Session.gold === goldBeforeBadBorder && Session.diamond === diamondBeforeBadBorder,
+        "empty 32001 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.borderData, borderZero));
+      assert(
+        WireSession.hasBorder() &&
+          WireSession.border !== null &&
+          WireSession.border.units.length === 1 &&
+          WireSession.border.units[0].id === 0 &&
+          WireSession.border.units[0].activeState === 0 &&
+          formatWireBorderLine(WireSession.border.units[0]) === "id=0 / active_state=0" &&
+          WireSession.headPortrait !== null &&
+          WireSession.headPortrait.idxList.length === 1,
+        "present 32001 zero stays zero and leaves 34001"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.borderData, borderMissingState));
+      assert(
+        WireSession.hasBorder() &&
+          WireSession.border !== null &&
+          WireSession.border.units[0].id === 4 &&
+          WireSession.border.units[0].activeState === null &&
+          formatWireBorderLine(WireSession.border.units[0]) === "id=4 / active_state=无",
+        "missing 32001 active_state stays blank"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.borderData, borderBody));
+      assert(
+        WireSession.hasBorder() &&
+          WireSession.border !== null &&
+          WireSession.border.units.length === 5 &&
+          WireSession.border.units[0].id === 3 &&
+          WireSession.border.units[0].activeState === 1 &&
+          WireSession.border.units[1].id === 0 &&
+          WireSession.border.units[1].activeState === 0 &&
+          WireSession.border.units[2].activeState === null &&
+          WireSession.border.units[3].id === null &&
+          WireSession.border.units[4].activeState === null &&
+          formatWireBorderHead(WireSession.border) === "units=5 条 / 字段8=1" &&
+          WireSession.headPortrait !== null &&
+          WireSession.headPortrait.idxList[0] === 0 &&
+          WireSession.titleList !== null &&
+          WireSession.titleList.titles[0].idx === 0,
+        "32001 writes id and active_state and leaves 34001 and 55001"
+      );
+      assert(
+        Session.gold === goldBeforeBadBorder && Session.diamond === diamondBeforeBadBorder,
+        "32001 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.headPortraitList, portraitUnpacked));
+      assert(
+        WireSession.hasHeadPortrait() &&
+          WireSession.headPortrait !== null &&
+          WireSession.headPortrait.idxList.length === 3 &&
+          WireSession.border !== null &&
+          WireSession.border.units.length === 5 &&
+          WireSession.border.units[1].activeState === 0,
+        "34001 refresh does not clear the 32001 units"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.borderData, borderOuterOnly));
+      assert(
+        WireSession.hasBorder() &&
+          WireSession.border !== null &&
+          WireSession.border.units.length === 0 &&
+          formatWireBorderHead(WireSession.border) === "units=空头像框 / 字段8=1" &&
+          WireSession.headPortrait !== null &&
+          WireSession.headPortrait.idxList[2] === 9 &&
+          WireSession.titleList !== null &&
+          WireSession.titleList.titles[0].idx === 0,
+        "non-empty 32001 without units stays synced and leaves 34001 and 55001"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
