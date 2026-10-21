@@ -111,6 +111,8 @@ F:\project\mxzg\scripts\start-local-all.bat
 
 它另开一扇窗口跑 `start-local-server.bat`（center、gameserver 仍是各自的窗口），等到 TCP `9902` 后再另开一扇窗口跑 `start-ws-bridge.bat`。`9902` 已经在听就写明不再启动第二个游戏服。`13111` 已经在听就不再启动第二个桥。只拉了客户端代码时，这两边都留着，刷新 Creator 预览即可，不必重启。
 
+中文 Windows 的 Windows PowerShell 5.x 把没有 UTF-8 BOM 的 `.ps1` 按系统 ANSI（GBK）读。UTF-8 中文会被拆字节，句末的 `'` 可能被吃掉。双击 `start-local-all.bat` 若报 ParserError（Unexpected token、缺少 `)`、数组下标缺失、字符串没有结束符），窗口里的中文是乱码，先确认 `scripts/start-local-all.ps1` 和 `scripts/stop-local-all.ps1` 仍是 UTF-8 带 BOM（文件头 `EF BB BF`）。临时绕开：先双击 `scripts\start-local-server.bat`，等 TCP `9902` 起来后再双击 `scripts\start-ws-bridge.bat`。
+
 停桥，并打印游戏服原来的停止说明（不结束 center / gameserver，也不结束别的进程）：
 
 ```

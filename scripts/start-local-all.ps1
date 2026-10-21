@@ -1,4 +1,4 @@
-# 日常一次打开：游戏服（start-local-server.bat）+ WebSocket 桥（start-ws-bridge.bat）。
+﻿# 日常一次打开：游戏服（start-local-server.bat）+ WebSocket 桥（start-ws-bridge.bat）。
 # TCP 9902 已经在听就不再开第二个游戏服。WS 13111 已经在听就不再开第二个桥。
 # 游戏服窗口和桥窗口分开留着。本窗口只负责拉起并等到端口。
 # 只拉了客户端时不必再跑本脚本，刷新预览即可。

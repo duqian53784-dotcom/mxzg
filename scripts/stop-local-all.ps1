@@ -1,4 +1,4 @@
-# 先停 WebSocket 桥（与 stop-ws-bridge.ps1 相同，只动 13111 上的桥进程）。
+﻿# 先停 WebSocket 桥（与 stop-ws-bridge.ps1 相同，只动 13111 上的桥进程）。
 # 不结束 center / gameserver，也不结束别的进程。游戏服仍在各自窗口输入 stop。
 
 $ErrorActionPreference = 'Continue'
