@@ -552,6 +552,21 @@ import {
   WIRE_SEVEN_UNSYNCED_TOAST,
   wireSevenNote,
 } from "../assets/scripts/net/protocol/wireSevenDay";
+import {
+  decodeWireGoal7,
+  formatWireGoalHead,
+  formatWireGoalLine,
+  WIRE_GOAL7_CMD,
+  WIRE_GOAL7_EMPTY,
+  WIRE_GOAL7_FIELD_NOTE,
+  WIRE_GOAL7_PUSH_CMD,
+  WIRE_GOAL7_PUSH_NOTE,
+  WIRE_GOAL7_READONLY_NOTE,
+  WIRE_GOAL7_READONLY_TITLE,
+  WIRE_GOAL7_SIDE_EFFECT,
+  WIRE_GOAL7_UNSYNCED_TOAST,
+  wireGoalNote,
+} from "../assets/scripts/net/protocol/wireGoal7";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -3474,6 +3489,111 @@ async function checkWs(): Promise<void> {
       decodeWireSevenDay(sevenSticky.frames[0].body)?.curDay === 1,
     "sticky 22000 frame stops at its length prefix"
   );
+  const goalTaskOpen = concatBytes(concatBytes(fieldVarint(1, 101), fieldVarint(2, 3)), fieldVarint(3, 0));
+  const goalTaskClaimed = concatBytes(concatBytes(fieldVarint(1, 102), fieldVarint(2, 1)), fieldVarint(3, 1));
+  const goalBody = concatBytes(
+    concatBytes(concatBytes(fieldBytes(1, goalTaskOpen), fieldBytes(1, goalTaskClaimed)), fieldVarint(2, 2)),
+    concatBytes(fieldVarint(3, 1), fieldVarint(4, 3))
+  );
+  const goalOuterOnly = concatBytes(fieldVarint(3, 0), fieldVarint(4, 1));
+  const goalPacked = concatBytes(fieldBytes(2, new Uint8Array([1, 3])), concatBytes(fieldVarint(3, 4), fieldVarint(4, 2)));
+  const loggedGoal = decodeWireGoal7(goalBody);
+  const goalEmptyOuter = decodeWireGoal7(goalOuterOnly);
+  const goalPackedSnap = decodeWireGoal7(goalPacked);
+  assert(
+    WireCmd.sevenDayTarget === 21010 &&
+      CmdId.goal7View === 2301 &&
+      CmdId.goal7Claim === 2302 &&
+      CmdId.dailyView === 2101 &&
+      CmdId.dailyChallenge === 2102 &&
+      CmdId.login7View === 2201,
+    "online 21010 stays off the placeholder goal7 ids and off 22000"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.sevenDayTarget)) === "0400000012520000", "empty c2s 21010");
+  assert(bytesToHex(encodeFrame(WireCmd.sevenDayTarget)) !== "0400000002520000", "21010 is not the 02 52 typo");
+  assert(bytesToHex(encodeFrame(21000)) !== "0400000012520000", "old 21000 is not the 21010 frame");
+  assert(bytesToHex(encodeFrame(21001)) !== "0400000012520000", "old 21001 is not the 21010 frame");
+  assert(bytesToHex(encodeFrame(21011)) !== "0400000012520000", "21011 is not the 21010 frame");
+  assert(bytesToHex(encodeFrame(21012)) !== "0400000012520000", "21012 is not the 21010 frame");
+  assert(bytesToHex(encodeFrame(21013)) !== "0400000012520000", "21013 is not a c2s 21010 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.sevenDayLogin)) !== "0400000012520000", "22000 is not the 21010 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.buyGoldList)) !== "0400000012520000", "17000 is not the 21010 frame");
+  assert(WIRE_GOAL7_READONLY_TITLE === "七日目标（真服只读）", "readonly goal7 title");
+  assert(WIRE_GOAL7_EMPTY === "空表" && WIRE_GOAL7_UNSYNCED_TOAST === "真服未同步", "empty goal table is not the unsynced toast");
+  assert(
+    WIRE_GOAL7_SIDE_EFFECT.indexOf("建档") >= 0 &&
+      WIRE_GOAL7_SIDE_EFFECT.indexOf("懒填") >= 0 &&
+      WIRE_GOAL7_SIDE_EFFECT.indexOf("不发奖") >= 0 &&
+      WIRE_GOAL7_PUSH_NOTE.indexOf("21013") >= 0 &&
+      WIRE_GOAL7_PUSH_NOTE.indexOf("只收") >= 0 &&
+      WIRE_GOAL7_READONLY_NOTE.indexOf("不领奖") >= 0 &&
+      WIRE_GOAL7_READONLY_NOTE.indexOf("21011") >= 0 &&
+      WIRE_GOAL7_READONLY_NOTE.indexOf("21012") >= 0 &&
+      WIRE_GOAL7_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_GOAL7_FIELD_NOTE.indexOf("curr_day") >= 0 &&
+      WIRE_GOAL7_FIELD_NOTE.indexOf("seven_day_value") >= 0 &&
+      WIRE_GOAL7_FIELD_NOTE.indexOf("reward_box_idx") >= 0 &&
+      WIRE_GOAL7_FIELD_NOTE.indexOf("未领") >= 0 &&
+      WIRE_GOAL7_FIELD_NOTE.indexOf("已领") >= 0 &&
+      WIRE_GOAL7_READONLY_TITLE.indexOf("登录") < 0 &&
+      WIRE_GOAL7_READONLY_TITLE.indexOf("点金") < 0 &&
+      WIRE_GOAL7_READONLY_TITLE.indexOf("22000") < 0 &&
+      WIRE_GOAL7_READONLY_TITLE.indexOf("17000") < 0,
+    "goal page names GResSevenDayTargetList and stays off login and buy gold"
+  );
+  assert(decodeWireGoal7(new Uint8Array(0)) !== null && decodeWireGoal7(new Uint8Array(0))?.tasks.length === 0, "empty 21010 body is a synced empty table");
+  assert(
+    goalEmptyOuter !== null &&
+      goalEmptyOuter.tasks.length === 0 &&
+      goalEmptyOuter.sevenDayValue === 0 &&
+      goalEmptyOuter.currDay === 1 &&
+      goalEmptyOuter.rewardBoxIdx.length === 0 &&
+      formatWireGoalHead(goalEmptyOuter) === "curr_day=1 / seven_day_value=0 / reward_box_idx=无",
+    "non-empty outer with no task still carries fields 3 and 4"
+  );
+  assert(decodeWireGoal7(new Uint8Array([0x80])) === null, "bad 21010 ignored");
+  assert(decodeWireGoal7(fieldBytes(1, new Uint8Array([0x80]))) === null, "bad nested task does not become an empty table");
+  assert(
+    loggedGoal !== null &&
+      loggedGoal.currDay === 3 &&
+      loggedGoal.sevenDayValue === 1 &&
+      loggedGoal.rewardBoxIdx.length === 1 &&
+      loggedGoal.rewardBoxIdx[0] === 2 &&
+      loggedGoal.tasks.length === 2 &&
+      loggedGoal.tasks[0].idx === 101 &&
+      loggedGoal.tasks[0].process === 3 &&
+      loggedGoal.tasks[0].state === 0 &&
+      loggedGoal.tasks[1].state === 1 &&
+      formatWireGoalLine(loggedGoal.tasks[0]) === "idx=101 / process=3 / state=0 · 未领" &&
+      formatWireGoalLine(loggedGoal.tasks[1]) === "idx=102 / process=1 / state=1 · 已领" &&
+      formatWireGoalHead(loggedGoal) === "curr_day=3 / seven_day_value=1 / reward_box_idx=2" &&
+      wireGoalNote(loggedGoal).indexOf("空表") < 0 &&
+      wireGoalNote(loggedGoal).indexOf(WIRE_GOAL7_SIDE_EFFECT) >= 0 &&
+      wireGoalNote(loggedGoal).indexOf("不写金币") >= 0 &&
+      wireGoalNote(loggedGoal).indexOf("登录") < 0 &&
+      wireGoalNote(loggedGoal).indexOf("点金") < 0,
+    "21010 sample keeps unclaimed and claimed tasks"
+  );
+  assert(
+    goalPackedSnap !== null &&
+      goalPackedSnap.rewardBoxIdx.length === 2 &&
+      goalPackedSnap.rewardBoxIdx[0] === 1 &&
+      goalPackedSnap.rewardBoxIdx[1] === 3 &&
+      formatWireGoalHead(goalPackedSnap) === "curr_day=2 / seven_day_value=4 / reward_box_idx=1,3",
+    "packed reward_box_idx stays a list"
+  );
+  const idxOnlyTask = decodeWireGoal7(fieldBytes(1, fieldVarint(1, 7)));
+  assert(idxOnlyTask !== null && formatWireGoalLine(idxOnlyTask.tasks[0]) === "idx=7 / process=无 / state=无", "missing process and state stay blank");
+  const goalSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.sevenDayTarget, goalOuterOnly), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    goalSticky.frames.length === 2 &&
+      goalSticky.frames[0].cmdId === 21010 &&
+      goalSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireGoal7(goalSticky.frames[0].body)?.tasks.length === 0 &&
+      decodeWireGoal7(goalSticky.frames[0].body)?.currDay === 1 &&
+      decodeWireGoal7(goalSticky.frames[0].body)?.sevenDayValue === 0,
+    "sticky 21010 frame stops at its length prefix"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -3924,6 +4044,8 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, pvpSampleA));
       roleSockets[0].push(encodeFrame(WireCmd.sevenDayLogin, sevenBody));
       roleSockets[0].push(encodeFrame(22002, fieldVarint(1, 2)));
+      roleSockets[0].push(encodeFrame(21013, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(WireCmd.sevenDayTarget, goalBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -3936,6 +4058,8 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasAchievement() && WireSession.achievements === null, "achievement stays unsynced before the city role");
       assert(!WireSession.hasPvp() && WireSession.pvp === null, "arena stays unsynced before the city role");
       assert(!WireSession.hasSevenDay() && WireSession.sevenDay === null, "seven day stays unsynced before the city role");
+      assert(!WireSession.hasGoal7() && WireSession.goal7 === null, "goal7 stays unsynced before the city role");
+      assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
       Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
@@ -4017,6 +4141,23 @@ async function checkWs(): Promise<void> {
         "flush writes the 22000 list and keeps the 22002 cur_day"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "22000 stays off the wallet");
+      assert(
+        WireSession.hasGoal7() &&
+          WireSession.goal7 !== null &&
+          WireSession.goal7.currDay === 3 &&
+          WireSession.goal7.sevenDayValue === 1 &&
+          WireSession.goal7.rewardBoxIdx.length === 1 &&
+          WireSession.goal7.rewardBoxIdx[0] === 2 &&
+          WireSession.goal7.tasks.length === 2 &&
+          WireSession.goal7.tasks[0].state === 0 &&
+          WireSession.goal7.tasks[1].state === 1 &&
+          formatWireGoalLine(WireSession.goal7.tasks[0]) === "idx=101 / process=3 / state=0 · 未领" &&
+          formatWireGoalLine(WireSession.goal7.tasks[1]) === "idx=102 / process=1 / state=1 · 已领" &&
+          WireSession.sevenDay !== null &&
+          WireSession.sevenDay.curDay === 2,
+        "flush writes the 21010 list and leaves the 22000 login table"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "21010 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -4239,7 +4380,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 7, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 8, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -4269,16 +4410,26 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 22000 after 18001"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 7] as ArrayBuffer)) === "0400000012520000",
+        "pullIdle sends empty c2s 21010 after 22000"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
           sawLog(lines, "发送 c2s 12010") &&
           sawLog(lines, "发送 c2s 18001") &&
           sawLog(lines, "发送 c2s 22000") &&
+          sawLog(lines, "发送 c2s 21010") &&
+          sawLog(lines, "0400000012520000") &&
+          sawLog(lines, "0400000002520000") === false &&
           sawLog(lines, "发送 c2s 12020") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
-          sawLog(lines, "发送 c2s 22001") === false,
-        "mail hero buy gold achievement arena and seven day pulls are logged"
+          sawLog(lines, "发送 c2s 22001") === false &&
+          sawLog(lines, "发送 c2s 21011") === false &&
+          sawLog(lines, "发送 c2s 21012") === false &&
+          sawLog(lines, "发送 c2s 21013") === false,
+        "mail hero buy gold achievement arena seven day and goal pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -4371,6 +4522,28 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 goal7.claim"),
         "seven day claim and the day push are not encoded"
       );
+      roleNet.send(WIRE_GOAL7_CMD);
+      const goalSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(goalSent as ArrayBuffer)) === "0400000012520000", "wire.21010 frame");
+      const sentBeforeGoalOther = roleSockets[0].sent.length;
+      roleNet.send("wire.21000");
+      roleNet.send("wire.21001");
+      roleNet.send("wire.21011");
+      roleNet.send("wire.21012");
+      roleNet.send(WIRE_GOAL7_PUSH_CMD);
+      roleNet.send(Cmd.goal7View);
+      roleNet.send(Cmd.goal7Claim);
+      assert(roleSockets[0].sent.length === sentBeforeGoalOther, "21011 21012 21013 and goal7 placeholders stay off the wire");
+      assert(
+        sawLog(lines, "未发送 wire.21000") &&
+          sawLog(lines, "未发送 wire.21001") &&
+          sawLog(lines, "未发送 wire.21011") &&
+          sawLog(lines, "未发送 wire.21012") &&
+          sawLog(lines, "未发送 wire.21013") &&
+          sawLog(lines, "未发送 goal7.view") &&
+          sawLog(lines, "未发送 goal7.claim"),
+        "goal claim and the target push are not encoded"
+      );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
       assert(
@@ -4422,6 +4595,48 @@ async function checkWs(): Promise<void> {
         "22002 after an empty list only changes cur_day"
       );
       assert(Session.gold === goldBeforeBadSeven, "later 22002 does not write gold");
+      const goldBeforeBadGoal = Session.gold;
+      const goalBeforePush = WireSession.goal7;
+      roleSockets[0].push(encodeFrame(21013, fieldVarint(1, 8)));
+      assert(
+        WireSession.hasGoal7() &&
+          WireSession.goal7 === goalBeforePush &&
+          WireSession.goal7 !== null &&
+          WireSession.goal7.tasks.length === 2 &&
+          WireSession.goal7.currDay === 3 &&
+          sawWire("21013 只收"),
+        "21013 does not replace the goal table"
+      );
+      assert(Session.gold === goldBeforeBadGoal, "21013 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.sevenDayTarget, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasGoal7() &&
+          WireSession.goal7 !== null &&
+          WireSession.goal7.tasks.length === 2 &&
+          WireSession.goal7.currDay === 3 &&
+          sawWire("21010 解不开"),
+        "bad 21010 keeps the list"
+      );
+      assert(Session.gold === goldBeforeBadGoal, "bad 21010 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.sevenDayTarget));
+      assert(
+        WireSession.hasGoal7() && WireSession.goal7 !== null && WireSession.goal7.tasks.length === 0,
+        "empty 21010 body replaces the list and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadGoal, "empty 21010 does not write gold");
+      roleSockets[0].push(encodeFrame(WireCmd.sevenDayTarget, goalOuterOnly));
+      assert(
+        WireSession.hasGoal7() &&
+          WireSession.goal7 !== null &&
+          WireSession.goal7.tasks.length === 0 &&
+          WireSession.goal7.sevenDayValue === 0 &&
+          WireSession.goal7.currDay === 1 &&
+          WireSession.goal7.rewardBoxIdx.length === 0 &&
+          WireSession.sevenDay !== null &&
+          WireSession.sevenDay.rows.length === 0,
+        "non-empty 21010 without tasks stays synced and leaves 22000"
+      );
+      assert(Session.gold === goldBeforeBadGoal, "outer-only 21010 does not write gold");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {
