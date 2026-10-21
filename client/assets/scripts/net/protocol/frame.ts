@@ -65,10 +65,17 @@ export const WireCmd = {
   heroList: 4001,
   /**
    * c2s 空体。进主城、c2s 4001 page=1 之后发。
-   * 整帧 `04 00 00 00 68 42 00 00`。仓库里没有这条 proto。
-   * s2c 按字段号只读。不是占位 login7.view（2201）。
+   * 整帧 `04 00 00 00 68 42 00 00`。BuyGoldHandler.buyGoldList。
+   * s2c 是 GResBuyGoldLog。不是占位 login7.view（2201）。不点金。
    */
-  activityProgress: 17000,
+  buyGoldList: 17000,
+  /**
+   * c2s 空体。进主城、空 c2s 17000 之后发。
+   * 整帧 `04 00 00 00 ea 2e 00 00`。AchievementHandler.achievementList。
+   * s2c 是 GResAchievementList。不发 12020。不领奖。
+   * 服端会懒建首链成就并落库，客户端仍只读。
+   */
+  achievementList: 12010,
 } as const;
 
 /**

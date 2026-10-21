@@ -1,6 +1,6 @@
 /**
- * 真服活动进度只读页。只按字段号展示 s2c 17000。
- * 不领取，不写顶栏。外层字段 1 只在 GameLog。Mock 七日登录仍是 Login7Page。
+ * 真服点金只读页。按 GResBuyGoldLog 展示 s2c 17000 的 status、time、idx、num。
+ * 不点金，不写顶栏。不从七日登录进入。
  */
 import { Color, Node } from "cc";
 import { GameLog } from "../core/GameLog";
@@ -53,7 +53,7 @@ class WireActivityController implements WireActivityPage {
     this.build();
     this.render();
     const snap = WireSession.activity;
-    GameLog.shared.info("Activity", "wire open " + (snap ? snap.rows.length : "unsynced"));
+    GameLog.shared.info("BuyGold", "wire open " + (snap ? snap.rows.length : "unsynced"));
     this.offSync = WireSession.onSync(() => this.onSync());
   }
 
@@ -97,7 +97,7 @@ class WireActivityController implements WireActivityPage {
       place(createLabel(WIRE_ACTIVITY_UNSYNCED_TOAST, 28, { color: TITLE, width: 640 }), rows, 0, 280);
       return;
     }
-    const stamp = formatWireActivityStamp(snap.field2);
+    const stamp = formatWireActivityStamp(snap);
     let top = 320;
     if (stamp) {
       place(createLabel(stamp, 22, { color: MUTED, width: 640 }), rows, 0, top);
