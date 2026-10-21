@@ -31,8 +31,9 @@
  * 空的 c2s 4101（wire.4101，英雄宝石 GReqHeroJewel / GResHeroJewel。不是 4001，也不是 13044）、
  * 空的 c2s 4013（wire.4013，英雄图鉴 GReqIllustratReward / GResIllustratReward。名字像领奖，实为查看。不是 4001，也不是 4101。不编 4014）。
  * 空的 c2s 74100（wire.74100，宠物信息 GReqPetInfoList / GResPetInfoList。不是 4001，也不是 4013。不编 74101、74102、74103、74105、74106）。
+ * 空的 c2s 51001（wire.51001，世界等级 GReqWorldLevel / GResWorldLevel。level 是字段 1。不编 20101。不夹在 2001 和 3007 中间）。
  * 挂机页领取再编空的 c2s 3005（wire.3005）。
- * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。4004 见 wireSummon.ts。13044 见 wireProphet.ts。4101 见 wireJewel.ts。4013 见 wireIllustrat.ts。74100 见 wirePet.ts。
+ * 3007 见 wireChapter.ts。3004 / 3005 见 wireIdle.ts。5001 见 wireBag.ts。15000 见 wireMail.ts。4001 见 wireHero.ts。17000 见 wireActivity.ts。12010 见 wireAchievement.ts。18001 见 wirePvp.ts。22000 见 wireSevenDay.ts。21010 见 wireGoal7.ts。27001 见 wireWish.ts。4004 见 wireSummon.ts。13044 见 wireProphet.ts。4101 见 wireJewel.ts。4013 见 wireIllustrat.ts。74100 见 wirePet.ts。51001 见 wireWorld.ts。
  * 不编 12020。不编 22001，也不编 22002。不编 21011、21012。不编 21013。旧号 21000 / 21001 不编。
  * 3002 不编。5002 只收不发。5004–5009、5010、5011–5013 不编。
  * 邮件领取、已读、删除不编。占位 mail.* 仍是 1701–1705。
@@ -47,6 +48,7 @@
  * 空的 4101 要编。不编 4102、4103、4104、4105、4106、4107。不编 9001。英雄列表仍是 4001。先知召唤仍是 13044。
  * 空的 4013 要编。不编 4014。4014 是 s2c 推送。不把 4013 当领奖再发写号。英雄列表仍是 4001。英雄宝石仍是 4101。
  * 空的 74100 要编。不编 74101、74102、74103。不编 74105、74106。74105、74106 是 s2c 推送。英雄列表仍是 4001。英雄图鉴仍是 4013。
+ * 空的 51001 要编。不编 20101。本模块无写操作号。不夹在 2001 和 3007 中间。
  */
 import { NetMessage } from "../NetTypes";
 import { Cmd } from "./cmds";
@@ -62,6 +64,7 @@ import { WIRE_PROPHET_CMD } from "./wireProphet";
 import { WIRE_JEWEL_CMD } from "./wireJewel";
 import { WIRE_ILLUSTRAT_CMD } from "./wireIllustrat";
 import { WIRE_PET_CMD } from "./wirePet";
+import { WIRE_WORLD_CMD } from "./wireWorld";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
 const LOGIN_FIELD1 = 7;
@@ -174,6 +177,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.4102、wire.4103、wire.4104、wire.4105、wire.4106、wire.4107、wire.9001 不编码。
  * wire.4014 不编码。4014 是 s2c 推送。
  * wire.74101、wire.74102、wire.74103、wire.74105、wire.74106 不编码。74105、74106 是 s2c 推送。
+ * wire.20101 不编码。51001 只编码空体。本模块无写操作号。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -331,6 +335,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.petInfoList,
       bytes: encodeFrame(WireCmd.petInfoList),
+      note: "空体",
+    };
+  }
+  if (cmd === WIRE_WORLD_CMD) {
+    return {
+      cmdId: WireCmd.worldLevel,
+      bytes: encodeFrame(WireCmd.worldLevel),
       note: "空体",
     };
   }

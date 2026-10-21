@@ -24,7 +24,8 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 空的 c2s 13044 拉先知召唤幸运值。s2c 13044 由 WireSession 按 GResProphetSummonInfo 读 luckys 的 type、lucky，不写顶栏。不发 13041、13042、13043。不做 58007、4201。不是召唤次数 4004。
  * 空的 c2s 4101 拉英雄宝石。s2c 4101 由 WireSession 按 GResHeroJewel 读 hero_id、jewel_id、place、jewel_type，不写顶栏。不发 4102、4103、4104、4105、4106、4107。不做 9001。不是英雄列表 4001，也不是 13044。
  * 空的 c2s 4013 拉英雄图鉴。s2c 4013 由 WireSession 按 GResIllustratReward 读 list 的 hero_type、star，不写顶栏。名字像领奖，实为查看。不发 4014。4014 仅 s2c 推送。不是英雄列表 4001，也不是 4101。
- * 空的 c2s 74100 拉宠物信息。s2c 74100 由 WireSession 按 GResPetInfoList 读 list 的 pet_id、sys_id、hero_id、level，不写顶栏。不发 74101、74102、74103。74105、74106 仅 s2c 推送，不主动发。不是英雄列表 4001，也不是 4013。别的号不猜。
+ * 空的 c2s 74100 拉宠物信息。s2c 74100 由 WireSession 按 GResPetInfoList 读 list 的 pet_id、sys_id、hero_id、level，不写顶栏。不发 74101、74102、74103。74105、74106 仅 s2c 推送，不主动发。不是英雄列表 4001，也不是 4013。
+ * 空的 c2s 51001 拉世界等级。s2c 51001 由 WireSession 按 GResWorldLevel 读 level，不写顶栏。本模块无写操作号。不做 20101。不夹在 2001 和 3007 中间。别的号不猜。
  * 单条处理失败也不丢掉后面的帧。
  */
 

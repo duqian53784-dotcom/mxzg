@@ -140,16 +140,23 @@ import {
   WirePetRow,
   WirePetSnapshot,
 } from "./protocol/wirePet";
+import {
+  decodeWireWorld,
+  WIRE_WORLD_CMD,
+  wireWorldNote,
+  WireWorldMark,
+  WireWorldSnapshot,
+} from "./protocol/wireWorld";
 import { wireBody } from "./protocol/wireLogin";
 
 /**
  * ?transport=ws 登录进主城后，这条 NetClient 要活过 Boot 切场景。
  * 心跳 1004 继续发。
- * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3004、wire.3005、wire.15000、wire.4001、wire.17000、wire.12010、wire.18001、wire.22000、wire.22002、wire.21010、wire.21013、wire.27001、wire.4004、wire.13044、wire.4101、wire.4013 和 wire.74100。
+ * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3004、wire.3005、wire.15000、wire.4001、wire.17000、wire.12010、wire.18001、wire.22000、wire.22002、wire.21010、wire.21013、wire.27001、wire.4004、wire.13044、wire.4101、wire.4013、wire.74100 和 wire.51001。
  * 登录成功后先发空的 c2s 2001（日志里的拉角色资料）。pullRoleProfile 紧接着发空的 c2s 5001。
- * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。pullIdle 在 3004 之后再发空的 c2s 15000，然后 c2s 4001 page=1，再发空的 c2s 17000，再发空的 c2s 12010，再发空的 c2s 18001，再发空的 c2s 22000，再发空的 c2s 21010，再发空的 c2s 27001，再发空的 c2s 4004，再发空的 c2s 13044，再发空的 c2s 4101，再发空的 c2s 4013，再发空的 c2s 74100。
- * 相对顺序是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100。不等 s2c 2001，也不夹那一长串别的号。
- * 不发 5010，也不发 5004–5009、5011–5013。不发邮件领取、已读、删除。不发英雄升级，不发 20001。不点金。不发 12020，不领奖。不发 18002、18003、18005、18007、18008。不发 22001。22002 只收。不发 21011、21012。21013 只收。不发 27002、27003、27004。不发 4201。不发 4002、4005。不做 58001、58007。4004 不是 4001。不发 13041、13042、13043。13044 不是 4004。不发 4102、4103、4104、4105、4106、4107。不做 9001。4101 不是 4001，也不是 13044。不发 4014。4014 仅 s2c 推送。不把 4013 当领奖再发写号。4013 不是 4001，也不是 4101。不发 74101 升级、74102 携带、74103 卸下。74105、74106 仅 s2c 推送，不主动发。74100 不是 4001，也不是 4013。
+ * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。pullIdle 在 3004 之后再发空的 c2s 15000，然后 c2s 4001 page=1，再发空的 c2s 17000，再发空的 c2s 12010，再发空的 c2s 18001，再发空的 c2s 22000，再发空的 c2s 21010，再发空的 c2s 27001，再发空的 c2s 4004，再发空的 c2s 13044，再发空的 c2s 4101，再发空的 c2s 4013，再发空的 c2s 74100，再发空的 c2s 51001。
+ * 相对顺序是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001。不等 s2c 2001。51001 只在这条链的末尾发一次，不夹在 2001 和 3007 中间。11005、58017 仍不发。不做 20101。
+ * 不发 5010，也不发 5004–5009、5011–5013。不发邮件领取、已读、删除。不发英雄升级，不发 20001。不点金。不发 12020，不领奖。不发 18002、18003、18005、18007、18008。不发 22001。22002 只收。不发 21011、21012。21013 只收。不发 27002、27003、27004。不发 4201。不发 4002、4005。不做 58001、58007。4004 不是 4001。不发 13041、13042、13043。13044 不是 4004。不发 4102、4103、4104、4105、4106、4107。不做 9001。4101 不是 4001，也不是 13044。不发 4014。4014 仅 s2c 推送。不把 4013 当领奖再发写号。4013 不是 4001，也不是 4101。不发 74101 升级、74102 携带、74103 卸下。74105、74106 仅 s2c 推送，不主动发。74100 不是 4001，也不是 4013。51001 无写操作号。不做 20101。
  * s2c 2001 按 Role.proto：字段 9 角色名、字段 6 等级、字段 2 金币、字段 1 宝石（顶栏钻石）。
  * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。
  * 不写 Session.stageId，主城按钮用 mainlineLabel()。
@@ -215,6 +222,10 @@ import { wireBody } from "./protocol/wireLogin";
  * 按 GResPetInfoList 写 PSPetInfo 的 pet_id、sys_id、hero_id、level。没有的数不写成 0。
  * 无写库。空体安全。不升级，不携带，不卸下。不写金币，不写钻石。英雄列表仍是 4001。英雄图鉴仍是 4013。
  * 从未收到 74100 时主城「宠物信息」只 Toast，不回落 Mock。不发 74101、74102、74103。不主动发 74105、74106。
+ * s2c 51001 替换本地世界等级。空包体是已同步，level 保持缺省，不写成 0。出现的 0 仍写 0。
+ * 按 GResWorldLevel 写字段 1 level（int64）。对不上的号按字段号写。无写库。空体安全。
+ * 只在 pullIdle 链尾、空 c2s 74100 之后发一次。不夹在 2001 和 3007 中间。不做 20101。不写金币，不写钻石。
+ * 从未收到 51001 时主城「世界等级」只 Toast，不回落 Mock。
  * 缺的顶栏字段不写，那个格子保持未同步。字段 5 是奖杯，不写进金币。开服天不推。
  * 别的 s2c 仍只记 wire.<cmdId>。解不开就忽略，不抛进拆帧循环。
  */
@@ -306,6 +317,11 @@ export class WireSession {
    * 空 rows 是已同步的空表，不是未同步。
    */
   static pet: WirePetSnapshot | null = null;
+  /**
+   * 收到的 s2c 51001。null 表示这次进主城还没收到 51001。
+   * 空包体是已同步，level 为 null，不是未同步，也不写成 0。
+   */
+  static world: WireWorldSnapshot | null = null;
 
   private static watched: NetClient | null = null;
   private static offProfile: (() => void) | null = null;
@@ -329,6 +345,7 @@ export class WireSession {
   private static offJewel: (() => void) | null = null;
   private static offIllustrat: (() => void) | null = null;
   private static offPet: (() => void) | null = null;
+  private static offWorld: (() => void) | null = null;
   private static pending: WireRoleProfile | null = null;
   private static pendingChapter: WireChapterProgress | null = null;
   private static pendingIdle: WireIdleSnapshot | null = null;
@@ -367,6 +384,8 @@ export class WireSession {
   private static pendingIllustrat: WireIllustratSnapshot | null = null;
   /** null 表示登录过程里还没看到 74100。空表的 rows 是空数组。 */
   private static pendingPet: WirePetSnapshot | null = null;
+  /** null 表示登录过程里还没看到 51001。空包体的 level 是 null。 */
+  private static pendingWorld: WireWorldSnapshot | null = null;
   private static listeners = new Set<() => void>();
 
   /** 套接字一开就听。登录回包里如果已经夹着 2001、5001、3007 或 3004，先记下，等角色写入后再套上。 */
@@ -393,7 +412,8 @@ export class WireSession {
       this.offProphet &&
       this.offJewel &&
       this.offIllustrat &&
-      this.offPet
+      this.offPet &&
+      this.offWorld
     ) {
       return;
     }
@@ -420,6 +440,7 @@ export class WireSession {
     this.offJewel = net.subscribe(WIRE_JEWEL_CMD, (msg) => this.onJewel(msg.data));
     this.offIllustrat = net.subscribe(WIRE_ILLUSTRAT_CMD, (msg) => this.onIllustrat(msg.data));
     this.offPet = net.subscribe(WIRE_PET_CMD, (msg) => this.onPet(msg.data));
+    this.offWorld = net.subscribe(WIRE_WORLD_CMD, (msg) => this.onWorld(msg.data));
   }
 
   static hold(net: NetClient): void {
@@ -429,7 +450,7 @@ export class WireSession {
   }
 
   /**
-   * 这次进主城还没看到新的 s2c 3007 / 3004 / 5001 / 15000 / 4001 / 17000 / 12010 / 18001 / 22000 / 21010 / 27001 / 4004 / 13044 / 4101 / 4013 / 74100。丢掉上一名角色的 idx、挂机时间、背包、邮件、英雄、点金、成就、竞技场、七日登录、七日目标、许愿池、召唤次数、先知召唤幸运值、英雄宝石、英雄图鉴和宠物信息。
+   * 这次进主城还没看到新的 s2c 3007 / 3004 / 5001 / 15000 / 4001 / 17000 / 12010 / 18001 / 22000 / 21010 / 27001 / 4004 / 13044 / 4101 / 4013 / 74100 / 51001。丢掉上一名角色的 idx、挂机时间、背包、邮件、英雄、点金、成就、竞技场、七日登录、七日目标、许愿池、召唤次数、先知召唤幸运值、英雄宝石、英雄图鉴、宠物信息和世界等级。
    * 登录过程中先到的包仍留在 pending，接着 flush 再写。
    */
   static prepareCity(): void {
@@ -454,6 +475,7 @@ export class WireSession {
     this.jewel = null;
     this.illustrat = null;
     this.pet = null;
+    this.world = null;
   }
 
   /** 只放下引用。调用方自己 close。 */
@@ -481,6 +503,7 @@ export class WireSession {
       this.pendingJewel = null;
       this.pendingIllustrat = null;
       this.pendingPet = null;
+      this.pendingWorld = null;
       this.resetHeroGather();
       this.nowIdx = null;
       this.maxIdx = null;
@@ -503,6 +526,7 @@ export class WireSession {
       this.jewel = null;
       this.illustrat = null;
       this.pet = null;
+      this.world = null;
     }
   }
 
@@ -530,6 +554,7 @@ export class WireSession {
     this.pendingJewel = null;
     this.pendingIllustrat = null;
     this.pendingPet = null;
+    this.pendingWorld = null;
     this.resetHeroGather();
     this.nowIdx = null;
     this.maxIdx = null;
@@ -552,6 +577,7 @@ export class WireSession {
     this.jewel = null;
     this.illustrat = null;
     this.pet = null;
+    this.world = null;
     if (net) net.close();
   }
 
@@ -582,13 +608,14 @@ export class WireSession {
     this.commitJewel();
     this.commitIllustrat();
     this.commitPet();
+    this.commitWorld();
   }
 
   /**
    * 空的 c2s 2001，紧接着空的 c2s 5001。
    * Boot 仍只调用这一处再调用 pullChapter / pullIdle，所以不改 Boot.ts。
-   * 相对顺序因此是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100。
-   * 15000、4001、17000、12010、18001、22000、21010、27001、4004、13044、4101、4013 和 74100 在 pullIdle 里，跟在 3004 后面。4001 带 page=1，不是空体。17000、12010、18001、22000、21010、27001、4004、13044、4101、4013 和 74100 是空体。
+   * 相对顺序因此是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001。
+   * 15000、4001、17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100 和 51001 在 pullIdle 里，跟在 3004 后面。4001 带 page=1，不是空体。17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100 和 51001 是空体。
    */
   static pullRoleProfile(): void {
     const net = this.net || this.watched;
@@ -631,10 +658,10 @@ export class WireSession {
   }
 
   /**
-   * 空的 c2s 3004，紧接着空的 c2s 15000，再发 c2s 4001 page=1，然后空的 c2s 17000，再发空的 c2s 12010，再发空的 c2s 18001，再发空的 c2s 22000，再发空的 c2s 21010，再发空的 c2s 27001，再发空的 c2s 4004，再发空的 c2s 13044，再发空的 c2s 4101，再发空的 c2s 4013，再发空的 c2s 74100。
-   * 跟在 pullChapter 后面发，不等 s2c 2001。
-   * 3004 在空 c2s 3007 之后，包体是空的。15000、4001、17000、12010、18001、22000、21010、27001、4004、13044、4101、4013 和 74100 接在 3004 后，不改 Boot.ts。
-   * 不发 20001，也不发 12020，也不发 18002，也不发 22001，也不发 21011、21012，也不发 27002、27003、27004，也不发 4201，也不发 4002、4005，也不发 58001、58007，也不发 13041、13042、13043，也不发 4102、4103、4104、4105、4106、4107，也不发 9001，也不发 4014，也不发 74101、74102、74103、74105、74106。17000 不点金。12010 不领奖。18001 不开战。22000 不领奖。21010 不发奖。27001 不刷新，不抽奖，不领幸运奖。4004 不召唤，不领累积奖。4004 不是 4001。13044 不抽，不置换，不确认置换。13044 不是 4004。4101 不替换，不卸下，不一键穿，不一键卸，不合成。4101 不是 4001，也不是 13044。4013 不领奖。4013 不是 4001，也不是 4101。4014 仅 s2c 推送。74100 不升级，不携带，不卸下。74100 不是 4001，也不是 4013。74105、74106 仅 s2c 推送。
+   * 空的 c2s 3004，紧接着空的 c2s 15000，再发 c2s 4001 page=1，然后空的 c2s 17000，再发空的 c2s 12010，再发空的 c2s 18001，再发空的 c2s 22000，再发空的 c2s 21010，再发空的 c2s 27001，再发空的 c2s 4004，再发空的 c2s 13044，再发空的 c2s 4101，再发空的 c2s 4013，再发空的 c2s 74100，再发空的 c2s 51001。
+   * 跟在 pullChapter 后面发，不等 s2c 2001。51001 只在这里发一次，不夹在 2001 和 3007 中间。
+   * 3004 在空 c2s 3007 之后，包体是空的。15000、4001、17000、12010、18001、22000、21010、27001、4004、13044、4101、4013、74100 和 51001 接在 3004 后，不改 Boot.ts。
+   * 不发 20001，也不发 12020，也不发 18002，也不发 22001，也不发 21011、21012，也不发 27002、27003、27004，也不发 4201，也不发 4002、4005，也不发 58001、58007，也不发 13041、13042、13043，也不发 4102、4103、4104、4105、4106、4107，也不发 9001，也不发 4014，也不发 74101、74102、74103、74105、74106，也不发 20101。17000 不点金。12010 不领奖。18001 不开战。22000 不领奖。21010 不发奖。27001 不刷新，不抽奖，不领幸运奖。4004 不召唤，不领累积奖。4004 不是 4001。13044 不抽，不置换，不确认置换。13044 不是 4004。4101 不替换，不卸下，不一键穿，不一键卸，不合成。4101 不是 4001，也不是 13044。4013 不领奖。4013 不是 4001，也不是 4101。4014 仅 s2c 推送。74100 不升级，不携带，不卸下。74100 不是 4001，也不是 4013。74105、74106 仅 s2c 推送。51001 无写操作号。
    */
   static pullIdle(): void {
     const net = this.net || this.watched;
@@ -653,6 +680,7 @@ export class WireSession {
     this.pullJewel();
     this.pullIllustrat();
     this.pullPet();
+    this.pullWorld();
   }
 
   /** 空的 c2s 15000。没有包体。不发领取和删除。 */
@@ -814,6 +842,18 @@ export class WireSession {
   /** 收到过 s2c 74100（含空包体、含空表）才算同步。解不开的包不算。74105、74106 单独到不算。 */
   static hasPet(): boolean {
     return this.pet !== null;
+  }
+
+  /** 空的 c2s 51001。GReqWorldLevel 没有包体。只在 74100 之后发一次。不做 20101。无写库。 */
+  static pullWorld(): void {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return;
+    net.send(WIRE_WORLD_CMD);
+  }
+
+  /** 收到过 s2c 51001（含空包体）才算同步。解不开的包不算。20101 单独到不算。 */
+  static hasWorld(): boolean {
+    return this.world !== null;
   }
 
   /** 空的 c2s 3005。没连上时返回 false，调用方 Toast。 */
@@ -1277,6 +1317,26 @@ export class WireSession {
     this.commitPet();
   }
 
+  private static onWorld(data: unknown): void {
+    let snap: WireWorldSnapshot | null = null;
+    try {
+      snap = decodeWireWorld(wireBody(data));
+    } catch (err) {
+      GameLog.shared.error("Wire", "s2c 51001 解不开 " + (err instanceof Error ? err.message : "未知错误"));
+      return;
+    }
+    if (!snap) {
+      GameLog.shared.info("Wire", "s2c 51001 解不开，世界等级不改");
+      return;
+    }
+    this.pendingWorld = copyWorld(snap);
+    if (Session.source !== "wire" || !Session.role) {
+      GameLog.shared.info("Wire", "s2c 51001 先记下：" + wireWorldNote(snap));
+      return;
+    }
+    this.commitWorld();
+  }
+
   /** 只收。不建表，不改已经有的七日目标，也不发奖。 */
   private static onGoal7Push(_data: unknown): void {
     GameLog.shared.info("Wire", "s2c 21013 只收，七日目标不改，不发奖");
@@ -1544,6 +1604,17 @@ export class WireSession {
     this.emit();
   }
 
+  private static commitWorld(): void {
+    const snap = this.pendingWorld;
+    if (!snap) return;
+    if (Session.source !== "wire" || !Session.role) return;
+    const next = copyWorld(snap);
+    this.pendingWorld = null;
+    this.world = next;
+    GameLog.shared.info("Wire", "s2c 51001 " + wireWorldNote(next));
+    this.emit();
+  }
+
   private static commitIdle(): void {
     const snapshot = this.pendingIdle;
     if (!snapshot || !wireIdleHasTime(snapshot)) return;
@@ -1655,6 +1726,10 @@ export class WireSession {
     if (this.offPet) {
       this.offPet();
       this.offPet = null;
+    }
+    if (this.offWorld) {
+      this.offWorld();
+      this.offWorld = null;
     }
   }
 }
@@ -1866,6 +1941,17 @@ function copyPetRow(row: WirePetRow): WirePetRow {
 }
 
 function copyPetMark(mark: WirePetMark): WirePetMark {
+  return { field: mark.field, text: mark.text };
+}
+
+function copyWorld(snap: WireWorldSnapshot): WireWorldSnapshot {
+  return {
+    level: snap.level,
+    marks: snap.marks.map(copyWorldMark),
+  };
+}
+
+function copyWorldMark(mark: WireWorldMark): WireWorldMark {
   return { field: mark.field, text: mark.text };
 }
 
