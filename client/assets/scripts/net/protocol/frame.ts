@@ -176,6 +176,16 @@ export const WireCmd = {
    * 不夹在 2001 和 3007 中间。不是角色资料 2001。不是基金列表 20001。
    */
   firstRecharge: 20012,
+  /**
+   * c2s 空体。进主城、空 c2s 20012 之后发，只发一次。
+   * 整帧 `04 00 00 00 71 11 01 00`。70001 = 0x11171，小端 71 11 01 00。
+   * GReqReikiEquipData / GResReikiEquipData。list 是字段 1，repeated PSReikiEquipData。
+   * hero_id、sys_id、reiki_equip_id 按声明顺序是 1、2、3。
+   * 不发 70002 激活、70003 穿、70004 卸、70005 转换、70006 合成。
+   * 70007、70008 仅 s2c 推送，不当拉包请求。不做 20011。
+   * 不夹在 2001 和 3007 中间。不是角色资料 2001。不是基金列表 20001。不是超值首充 20012。
+   */
+  reikiEquipData: 70001,
 } as const;
 
 /**
