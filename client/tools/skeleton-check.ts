@@ -857,6 +857,17 @@ import {
   WIRE_WORN_FASHION_UNSYNCED_TOAST,
   wireWornFashionNote,
 } from "../assets/scripts/net/protocol/wireWornFashion";
+import {
+  decodeWireHeroPrayer,
+  formatWireHeroPrayerLine,
+  WIRE_HERO_PRAYER_CMD,
+  WIRE_HERO_PRAYER_FIELD_NOTE,
+  WIRE_HERO_PRAYER_READONLY_NOTE,
+  WIRE_HERO_PRAYER_READONLY_TITLE,
+  WIRE_HERO_PRAYER_SIDE_EFFECT,
+  WIRE_HERO_PRAYER_UNSYNCED_TOAST,
+  wireHeroPrayerNote,
+} from "../assets/scripts/net/protocol/wireHeroPrayer";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1588,6 +1599,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("borderData") === "city", "border data stays on the city tab");
   assert(rootTabFor("fashionList") === "city", "fashion list stays on the city tab");
   assert(rootTabFor("wornFashion") === "city", "worn fashion list stays on the city tab");
+  assert(rootTabFor("heroPrayer") === "city", "hero prayer stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -6756,6 +6768,156 @@ async function checkWs(): Promise<void> {
     "4401 outer varint is a mark and is not a worn row"
   );
   assert(
+    WireCmd.heroPrayerData === 4201 &&
+      WireCmd.heroPrayerData !== WireCmd.heroFashion &&
+      WireCmd.heroPrayerData !== WireCmd.heroFashionList &&
+      WireCmd.heroPrayerData !== WireCmd.blessingPool,
+    "online 4201 stays off 4401 4402 and 27001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.heroPrayerData)) === "0400000069100000", "empty c2s 4201");
+  assert(bytesToHex(encodeFrame(WireCmd.heroPrayerData)) !== "0400000031110000", "4201 is not the 4401 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.heroPrayerData)) !== "0400000032110000", "4201 is not the 4402 frame");
+  assert(bytesToHex(encodeFrame(4202)) !== "0400000069100000", "4202 is not the 4201 frame");
+  assert(bytesToHex(encodeFrame(74104)) !== "0400000069100000", "74104 is not the 4201 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== "0400000069100000", "4601 is not the 4201 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== "0400000069100000", "29001 is not the 4201 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "0400000069100000", "20011 is not the 4201 frame");
+  assert(bytesToHex(encodeFrame(27001)) !== "0400000069100000", "27001 is not the 4201 frame");
+  assert(bytesToHex(encodeFrame(4004)) !== "0400000069100000", "4004 is not the 4201 frame");
+  assert(WIRE_HERO_PRAYER_CMD === "wire.4201", "hero prayer wire cmd");
+  assert(WIRE_HERO_PRAYER_READONLY_TITLE === "英雄祈愿数据（真服只读）", "readonly hero prayer title");
+  assert(WIRE_HERO_PRAYER_UNSYNCED_TOAST === "真服未同步", "unsynced hero prayer toast");
+  assert(
+    WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("hero_prayer") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("特权过期清字段") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("4202") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("74104") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("4401") >= 0 &&
+      WIRE_HERO_PRAYER_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("privilege") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("end_time") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("0/1") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("未开为 0") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("无祈愿写入口") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("4202") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("74104") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("分刀") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_HERO_PRAYER_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_HERO_PRAYER_FIELD_NOTE.indexOf("privilege") >= 0 &&
+      WIRE_HERO_PRAYER_FIELD_NOTE.indexOf("end_time") >= 0 &&
+      WIRE_HERO_PRAYER_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "hero prayer page names privilege and end_time and refuses the write cmds"
+  );
+  const emptyPrayer = {
+    privilege: null as number | null,
+    endTime: null as number | null,
+    marks: [] as { field: number; text: string }[],
+  };
+  const prayerZero = concatBytes(fieldVarint(1, 0), fieldVarint(2, 0));
+  const prayerMissingEnd = fieldVarint(1, 1);
+  const prayerMissingPriv = fieldVarint(2, 1792464848);
+  const prayerNeg = concatBytes(fieldVarint(1, 1), fieldNeg1(2));
+  const prayerWide = concatBytes(fieldVarint(1, 1), fieldVarint(2, 1099511627776));
+  const prayerOuterOnly = fieldVarint(8, 1);
+  const prayerBody = concatBytes(concatBytes(fieldVarint(1, 1), fieldVarint(2, 1792464848)), fieldVarint(8, 1));
+  assert(
+    decodeWireHeroPrayer(new Uint8Array(0)) !== null &&
+      decodeWireHeroPrayer(new Uint8Array(0))?.privilege === null &&
+      decodeWireHeroPrayer(new Uint8Array(0))?.endTime === null &&
+      formatWireHeroPrayerLine(decodeWireHeroPrayer(new Uint8Array(0)) || emptyPrayer) === "privilege=无 / end_time=无",
+    "empty 4201 body is synced and does not invent zero"
+  );
+  assert(decodeWireHeroPrayer(null) === null, "null 4201 body is not a snapshot");
+  assert(decodeWireHeroPrayer(new Uint8Array([0x80])) === null, "bad 4201 ignored");
+  const prayerZeroSnap = decodeWireHeroPrayer(prayerZero);
+  assert(
+    prayerZeroSnap !== null &&
+      prayerZeroSnap.privilege === 0 &&
+      prayerZeroSnap.endTime === 0 &&
+      formatWireHeroPrayerLine(prayerZeroSnap) === "privilege=0 / end_time=0 未开",
+    "present 4201 zero stays zero and end_time 0 is not open"
+  );
+  const prayerMissingEndSnap = decodeWireHeroPrayer(prayerMissingEnd);
+  assert(
+    prayerMissingEndSnap !== null &&
+      prayerMissingEndSnap.privilege === 1 &&
+      prayerMissingEndSnap.endTime === null &&
+      formatWireHeroPrayerLine(prayerMissingEndSnap) === "privilege=1 / end_time=无",
+    "missing 4201 end_time stays blank"
+  );
+  const prayerMissingPrivSnap = decodeWireHeroPrayer(prayerMissingPriv);
+  assert(
+    prayerMissingPrivSnap !== null &&
+      prayerMissingPrivSnap.privilege === null &&
+      prayerMissingPrivSnap.endTime === 1792464848 &&
+      formatWireHeroPrayerLine(prayerMissingPrivSnap) === "privilege=无 / end_time=1792464848",
+    "missing 4201 privilege stays blank"
+  );
+  const prayerNegSnap = decodeWireHeroPrayer(prayerNeg);
+  assert(
+    prayerNegSnap !== null &&
+      prayerNegSnap.privilege === 1 &&
+      prayerNegSnap.endTime === null &&
+      formatWireHeroPrayerLine(prayerNegSnap).indexOf("end_time=无") >= 0 &&
+      formatWireHeroPrayerLine(prayerNegSnap).indexOf("字段2=-1") >= 0,
+    "4201 end_time -1 is not written as zero"
+  );
+  const prayerWideSnap = decodeWireHeroPrayer(prayerWide);
+  assert(
+    prayerWideSnap !== null &&
+      prayerWideSnap.privilege === 1 &&
+      prayerWideSnap.endTime === 1099511627776 &&
+      formatWireHeroPrayerLine(prayerWideSnap) === "privilege=1 / end_time=1099511627776",
+    "4201 end_time keeps the wide integer"
+  );
+  const loggedPrayer = decodeWireHeroPrayer(prayerBody);
+  assert(
+    loggedPrayer !== null &&
+      loggedPrayer.privilege === 1 &&
+      loggedPrayer.endTime === 1792464848 &&
+      loggedPrayer.marks.length === 1 &&
+      loggedPrayer.marks[0].field === 8 &&
+      loggedPrayer.marks[0].text === "1" &&
+      formatWireHeroPrayerLine(loggedPrayer) === "privilege=1 / end_time=1792464848 / 字段8=1" &&
+      wireHeroPrayerNote(loggedPrayer).indexOf(WIRE_HERO_PRAYER_SIDE_EFFECT) >= 0 &&
+      wireHeroPrayerNote(loggedPrayer).indexOf("不写金币") >= 0 &&
+      wireHeroPrayerNote(loggedPrayer).indexOf("不写钻石") >= 0,
+    "4201 sample keeps privilege and end_time and does not fill missing numbers with 0"
+  );
+  const prayerFirst = decodeWireHeroPrayer(concatBytes(fieldVarint(1, 0), fieldVarint(1, 1)));
+  assert(
+    prayerFirst !== null && prayerFirst.privilege === 0 && prayerFirst.endTime === null,
+    "4201 keeps the first privilege and does not replace it with a later one"
+  );
+  const prayerSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.heroPrayerData, prayerBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    prayerSticky.frames.length === 2 &&
+      prayerSticky.frames[0].cmdId === 4201 &&
+      prayerSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireHeroPrayer(prayerSticky.frames[0].body)?.privilege === 1 &&
+      decodeWireHeroPrayer(prayerSticky.frames[0].body)?.endTime === 1792464848,
+    "sticky 4201 frame stops at its length prefix"
+  );
+  assert(
+    decodeWireHeroPrayer(prayerOuterOnly) !== null &&
+      decodeWireHeroPrayer(prayerOuterOnly)?.privilege === null &&
+      decodeWireHeroPrayer(prayerOuterOnly)?.endTime === null &&
+      formatWireHeroPrayerLine(decodeWireHeroPrayer(prayerOuterOnly) || emptyPrayer) === "privilege=无 / end_time=无 / 字段8=1",
+    "non-empty 4201 without the two fields stays synced and does not invent zero"
+  );
+  assert(
     decodeWireWornFashion(fashionPerm)?.list.length === 1 && decodeWireWornFashion(fashionPerm)?.list[0].heroId === 3,
     "a 4402 row still yields hero_id from field 1 when read as 4401 and does not invent the other fields"
   );
@@ -7873,7 +8035,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 29, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 30, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -7991,6 +8153,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 4401 after 4402"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 29] as ArrayBuffer)) === "0400000069100000",
+        "pullIdle sends empty c2s 4201 after 4401"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -8019,6 +8185,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 32001") &&
           sawLog(lines, "发送 c2s 4402") &&
           sawLog(lines, "发送 c2s 4401") &&
+          sawLog(lines, "发送 c2s 4201") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -8041,6 +8208,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000017d0000") &&
           sawLog(lines, "0400000032110000") &&
           sawLog(lines, "0400000031110000") &&
+          sawLog(lines, "0400000069100000") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -8058,7 +8226,8 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 27002") === false &&
           sawLog(lines, "发送 c2s 27003") === false &&
           sawLog(lines, "发送 c2s 27004") === false &&
-          sawLog(lines, "发送 c2s 4201") === false &&
+          sawLog(lines, "发送 c2s 4202") === false &&
+          sawLog(lines, "发送 c2s 74104") === false &&
           sawLog(lines, "发送 c2s 4002") === false &&
           sawLog(lines, "发送 c2s 4005") === false &&
           sawLog(lines, "发送 c2s 58001") === false &&
@@ -8246,15 +8415,13 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.27002");
       roleNet.send("wire.27003");
       roleNet.send("wire.27004");
-      roleNet.send("wire.4201");
       roleNet.send(Cmd.wishView);
       roleNet.send(Cmd.wishDraw);
-      assert(roleSockets[0].sent.length === sentBeforeWishOther, "27002 27003 27004 4201 and wish placeholders stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeWishOther, "27002 27003 27004 and wish placeholders stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.27002") &&
           sawLog(lines, "未发送 wire.27003") &&
           sawLog(lines, "未发送 wire.27004") &&
-          sawLog(lines, "未发送 wire.4201") &&
           sawLog(lines, "未发送 wish.view") &&
           sawLog(lines, "未发送 wish.draw"),
         "wish refresh draw and lucky claim are not encoded"
@@ -8267,9 +8434,8 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.4005");
       roleNet.send("wire.58001");
       roleNet.send("wire.58007");
-      roleNet.send("wire.4201");
       roleNet.send(Cmd.summonPull);
-      assert(roleSockets[0].sent.length === sentBeforeSummonOther, "4002 4005 58001 58007 4201 and summon.pull stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeSummonOther, "4002 4005 58001 58007 and summon.pull stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.4002") &&
           sawLog(lines, "未发送 wire.4005") &&
@@ -8286,15 +8452,13 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.13042");
       roleNet.send("wire.13043");
       roleNet.send("wire.58007");
-      roleNet.send("wire.4201");
       roleNet.send(Cmd.summonPull);
-      assert(roleSockets[0].sent.length === sentBeforeProphetOther, "13041 13042 13043 58007 4201 and summon.pull stay off the prophet wire");
+      assert(roleSockets[0].sent.length === sentBeforeProphetOther, "13041 13042 13043 58007 and summon.pull stay off the prophet wire");
       assert(
         sawLog(lines, "未发送 wire.13041") &&
           sawLog(lines, "未发送 wire.13042") &&
           sawLog(lines, "未发送 wire.13043") &&
           sawLog(lines, "未发送 wire.58007") &&
-          sawLog(lines, "未发送 wire.4201") &&
           sawLog(lines, "未发送 summon.pull"),
         "prophet draw replace and confirm are not encoded"
       );
@@ -8590,17 +8754,23 @@ async function checkWs(): Promise<void> {
       assert(bytesToHex(new Uint8Array(wornSent as ArrayBuffer)) === "0400000031110000", "wire.4401 frame");
       assert(roleSockets[0].sent.length === sentAfterFashion + 1, "4401 is its own frame and is not merged into 4402");
       const sentAfterWorn = roleSockets[0].sent.length;
+      roleNet.send(WIRE_HERO_PRAYER_CMD);
+      const prayerSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(prayerSent as ArrayBuffer)) === "0400000069100000", "wire.4201 frame");
+      assert(roleSockets[0].sent.length === sentAfterWorn + 1, "4201 is its own frame and is not merged into 4401");
+      const sentAfterPrayer = roleSockets[0].sent.length;
       roleNet.send("wire.4403");
       roleNet.send("wire.4404");
       roleNet.send("wire.4405");
       roleNet.send("wire.4406");
       roleNet.send("wire.4601");
-      roleNet.send("wire.4201");
+      roleNet.send("wire.4202");
+      roleNet.send("wire.74104");
       roleNet.send("wire.29001");
       roleNet.send("wire.20011");
       assert(
-        roleSockets[0].sent.length === sentAfterWorn,
-        "4403 4404 4405 4406 4601 4201 29001 and 20011 stay off the worn fashion wire"
+        roleSockets[0].sent.length === sentAfterPrayer,
+        "4403 4404 4405 4406 4601 4202 74104 29001 and 20011 stay off the hero prayer wire"
       );
       assert(
         sawLog(lines, "未发送 wire.4403") &&
@@ -8608,14 +8778,15 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.4405") &&
           sawLog(lines, "未发送 wire.4406") &&
           sawLog(lines, "未发送 wire.4601") &&
-          sawLog(lines, "未发送 wire.4201") &&
+          sawLog(lines, "未发送 wire.4202") &&
+          sawLog(lines, "未发送 wire.74104") &&
           sawLog(lines, "未发送 wire.29001") &&
           sawLog(lines, "未发送 wire.20011"),
-        "worn fashion activate replace upgrade and the unimplemented 4406 are not encoded"
+        "hero prayer write and the paged cmds are not encoded"
       );
       roleNet.send(WIRE_FASHION_CMD);
       assert(
-        roleSockets[0].sent.length === sentAfterWorn + 1 &&
+        roleSockets[0].sent.length === sentAfterPrayer + 1 &&
           bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000032110000",
         "sending 4402 does not also send 4401"
       );
@@ -10230,6 +10401,20 @@ async function checkWs(): Promise<void> {
           WireSession.fashion.marks[0].field === 8,
         "4403 4404 4405 4406 4601 4201 29001 20011 and 4402 do not replace the 4401 record"
       );
+      assert(
+        WireSession.hasHeroPrayer() &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === 1 &&
+          WireSession.heroPrayer.endTime === null &&
+          formatWireHeroPrayerLine(WireSession.heroPrayer) === "privilege=1 / end_time=无" &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.marks[0].text === "9",
+        "4201 writes privilege and does not replace the 4401 record"
+      );
+      assert(
+        Session.gold === goldBeforeBadWorn && Session.diamond === diamondBeforeBadWorn,
+        "4201 does not write gold or diamonds while the worn list stays"
+      );
       roleSockets[0].push(encodeFrame(WireCmd.heroFashion, new Uint8Array([0x80])));
       assert(
         WireSession.hasWornFashion() &&
@@ -10345,6 +10530,142 @@ async function checkWs(): Promise<void> {
           WireSession.fashion.list.length === 7 &&
           sawWire("4401 解不开，穿戴皮肤英雄列表不改"),
         "undecodable 4401 row keeps the previous snapshot"
+      );
+      const goldBeforeBadPrayer = Session.gold;
+      const diamondBeforeBadPrayer = Session.diamond;
+      roleSockets[0].push(encodeFrame(WireCmd.heroPrayerData, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasHeroPrayer() &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === 1 &&
+          WireSession.heroPrayer.endTime === null &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 0 &&
+          WireSession.wornFashion.marks[0].field === 8 &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.list.length === 7 &&
+          sawWire("4201 解不开"),
+        "bad 4201 keeps the prayer record and the 4401 record"
+      );
+      assert(
+        Session.gold === goldBeforeBadPrayer && Session.diamond === diamondBeforeBadPrayer,
+        "bad 4201 stays off the wallet"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroPrayerData));
+      assert(
+        WireSession.hasHeroPrayer() &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === null &&
+          WireSession.heroPrayer.endTime === null &&
+          formatWireHeroPrayerLine(WireSession.heroPrayer) === "privilege=无 / end_time=无" &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 0 &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.list.length === 7,
+        "empty 4201 body stays synced and does not invent zero"
+      );
+      assert(
+        Session.gold === goldBeforeBadPrayer && Session.diamond === diamondBeforeBadPrayer,
+        "empty 4201 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroPrayerData, prayerZero));
+      assert(
+        WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === 0 &&
+          WireSession.heroPrayer.endTime === 0 &&
+          formatWireHeroPrayerLine(WireSession.heroPrayer) === "privilege=0 / end_time=0 未开" &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.marks[0].field === 8,
+        "present 4201 zero stays zero and leaves 4401"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroPrayerData, prayerMissingEnd));
+      assert(
+        WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === 1 &&
+          WireSession.heroPrayer.endTime === null &&
+          formatWireHeroPrayerLine(WireSession.heroPrayer) === "privilege=1 / end_time=无",
+        "missing 4201 end_time stays blank"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroPrayerData, prayerMissingPriv));
+      assert(
+        WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === null &&
+          WireSession.heroPrayer.endTime === 1792464848 &&
+          formatWireHeroPrayerLine(WireSession.heroPrayer) === "privilege=无 / end_time=1792464848",
+        "missing 4201 privilege stays blank"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroPrayerData, prayerNeg));
+      assert(
+        WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.endTime === null &&
+          formatWireHeroPrayerLine(WireSession.heroPrayer).indexOf("end_time=无") >= 0 &&
+          formatWireHeroPrayerLine(WireSession.heroPrayer).indexOf("字段2=-1") >= 0,
+        "4201 end_time -1 is not written as zero"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroPrayerData, prayerWide));
+      assert(
+        WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.endTime === 1099511627776 &&
+          formatWireHeroPrayerLine(WireSession.heroPrayer) === "privilege=1 / end_time=1099511627776",
+        "4201 end_time keeps the wide integer"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroPrayerData, prayerBody));
+      assert(
+        WireSession.hasHeroPrayer() &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === 1 &&
+          WireSession.heroPrayer.endTime === 1792464848 &&
+          WireSession.heroPrayer.marks[0].field === 8 &&
+          formatWireHeroPrayerLine(WireSession.heroPrayer) === "privilege=1 / end_time=1792464848 / 字段8=1" &&
+          wireHeroPrayerNote(WireSession.heroPrayer).indexOf(WIRE_HERO_PRAYER_SIDE_EFFECT) >= 0 &&
+          wireHeroPrayerNote(WireSession.heroPrayer).indexOf("不写金币") >= 0 &&
+          wireHeroPrayerNote(WireSession.heroPrayer).indexOf("不写钻石") >= 0 &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.marks[0].field === 8 &&
+          WireSession.fashion !== null &&
+          WireSession.fashion.list.length === 7,
+        "4201 sample keeps privilege and end_time and leaves 4401"
+      );
+      assert(
+        Session.gold === goldBeforeBadPrayer && Session.diamond === diamondBeforeBadPrayer,
+        "4201 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(4202, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(74104, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 4)));
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion, wornOuterOnly));
+      assert(
+        WireSession.hasHeroPrayer() &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === 1 &&
+          WireSession.heroPrayer.endTime === 1792464848 &&
+          WireSession.heroPrayer.marks[0].field === 8 &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 0 &&
+          formatWireWornFashionHead(WireSession.wornFashion) === "list=空穿戴 / 字段8=1",
+        "4202 74104 4601 29001 20011 and 4401 do not replace the 4201 record"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroFashion, wornBody));
+      assert(
+        WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 6 &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.endTime === 1792464848 &&
+          WireSession.heroPrayer.privilege === 1,
+        "4401 refresh does not clear the 4201 record"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.heroPrayerData, prayerOuterOnly));
+      assert(
+        WireSession.hasHeroPrayer() &&
+          WireSession.heroPrayer !== null &&
+          WireSession.heroPrayer.privilege === null &&
+          WireSession.heroPrayer.endTime === null &&
+          formatWireHeroPrayerLine(WireSession.heroPrayer) === "privilege=无 / end_time=无 / 字段8=1" &&
+          WireSession.wornFashion !== null &&
+          WireSession.wornFashion.list.length === 6,
+        "non-empty 4201 without the two fields stays synced and leaves 4401"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
