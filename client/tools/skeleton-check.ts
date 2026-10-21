@@ -675,6 +675,19 @@ import {
   WIRE_WORLD_UNSYNCED_TOAST,
   wireWorldNote,
 } from "../assets/scripts/net/protocol/wireWorld";
+import {
+  decodeWirePromotion,
+  formatWirePromotionHead,
+  formatWirePromotionLine,
+  WIRE_PROMOTION_CMD,
+  WIRE_PROMOTION_EMPTY,
+  WIRE_PROMOTION_FIELD_NOTE,
+  WIRE_PROMOTION_READONLY_NOTE,
+  WIRE_PROMOTION_READONLY_TITLE,
+  WIRE_PROMOTION_SIDE_EFFECT,
+  WIRE_PROMOTION_UNSYNCED_TOAST,
+  wirePromotionNote,
+} from "../assets/scripts/net/protocol/wirePromotion";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1392,6 +1405,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("illustrat") === "city", "illustrat stays on the city tab");
   assert(rootTabFor("pet") === "city", "pet stays on the city tab");
   assert(rootTabFor("world") === "city", "world level stays on the city tab");
+  assert(rootTabFor("promotion") === "city", "promotion list stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -3913,6 +3927,16 @@ async function checkWs(): Promise<void> {
   const worldMissing = fieldVarint(2, 7);
   const worldZero = fieldVarint(1, 0);
   const worldWide = fieldVarint(1, 1099511627776);
+  const promoRecordA = concatBytes(fieldVarint(1, 3), fieldVarint(2, 1));
+  const promoRecordB = concatBytes(fieldVarint(2, 0), fieldVarint(6, 4));
+  const promoBody = concatBytes(
+    concatBytes(concatBytes(fieldVarint(1, 1), fieldBytes(2, promoRecordA)), fieldBytes(2, promoRecordB)),
+    fieldVarint(5, 9)
+  );
+  const promoMissing = fieldVarint(4, 7);
+  const promoZero = fieldVarint(1, 0);
+  const promoWide = fieldBytes(2, fieldVarint(2, 1099511627776));
+  const promoOuterOnly = fieldVarint(7, 2);
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -4450,6 +4474,97 @@ async function checkWs(): Promise<void> {
       decodeWireWorld(worldSticky.frames[0].body)?.level === 1,
     "sticky 51001 frame stops at its length prefix"
   );
+  const loggedPromotion = decodeWirePromotion(promoBody);
+  assert(WireCmd.promotionList === 20001 && WireCmd.roleProfile === 2001, "online 20001 stays off role profile 2001");
+  assert(WireCmd.promotionList !== WireCmd.worldLevel, "20001 stays off world level 51001");
+  assert(bytesToHex(encodeFrame(WireCmd.promotionList)) === "04000000214e0000", "empty c2s 20001");
+  assert(bytesToHex(encodeFrame(20018)) === "04000000324e0000", "20018 claim frame stays distinct");
+  assert(bytesToHex(encodeFrame(20004)) !== "04000000214e0000", "20004 is not the 20001 frame");
+  assert(bytesToHex(encodeFrame(20010)) !== "04000000214e0000", "20010 is not the 20001 frame");
+  assert(bytesToHex(encodeFrame(3007)) !== "04000000214e0000", "3007 is not the 20001 frame");
+  assert(WIRE_PROMOTION_READONLY_TITLE === "基金列表（真服只读）", "readonly promotion title");
+  assert(WIRE_PROMOTION_UNSYNCED_TOAST === "真服未同步", "unsynced promotion toast");
+  assert(WIRE_PROMOTION_EMPTY === "空记录", "empty promotion record label");
+  assert(
+    WIRE_PROMOTION_SIDE_EFFECT.indexOf("51001") >= 0 &&
+      WIRE_PROMOTION_SIDE_EFFECT.indexOf("20018") >= 0 &&
+      WIRE_PROMOTION_SIDE_EFFECT.indexOf("20004") >= 0 &&
+      WIRE_PROMOTION_SIDE_EFFECT.indexOf("20010") >= 0 &&
+      WIRE_PROMOTION_SIDE_EFFECT.indexOf("3007") >= 0 &&
+      WIRE_PROMOTION_READONLY_NOTE.indexOf("不发 20018") >= 0 &&
+      WIRE_PROMOTION_READONLY_NOTE.indexOf("20004") >= 0 &&
+      WIRE_PROMOTION_READONLY_NOTE.indexOf("20010") >= 0 &&
+      WIRE_PROMOTION_READONLY_NOTE.indexOf("不做 3007") >= 0 &&
+      WIRE_PROMOTION_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_PROMOTION_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_PROMOTION_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_PROMOTION_FIELD_NOTE.indexOf("is_buy_foundation") >= 0 &&
+      WIRE_PROMOTION_FIELD_NOTE.indexOf("key") >= 0 &&
+      WIRE_PROMOTION_FIELD_NOTE.indexOf("value") >= 0 &&
+      WIRE_PROMOTION_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "promotion page names foundation fields and refuses 20018 20004 20010 and 3007"
+  );
+  assert(
+    decodeWirePromotion(new Uint8Array(0)) !== null &&
+      decodeWirePromotion(new Uint8Array(0))?.isBuyFoundation === null &&
+      decodeWirePromotion(new Uint8Array(0))?.records.length === 0 &&
+      formatWirePromotionHead(decodeWirePromotion(new Uint8Array(0)) || { isBuyFoundation: null, records: [], marks: [] }) ===
+        "is_buy_foundation=无 / 空记录",
+    "empty 20001 body is synced and does not invent zero"
+  );
+  assert(decodeWirePromotion(new Uint8Array([0x80])) === null, "bad 20001 ignored");
+  const promoMissingSnap = decodeWirePromotion(promoMissing);
+  assert(
+    promoMissingSnap !== null &&
+      promoMissingSnap.isBuyFoundation === null &&
+      promoMissingSnap.records.length === 0 &&
+      promoMissingSnap.marks.length === 1 &&
+      promoMissingSnap.marks[0].field === 4 &&
+      formatWirePromotionHead(promoMissingSnap) === "is_buy_foundation=无 / 空记录 / 字段4=7",
+    "missing 20001 is_buy_foundation stays blank"
+  );
+  assert(
+    decodeWirePromotion(promoZero) !== null &&
+      decodeWirePromotion(promoZero)?.isBuyFoundation === 0 &&
+      formatWirePromotionHead(decodeWirePromotion(promoZero) || { isBuyFoundation: null, records: [], marks: [] }) ===
+        "is_buy_foundation=0 / 空记录",
+    "present 20001 zero stays zero"
+  );
+  const promoWideSnap = decodeWirePromotion(promoWide);
+  assert(
+    promoWideSnap !== null &&
+      promoWideSnap.isBuyFoundation === null &&
+      promoWideSnap.records.length === 1 &&
+      promoWideSnap.records[0].key === null &&
+      promoWideSnap.records[0].value === 1099511627776,
+    "20001 map value keeps the wide int64 and does not invent a key"
+  );
+  assert(
+    loggedPromotion !== null &&
+      loggedPromotion.isBuyFoundation === 1 &&
+      loggedPromotion.records.length === 2 &&
+      loggedPromotion.records[0].key === 3 &&
+      loggedPromotion.records[0].value === 1 &&
+      loggedPromotion.records[1].key === null &&
+      loggedPromotion.records[1].value === 0 &&
+      loggedPromotion.marks.length === 1 &&
+      loggedPromotion.marks[0].field === 5 &&
+      formatWirePromotionLine(loggedPromotion.records[1]) === "key=无 / value=0 / 字段6=4" &&
+      formatWirePromotionHead(loggedPromotion) === "is_buy_foundation=1 / 2 条 / 字段5=9" &&
+      wirePromotionNote(loggedPromotion).indexOf(WIRE_PROMOTION_SIDE_EFFECT) >= 0 &&
+      wirePromotionNote(loggedPromotion).indexOf("不写金币") >= 0 &&
+      wirePromotionNote(loggedPromotion).indexOf("不写钻石") >= 0,
+    "20001 sample keeps is_buy_foundation and key value and does not fill missing numbers with 0"
+  );
+  const promoSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.promotionList, promoBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    promoSticky.frames.length === 2 &&
+      promoSticky.frames[0].cmdId === 20001 &&
+      promoSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWirePromotion(promoSticky.frames[0].body)?.isBuyFoundation === 1,
+    "sticky 20001 frame stops at its length prefix"
+  );
+  assert(decodeWirePromotion(fieldBytes(2, new Uint8Array([0x80]))) === null, "20001 record blob that will not decode is ignored");
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -4909,6 +5024,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.illustratReward, illustratBody));
       roleSockets[0].push(encodeFrame(WireCmd.petInfoList, petBody));
       roleSockets[0].push(encodeFrame(WireCmd.worldLevel, worldBody));
+      roleSockets[0].push(encodeFrame(WireCmd.promotionList, promoBody));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -4929,6 +5045,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasIllustrat() && WireSession.illustrat === null, "illustrat stays unsynced before the city role");
       assert(!WireSession.hasPet() && WireSession.pet === null, "pet stays unsynced before the city role");
       assert(!WireSession.hasWorld() && WireSession.world === null, "world level stays unsynced before the city role");
+      assert(!WireSession.hasPromotion() && WireSession.promotion === null, "promotion stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -5128,6 +5245,22 @@ async function checkWs(): Promise<void> {
         "flush writes the 51001 level and leaves the 74100 rows"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "51001 stays off the wallet");
+      assert(
+        WireSession.hasPromotion() &&
+          WireSession.promotion !== null &&
+          WireSession.promotion.isBuyFoundation === 1 &&
+          WireSession.promotion.records.length === 2 &&
+          WireSession.promotion.records[0].key === 3 &&
+          WireSession.promotion.records[0].value === 1 &&
+          WireSession.promotion.records[1].key === null &&
+          WireSession.promotion.records[1].value === 0 &&
+          formatWirePromotionLine(WireSession.promotion.records[1]) === "key=无 / value=0 / 字段6=4" &&
+          formatWirePromotionHead(WireSession.promotion) === "is_buy_foundation=1 / 2 条 / 字段5=9" &&
+          WireSession.world !== null &&
+          WireSession.world.level === 1,
+        "flush writes the 20001 foundation list and leaves the 51001 level"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "20001 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -5373,7 +5506,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 15, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 16, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -5435,6 +5568,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 51001 after 74100"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 15] as ArrayBuffer)) === "04000000214e0000",
+        "pullIdle sends empty c2s 20001 after 51001"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -5449,6 +5586,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 4013") &&
           sawLog(lines, "发送 c2s 74100") &&
           sawLog(lines, "发送 c2s 51001") &&
+          sawLog(lines, "发送 c2s 20001") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -5457,7 +5595,12 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000ad0f0000") &&
           sawLog(lines, "0400000074210100") &&
           sawLog(lines, "0400000039c70000") &&
+          sawLog(lines, "04000000214e0000") &&
           sawLog(lines, "发送 c2s 20101") === false &&
+          sawLog(lines, "发送 c2s 20018") === false &&
+          sawLog(lines, "发送 c2s 20004") === false &&
+          sawLog(lines, "发送 c2s 20010") === false &&
+          sawLog(lines, "发送 c2s 3007") === false &&
           sawLog(lines, "0400000002520000") === false &&
           sawLog(lines, "发送 c2s 12020") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
@@ -5717,6 +5860,20 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.20101");
       assert(roleSockets[0].sent.length === sentBeforeWorldOther, "20101 stays off the world wire");
       assert(sawLog(lines, "未发送 wire.20101"), "alternate 20101 is not encoded");
+      roleNet.send(WIRE_PROMOTION_CMD);
+      const promotionSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(promotionSent as ArrayBuffer)) === "04000000214e0000", "wire.20001 frame");
+      const sentBeforePromotionOther = roleSockets[0].sent.length;
+      roleNet.send("wire.20018");
+      roleNet.send("wire.20004");
+      roleNet.send("wire.20010");
+      assert(roleSockets[0].sent.length === sentBeforePromotionOther, "20018 20004 and 20010 stay off the promotion wire");
+      assert(
+        sawLog(lines, "未发送 wire.20018") &&
+          sawLog(lines, "未发送 wire.20004") &&
+          sawLog(lines, "未发送 wire.20010"),
+        "promotion claim and bypass cmds are not encoded"
+      );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
       assert(
@@ -6098,6 +6255,56 @@ async function checkWs(): Promise<void> {
         "51001 without level stays blank and leaves 74100"
       );
       assert(Session.gold === goldBeforeBadWorld && Session.diamond === diamondBeforeBadWorld, "missing 51001 level does not write gold or diamonds");
+      const goldBeforeBadPromotion = Session.gold;
+      const diamondBeforeBadPromotion = Session.diamond;
+      roleSockets[0].push(encodeFrame(WireCmd.promotionList, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasPromotion() &&
+          WireSession.promotion !== null &&
+          WireSession.promotion.isBuyFoundation === 1 &&
+          WireSession.promotion.records.length === 2 &&
+          WireSession.world !== null &&
+          WireSession.world.level === null &&
+          sawWire("20001 解不开"),
+        "bad 20001 keeps the foundation list and the 51001 level"
+      );
+      assert(Session.gold === goldBeforeBadPromotion && Session.diamond === diamondBeforeBadPromotion, "bad 20001 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.promotionList));
+      assert(
+        WireSession.hasPromotion() &&
+          WireSession.promotion !== null &&
+          WireSession.promotion.isBuyFoundation === null &&
+          WireSession.promotion.records.length === 0 &&
+          formatWirePromotionHead(WireSession.promotion) === "is_buy_foundation=无 / 空记录" &&
+          WireSession.world !== null &&
+          WireSession.world.marks.length === 1,
+        "empty 20001 body clears is_buy_foundation without writing zero and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadPromotion && Session.diamond === diamondBeforeBadPromotion, "empty 20001 does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.promotionList, promoMissing));
+      assert(
+        WireSession.hasPromotion() &&
+          WireSession.promotion !== null &&
+          WireSession.promotion.isBuyFoundation === null &&
+          WireSession.promotion.records.length === 0 &&
+          WireSession.promotion.marks.length === 1 &&
+          WireSession.promotion.marks[0].field === 4 &&
+          WireSession.world !== null &&
+          WireSession.world.marks[0].field === 2,
+        "20001 without is_buy_foundation stays blank and leaves 51001"
+      );
+      assert(Session.gold === goldBeforeBadPromotion && Session.diamond === diamondBeforeBadPromotion, "missing 20001 field does not write gold or diamonds");
+      roleSockets[0].push(encodeFrame(WireCmd.promotionList, promoOuterOnly));
+      assert(
+        WireSession.hasPromotion() &&
+          WireSession.promotion !== null &&
+          WireSession.promotion.records.length === 0 &&
+          WireSession.promotion.marks.length === 1 &&
+          WireSession.promotion.marks[0].field === 7 &&
+          WireSession.world !== null &&
+          WireSession.world.marks[0].field === 2,
+        "non-empty 20001 without records stays synced and leaves 51001"
+      );
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {

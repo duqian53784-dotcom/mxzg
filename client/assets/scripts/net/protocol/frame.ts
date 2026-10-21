@@ -158,6 +158,15 @@ export const WireCmd = {
    * 不是角色资料 2001。
    */
   worldLevel: 51001,
+  /**
+   * c2s 空体。进主城、空 c2s 51001 之后发，只发一次。
+   * 整帧 `04 00 00 00 21 4e 00 00`。20001 = 0x4E21，小端 21 4e 00 00。
+   * GReqPromotionList / GResPromotionList。is_buy_foundation 是字段 1。
+   * foundation_reward_record 是字段 2，PSMapData 的 key、value。
+   * 不发 20018 领奖。不发 20004、20010。不做 3007。
+   * 不夹在 2001 和 3007 中间。不是角色资料 2001。不是世界等级 51001。
+   */
+  promotionList: 20001,
 } as const;
 
 /**
