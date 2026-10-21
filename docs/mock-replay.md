@@ -2,6 +2,8 @@
 
 没有 Java 服时，编辑器预览仍然只走 `MockTransport`。不需要另起进程，也没有 `npm run mock-server`。
 
+要连本机游戏服 WebSocket 时，预览地址加 `?transport=ws`（`http://127.0.0.1:7456/?transport=ws`）。那一步只确认 `ws://127.0.0.1:13101` 通不通，不替换这里的 Mock 会话。见 `docs/h5-websocket.md`。
+
 假服状态在 `MockGameSession` 上，和传输绑在一起。同一次预览里多次请求共用这一份：登录、创角、主线连打都会改它。断线重连不新建会话，进度还在。
 
 ## 默认路径

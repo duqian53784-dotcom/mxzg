@@ -4,6 +4,7 @@ import { NetMessage } from "../NetTypes";
  * 编解码缝。现在请求和回包都是明文对象，MockTransport 直接读。
  * 换成真 Protobuf 时只改本文件：encode 出字节，decode 回与 types.ts 相同的字段。
  * Proto.* 与 Boot 不要自己序列化。
+ * D2 的 WsTransport 还不发送这里的对象：帧头和真实协议号未对齐。
  */
 export function encodeRequest(cmd: string, data?: unknown): NetMessage {
   return { cmd, data };

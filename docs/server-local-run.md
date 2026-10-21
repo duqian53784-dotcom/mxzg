@@ -3,7 +3,7 @@
 > **来源：** 本文按 2026-10-19《项目分析与启动指南》写成。端口、密码、路径和命令只取那份分析，不另补。  
 > **D1 已在倩本机验证（2026-10-21，Asia/Shanghai）。** 双击 `scripts\start-local-server.bat`：`netstat` 见 TCP `11122`、TCP `9902`、WS `13101` 均在听，脚本打出「[启动成功]」。`PROJECT_PLAN.md` 里 D1 已勾选。  
 > **cross 默认不启。** 游戏服连 `127.0.0.1:11422` 失败、中心服「游戏服加载跨服失败」类日志是预期，不算启动失败。分析里 cross 曾因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败；单机只需 center + gameserver。  
-> **客户端仍走 Mock。** 本仓库 H5 连服是 **D2**，用分析里的游戏服 WebSocket **13101**。
+> **客户端默认仍走 Mock。** 预览加 `?transport=ws` 可测 WebSocket **13101** 连通（不发登录包）。步骤见 `docs/h5-websocket.md`。D2 勾选仍等倩本机验证。
 
 `server/`、`config/` 是本机 junction，不在 Git 里。不要把 junction 背后的内容推进这个仓库。
 
@@ -33,14 +33,14 @@
 
 服读的是 `F:\mxzg-local\gameconfig`，不是整个 `F:\mxzg-local`，也不是新客户端用的 JSON。分析把表放在纯英文目录，避免中文路径在 properties 里出编码问题。客户端导出是 D4，分析没有说两份表是同一次导出。
 
-## 客户端现在连的是 Mock
+## 客户端默认仍是 Mock
 
-预览不需要起服。
+不加参数时，预览不需要起服。
 
 - Boot 走 `mock://`，`MockTransport` 里一份 `MockGameSession`。
-- 协议在 `client/assets/scripts/net/protocol/`。`CmdId` 是客户端占位号，**不是**旧服消息号。限时活动是 `2801`–`2804`，同样是占位。
-- 编解码仍是明文对象。真 WebSocket 要改的是 `codec.ts` 和传输层，调用方继续用 `Proto.*`。
-- 细节见 `docs/protocol-stubs.md` 和 `docs/mock-replay.md`。
+- 协议在 `client/assets/scripts/net/protocol/`。`CmdId` 是客户端占位号，**不是**旧服消息号。限时活动是 `2801`–`2804`，同样是占位。心跳占位是 **1002**。旧桥日志里的心跳是 **1004**，不要混。
+- 编解码仍是明文对象。`?transport=ws` 只打开套接字，**不把** `encodeRequest` 的对象写到 13101。调用方继续用 `Proto.*` 走 Mock。
+- 细节见 `docs/protocol-stubs.md`、`docs/mock-replay.md`、`docs/h5-websocket.md`。
 
 D2 才把本仓库 H5 接到游戏服 WebSocket `13101`。在那之前不要改连接、占位号或场景。
 

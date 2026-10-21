@@ -55,6 +55,10 @@ export const Cmd = {
   limitedBuy: "limited.buy",
 } as const;
 
+/**
+ * 下面全是客户端占位号，不是旧服消息号。
+ * 旧 H5 桥日志里登录请求是 1001、心跳是 1004，只说明数字碰巧或不同，D2 不拿来组包。
+ */
 export const CmdId = {
   login: 1001,
   heartbeat: 1002,

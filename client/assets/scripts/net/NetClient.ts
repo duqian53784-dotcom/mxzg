@@ -13,6 +13,19 @@ export type { MockRoleState, MockSessionSeed } from "./MockGameSession";
 export { parseMockFixture } from "./MockFixture";
 export type { MockEnvelope, MockFixture } from "./MockFixture";
 export { ReplayTransport } from "./ReplayTransport";
+export { WsTransport, readObservedCmdId } from "./WsTransport";
+export {
+  DEFAULT_WS_URL,
+  TransportConfig,
+  parseTransportSearch,
+  readPreviewTransport,
+  WS_CLOSE_STATUS,
+  WS_DOWN_LOG,
+  WS_DOWN_STATUS,
+  WS_MOCK_STATUS,
+  WS_OPEN_STATUS,
+  WS_OPEN_TOAST,
+} from "./transportSelect";
 
 export interface NetClientOptions {
   heartbeatMs?: number;
@@ -24,6 +37,7 @@ export interface NetClientOptions {
 /**
  * 连接状态机 + 心跳 + 断线重连占位 + subscribe/emit。
  * 默认走 MockTransport（mock://local），不需要真实服。
+ * ?transport=ws 时 Boot 另建一条 WsTransport，不替换这条 Mock。
  */
 export class NetClient {
   static shared = new NetClient();

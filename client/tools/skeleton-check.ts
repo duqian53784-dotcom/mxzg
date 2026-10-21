@@ -1,5 +1,5 @@
 /**
- * B3–C15、基础商店、许愿池、咖啡馆、礼包与限时活动自检（不启动 Creator）。
+ * B3–C15、基础商店、许愿池、咖啡馆、礼包、限时活动与 D2 WebSocket 传输自检（不启动 Creator）。
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
@@ -436,7 +436,17 @@ import { MockTransport } from "../assets/scripts/net/MockTransport";
 import { NetClient } from "../assets/scripts/net/NetClient";
 import { NetState } from "../assets/scripts/net/NetTypes";
 import { ReplayTransport } from "../assets/scripts/net/ReplayTransport";
-import { Cmd, P0_CMDS, Proto } from "../assets/scripts/net/protocol";
+import { readObservedCmdId, WsSocketEvent, WsSocketLike, WsTransport } from "../assets/scripts/net/WsTransport";
+import {
+  DEFAULT_WS_URL,
+  parseTransportSearch,
+  readPreviewTransport,
+  TransportConfig,
+  WS_DOWN_LOG,
+  WS_DOWN_STATUS,
+  WS_OPEN_STATUS,
+} from "../assets/scripts/net/transportSelect";
+import { Cmd, CmdId, P0_CMDS, Proto } from "../assets/scripts/net/protocol";
 import { PageStack } from "../assets/scripts/ui/PageStack";
 import { PanelNav } from "../assets/scripts/ui/PanelNav";
 import { PopupQueue } from "../assets/scripts/ui/PopupQueue";
@@ -2681,6 +2691,202 @@ async function checkLogin7(): Promise<void> {
   net.close();
 }
 
+class FakeSocket implements WsSocketLike {
+  binaryType = "";
+  sent: Array<string | ArrayBuffer> = [];
+  closed = false;
+  private listeners: { [type: string]: Array<(ev: WsSocketEvent) => void> } = {};
+
+  addEventListener(type: string, listener: (ev: WsSocketEvent) => void): void {
+    const list = this.listeners[type] || [];
+    list.push(listener);
+    this.listeners[type] = list;
+  }
+
+  removeEventListener(type: string, listener: (ev: WsSocketEvent) => void): void {
+    const list = this.listeners[type];
+    if (!list) return;
+    const next: Array<(ev: WsSocketEvent) => void> = [];
+    for (let i = 0; i < list.length; i++) {
+      if (list[i] !== listener) next.push(list[i]);
+    }
+    this.listeners[type] = next;
+  }
+
+  send(data: string | ArrayBuffer): void {
+    this.sent.push(data);
+  }
+
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.emit("close", { code: 1000, reason: "" });
+  }
+
+  open(): void {
+    this.emit("open", {});
+  }
+
+  fail(): void {
+    this.emit("error", {});
+  }
+
+  serverClose(code: number): void {
+    this.closed = true;
+    this.emit("close", { code, reason: "bye" });
+  }
+
+  push(data: unknown): void {
+    this.emit("message", { data });
+  }
+
+  private emit(type: string, ev: WsSocketEvent): void {
+    const list = (this.listeners[type] || []).slice();
+    for (let i = 0; i < list.length; i++) list[i](ev);
+  }
+}
+
+function leFrame(cmd: number, size = 8): ArrayBuffer {
+  const buf = new ArrayBuffer(size);
+  if (size >= 8) new DataView(buf).setUint32(4, cmd, true);
+  return buf;
+}
+
+function sawLog(lines: string[], part: string): boolean {
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].indexOf(part) >= 0) return true;
+  }
+  return false;
+}
+
+async function checkWs(): Promise<void> {
+  assert(CmdId.login === 1001 && CmdId.heartbeat === 1002, "placeholder ids stay put");
+  assert(DEFAULT_WS_URL === "ws://127.0.0.1:13101", "default ws url");
+  assert(TransportConfig.defaultKind === "mock", "config default is mock");
+  const plain = parseTransportSearch("");
+  assert(plain.kind === "mock" && plain.wsUrl === DEFAULT_WS_URL, "empty search is mock");
+  const ws = parseTransportSearch("?transport=ws");
+  assert(ws.kind === "ws" && ws.wsUrl === DEFAULT_WS_URL, "query ws");
+  const mixed = parseTransportSearch("?safe=88,0,34,0&transport=WS&ws=wss://127.0.0.1:13101/game");
+  assert(mixed.kind === "ws" && mixed.wsUrl === "wss://127.0.0.1:13101/game", "wss override beside safe");
+  const forcedMock = parseTransportSearch("?transport=mock", { defaultKind: "ws", wsUrl: DEFAULT_WS_URL });
+  assert(forcedMock.kind === "mock" && forcedMock.wsUrl === DEFAULT_WS_URL, "query mock wins");
+  const flagged = parseTransportSearch("", { defaultKind: "ws", wsUrl: "ws://127.0.0.1:9" });
+  assert(flagged.kind === "ws" && flagged.wsUrl === "ws://127.0.0.1:9", "config flag without query");
+  const junk = parseTransportSearch("?transport=tcp&ws=http://127.0.0.1:13101");
+  assert(junk.kind === "mock" && junk.wsUrl === DEFAULT_WS_URL, "bad scheme ignored");
+  assert(WS_DOWN_STATUS.indexOf("服未启动") >= 0 && WS_DOWN_LOG.indexOf("start-local-server.bat") >= 0, "down copy");
+  assert(WS_OPEN_STATUS.indexOf("尚未发登录包") >= 0, "open copy");
+  assert(readObservedCmdId(leFrame(1004)) === 1004, "legacy heartbeat bytes");
+  assert(readObservedCmdId(leFrame(1001)) === 1001, "legacy login bytes");
+  assert(readObservedCmdId(leFrame(1002, 7)) === null, "short frame");
+
+  const host = globalThis as { location?: { search?: string }; parent?: { location?: { search?: string } } };
+  const prevLocation = host.location;
+  const prevParent = host.parent;
+  try {
+    host.location = { search: "" };
+    host.parent = { location: { search: "?transport=ws" } };
+    assert(readPreviewTransport().kind === "ws", "parent query");
+    host.location = { search: "?transport=mock" };
+    assert(readPreviewTransport().kind === "mock", "own query wins");
+  } finally {
+    host.location = prevLocation;
+    host.parent = prevParent;
+  }
+
+  const lines: string[] = [];
+  const off = GameLog.shared.subscribe((line) => {
+    if (line.tag === "Ws") lines.push(line.message);
+  });
+  try {
+    const refused = new FakeSocket();
+    const refusedTransport = new WsTransport({
+      connectTimeoutMs: 200,
+      factory: () => refused,
+    });
+    let refusedText = "";
+    const refusedPromise = refusedTransport.connect("ws://127.0.0.1:13101");
+    setTimeout(() => refused.fail(), 0);
+    try {
+      await refusedPromise;
+    } catch (err) {
+      refusedText = messageOf(err);
+    }
+    assert(refusedText === "服未启动", "refuse text " + refusedText);
+    assert(sawLog(lines, "正在连接") && sawLog(lines, "出错") && sawLog(lines, "已关闭"), "refuse logs");
+    assert(refused.sent.length === 0, "refuse sends nothing");
+
+    lines.length = 0;
+    const hung = new FakeSocket();
+    const hungTransport = new WsTransport({
+      connectTimeoutMs: 40,
+      factory: () => hung,
+    });
+    let timeoutText = "";
+    try {
+      await hungTransport.connect("ws://127.0.0.1:13101");
+    } catch (err) {
+      timeoutText = messageOf(err);
+    }
+    assert(timeoutText === "连接超时", "timeout text");
+    assert(sawLog(lines, "出错 连接超时") && sawLog(lines, "已关闭"), "timeout logs");
+
+    lines.length = 0;
+    const sockets: FakeSocket[] = [];
+    const transport = new WsTransport({
+      connectTimeoutMs: 200,
+      factory: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        setTimeout(() => socket.open(), 0);
+        return socket;
+      },
+    });
+    let dispatched = 0;
+    transport.onMessage(() => {
+      dispatched += 1;
+    });
+    const net = new NetClient(transport, {
+      heartbeatMs: 60000,
+      reconnectDelayMs: 20,
+      maxReconnect: 0,
+      requestTimeoutMs: 200,
+    });
+    await net.connect("ws://127.0.0.1:13101");
+    assert(net.state === "connected" && sockets.length === 1, "ws connected");
+    assert(sawLog(lines, "已打开 ws://127.0.0.1:13101"), "open log");
+    net.send("login", { account: "mock" });
+    net.send("heartbeat", { clientTime: 1 });
+    net.send("heartbeat", { clientTime: 2 });
+    assert(sockets[0].sent.length === 0, "login and heartbeat stay off the wire");
+    assert(sawLog(lines, "未发送 login") && sawLog(lines, "未发送 heartbeat"), "suppressed cmds");
+    const seen: string[] = [];
+    net.subscribe("*", (msg) => seen.push(msg.cmd));
+    sockets[0].push(leFrame(1004));
+    sockets[0].push("hello");
+    assert(dispatched === 0 && seen.length === 0, "inbound is not a game message");
+    assert(sawLog(lines, "第5-8字节协议号 1004") && sawLog(lines, "收到文本"), "inbound log");
+    sockets[0].serverClose(1006);
+    assert(net.state === "closed", "peer close stops reconnect");
+    assert(sawLog(lines, "已关闭 code=1006"), "close code");
+
+    if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "function") {
+      const live = new WsTransport({ connectTimeoutMs: 400 });
+      let liveText = "";
+      try {
+        await live.connect("ws://127.0.0.1:1");
+      } catch (err) {
+        liveText = messageOf(err);
+      }
+      assert(liveText === "服未启动" || liveText === "连接超时", "closed port " + liveText);
+      live.close();
+    }
+  } finally {
+    off();
+  }
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -2692,6 +2898,7 @@ async function main(): Promise<void> {
   checkMainline();
   checkIdleMath();
   await checkNet();
+  await checkWs();
   await checkSession();
   await checkNoRole();
   await checkReplay();

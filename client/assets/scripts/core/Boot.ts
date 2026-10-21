@@ -4,7 +4,9 @@
  * 阶段：version → hot-update 占位 → 读表 → 登录门（或跳过）→ Main。
  * 登录是本组件在 Canvas 上生成的面板，不另建 Login 场景。
  * 账号走 Proto.login / Proto.roleEnter；没有角色或点「创角」时再 Proto.roleCreate。
- * 仍是 NetClient → MockTransport，不需要服务器。
+ * 默认仍是 NetClient → MockTransport，不需要服务器。
+ * 预览地址加 ?transport=ws 才连 ws://127.0.0.1:13101，只看连通，不发登录包。
+ * 连不上会提示检查 scripts/start-local-server.bat，并可改走 Mock。
  *
  * Creator 里怎么挂（仓库不改 .scene，避免脚本 uuid 对不上）：
  * 1. 用 Creator 3.8.8 打开 client 工程
@@ -14,6 +16,7 @@
  * 5. 保存场景。项目启动场景保持 Boot，再点预览
  * 6. 控制台应出现 [Boot] stage=version / hot-update / config / login
  * 7. 选服后点「进入游戏」：Mock 登录成功后 director.loadScene("Main")
+ *    地址带 ?transport=ws 时，这一步只连接本机 13101，成功也不进真实主城
  *    账号不是 mock、或点「创角」时先出创角面板（Proto.roleCreate）
  *    Main 场景可以是空的。若 Canvas 上没有 MainApp，这里会补挂
  * 8. 勾选 skipLogin 可跳过面板，仍用检查器里的账号进 Main
@@ -25,6 +28,18 @@ import { _decorator, Component, director, Node, sys, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
 import { listOpenEntries } from "../config/gates";
 import { NetClient } from "../net/NetClient";
+import { WsTransport } from "../net/WsTransport";
+import { NetState } from "../net/NetTypes";
+import {
+  readPreviewTransport,
+  TransportChoice,
+  WS_CLOSE_STATUS,
+  WS_DOWN_LOG,
+  WS_DOWN_STATUS,
+  WS_MOCK_STATUS,
+  WS_OPEN_STATUS,
+  WS_OPEN_TOAST,
+} from "../net/transportSelect";
 import { Proto } from "../net/protocol";
 import { RoleEnterResp } from "../net/protocol/types";
 import { buildCreateRolePanel, CreateRolePanelView } from "../ui/CreateRolePanel";
@@ -61,6 +76,13 @@ export class Boot extends Component {
   private authBusy = false;
   private loginPanel: LoginPanelView | null = null;
   private createPanel: CreateRolePanelView | null = null;
+  private alive = true;
+  private useWs = false;
+  private wsChoice: TransportChoice = readPreviewTransport();
+  private wsEpoch = 0;
+  private wsLive = false;
+  private wsNet: NetClient | null = null;
+  private wsStateOff: (() => void) | null = null;
 
   start() {
     if (this.started) return;
@@ -69,6 +91,16 @@ export class Boot extends Component {
   }
 
   onDestroy() {
+    this.alive = false;
+    this.wsEpoch += 1;
+    if (this.wsStateOff) {
+      this.wsStateOff();
+      this.wsStateOff = null;
+    }
+    if (this.wsNet) {
+      this.wsNet.close();
+      this.wsNet = null;
+    }
     if (this.safeBinding) {
       this.safeBinding.dispose();
       this.safeBinding = null;
@@ -76,6 +108,9 @@ export class Boot extends Component {
   }
 
   private async runBoot(): Promise<void> {
+    this.wsChoice = readPreviewTransport();
+    this.useWs = this.wsChoice.kind === "ws";
+    GameLog.shared.info("Boot", this.useWs ? "transport=ws " + this.wsChoice.wsUrl : "transport=mock");
     const canvas = this.resolveCanvas();
     this.canvas = canvas;
     const frame = this.mountSafeFrame(canvas);
@@ -90,7 +125,7 @@ export class Boot extends Component {
     await this.loadConfig();
     if (!this.isValid) return;
 
-    if (this.skipLogin) {
+    if (this.skipLogin && !this.useWs) {
       setText(status, "跳过登录，Mock 进入…");
       try {
         await this.skipIntoMain();
@@ -147,14 +182,126 @@ export class Boot extends Component {
         onCreate: () => {
           void this.onLoginClicked(panel, true);
         },
+        onMock: () => {
+          this.onUseMock(panel);
+        },
       },
-      { account, serverId }
+      { account, serverId, mode: this.useWs ? "ws" : "mock", wsUrl: this.wsChoice.wsUrl }
     );
     this.loginPanel = panel;
+    if (this.useWs) {
+      panel.setStatus("正在连接 " + this.wsChoice.wsUrl);
+      panel.setDetail("进入游戏只测连通");
+      void this.probeLocalWs(false);
+      return;
+    }
     panel.setStatus("账号 " + account);
   }
 
   private async onLoginClicked(panel: LoginPanelView, create: boolean): Promise<void> {
+    if (this.useWs) {
+      await this.probeLocalWs(create);
+      return;
+    }
+    await this.onMockLoginClicked(panel, create);
+  }
+
+  /** 关掉 13101 上的套接字，再用原来的 Mock 登录进主城。失败不把预览打崩。 */
+  private onUseMock(panel: LoginPanelView): void {
+    if (!this.alive || this.entering || this.authBusy) return;
+    this.useWs = false;
+    this.wsEpoch += 1;
+    this.wsLive = false;
+    if (this.wsNet) this.wsNet.close();
+    GameLog.shared.info("Boot", WS_MOCK_STATUS);
+    this.showBootToast(WS_MOCK_STATUS);
+    panel.setStatus(WS_MOCK_STATUS);
+    panel.setDetail("");
+    void this.onMockLoginClicked(panel, false);
+  }
+
+  private async probeLocalWs(create: boolean): Promise<void> {
+    if (!this.alive || this.entering || this.authBusy) return;
+    this.authBusy = true;
+    const panel = this.loginPanel;
+    if (panel) panel.setBusy(true);
+    const epoch = this.wsEpoch;
+    const url = this.wsChoice.wsUrl;
+    if (panel) {
+      panel.setStatus("正在连接 " + url);
+      panel.setDetail("请稍候");
+    }
+    const net = this.ensureWsNet();
+    const already = net.state === "connected" && net.url === url;
+    try {
+      if (!already) await net.connect(url);
+    } catch (err) {
+      if (!this.alive || epoch !== this.wsEpoch) return;
+      GameLog.shared.error("Boot", "WebSocket 连接失败 " + messageOf(err) + "。" + WS_DOWN_LOG);
+      if (this.loginPanel) {
+        this.loginPanel.setStatus(WS_DOWN_STATUS);
+        this.loginPanel.setDetail("可改走 Mock 继续预览");
+        this.loginPanel.setBusy(false);
+      }
+      this.authBusy = false;
+      this.showBootToast(WS_DOWN_STATUS);
+      return;
+    }
+    if (!this.alive || epoch !== this.wsEpoch) return;
+    this.wsLive = true;
+    const detail = create ? "真实创角还没接上，可改走 Mock" : "不能进真实主城，可改走 Mock";
+    if (this.loginPanel) {
+      this.loginPanel.setStatus(WS_OPEN_STATUS);
+      this.loginPanel.setDetail(detail);
+      this.loginPanel.setBusy(false);
+    }
+    this.authBusy = false;
+    if (!already) net.send("heartbeat", { clientTime: Date.now() });
+    GameLog.shared.info("Boot", "尚未发送登录包，真实主城要等协议号对齐");
+    this.showBootToast(create ? "真实创角还没接上" : already ? "尚未发登录包" : WS_OPEN_TOAST);
+  }
+
+  private ensureWsNet(): NetClient {
+    if (this.wsNet) return this.wsNet;
+    const transport = new WsTransport({ connectTimeoutMs: 5000 });
+    const net = new NetClient(transport, {
+      heartbeatMs: 15000,
+      reconnectDelayMs: 800,
+      maxReconnect: 0,
+      requestTimeoutMs: 3000,
+    });
+    this.wsStateOff = net.onState((state) => this.onWsState(state));
+    this.wsNet = net;
+    return net;
+  }
+
+  private onWsState(state: NetState): void {
+    if (!this.alive || !this.useWs) return;
+    const panel = this.loginPanel;
+    if (state === "connecting") {
+      if (panel) panel.setStatus("正在连接 " + this.wsChoice.wsUrl);
+      return;
+    }
+    if (state === "reconnecting") {
+      GameLog.shared.info("Ws", "正在重连");
+      if (panel) panel.setStatus("正在重连…");
+      this.showBootToast("正在重连");
+      return;
+    }
+    if (state === "closed" && this.wsLive) {
+      this.wsLive = false;
+      GameLog.shared.warn("Boot", WS_CLOSE_STATUS);
+      if (panel) {
+        panel.setStatus(WS_CLOSE_STATUS);
+        panel.setDetail("可点进入游戏重试，或改走 Mock");
+        panel.setBusy(false);
+      }
+      this.authBusy = false;
+      this.showBootToast(WS_CLOSE_STATUS);
+    }
+  }
+
+  private async onMockLoginClicked(panel: LoginPanelView, create: boolean): Promise<void> {
     if (this.entering || this.authBusy) return;
     this.authBusy = true;
     panel.setBusy(true);

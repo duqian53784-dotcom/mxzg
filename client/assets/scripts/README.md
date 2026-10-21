@@ -1,7 +1,7 @@
 ﻿# scripts
 
 - `core/` 启动、会话（Boot、Session）
-- `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、P0 协议 stub（`net/protocol/`，不连真服）
+- `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、可选 WsTransport（`?transport=ws`，只测 13101 连通）、P0 协议 stub（`net/protocol/`，占位号不发给真服）
 - `config/` JSON 读表
 - `module/` 业务系统（`mainline/` 主线战报和推关调试，`idle/` 挂机收益，`hero/` 英雄升级，`summon/` 召唤，`smith/` 铁匠铺强化，`arena/` 竞技场，`tower/` 幻境之塔，`daily/` 日常金币副本，`login7/` 七日登录，`goal7/` 七日目标，`shop/` 基础商店，`wish/` 低级许愿池，`cafe/` 咖啡馆招待，`gift/` 礼包骨架，`limited/` 限时活动）
 - `ui/` 页面栈、弹窗队列、Toast、主城壳（顶栏 / 底栏 / `PanelNav`）、安全区（`SafeArea.ts`）
@@ -27,7 +27,15 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 - 主线：点「主线 · 第N关」打开关卡列表，挑战后看战报再结算。详见下面 C3。
 - 发布构建前，构建场景列表要包含 Boot 和 Main，启动场景为 Boot。
 
-热更和真 socket 都不在这一步。网络是 `mock://local`。
+热更不在这一步。不加参数时网络仍是 `mock://local`。
+
+## 本机 WebSocket（D2，可选）
+
+默认不要走这里。服已经用 `scripts/start-local-server.bat` 拉起来、并且 13101 在听时，预览地址改成：
+
+`http://127.0.0.1:7456/?transport=ws`
+
+面板会去连 `ws://127.0.0.1:13101`，中文提示打开、失败或关闭。失败时点 **改走 Mock** 仍进原来的主城。这一步不发登录包，也不会进真实主城。说明见 `docs/h5-websocket.md`。
 
 ## 协议 stub（B5）
 
