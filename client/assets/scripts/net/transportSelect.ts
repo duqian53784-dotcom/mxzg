@@ -24,8 +24,8 @@ export const TransportConfig = {
 export const WS_DOWN_STATUS = "服未启动，请检查启动 bat";
 export const WS_DOWN_LOG =
   "服未启动。请先双击 scripts/start-local-server.bat，确认 13101 在听，再打开 http://127.0.0.1:7456/?transport=ws 。可改走 Mock。";
-export const WS_OPEN_STATUS = "已打开，尚未发登录包";
-export const WS_OPEN_TOAST = "WebSocket 已打开";
+export const WS_OPEN_STATUS = "已打开，心跳 1004 已发送";
+export const WS_OPEN_TOAST = "心跳 1004 已发送";
 export const WS_CLOSE_STATUS = "连接已关闭";
 export const WS_MOCK_STATUS = "已改走 Mock";
 

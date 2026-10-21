@@ -437,6 +437,14 @@ import { NetClient } from "../assets/scripts/net/NetClient";
 import { NetState } from "../assets/scripts/net/NetTypes";
 import { ReplayTransport } from "../assets/scripts/net/ReplayTransport";
 import { readObservedCmdId, WsSocketEvent, WsSocketLike, WsTransport } from "../assets/scripts/net/WsTransport";
+import { bytesToHex, concatBytes, decodeFrames, encodeFrame, WIRE_HEARTBEAT_MS, WireCmd } from "../assets/scripts/net/protocol/frame";
+import {
+  decodeProtoFields,
+  encodeObservedCreateBody,
+  encodeObservedLoginBody,
+  uidFromAccount,
+  varintField,
+} from "../assets/scripts/net/protocol/wireLogin";
 import {
   DEFAULT_WS_URL,
   parseTransportSearch,
@@ -2752,6 +2760,25 @@ function leFrame(cmd: number, size = 8): ArrayBuffer {
   return buf;
 }
 
+function hexToBytes(hex: string): Uint8Array {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return out;
+}
+
+function textField(fields: { field: number; kind: string; text?: string }[] | null, field: number): string | null {
+  if (!fields) return null;
+  for (let i = 0; i < fields.length; i++) {
+    if (fields[i].field === field && fields[i].kind === "string") return fields[i].text || "";
+  }
+  return null;
+}
+
+function exactCopy(bytes: Uint8Array): ArrayBuffer {
+  const copy = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  return copy as ArrayBuffer;
+}
+
 function sawLog(lines: string[], part: string): boolean {
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].indexOf(part) >= 0) return true;
@@ -2776,9 +2803,34 @@ async function checkWs(): Promise<void> {
   const junk = parseTransportSearch("?transport=tcp&ws=http://127.0.0.1:13101");
   assert(junk.kind === "mock" && junk.wsUrl === DEFAULT_WS_URL, "bad scheme ignored");
   assert(WS_DOWN_STATUS.indexOf("服未启动") >= 0 && WS_DOWN_LOG.indexOf("start-local-server.bat") >= 0, "down copy");
-  assert(WS_OPEN_STATUS.indexOf("尚未发登录包") >= 0, "open copy");
-  assert(readObservedCmdId(leFrame(1004)) === 1004, "legacy heartbeat bytes");
-  assert(readObservedCmdId(leFrame(1001)) === 1001, "legacy login bytes");
+  assert(WS_OPEN_STATUS.indexOf("1004") >= 0, "open copy");
+  assert(WIRE_HEARTBEAT_MS === 25000, "heartbeat interval from the net log");
+  assert(WireCmd.login === 1001 && WireCmd.heartbeat === 1004 && WireCmd.roleCreate === 1002, "wire ids");
+  assert(bytesToHex(encodeFrame(WireCmd.heartbeat)) === "04000000ec030000", "heartbeat frame");
+  const loginBody = encodeObservedLoginBody(960011, 1792466798);
+  assert(
+    bytesToHex(loginBody) === "2a0a31373932343636373938108bcc3a080718023a0d6d787a672d7765622d3130303132086c6f63616c646576",
+    "login body matches log"
+  );
+  const capturedA = hexToBytes("080718023a0d6d787a672d7765622d313030312a0a31373932343634393031106f32086c6f63616c646576");
+  const fieldsA = decodeProtoFields(capturedA);
+  assert(varintField(fieldsA, 1) === 7 && varintField(fieldsA, 2) === 111 && varintField(fieldsA, 3) === 2, "login sample A ints");
+  assert(uidFromAccount("960011") === 960011 && uidFromAccount("mock") === null && uidFromAccount("0") === null, "uid parse");
+  const created = encodeObservedCreateBody("见习冒险家");
+  const createdFields = decodeProtoFields(created || new Uint8Array(0));
+  assert(created !== null && textField(createdFields, 1) === "见习冒险家" && varintField(createdFields, 2) === 0, "create body");
+  assert(encodeObservedCreateBody("  ") === null, "blank create");
+  const beat = encodeFrame(WireCmd.heartbeat);
+  const loginFrame = encodeFrame(WireCmd.login, loginBody);
+  const sticky = concatBytes(beat, loginFrame);
+  const head = decodeFrames(sticky.subarray(0, 5));
+  assert(head.frames.length === 0 && head.rest.length === 5 && head.fatal === false, "partial frame waits");
+  const done = decodeFrames(concatBytes(head.rest, sticky.subarray(5)));
+  assert(done.frames.length === 2 && done.frames[0].cmdId === 1004 && done.frames[1].cmdId === 1001 && done.rest.length === 0, "sticky frames");
+  const bad = decodeFrames(new Uint8Array(8));
+  assert(bad.fatal && bad.frames.length === 0, "zero length is fatal");
+  assert(readObservedCmdId(exactCopy(encodeFrame(1004))) === 1004, "legacy heartbeat bytes");
+  assert(readObservedCmdId(exactCopy(encodeFrame(1001, loginBody))) === 1001, "legacy login bytes");
   assert(readObservedCmdId(leFrame(1002, 7)) === null, "short frame");
 
   const host = globalThis as { location?: { search?: string }; parent?: { location?: { search?: string } } };
@@ -2856,17 +2908,29 @@ async function checkWs(): Promise<void> {
     await net.connect("ws://127.0.0.1:13101");
     assert(net.state === "connected" && sockets.length === 1, "ws connected");
     assert(sawLog(lines, "已打开 ws://127.0.0.1:13101"), "open log");
-    net.send("login", { account: "mock" });
+    assert(sockets[0].sent.length === 1, "heartbeat goes out on open");
+    assert(bytesToHex(new Uint8Array(sockets[0].sent[0] as ArrayBuffer)) === "04000000ec030000", "open heartbeat bytes");
+    net.send("login", { account: "960011", nowSec: 1792466798 });
     net.send("heartbeat", { clientTime: 1 });
-    net.send("heartbeat", { clientTime: 2 });
-    assert(sockets[0].sent.length === 0, "login and heartbeat stay off the wire");
-    assert(sawLog(lines, "未发送 login") && sawLog(lines, "未发送 heartbeat"), "suppressed cmds");
+    net.send("stage.enter", { stageId: 1 });
+    assert(sockets[0].sent.length === 3, "login and heartbeat are on the wire");
+    assert(bytesToHex(new Uint8Array(sockets[0].sent[1] as ArrayBuffer)) === bytesToHex(encodeFrame(1001, loginBody)), "login frame");
+    assert(bytesToHex(new Uint8Array(sockets[0].sent[2] as ArrayBuffer)) === "04000000ec030000", "later heartbeat");
+    assert(sawLog(lines, "发送 c2s 1004") && sawLog(lines, "发送 c2s 1001") && sawLog(lines, "未发送 stage.enter"), "wire log");
     const seen: string[] = [];
     net.subscribe("*", (msg) => seen.push(msg.cmd));
-    sockets[0].push(leFrame(1004));
+    const replyBeat = encodeFrame(1004, hexToBytes("08ae8f91a79534"));
+    const replyNotice = encodeFrame(1005, hexToBytes("08c58d02"));
+    const packed = concatBytes(replyBeat, replyNotice);
+    sockets[0].push(packed.subarray(0, 4));
+    assert(seen.length === 0, "half frame is not a message yet");
+    sockets[0].push(packed.subarray(4));
     sockets[0].push("hello");
-    assert(dispatched === 0 && seen.length === 0, "inbound is not a game message");
-    assert(sawLog(lines, "第5-8字节协议号 1004") && sawLog(lines, "收到文本"), "inbound log");
+    assert(dispatched === 0, "NetClient owns the message handler");
+    assert(seen.length === 2 && seen[0] === "heartbeat" && seen[1] === "wire.1005", "sticky replies " + seen.join(","));
+    assert(sawLog(lines, "收到 s2c 1004") && sawLog(lines, "收到 s2c 1005") && sawLog(lines, "字段1=34501") && sawLog(lines, "收到文本"), "inbound log");
+    sockets[0].push(new Uint8Array(8));
+    assert(sawLog(lines, "帧长度异常"), "bad length");
     sockets[0].serverClose(1006);
     assert(net.state === "closed", "peer close stops reconnect");
     assert(sawLog(lines, "已关闭 code=1006"), "close code");

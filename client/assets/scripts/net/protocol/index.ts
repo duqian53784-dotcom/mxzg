@@ -1,4 +1,19 @@
 export { decodeResponse, encodeRequest } from "./codec";
+export { bytesToHex, concatBytes, decodeFrames, encodeFrame, WIRE_HEARTBEAT_MS, WireCmd } from "./frame";
+export type { DecodeFramesResult, GameFrame } from "./frame";
+export {
+  decodeProtoFields,
+  encodeObservedCreateBody,
+  encodeObservedLoginBody,
+  encodeWireMessage,
+  formatProtoFields,
+  summarizeCreateReply,
+  summarizeLoginReply,
+  uidFromAccount,
+  varintField,
+  wireBody,
+} from "./wireLogin";
+export type { LoginReplySummary, ProtoField, WireInbound, WirePacket } from "./wireLogin";
 export { Cmd, CmdId, P0_CMDS } from "./cmds";
 export type { CmdName, CmdSpec } from "./cmds";
 export { Proto } from "./Proto";

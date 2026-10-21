@@ -202,12 +202,16 @@ export class NetClient {
 
   private startHeartbeat(): void {
     this.stopHeartbeat();
-    this.heartbeat = setInterval(() => {
-      if (this.state !== "connected") return;
-      const beat: HeartbeatReq = { clientTime: Date.now() };
-      this.transport.send(encodeRequest(Cmd.heartbeat, beat));
-    }, this.heartbeatMs);
+    this.pumpHeartbeat();
+    this.heartbeat = setInterval(() => this.pumpHeartbeat(), this.heartbeatMs);
     this.dontBlock(this.heartbeat);
+  }
+
+  /** 连上立刻一拍，然后按间隔。WS 上这一拍是空体 1004，不等到第一个间隔。 */
+  private pumpHeartbeat(): void {
+    if (this.state !== "connected") return;
+    const beat: HeartbeatReq = { clientTime: Date.now() };
+    this.transport.send(encodeRequest(Cmd.heartbeat, beat));
   }
 
   private stopHeartbeat(): void {

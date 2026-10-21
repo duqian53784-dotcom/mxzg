@@ -5,7 +5,7 @@
  * 登录是本组件在 Canvas 上生成的面板，不另建 Login 场景。
  * 账号走 Proto.login / Proto.roleEnter；没有角色或点「创角」时再 Proto.roleCreate。
  * 默认仍是 NetClient → MockTransport，不需要服务器。
- * 预览地址加 ?transport=ws 才连 ws://127.0.0.1:13101，只看连通，不发登录包。
+ * 预览地址加 ?transport=ws 才连 ws://127.0.0.1:13101。打开后发心跳 1004，点登录再发 1001。不进真实主城。
  * 连不上会提示检查 scripts/start-local-server.bat，并可改走 Mock。
  *
  * Creator 里怎么挂（仓库不改 .scene，避免脚本 uuid 对不上）：
@@ -16,7 +16,7 @@
  * 5. 保存场景。项目启动场景保持 Boot，再点预览
  * 6. 控制台应出现 [Boot] stage=version / hot-update / config / login
  * 7. 选服后点「进入游戏」：Mock 登录成功后 director.loadScene("Main")
- *    地址带 ?transport=ws 时，这一步只连接本机 13101，成功也不进真实主城
+ *    地址带 ?transport=ws 时连本机 13101，发心跳 1004，点登录发 1001。成功也不进真实主城
  *    账号不是 mock、或点「创角」时先出创角面板（Proto.roleCreate）
  *    Main 场景可以是空的。若 Canvas 上没有 MainApp，这里会补挂
  * 8. 勾选 skipLogin 可跳过面板，仍用检查器里的账号进 Main
@@ -29,6 +29,8 @@ import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
 import { listOpenEntries } from "../config/gates";
 import { NetClient } from "../net/NetClient";
 import { WsTransport } from "../net/WsTransport";
+import { WIRE_HEARTBEAT_MS } from "../net/protocol/frame";
+import { summarizeCreateReply, summarizeLoginReply, uidFromAccount, wireBody } from "../net/protocol/wireLogin";
 import { NetState } from "../net/NetTypes";
 import {
   readPreviewTransport,
@@ -83,6 +85,8 @@ export class Boot extends Component {
   private wsLive = false;
   private wsNet: NetClient | null = null;
   private wsStateOff: (() => void) | null = null;
+  /** 最近一次点登录时的账号。创角 1002 之后再发 1001 用它，不猜平台 uid。 */
+  private wsAccount = "";
 
   start() {
     if (this.started) return;
@@ -191,8 +195,8 @@ export class Boot extends Component {
     this.loginPanel = panel;
     if (this.useWs) {
       panel.setStatus("正在连接 " + this.wsChoice.wsUrl);
-      panel.setDetail("进入游戏只测连通");
-      void this.probeLocalWs(false);
+      panel.setDetail("打开后发心跳 1004");
+      void this.probeLocalWs();
       return;
     }
     panel.setStatus("账号 " + account);
@@ -200,7 +204,7 @@ export class Boot extends Component {
 
   private async onLoginClicked(panel: LoginPanelView, create: boolean): Promise<void> {
     if (this.useWs) {
-      await this.probeLocalWs(create);
+      await this.onWsAuth(panel, create);
       return;
     }
     await this.onMockLoginClicked(panel, create);
@@ -220,23 +224,37 @@ export class Boot extends Component {
     void this.onMockLoginClicked(panel, false);
   }
 
-  private async probeLocalWs(create: boolean): Promise<void> {
+  private async probeLocalWs(): Promise<void> {
     if (!this.alive || this.entering || this.authBusy) return;
     this.authBusy = true;
     const panel = this.loginPanel;
     if (panel) panel.setBusy(true);
     const epoch = this.wsEpoch;
-    const url = this.wsChoice.wsUrl;
-    if (panel) {
-      panel.setStatus("正在连接 " + url);
-      panel.setDetail("请稍候");
+    const opened = await this.openWs(epoch);
+    if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+    if (!opened) return;
+    if (this.loginPanel) {
+      this.loginPanel.setStatus(WS_OPEN_STATUS);
+      this.loginPanel.setDetail("点进入游戏发登录 1001。账号填数字 uid。不进主城。");
+      this.loginPanel.setBusy(false);
     }
+    this.authBusy = false;
+    this.showBootToast(WS_OPEN_TOAST);
+  }
+
+  /** 连上后 NetClient 会立刻发一拍心跳 1004，之后每 25 秒一拍。这里不发登录。 */
+  private async openWs(epoch: number): Promise<boolean> {
+    const url = this.wsChoice.wsUrl;
     const net = this.ensureWsNet();
     const already = net.state === "connected" && net.url === url;
+    if (this.loginPanel && !already) {
+      this.loginPanel.setStatus("正在连接 " + url);
+      this.loginPanel.setDetail("请稍候");
+    }
     try {
       if (!already) await net.connect(url);
     } catch (err) {
-      if (!this.alive || epoch !== this.wsEpoch) return;
+      if (!this.alive || epoch !== this.wsEpoch) return false;
       GameLog.shared.error("Boot", "WebSocket 连接失败 " + messageOf(err) + "。" + WS_DOWN_LOG);
       if (this.loginPanel) {
         this.loginPanel.setStatus(WS_DOWN_STATUS);
@@ -245,30 +263,84 @@ export class Boot extends Component {
       }
       this.authBusy = false;
       this.showBootToast(WS_DOWN_STATUS);
+      return false;
+    }
+    if (!this.alive || epoch !== this.wsEpoch) return false;
+    this.wsLive = true;
+    return true;
+  }
+
+  private async onWsAuth(panel: LoginPanelView, create: boolean): Promise<void> {
+    if (!this.alive || this.entering || this.authBusy) return;
+    this.authBusy = true;
+    panel.setBusy(true);
+    const epoch = this.wsEpoch;
+    const opened = await this.openWs(epoch);
+    if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+    if (!opened) return;
+    const account = resolveAccount(panel.account(), this.account);
+    const serverId = panel.serverId();
+    this.wsAccount = account;
+    this.remember(account, serverId);
+    const uid = uidFromAccount(account);
+    if (uid === null) {
+      GameLog.shared.warn(
+        "Ws",
+        "账号「" + account + "」不是平台 uid，1001 不写字段2。日志两例是 111 和 960011。没有接平台登录。"
+      );
+    }
+    GameLog.shared.info("Ws", "选服 " + serverId + " 不写入登录包。两例 1001 的字段1都是 7、字段3都是 2。");
+    panel.setStatus("正在发送登录 1001");
+    panel.setDetail(uid === null ? "字段2未写，看回包" : "uid " + uid);
+    const nowSec = Math.floor(Date.now() / 1000);
+    let body: Uint8Array;
+    try {
+      const msg = await this.ensureWsNet().request("login", { account, nowSec }, 5000);
+      body = wireBody(msg.data);
+    } catch (err) {
+      if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+      const text = messageOf(err);
+      GameLog.shared.error("Boot", "登录 1001 " + text);
+      if (this.loginPanel) {
+        this.loginPanel.setStatus(text);
+        this.loginPanel.setDetail("可再点一次，或改走 Mock");
+        this.loginPanel.setBusy(false);
+      }
+      this.authBusy = false;
+      this.showBootToast(text);
       return;
     }
-    if (!this.alive || epoch !== this.wsEpoch) return;
-    this.wsLive = true;
-    const detail = create ? "真实创角还没接上，可改走 Mock" : "不能进真实主城，可改走 Mock";
+    if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+    const summary = summarizeLoginReply(body);
+    GameLog.shared.info("Boot", summary.status + " " + summary.detail);
+    if (create && summary.empty) {
+      const parent = panel.root.parent;
+      setTimeout(() => {
+        if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+        this.destroyAuthPanels();
+        if (parent && parent.isValid) this.showCreate(parent, account, false, true);
+        else this.authBusy = false;
+      }, 0);
+      return;
+    }
     if (this.loginPanel) {
-      this.loginPanel.setStatus(WS_OPEN_STATUS);
-      this.loginPanel.setDetail(detail);
+      const extra = create && !summary.empty ? "已有回包，未发创角 1002。" : "";
+      this.loginPanel.setStatus(summary.status);
+      this.loginPanel.setDetail(extra + summary.detail);
       this.loginPanel.setBusy(false);
     }
     this.authBusy = false;
-    if (!already) net.send("heartbeat", { clientTime: Date.now() });
-    GameLog.shared.info("Boot", "尚未发送登录包，真实主城要等协议号对齐");
-    this.showBootToast(create ? "真实创角还没接上" : already ? "尚未发登录包" : WS_OPEN_TOAST);
+    this.showBootToast(summary.status);
   }
 
   private ensureWsNet(): NetClient {
     if (this.wsNet) return this.wsNet;
     const transport = new WsTransport({ connectTimeoutMs: 5000 });
     const net = new NetClient(transport, {
-      heartbeatMs: 15000,
+      heartbeatMs: WIRE_HEARTBEAT_MS,
       reconnectDelayMs: 800,
       maxReconnect: 0,
-      requestTimeoutMs: 3000,
+      requestTimeoutMs: 5000,
     });
     this.wsStateOff = net.onState((state) => this.onWsState(state));
     this.wsNet = net;
@@ -361,7 +433,7 @@ export class Boot extends Component {
     this.logEntered("mock login ok");
   }
 
-  private showCreate(parent: Node, account: string, hadRole: boolean): void {
+  private showCreate(parent: Node, account: string, hadRole: boolean, wire = false): void {
     this.authBusy = false;
     GameLog.shared.info("Boot", "stage=create account=" + account + " server=" + Session.serverName);
     const panel = buildCreateRolePanel(
@@ -379,12 +451,21 @@ export class Boot extends Component {
           }, 0);
         },
       },
-      { account, serverName: Session.serverName, hadRole }
+      {
+        account,
+        serverName: Session.serverName,
+        hadRole,
+        hint: wire ? "登录 1001 回包是空的。确认后只发创角 1002，不进主城。" : undefined,
+      }
     );
     this.createPanel = panel;
   }
 
   private async onCreateConfirmed(panel: CreateRolePanelView): Promise<void> {
+    if (this.useWs) {
+      await this.onWsCreateConfirmed(panel);
+      return;
+    }
     if (this.entering || this.authBusy) return;
     this.authBusy = true;
     panel.setBusy(true);
@@ -411,6 +492,49 @@ export class Boot extends Component {
       const text = messageOf(err);
       GameLog.shared.error("Boot", "create " + text);
       if (!this.isValid) return;
+      panel.setStatus(text);
+      panel.setBusy(false);
+      this.authBusy = false;
+      this.showBootToast(text);
+    }
+  }
+
+  private async onWsCreateConfirmed(panel: CreateRolePanelView): Promise<void> {
+    if (!this.alive || this.entering || this.authBusy) return;
+    const name = panel.name().trim();
+    if (!name) {
+      panel.setStatus("角色名不能为空");
+      this.showBootToast("角色名不能为空");
+      return;
+    }
+    const net = this.ensureWsNet();
+    if (net.state !== "connected") {
+      panel.setStatus(WS_CLOSE_STATUS);
+      this.showBootToast(WS_CLOSE_STATUS);
+      return;
+    }
+    this.authBusy = true;
+    panel.setBusy(true);
+    const epoch = this.wsEpoch;
+    panel.setStatus("正在发送创角 1002");
+    try {
+      const createdMsg = await net.request("role.create", { name }, 5000);
+      if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+      const created = summarizeCreateReply(wireBody(createdMsg.data));
+      GameLog.shared.info("Boot", created.status);
+      const againMsg = await net.request("login", { account: this.wsAccount, nowSec: Math.floor(Date.now() / 1000) }, 5000);
+      if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+      const again = summarizeLoginReply(wireBody(againMsg.data));
+      GameLog.shared.info("Boot", "创角后 " + again.status + " " + again.detail);
+      const status = again.roleId !== null ? "角色 " + again.roleId + " 已在服务器" : again.status;
+      panel.setStatus(status);
+      panel.setBusy(false);
+      this.authBusy = false;
+      this.showBootToast("不进主城");
+    } catch (err) {
+      if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+      const text = messageOf(err);
+      GameLog.shared.error("Boot", "创角 1002 " + text);
       panel.setStatus(text);
       panel.setBusy(false);
       this.authBusy = false;
