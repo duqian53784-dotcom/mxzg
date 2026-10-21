@@ -13,9 +13,10 @@ import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } 
  * 空的 c2s 2001 是日志里拉角色资料的那一帧。回包由 WireSession 读字段 9、6、2、1。
  * 空的 c2s 5001 拉背包整表。s2c 5001 / 5002 由 WireSession 读，不写顶栏。
  * 空的 c2s 15000 拉邮件列表。s2c 15000 由 WireSession 读，不写顶栏，不领取。
- * c2s 4001 page=1 拉英雄列表。s2c 4001 由 WireSession 读，不写顶栏，不升级。不发 18001。
+ * c2s 4001 page=1 拉英雄列表。s2c 4001 由 WireSession 读，不写顶栏，不升级。
  * 空的 c2s 17000 拉点金记录。s2c 17000 由 WireSession 按 GResBuyGoldLog 读，不写顶栏，不点金。
- * 空的 c2s 12010 拉成就记录。s2c 12010 由 WireSession 按 GResAchievementList 读，不写顶栏，不领奖。不发 12020。别的号不猜。
+ * 空的 c2s 12010 拉成就记录。s2c 12010 由 WireSession 按 GResAchievementList 读，不写顶栏，不领奖。不发 12020。
+ * 空的 c2s 18001 拉竞技场。s2c 18001 由 WireSession 按 GResPvpData 读，不写顶栏，不开战。不发 18002、18003、18005、18007、18008。别的号不猜。
  * 单条处理失败也不丢掉后面的帧。
  */
 

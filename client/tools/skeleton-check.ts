@@ -522,6 +522,20 @@ import {
   WIRE_ACHIEVEMENT_UNSYNCED_TOAST,
   wireAchievementNote,
 } from "../assets/scripts/net/protocol/wireAchievement";
+import {
+  decodeWirePvp,
+  formatWirePvpLine,
+  formatWirePvpSelf,
+  WIRE_PVP_CMD,
+  WIRE_PVP_EMPTY,
+  WIRE_PVP_FIELD_NOTE,
+  WIRE_PVP_READONLY_NOTE,
+  WIRE_PVP_READONLY_TITLE,
+  WIRE_PVP_SEASON_NOTE,
+  WIRE_PVP_SIDE_EFFECT,
+  WIRE_PVP_UNSYNCED_TOAST,
+  wirePvpNote,
+} from "../assets/scripts/net/protocol/wirePvp";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -3291,6 +3305,76 @@ async function checkWs(): Promise<void> {
     achieveOne !== null && wireAchievementNote(achieveOne).indexOf("打开/同步可能在服上补成就") >= 0 && wireAchievementNote(achieveOne).indexOf("不写金币") >= 0,
     "achievement note keeps the side effect"
   );
+  const pvpSampleA = hexToBytes(
+    "080310e8071a1f081012084f696d79616b6f6e18002200300838fbdeee0448e807509c1658001a230804120c48617469206b65206861746918002200300838b9f9fa0448e80750e01258001a2c08181215486174692079616e672074616b20646973756b61691800220030083885f4f40448e80750d61158002080cff8d6063000"
+  );
+  const pvpOuterOnly = concatBytes(
+    concatBytes(concatBytes(fieldVarint(1, 3), fieldVarint(2, 1000)), fieldVarint(4, 1792944000)),
+    fieldVarint(6, 0)
+  );
+  const loggedPvp = decodeWirePvp(pvpSampleA);
+  const pvpEmptyOuter = decodeWirePvp(pvpOuterOnly);
+  assert(
+    WireCmd.pvpData === 18001 && CmdId.arenaView === 1901 && CmdId.arenaChallenge === 1902 && CmdId.heroList === 1401,
+    "online 18001 stays off the placeholder arena and hero ids"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.pvpData)) === "0400000051460000", "empty c2s 18001");
+  assert(bytesToHex(encodeFrame(18002)) !== "0400000051460000", "18002 is not the 18001 frame");
+  assert(WIRE_PVP_READONLY_TITLE === "竞技场（真服只读）", "readonly arena title");
+  assert(WIRE_PVP_EMPTY === "空对手表" && WIRE_PVP_UNSYNCED_TOAST === "真服未同步", "empty opponent table is not the unsynced toast");
+  assert(
+    WIRE_PVP_SIDE_EFFECT === "同步时若对手为空服可能补名单" &&
+      WIRE_PVP_SEASON_NOTE.indexOf("日切") >= 0 &&
+      WIRE_PVP_READONLY_NOTE.indexOf("不挑战") >= 0 &&
+      WIRE_PVP_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_PVP_FIELD_NOTE.indexOf("free_count") >= 0 &&
+      WIRE_PVP_FIELD_NOTE.indexOf("player_id") >= 0 &&
+      WIRE_PVP_FIELD_NOTE.indexOf("name") >= 0,
+    "arena page names GResPvpData and warns about the server side effect"
+  );
+  assert(decodeWirePvp(new Uint8Array(0)) !== null && decodeWirePvp(new Uint8Array(0))?.opponents.length === 0, "empty 18001 body is a synced empty opponent table");
+  assert(
+    pvpEmptyOuter !== null &&
+      pvpEmptyOuter.opponents.length === 0 &&
+      pvpEmptyOuter.freeCount === 3 &&
+      pvpEmptyOuter.score === 1000 &&
+      pvpEmptyOuter.seasonEndTime === 1792944000 &&
+      pvpEmptyOuter.seasonCount === 0 &&
+      formatWirePvpSelf(pvpEmptyOuter).indexOf("free_count=3") >= 0 &&
+      formatWirePvpSelf(pvpEmptyOuter).indexOf("score=1000") >= 0,
+    "non-empty outer with no list is still an empty opponent table"
+  );
+  assert(decodeWirePvp(new Uint8Array([0x80])) === null, "bad 18001 ignored");
+  assert(decodeWirePvp(fieldBytes(3, new Uint8Array([0x80]))) === null, "bad nested opponent does not become an empty table");
+  assert(
+    loggedPvp !== null &&
+      loggedPvp.freeCount === 3 &&
+      loggedPvp.score === 1000 &&
+      loggedPvp.seasonEndTime === 1792944000 &&
+      loggedPvp.seasonCount === 0 &&
+      loggedPvp.likeRids === null &&
+      loggedPvp.seasonReward === null &&
+      loggedPvp.opponents.length === 3 &&
+      loggedPvp.opponents[0].playerId === 16 &&
+      loggedPvp.opponents[0].name === "Oimyakon" &&
+      loggedPvp.opponents[1].name === "Hati ke hati" &&
+      loggedPvp.opponents[1].playerId === 4 &&
+      formatWirePvpLine(loggedPvp.opponents[0]) ===
+        "Oimyakon · player_id=16 · 字段3=0 · 字段4=空 · 字段6=8 · 字段7=10203003 · 字段9=1000 · 字段10=2844 · 字段11=0" &&
+      formatWirePvpLine(loggedPvp.opponents[0]).indexOf("挑战") < 0 &&
+      wirePvpNote(loggedPvp).indexOf("不写金币") >= 0 &&
+      wirePvpNote(loggedPvp).indexOf(WIRE_PVP_SIDE_EFFECT) >= 0,
+    "18001 sample uses GResPvpData names and keeps unmatched opponent fields numbered"
+  );
+  const pvpSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.pvpData, pvpOuterOnly), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    pvpSticky.frames.length === 2 &&
+      pvpSticky.frames[0].cmdId === 18001 &&
+      pvpSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWirePvp(pvpSticky.frames[0].body)?.opponents.length === 0 &&
+      decodeWirePvp(pvpSticky.frames[0].body)?.score === 1000,
+    "sticky 18001 frame stops at its length prefix"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -3738,6 +3822,7 @@ async function checkWs(): Promise<void> {
           fieldBytes(1, concatBytes(concatBytes(fieldVarint(1, 100100), fieldVarint(2, 1)), fieldVarint(3, 0)))
         )
       );
+      roleSockets[0].push(encodeFrame(WireCmd.pvpData, pvpSampleA));
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -3748,6 +3833,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasHero() && WireSession.heroes === null, "hero stays unsynced before the city role");
       assert(!WireSession.hasActivity() && WireSession.activity === null, "buy gold stays unsynced before the city role");
       assert(!WireSession.hasAchievement() && WireSession.achievements === null, "achievement stays unsynced before the city role");
+      assert(!WireSession.hasPvp() && WireSession.pvp === null, "arena stays unsynced before the city role");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
       Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
@@ -3806,6 +3892,17 @@ async function checkWs(): Promise<void> {
         "flush writes the 12010 achievement"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "12010 stays off the wallet");
+      assert(
+        WireSession.hasPvp() &&
+          WireSession.pvp !== null &&
+          WireSession.pvp.freeCount === 3 &&
+          WireSession.pvp.score === 1000 &&
+          WireSession.pvp.opponents.length === 3 &&
+          WireSession.pvp.opponents[0].name === "Oimyakon" &&
+          formatWirePvpLine(WireSession.pvp.opponents[0]).indexOf("player_id=16") >= 0,
+        "flush writes the 18001 arena"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "18001 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -4028,7 +4125,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 5, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 6, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -4050,13 +4147,18 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 12010 after 17000"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 5] as ArrayBuffer)) === "0400000051460000",
+        "pullIdle sends empty c2s 18001 after 12010"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
           sawLog(lines, "发送 c2s 12010") &&
+          sawLog(lines, "发送 c2s 18001") &&
           sawLog(lines, "发送 c2s 12020") === false &&
-          sawLog(lines, "发送 c2s 18001") === false,
-        "mail hero buy gold and achievement pulls are logged"
+          sawLog(lines, "发送 c2s 18002") === false,
+        "mail hero buy gold achievement and arena pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -4078,13 +4180,11 @@ async function checkWs(): Promise<void> {
       const sentBeforeHeroOther = roleSockets[0].sent.length;
       roleNet.send(Cmd.heroList);
       roleNet.send(Cmd.heroUpgrade);
-      roleNet.send("wire.18001");
       roleNet.send("wire.18002");
       assert(roleSockets[0].sent.length === sentBeforeHeroOther, "hero list and upgrade placeholders stay off the wire");
       assert(
         sawLog(lines, "未发送 hero.list") &&
           sawLog(lines, "未发送 hero.upgrade") &&
-          sawLog(lines, "未发送 wire.18001") &&
           sawLog(lines, "未发送 wire.18002"),
         "hero upgrade is not encoded"
       );
@@ -4095,13 +4195,11 @@ async function checkWs(): Promise<void> {
       roleNet.send(Cmd.login7View);
       roleNet.send(Cmd.login7Claim);
       roleNet.send(Cmd.login7Advance);
-      roleNet.send("wire.18001");
       assert(roleSockets[0].sent.length === sentBeforeActivityOther, "login7 placeholders stay off the wire");
       assert(
         sawLog(lines, "未发送 login7.view") &&
           sawLog(lines, "未发送 login7.claim") &&
-          sawLog(lines, "未发送 login7.advance") &&
-          sawLog(lines, "未发送 wire.18001"),
+          sawLog(lines, "未发送 login7.advance"),
         "buy gold is not a login7 claim"
       );
       roleNet.send(WIRE_ACHIEVEMENT_CMD);
@@ -4112,6 +4210,42 @@ async function checkWs(): Promise<void> {
       roleNet.send(Cmd.goal7Claim);
       assert(roleSockets[0].sent.length === sentBeforeAchievementOther, "12020 and goal claim stay off the wire");
       assert(sawLog(lines, "未发送 wire.12020") && sawLog(lines, "未发送 goal7.claim"), "daily task and goal claim are not encoded");
+      roleNet.send(WIRE_PVP_CMD);
+      const pvpSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(pvpSent as ArrayBuffer)) === "0400000051460000", "wire.18001 frame");
+      const sentBeforePvpOther = roleSockets[0].sent.length;
+      roleNet.send("wire.18002");
+      roleNet.send("wire.18003");
+      roleNet.send("wire.18004");
+      roleNet.send("wire.18005");
+      roleNet.send("wire.18007");
+      roleNet.send("wire.18008");
+      roleNet.send(Cmd.arenaView);
+      roleNet.send(Cmd.arenaChallenge);
+      assert(roleSockets[0].sent.length === sentBeforePvpOther, "arena fight refresh ticket like and reward stay off the wire");
+      assert(
+        sawLog(lines, "未发送 wire.18002") &&
+          sawLog(lines, "未发送 wire.18003") &&
+          sawLog(lines, "未发送 wire.18005") &&
+          sawLog(lines, "未发送 wire.18007") &&
+          sawLog(lines, "未发送 wire.18008") &&
+          sawLog(lines, "未发送 arena.view") &&
+          sawLog(lines, "未发送 arena.challenge"),
+        "arena mutations are not encoded"
+      );
+      const goldBeforeBadPvp = Session.gold;
+      roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasPvp() && WireSession.pvp !== null && WireSession.pvp.opponents.length === 3 && sawWire("18001 解不开"),
+        "bad 18001 keeps the arena"
+      );
+      assert(Session.gold === goldBeforeBadPvp, "bad 18001 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.pvpData));
+      assert(
+        WireSession.hasPvp() && WireSession.pvp !== null && WireSession.pvp.opponents.length === 0,
+        "empty 18001 body replaces the arena and stays synced"
+      );
+      assert(Session.gold === goldBeforeBadPvp, "empty 18001 does not write gold");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {
