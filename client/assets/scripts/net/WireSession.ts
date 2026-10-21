@@ -38,16 +38,22 @@ import {
   WireBagGain,
   WireBagItem,
 } from "./protocol/wireBag";
+import {
+  decodeWireMailList,
+  WIRE_MAIL_CMD,
+  wireMailNote,
+  WireMailEntry,
+} from "./protocol/wireMail";
 import { wireBody } from "./protocol/wireLogin";
 
 /**
  * ?transport=ws 登录进主城后，这条 NetClient 要活过 Boot 切场景。
  * 心跳 1004 继续发。
- * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3004 和 wire.3005。
+ * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3004、wire.3005 和 wire.15000。
  * 登录成功后先发空的 c2s 2001（日志里的拉角色资料）。pullRoleProfile 紧接着发空的 c2s 5001。
- * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。
- * 线上顺序是 2001 → 5001 → 3007 → 3004。不等 s2c 2001，也不夹那一长串别的号。
- * 不发 5010，也不发 5004–5009、5011–5013。
+ * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。pullIdle 在 3004 之后再发空的 c2s 15000。
+ * 线上顺序是 2001 → 5001 → 3007 → 3004 → 15000。不等 s2c 2001，也不夹那一长串别的号。
+ * 不发 5010，也不发 5004–5009、5011–5013。不发邮件领取、已读、删除。
  * s2c 2001 按 Role.proto：字段 9 角色名、字段 6 等级、字段 2 金币、字段 1 宝石（顶栏钻石）。
  * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。
  * 不写 Session.stageId，主城按钮用 mainlineLabel()。
@@ -60,6 +66,9 @@ import { wireBody } from "./protocol/wireLogin";
  * 从未收到 5001 时主城背包只 Toast，不打开 Mock 背包页。
  * s2c 5002 在已经有列表之后合并：num > 0 加上，num = 0 删掉该格。type 只记日志，不弹窗。
  * 背包、5002、5010、50000 都不写顶栏。钱包只认 s2c 2001 的金币和宝石。
+ * s2c 15000 替换本地邮件列表。空包体是已同步的空邮箱。
+ * 从未收到 15000 时主城邮件只 Toast，不打开 Mock 邮件页。
+ * 字段 3、字段 4 只记日志，不当成已读或未读。不领取，不删除，不写顶栏。
  * 缺的顶栏字段不写，那个格子保持未同步。字段 5 是奖杯，不写进金币。开服天不推。
  * 别的 s2c 仍只记 wire.<cmdId>。解不开就忽略，不抛进拆帧循环。
  */
@@ -83,6 +92,11 @@ export class WireSession {
    * 空数组是已同步的空背包，不是未同步。
    */
   static bagItems: WireBagItem[] | null = null;
+  /**
+   * s2c 15000 的列表。null 表示这次进主城还没收到 15000。
+   * 空数组是已同步的空邮箱，不是未同步。
+   */
+  static mailEntries: WireMailEntry[] | null = null;
 
   private static watched: NetClient | null = null;
   private static offProfile: (() => void) | null = null;
@@ -91,6 +105,7 @@ export class WireSession {
   private static offIdleClaim: (() => void) | null = null;
   private static offBag: (() => void) | null = null;
   private static offBagGain: (() => void) | null = null;
+  private static offMail: (() => void) | null = null;
   private static pending: WireRoleProfile | null = null;
   private static pendingChapter: WireChapterProgress | null = null;
   private static pendingIdle: WireIdleSnapshot | null = null;
@@ -98,6 +113,8 @@ export class WireSession {
   private static pendingBag: WireBagItem[] | null = null;
   /** 快照之后、进主城之前到达的 5002。新的 5001 会清掉。 */
   private static pendingGains: WireBagGain[] = [];
+  /** null 表示登录过程里还没看到 15000。空数组是空邮箱。 */
+  private static pendingMail: WireMailEntry[] | null = null;
   private static listeners = new Set<() => void>();
 
   /** 套接字一开就听。登录回包里如果已经夹着 2001、5001、3007 或 3004，先记下，等角色写入后再套上。 */
@@ -109,7 +126,8 @@ export class WireSession {
       this.offIdle &&
       this.offIdleClaim &&
       this.offBag &&
-      this.offBagGain
+      this.offBagGain &&
+      this.offMail
     ) {
       return;
     }
@@ -121,6 +139,7 @@ export class WireSession {
     this.offIdleClaim = net.subscribe(WIRE_IDLE_CLAIM_CMD, (msg) => this.onIdleClaim(msg.data));
     this.offBag = net.subscribe(WIRE_BAG_CMD, (msg) => this.onBag(msg.data));
     this.offBagGain = net.subscribe(WIRE_BAG_GAIN_CMD, (msg) => this.onBagGain(msg.data));
+    this.offMail = net.subscribe(WIRE_MAIL_CMD, (msg) => this.onMail(msg.data));
   }
 
   static hold(net: NetClient): void {
@@ -130,7 +149,7 @@ export class WireSession {
   }
 
   /**
-   * 这次进主城还没看到新的 s2c 3007 / 3004 / 5001。丢掉上一名角色的 idx、挂机时间和背包。
+   * 这次进主城还没看到新的 s2c 3007 / 3004 / 5001 / 15000。丢掉上一名角色的 idx、挂机时间、背包和邮件。
    * 登录过程中先到的包仍留在 pending，接着 flush 再写。
    */
   static prepareCity(): void {
@@ -141,6 +160,7 @@ export class WireSession {
     this.claimNote = "";
     this.claimSerial = 0;
     this.bagItems = null;
+    this.mailEntries = null;
   }
 
   /** 只放下引用。调用方自己 close。 */
@@ -154,6 +174,7 @@ export class WireSession {
       this.pendingIdle = null;
       this.pendingBag = null;
       this.pendingGains = [];
+      this.pendingMail = null;
       this.nowIdx = null;
       this.maxIdx = null;
       this.rewardTime = null;
@@ -161,6 +182,7 @@ export class WireSession {
       this.claimNote = "";
       this.claimSerial = 0;
       this.bagItems = null;
+      this.mailEntries = null;
     }
   }
 
@@ -174,6 +196,7 @@ export class WireSession {
     this.pendingIdle = null;
     this.pendingBag = null;
     this.pendingGains = [];
+    this.pendingMail = null;
     this.nowIdx = null;
     this.maxIdx = null;
     this.rewardTime = null;
@@ -181,6 +204,7 @@ export class WireSession {
     this.claimNote = "";
     this.claimSerial = 0;
     this.bagItems = null;
+    this.mailEntries = null;
     if (net) net.close();
   }
 
@@ -198,12 +222,13 @@ export class WireSession {
     this.commitChapter();
     this.commitIdle();
     this.commitBag();
+    this.commitMail();
   }
 
   /**
    * 空的 c2s 2001，紧接着空的 c2s 5001。
    * Boot 仍只调用这一处再调用 pullChapter / pullIdle，所以不改 Boot.ts。
-   * 线上顺序因此是 2001 → 5001 → 3007 → 3004。
+   * 线上顺序因此是 2001 → 5001 → 3007 → 3004 → 15000。15000 在 pullIdle 里，跟在 3004 后面。
    */
   static pullRoleProfile(): void {
     const net = this.net || this.watched;
@@ -246,13 +271,27 @@ export class WireSession {
   }
 
   /**
-   * 空的 c2s 3004。跟在 pullChapter 后面发，不等 s2c 2001。
-   * 旧桥日志里这一帧在空 c2s 3007 之后，包体是空的。
+   * 空的 c2s 3004，紧接着空的 c2s 15000。
+   * 跟在 pullChapter 后面发，不等 s2c 2001。
+   * 旧桥日志里 3004 在空 c2s 3007 之后，包体是空的。15000 在同步后段，这里接在 3004 后，不改 Boot.ts。
    */
   static pullIdle(): void {
     const net = this.net || this.watched;
     if (!net || net.state !== "connected") return;
     net.send(WIRE_IDLE_CMD);
+    this.pullMail();
+  }
+
+  /** 空的 c2s 15000。没有包体。不发领取和删除。 */
+  static pullMail(): void {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return;
+    net.send(WIRE_MAIL_CMD);
+  }
+
+  /** 收到过 s2c 15000（含空包体）才算同步。解不开的包不算。 */
+  static hasMail(): boolean {
+    return this.mailEntries !== null;
   }
 
   /** 空的 c2s 3005。没连上时返回 false，调用方 Toast。 */
@@ -426,6 +465,26 @@ export class WireSession {
     this.emit();
   }
 
+  private static onMail(data: unknown): void {
+    let list: { entries: WireMailEntry[] } | null = null;
+    try {
+      list = decodeWireMailList(wireBody(data));
+    } catch (err) {
+      GameLog.shared.error("Wire", "s2c 15000 解不开 " + (err instanceof Error ? err.message : "未知错误"));
+      return;
+    }
+    if (!list) {
+      GameLog.shared.info("Wire", "s2c 15000 解不开，邮件不改");
+      return;
+    }
+    this.pendingMail = list.entries.map(copyMail);
+    if (Session.source !== "wire" || !Session.role) {
+      GameLog.shared.info("Wire", "s2c 15000 先记下：" + wireMailNote(list.entries));
+      return;
+    }
+    this.commitMail();
+  }
+
   /** 后到的包只补上自己有的字段，不把先记下、这一包没有的格子清掉。 */
   private static remember(profile: WireRoleProfile): void {
     const prev = this.pending;
@@ -496,6 +555,16 @@ export class WireSession {
     this.emit();
   }
 
+  private static commitMail(): void {
+    if (this.pendingMail === null) return;
+    if (Session.source !== "wire" || !Session.role) return;
+    const entries = this.pendingMail.map(copyMail);
+    this.pendingMail = null;
+    this.mailEntries = entries;
+    GameLog.shared.info("Wire", "s2c 15000 " + wireMailNote(entries));
+    this.emit();
+  }
+
   private static commitIdle(): void {
     const snapshot = this.pendingIdle;
     if (!snapshot || !wireIdleHasTime(snapshot)) return;
@@ -548,9 +617,26 @@ export class WireSession {
       this.offBagGain();
       this.offBagGain = null;
     }
+    if (this.offMail) {
+      this.offMail();
+      this.offMail = null;
+    }
   }
 }
 
 function copyBagItem(item: WireBagItem): WireBagItem {
   return { itemId: item.itemId, itemType: item.itemType, num: item.num };
+}
+
+function copyMail(entry: WireMailEntry): WireMailEntry {
+  return {
+    id: entry.id,
+    time: entry.time,
+    mark3: entry.mark3,
+    mark4: entry.mark4,
+    title: entry.title,
+    body: entry.body,
+    attachment: entry.attachment,
+    attachments: entry.attachments.map((row) => ({ itemId: row.itemId, count: row.count })),
+  };
 }
