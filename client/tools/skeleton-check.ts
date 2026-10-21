@@ -510,6 +510,18 @@ import {
   WIRE_ACTIVITY_UNSYNCED_TOAST,
   wireActivityNote,
 } from "../assets/scripts/net/protocol/wireActivity";
+import {
+  decodeWireAchievement,
+  formatWireAchievementLine,
+  WIRE_ACHIEVEMENT_CMD,
+  WIRE_ACHIEVEMENT_EMPTY,
+  WIRE_ACHIEVEMENT_FIELD_NOTE,
+  WIRE_ACHIEVEMENT_READONLY_NOTE,
+  WIRE_ACHIEVEMENT_READONLY_TITLE,
+  WIRE_ACHIEVEMENT_SIDE_EFFECT,
+  WIRE_ACHIEVEMENT_UNSYNCED_TOAST,
+  wireAchievementNote,
+} from "../assets/scripts/net/protocol/wireAchievement";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1221,6 +1233,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   );
   assert(rootTabFor("arena") === "plays" && rootTabFor("log") === "city" && rootTabFor("smith") === "smith", "root tab");
   assert(rootTabFor("mainline") === "city", "mainline stays on city tab");
+  assert(rootTabFor("buygold") === "city" && rootTabFor("achieve") === "city", "buy gold and achievement stay on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -3161,57 +3174,122 @@ async function checkWs(): Promise<void> {
   assert(heroIdOnly !== null && formatWireHeroLine(heroIdOnly.entries[0]) === "类型未解 · id 9", "hero without a type keeps the id");
   const activityBody = hexToBytes("08011090fadad6061a04080110001a04080210001a0408031000");
   assert(
-    WireCmd.activityProgress === 17000 && CmdId.login7View === 2201 && CmdId.login7Claim === 2202 && CmdId.login7Advance === 2203,
+    WireCmd.buyGoldList === 17000 && CmdId.login7View === 2201 && CmdId.login7Claim === 2202 && CmdId.login7Advance === 2203,
     "online 17000 stays off the placeholder login7 ids"
   );
-  assert(bytesToHex(encodeFrame(WireCmd.activityProgress)) === "0400000068420000", "empty c2s 17000");
-  assert(WIRE_ACTIVITY_READONLY_TITLE === "活动进度（真服只读）", "readonly activity title");
-  assert(WIRE_ACTIVITY_EMPTY === "已同步空表" && WIRE_ACTIVITY_UNSYNCED_TOAST === "真服未同步", "activity empty is not the unsynced toast");
+  assert(bytesToHex(encodeFrame(WireCmd.buyGoldList)) === "0400000068420000", "empty c2s 17000");
+  assert(WIRE_ACTIVITY_READONLY_TITLE === "点金（真服只读）", "readonly buy gold title");
+  assert(WIRE_ACTIVITY_EMPTY === "已同步空表" && WIRE_ACTIVITY_UNSYNCED_TOAST === "真服未同步", "buy gold empty is not the unsynced toast");
   assert(
-    WIRE_ACTIVITY_READONLY_NOTE.indexOf("不领取") >= 0 &&
+    WIRE_ACTIVITY_READONLY_NOTE.indexOf("不点金") >= 0 &&
       WIRE_ACTIVITY_READONLY_NOTE.indexOf("不写金币") >= 0 &&
-      WIRE_ACTIVITY_FIELD_NOTE.indexOf("外层字段1") >= 0 &&
-      WIRE_ACTIVITY_FIELD_NOTE.indexOf("外层字段2") >= 0,
-    "activity page refuses claim and keeps field numbers"
+      WIRE_ACTIVITY_FIELD_NOTE.indexOf("status") >= 0 &&
+      WIRE_ACTIVITY_FIELD_NOTE.indexOf("idx") >= 0 &&
+      WIRE_ACTIVITY_READONLY_TITLE.indexOf("活动进度") < 0,
+    "buy gold page names GResBuyGoldLog and does not say activity progress"
   );
   assert(decodeWireActivity(new Uint8Array(0)) !== null && decodeWireActivity(new Uint8Array(0))?.rows.length === 0, "empty 17000 is a synced empty table");
   assert(decodeWireActivity(new Uint8Array([0x80])) === null, "bad 17000 ignored");
-  assert(decodeWireActivity(fieldVarint(1, 1)) === null, "non-empty 17000 without rows stays unsynced");
+  const statusOnly = decodeWireActivity(fieldVarint(1, 1));
+  assert(statusOnly !== null && statusOnly.status === 1 && statusOnly.rows.length === 0, "status without list is a synced empty buy gold log");
   assert(decodeWireActivity(fieldBytes(3, new Uint8Array([0x80]))) === null, "bad nested row does not become an empty table");
   const loggedActivity = decodeWireActivity(activityBody);
   assert(
     loggedActivity !== null &&
-      loggedActivity.field1 === 1 &&
-      loggedActivity.field2 === 1792458000 &&
+      loggedActivity.status === 1 &&
+      loggedActivity.time === 1792458000 &&
       loggedActivity.rows.length === 3 &&
-      loggedActivity.rows[0].field1 === 1 &&
-      loggedActivity.rows[0].field2 === 0 &&
-      loggedActivity.rows[1].field1 === 2 &&
-      loggedActivity.rows[2].field1 === 3 &&
-      loggedActivity.rows[2].field2 === 0,
-    "17000 sample keeps field numbers"
+      loggedActivity.rows[0].idx === 1 &&
+      loggedActivity.rows[0].num === 0 &&
+      loggedActivity.rows[1].idx === 2 &&
+      loggedActivity.rows[2].idx === 3 &&
+      loggedActivity.rows[2].num === 0,
+    "17000 sample uses GResBuyGoldLog names"
   );
   assert(
     loggedActivity !== null &&
-      formatWireActivityLine(loggedActivity.rows[0]) === "字段1=1 / 字段2=0" &&
-      formatWireActivityLine(loggedActivity.rows[1]) === "字段1=2 / 字段2=0" &&
-      formatWireActivityLine(loggedActivity.rows[2]) === "字段1=3 / 字段2=0" &&
-      formatWireActivityStamp(loggedActivity.field2) === "外层字段2=1792458000",
-    "activity lines show field numbers and the raw outer field 2"
+      formatWireActivityLine(loggedActivity.rows[0]) === "idx=1 / num=0" &&
+      formatWireActivityLine(loggedActivity.rows[1]) === "idx=2 / num=0" &&
+      formatWireActivityLine(loggedActivity.rows[2]) === "idx=3 / num=0" &&
+      formatWireActivityStamp(loggedActivity) === "status=1 / time=1792458000",
+    "buy gold lines show idx num and the raw time"
   );
   assert(
     loggedActivity !== null &&
-      wireActivityNote(loggedActivity).indexOf("外层字段1=1") >= 0 &&
+      wireActivityNote(loggedActivity).indexOf("status=1") >= 0 &&
       wireActivityNote(loggedActivity).indexOf("不写金币") >= 0 &&
-      formatWireActivityLine(loggedActivity.rows[0]).indexOf("已领") < 0 &&
+      wireActivityNote(loggedActivity).indexOf("活动进度") < 0 &&
       formatWireActivityLine(loggedActivity.rows[0]).indexOf("七日") < 0 &&
-      (formatWireActivityStamp(loggedActivity.field2) || "").indexOf("开服") < 0,
-    "activity copy stays on field numbers"
+      (formatWireActivityStamp(loggedActivity) || "").indexOf("开服") < 0,
+    "buy gold copy stays on proto names"
   );
   const activityFieldOnly = decodeWireActivity(fieldBytes(3, fieldVarint(1, 2)));
   assert(
-    activityFieldOnly !== null && formatWireActivityLine(activityFieldOnly.rows[0]) === "字段1=2 / 字段2=无",
-    "missing row field stays blank instead of zero"
+    activityFieldOnly !== null && formatWireActivityLine(activityFieldOnly.rows[0]) === "idx=2 / num=无",
+    "missing num stays blank instead of zero"
+  );
+  const achieveOne = decodeWireAchievement(
+    fieldBytes(1, concatBytes(concatBytes(fieldVarint(1, 100100), fieldVarint(2, 1)), fieldVarint(3, 0)))
+  );
+  const achieveEmptyOuter = decodeWireAchievement(fieldVarint(3, 0));
+  assert(
+    WireCmd.achievementList === 12010 && CmdId.login7View === 2201 && CmdId.goal7View === 2301,
+    "online 12010 stays off the placeholder login7 and goal7 ids"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.achievementList)) === "04000000ea2e0000", "empty c2s 12010");
+  assert(bytesToHex(encodeFrame(12020)) !== "04000000ea2e0000", "12020 is not the 12010 frame");
+  assert(WIRE_ACHIEVEMENT_READONLY_TITLE === "成就记录（真服只读）", "readonly achievement title");
+  assert(
+    WIRE_ACHIEVEMENT_EMPTY === "空成就表" && WIRE_ACHIEVEMENT_UNSYNCED_TOAST === "真服未同步",
+    "empty achievement table is not the unsynced toast"
+  );
+  assert(
+    WIRE_ACHIEVEMENT_SIDE_EFFECT === "打开/同步可能在服上补成就" &&
+      WIRE_ACHIEVEMENT_READONLY_NOTE.indexOf("不领奖") >= 0 &&
+      WIRE_ACHIEVEMENT_READONLY_NOTE.indexOf("不改 state") >= 0 &&
+      WIRE_ACHIEVEMENT_FIELD_NOTE.indexOf("idx") >= 0 &&
+      WIRE_ACHIEVEMENT_FIELD_NOTE.indexOf("process") >= 0 &&
+      WIRE_ACHIEVEMENT_FIELD_NOTE.indexOf("state") >= 0 &&
+      WIRE_ACHIEVEMENT_FIELD_NOTE.indexOf("字段1") < 0,
+    "achievement page names PSTaskData and warns about the server side effect"
+  );
+  assert(
+    decodeWireAchievement(new Uint8Array(0)) !== null && decodeWireAchievement(new Uint8Array(0))?.tasks.length === 0,
+    "empty 12010 body is a synced empty achievement table"
+  );
+  assert(
+    achieveEmptyOuter !== null && achieveEmptyOuter.tasks.length === 0,
+    "non-empty outer with no task is still an empty achievement table"
+  );
+  assert(decodeWireAchievement(new Uint8Array([0x80])) === null, "bad 12010 ignored");
+  assert(decodeWireAchievement(fieldBytes(1, new Uint8Array([0x80]))) === null, "bad nested task does not become an empty table");
+  assert(
+    achieveOne !== null &&
+      achieveOne.tasks.length === 1 &&
+      achieveOne.tasks[0].idx === 100100 &&
+      achieveOne.tasks[0].process === 1 &&
+      achieveOne.tasks[0].state === 0 &&
+      formatWireAchievementLine(achieveOne.tasks[0]) === "idx=100100 / process=1 / state=0",
+    "12010 task uses idx process state"
+  );
+  const achieveSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.achievementList, fieldBytes(1, fieldVarint(1, 110400))), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    achieveSticky.frames.length === 2 &&
+      achieveSticky.frames[0].cmdId === 12010 &&
+      achieveSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireAchievement(achieveSticky.frames[0].body)?.tasks.length === 1 &&
+      decodeWireAchievement(achieveSticky.frames[0].body)?.tasks[0].idx === 110400 &&
+      formatWireAchievementLine(decodeWireAchievement(achieveSticky.frames[0].body)!.tasks[0]).indexOf("每日") < 0,
+    "sticky 12010 frame stops at its length prefix"
+  );
+  const idxOnly = decodeWireAchievement(fieldBytes(1, fieldVarint(1, 115200)));
+  assert(
+    idxOnly !== null && formatWireAchievementLine(idxOnly.tasks[0]) === "idx=115200 / process=无 / state=无",
+    "missing process and state stay blank"
+  );
+  assert(
+    achieveOne !== null && wireAchievementNote(achieveOne).indexOf("打开/同步可能在服上补成就") >= 0 && wireAchievementNote(achieveOne).indexOf("不写金币") >= 0,
+    "achievement note keeps the side effect"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -3653,7 +3731,13 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.backpackList));
       roleSockets[0].push(encodeFrame(WireCmd.mailList, mailSample));
       roleSockets[0].push(encodeFrame(WireCmd.heroList, heroRoster));
-      roleSockets[0].push(encodeFrame(WireCmd.activityProgress, activityBody));
+      roleSockets[0].push(encodeFrame(WireCmd.buyGoldList, activityBody));
+      roleSockets[0].push(
+        encodeFrame(
+          WireCmd.achievementList,
+          fieldBytes(1, concatBytes(concatBytes(fieldVarint(1, 100100), fieldVarint(2, 1)), fieldVarint(3, 0)))
+        )
+      );
       assert(Session.source === "mock" && Session.role?.name === (kept || "甲"), "name waits until the city role exists");
       assert(WireSession.nowIdx === null && WireSession.maxIdx === null, "3007 waits until the city role exists");
       assert(!WireSession.hasChapter(), "chapter page stays closed before either idx");
@@ -3662,7 +3746,8 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasBag() && WireSession.bagItems === null, "bag stays unsynced before the city role");
       assert(!WireSession.hasMail() && WireSession.mailEntries === null, "mail stays unsynced before the city role");
       assert(!WireSession.hasHero() && WireSession.heroes === null, "hero stays unsynced before the city role");
-      assert(!WireSession.hasActivity() && WireSession.activity === null, "activity stays unsynced before the city role");
+      assert(!WireSession.hasActivity() && WireSession.activity === null, "buy gold stays unsynced before the city role");
+      assert(!WireSession.hasAchievement() && WireSession.achievements === null, "achievement stays unsynced before the city role");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
       Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
@@ -3703,13 +3788,24 @@ async function checkWs(): Promise<void> {
       assert(
         WireSession.hasActivity() &&
           WireSession.activity !== null &&
-          WireSession.activity.field1 === 1 &&
-          WireSession.activity.field2 === 1792458000 &&
+          WireSession.activity.status === 1 &&
+          WireSession.activity.time === 1792458000 &&
           WireSession.activity.rows.length === 3 &&
-          formatWireActivityLine(WireSession.activity.rows[0]) === "字段1=1 / 字段2=0",
-        "flush writes the 17000 rows"
+          formatWireActivityLine(WireSession.activity.rows[0]) === "idx=1 / num=0",
+        "flush writes the 17000 buy gold rows"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "17000 stays off the wallet");
+      assert(
+        WireSession.hasAchievement() &&
+          WireSession.achievements !== null &&
+          WireSession.achievements.tasks.length === 1 &&
+          WireSession.achievements.tasks[0].idx === 100100 &&
+          WireSession.achievements.tasks[0].process === 1 &&
+          WireSession.achievements.tasks[0].state === 0 &&
+          formatWireAchievementLine(WireSession.achievements.tasks[0]) === "idx=100100 / process=1 / state=0",
+        "flush writes the 12010 achievement"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "12010 stays off the wallet");
       assert(sawWire("在背包列表之前"), "5002 before the list is not merged");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
@@ -3866,7 +3962,7 @@ async function checkWs(): Promise<void> {
         "empty GResHeroList replaces the roster and stays synced"
       );
       assert(Session.gold === 40, "empty roster does not write gold");
-      roleSockets[0].push(encodeFrame(WireCmd.activityProgress, new Uint8Array([0x80])));
+      roleSockets[0].push(encodeFrame(WireCmd.buyGoldList, new Uint8Array([0x80])));
       assert(
         WireSession.hasActivity() &&
           WireSession.activity !== null &&
@@ -3875,12 +3971,34 @@ async function checkWs(): Promise<void> {
         "bad 17000 keeps the table"
       );
       assert(Session.gold === 40 && Session.diamond === 0, "bad 17000 stays off the wallet");
-      roleSockets[0].push(encodeFrame(WireCmd.activityProgress));
+      roleSockets[0].push(encodeFrame(WireCmd.buyGoldList));
       assert(
         WireSession.hasActivity() && WireSession.activity !== null && WireSession.activity.rows.length === 0,
         "empty 17000 replaces the table and stays synced"
       );
       assert(Session.gold === 40, "empty 17000 does not write gold");
+      roleSockets[0].push(encodeFrame(WireCmd.achievementList, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasAchievement() &&
+          WireSession.achievements !== null &&
+          WireSession.achievements.tasks.length === 1 &&
+          sawWire("12010 解不开"),
+        "bad 12010 keeps the table"
+      );
+      assert(Session.gold === 40 && Session.diamond === 0, "bad 12010 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.achievementList));
+      assert(
+        WireSession.hasAchievement() &&
+          WireSession.achievements !== null &&
+          WireSession.achievements.tasks.length === 0,
+        "empty 12010 body is a synced empty achievement table"
+      );
+      assert(Session.gold === 40, "empty 12010 does not write gold");
+      roleSockets[0].push(encodeFrame(WireCmd.achievementList, fieldVarint(3, 0)));
+      assert(
+        WireSession.hasAchievement() && WireSession.achievements !== null && WireSession.achievements.tasks.length === 0,
+        "non-empty 12010 without tasks stays the empty achievement table"
+      );
       lines.length = 0;
       const sentBeforePull = roleSockets[0].sent.length;
       WireSession.pullRoleProfile();
@@ -3910,7 +4028,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 4, "idle pull sends 3004 then 15000 then 4001 then 17000");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 5, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -3928,11 +4046,17 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 17000 after 4001"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 4] as ArrayBuffer)) === "04000000ea2e0000",
+        "pullIdle sends empty c2s 12010 after 17000"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
+          sawLog(lines, "发送 c2s 12010") &&
+          sawLog(lines, "发送 c2s 12020") === false &&
           sawLog(lines, "发送 c2s 18001") === false,
-        "mail hero and activity pulls are logged"
+        "mail hero buy gold and achievement pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
       const mailSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -3978,8 +4102,16 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 login7.claim") &&
           sawLog(lines, "未发送 login7.advance") &&
           sawLog(lines, "未发送 wire.18001"),
-        "activity claim is not encoded"
+        "buy gold is not a login7 claim"
       );
+      roleNet.send(WIRE_ACHIEVEMENT_CMD);
+      const achievementSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(achievementSent as ArrayBuffer)) === "04000000ea2e0000", "wire.12010 frame");
+      const sentBeforeAchievementOther = roleSockets[0].sent.length;
+      roleNet.send("wire.12020");
+      roleNet.send(Cmd.goal7Claim);
+      assert(roleSockets[0].sent.length === sentBeforeAchievementOther, "12020 and goal claim stay off the wire");
+      assert(sawLog(lines, "未发送 wire.12020") && sawLog(lines, "未发送 goal7.claim"), "daily task and goal claim are not encoded");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {

@@ -41,6 +41,7 @@ import { ArenaPage, buildArenaPage } from "./ArenaPage";
 import { buildTowerPage, TowerPage } from "./TowerPage";
 import { buildDailyGoldPage, DailyGoldPage } from "./DailyGoldPage";
 import { buildLogin7Page, Login7Page } from "./Login7Page";
+import { buildWireAchievementPage, WireAchievementPage } from "./WireAchievementPage";
 import { buildWireActivityPage, WireActivityPage } from "./WireActivityPage";
 import { buildGoal7Page, Goal7Page } from "./Goal7Page";
 import { buildShopPage, ShopPage } from "./ShopPage";
@@ -58,6 +59,7 @@ import { buildWireMainlinePage, WireMainlinePage } from "./WireMainlinePage";
 import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
 import { WIRE_HERO_UNSYNCED_TOAST } from "../net/protocol/wireHero";
 import { WIRE_MAIL_UNSYNCED_TOAST } from "../net/protocol/wireMail";
+import { WIRE_ACHIEVEMENT_UNSYNCED_TOAST } from "../net/protocol/wireAchievement";
 import { WIRE_ACTIVITY_UNSYNCED_TOAST } from "../net/protocol/wireActivity";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
@@ -83,6 +85,8 @@ const GOAL7_FILL = new Color(184, 122, 36, 255);
 const SHOP_FILL = new Color(42, 108, 132, 255);
 const GIFT_FILL = new Color(140, 52, 108, 255);
 const LIMITED_FILL = new Color(168, 72, 48, 255);
+const ACHIEVE_FILL = new Color(72, 96, 160, 255);
+const BUYGOLD_FILL = new Color(176, 144, 48, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -101,8 +105,10 @@ export class MainApp extends Component {
   private arena: ArenaPage | null = null;
   private tower: TowerPage | null = null;
   private daily: DailyGoldPage | null = null;
-  private login7: Login7Page | WireActivityPage | null = null;
+  private login7: Login7Page | null = null;
   private goal7: Goal7Page | null = null;
+  private buyGold: WireActivityPage | null = null;
+  private achieve: WireAchievementPage | null = null;
   private shop: ShopPage | null = null;
   private wish: WishPage | null = null;
   private cafe: CafePage | null = null;
@@ -149,6 +155,10 @@ export class MainApp extends Component {
     this.daily = null;
     this.login7?.dispose();
     this.login7 = null;
+    this.buyGold?.dispose();
+    this.buyGold = null;
+    this.achieve?.dispose();
+    this.achieve = null;
     this.goal7?.dispose();
     this.goal7 = null;
     this.shop?.dispose();
@@ -244,7 +254,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "login7")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -295,6 +305,8 @@ export class MainApp extends Component {
     if (id === "daily") return this.mountDaily();
     if (id === "login7") return this.mountLogin7();
     if (id === "goal7") return this.mountGoal7();
+    if (id === "buygold") return this.mountBuyGold();
+    if (id === "achieve") return this.mountAchievement();
     if (id === "shop") return this.mountShop();
     if (id === "wish") return this.mountWish();
     if (id === "cafe") return this.mountCafe();
@@ -323,6 +335,8 @@ export class MainApp extends Component {
     place(createButton("商店", () => this.openShop(), 156, 52, SHOP_FILL, 18), page, 83, -120);
     place(createButton("礼包", () => this.openGift(), 156, 52, GIFT_FILL, 18), page, 249, -120);
     place(createButton("限时活动", () => this.openLimited(), 420, 48, LIMITED_FILL, 22), page, 0, -188);
+    place(createButton("成就记录", () => this.openAchievement(), 200, 44, ACHIEVE_FILL, 18), page, -110, -248);
+    place(createButton("点金", () => this.openBuyGold(), 200, 44, BUYGOLD_FILL, 18), page, 110, -248);
     place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, -40);
     place(
       createButton("公告", () => {
@@ -349,13 +363,13 @@ export class MainApp extends Component {
       190,
       -40
     );
-    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -248);
+    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -310);
 
     this.gateNode = place(
       createLabel(this.gateText(), 20, { color: GATE_COLOR, width: 680, height: 72 }),
       page,
       0,
-      -330
+      -400
     );
     const net = this.cityNet();
     this.netState = net.state;
@@ -363,7 +377,7 @@ export class MainApp extends Component {
       color: new Color(160, 180, 210, 255),
       width: 680,
     });
-    place(netNode, page, 0, -420);
+    place(netNode, page, 0, -490);
     net.onState((state) => {
       if (!this.isValid) return;
       if (netNode.isValid) setText(netNode, "网络 " + state);
@@ -460,8 +474,10 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。七日入口收到 17000 时另走只读页。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。七日登录不绑 17000。 */
   private blockWirePage(id: string): boolean {
+    if (id === "achieve") return this.blockWireAchievement();
+    if (id === "buygold") return this.blockWireBuyGold();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -470,7 +486,6 @@ export class MainApp extends Component {
     if (id === "mail") return this.blockWireMail();
     if (id === "hero") return this.blockWireHero();
     if (id === "hero-detail") return this.blockWireHeroDetail();
-    if (id === "login7") return this.blockWireActivity();
     GameLog.shared.info("MainApp", "wire skip " + id);
     this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
     return true;
@@ -500,11 +515,19 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 17000 就停在主城。空表也算同步，放行后页面写「已同步空表」。 */
-  private blockWireActivity(): boolean {
-    if (WireSession.hasActivity()) return false;
-    GameLog.shared.info("MainApp", "wire activity unsynced");
+  /** 没收到过 s2c 17000 就停在主城。空表也算同步，放行后页面写「已同步空表」。Mock 也不进别的页。 */
+  private blockWireBuyGold(): boolean {
+    if (Session.source === "wire" && WireSession.hasActivity()) return false;
+    GameLog.shared.info("MainApp", "wire buygold unsynced");
     this.shell?.showToast(WIRE_ACTIVITY_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 12010 就停在主城。空成就表也算同步。Mock 不回落。 */
+  private blockWireAchievement(): boolean {
+    if (Session.source === "wire" && WireSession.hasAchievement()) return false;
+    GameLog.shared.info("MainApp", "wire achievement unsynced");
+    this.shell?.showToast(WIRE_ACHIEVEMENT_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -619,23 +642,12 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "click login7");
     if (this.blockWirePage("login7")) return;
     if (!this.allow("login7")) return;
-    if (Session.source === "wire") {
-      const net = this.cityNet();
-      if (net.state !== "connected") {
-        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
-        return;
-      }
-      this.panels?.openChild("login7");
-      this.refreshChrome();
-      return;
-    }
     if (!this.ensureNet()) return;
     this.panels?.openChild("login7");
     this.refreshChrome();
   }
 
   private mountLogin7(): Node {
-    if (Session.source === "wire") return this.mountWireActivity();
     this.login7?.dispose();
     const page = buildLogin7Page({
       showToast: (text) => this.shell?.showToast(text, 2400),
@@ -654,13 +666,49 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  private mountWireActivity(): Node {
-    this.login7?.dispose();
+  /** 真服点金。未同步 Toast。已同步压入只读页，不点金，不写金币。不走七日登录。 */
+  private openBuyGold(): void {
+    GameLog.shared.info("MainApp", "click buygold");
+    if (this.blockWirePage("buygold")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("buygold");
+    this.refreshChrome();
+  }
+
+  private mountBuyGold(): Node {
+    this.buyGold?.dispose();
     const page = buildWireActivityPage({
       alive: () => this.isValid,
       close: () => this.back(),
     });
-    this.login7 = page;
+    this.buyGold = page;
+    return page.node;
+  }
+
+  /** 真服成就记录。未同步 Toast。已同步（含空成就表）压入只读页，不领奖。 */
+  private openAchievement(): void {
+    GameLog.shared.info("MainApp", "click achieve");
+    if (this.blockWirePage("achieve")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("achieve");
+    this.refreshChrome();
+  }
+
+  private mountAchievement(): Node {
+    this.achieve?.dispose();
+    const page = buildWireAchievementPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.achieve = page;
     return page.node;
   }
 
@@ -1279,6 +1327,14 @@ export class MainApp extends Component {
     if (id === "login7") {
       this.login7?.dispose();
       this.login7 = null;
+    }
+    if (id === "buygold") {
+      this.buyGold?.dispose();
+      this.buyGold = null;
+    }
+    if (id === "achieve") {
+      this.achieve?.dispose();
+      this.achieve = null;
     }
     if (id === "goal7") {
       this.goal7?.dispose();

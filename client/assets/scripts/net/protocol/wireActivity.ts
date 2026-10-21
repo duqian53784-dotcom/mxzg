@@ -1,56 +1,56 @@
 /**
- * 真服活动进度只读。c2s / s2c 都是 17000。仓库里没有这条消息的 proto。
+ * 真服点金只读。c2s / s2c 都是 17000，BuyGoldHandler.buyGoldList。
+ * s2c 是 GResBuyGoldLog：status=1，time=2，repeated PSBuyGoldData list=3（idx=1，num=2）。
  * 不是占位 login7.view / login7.claim / login7.advance（2201–2203）。
+ * 不从「七日登录」进入。
  *
  * c2s 没有包体。整帧 04 00 00 00 68 42 00 00。
  * 由 WireSession.pullIdle 在 c2s 4001 page=1 之后发出。Boot.ts 不改。
- * 相对顺序：2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000。
- * 不发 18001，不发 20001。不领取，不写钱包。
+ * 相对顺序：2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010。
+ * 不发 12020，不发 18001，不发 20001。不点金，不写钱包。
  *
- * s2c 17000 只按字段号读。net-20261020 三例同形，一例包体 26 字节：
+ * s2c 17000 按 GResBuyGoldLog 命名。对不上的子字段不补 0。
+ * net-20261020 三例同形，一例包体 26 字节：
  * `08 01 10 90 fa da d6 06 1a 04 08 01 10 00 1a 04 08 02 10 00 1a 04 08 03 10 00`
- * - 外层字段 1 varint。三例都是 1。只记日志，不命名，列表不写。
- * - 外层字段 2 varint。像日界 unix 秒。列表写原数，不推开服天。
- * - 外层字段 3 repeated 子消息。三例各 3 条。
- *   - 子字段 1 varint：1 / 2 / 3。行上写「字段1=N」。
- *   - 子字段 2 varint：都是 0。行上写「字段2=0」。
- * 不写成已领或未领，也不写成七日登录。
- * 空包体是已同步的空表。日志里没有空包样本，这是和背包空包同一条规则。
+ * - status：三例都是 1。
+ * - time：原数。不推开服天。
+ * - list：三例各 3 条。idx 为 1 / 2 / 3，num 都是 0。
+ * 空包体、或能解开但 list 为 0 条，都是已同步的空表。
+ * 有 list 包但一条都解不开时返回 null，调用方保持上一次。
  */
 const MAX_BODY = 65536;
 
-/** 和 WsTransport 入站分发、encodeWireMessage 用同一个字符串。数字号是 WireCmd.activityProgress。 */
+/** 和 WsTransport 入站分发、encodeWireMessage 用同一个字符串。数字号是 WireCmd.buyGoldList。 */
 export const WIRE_ACTIVITY_CMD = "wire.17000";
 
-export const WIRE_ACTIVITY_READONLY_TITLE = "活动进度（真服只读）";
+export const WIRE_ACTIVITY_READONLY_TITLE = "点金（真服只读）";
 export const WIRE_ACTIVITY_EMPTY = "已同步空表";
 export const WIRE_ACTIVITY_UNSYNCED_TOAST = "真服未同步";
-export const WIRE_ACTIVITY_READONLY_NOTE = "只读。不领取，不写金币";
-export const WIRE_ACTIVITY_FIELD_NOTE = "外层字段1只记日志。外层字段2写原数";
+export const WIRE_ACTIVITY_READONLY_NOTE = "只读。不点金，不写金币";
+export const WIRE_ACTIVITY_FIELD_NOTE = "status、time 写原数。行上写 idx / num";
 
 export interface WireActivityRow {
-  /** 子消息字段 1。没有时是 null，不写成 0。 */
-  field1: number | null;
-  /** 子消息字段 2。没有时是 null，不写成 0。 */
-  field2: number | null;
+  /** PSBuyGoldData.idx。没有时是 null，不写成 0。 */
+  idx: number | null;
+  /** PSBuyGoldData.num。没有时是 null，不写成 0。 */
+  num: number | null;
 }
 
 export interface WireActivitySnapshot {
-  /** 外层字段 1。只记日志。 */
-  field1: number | null;
-  /** 外层字段 2。原数，不是开服天。 */
-  field2: number | null;
+  /** GResBuyGoldLog.status。 */
+  status: number | null;
+  /** GResBuyGoldLog.time。原数，不是开服天。 */
+  time: number | null;
   rows: WireActivityRow[];
 }
 
 /**
- * 解 s2c 17000。空包体返回空表，不返回 null。
- * 超长、坏 varint、非空却没有一条能解开的字段 3 时返回 null。
- * 调用方保持上一次，不要把未同步标成已同步。
+ * 解 s2c 17000。空包体、以及没有 list 的合法包，都返回空表，不返回 null。
+ * 超长、坏 varint、list 有包但一条都解不开时返回 null。
  */
 export function decodeWireActivity(body: Uint8Array | null | undefined): WireActivitySnapshot | null {
   if (!body) return null;
-  if (body.length === 0) return { field1: null, field2: null, rows: [] };
+  if (body.length === 0) return { status: null, time: null, rows: [] };
   if (body.length > MAX_BODY) return null;
   const fields = readRawFields(body);
   if (!fields) return null;
@@ -60,31 +60,31 @@ export function decodeWireActivity(body: Uint8Array | null | undefined): WireAct
     const row = fields[i];
     if (row.field !== 3 || row.kind !== "bytes" || !row.bytes) continue;
     blobs += 1;
-    const parsed = decodeActivityRow(row.bytes);
+    const parsed = decodeBuyGoldRow(row.bytes);
     if (!parsed) continue;
     rows.push(parsed);
   }
-  if (blobs === 0 || rows.length === 0) return null;
+  if (blobs > 0 && rows.length === 0) return null;
   return {
-    field1: nonNegativeVarint(fields, 1),
-    field2: nonNegativeVarint(fields, 2),
+    status: nonNegativeVarint(fields, 1),
+    time: nonNegativeVarint(fields, 2),
     rows,
   };
 }
 
-/** 行上只写字段号。不写已领、未领或天数。 */
+/** 行上写 PSBuyGoldData 的 idx / num。 */
 export function formatWireActivityLine(row: WireActivityRow): string {
-  return "字段1=" + numText(row.field1) + " / 字段2=" + numText(row.field2);
+  return "idx=" + numText(row.idx) + " / num=" + numText(row.num);
 }
 
-/** 外层字段 2 的原数。没有就不写。不换成日期，也不换成开服天。 */
-export function formatWireActivityStamp(field2: number | null): string | null {
-  if (field2 === null) return null;
-  return "外层字段2=" + field2;
+/** status 与 time 的原数。两个都没有就不写。 */
+export function formatWireActivityStamp(snap: WireActivitySnapshot): string | null {
+  if (snap.status === null && snap.time === null) return null;
+  return "status=" + numText(snap.status) + " / time=" + numText(snap.time);
 }
 
 export function wireActivityNote(snap: WireActivitySnapshot): string {
-  const head = "外层字段1=" + numText(snap.field1) + " 外层字段2=" + numText(snap.field2);
+  const head = "status=" + numText(snap.status) + " time=" + numText(snap.time);
   if (snap.rows.length === 0) return "已同步空表。" + head + "。不写金币";
   const parts: string[] = [];
   const n = Math.min(snap.rows.length, 4);
@@ -104,13 +104,13 @@ interface RawField {
   bytes?: Uint8Array;
 }
 
-function decodeActivityRow(body: Uint8Array): WireActivityRow | null {
+function decodeBuyGoldRow(body: Uint8Array): WireActivityRow | null {
   const fields = readRawFields(body);
   if (!fields) return null;
-  const field1 = nonNegativeVarint(fields, 1);
-  const field2 = nonNegativeVarint(fields, 2);
-  if (field1 === null && field2 === null) return null;
-  return { field1, field2 };
+  const idx = nonNegativeVarint(fields, 1);
+  const num = nonNegativeVarint(fields, 2);
+  if (idx === null && num === null) return null;
+  return { idx, num };
 }
 
 function nonNegativeVarint(fields: RawField[], field: number): number | null {

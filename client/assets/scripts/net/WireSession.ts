@@ -59,16 +59,22 @@ import {
   WireActivityRow,
   WireActivitySnapshot,
 } from "./protocol/wireActivity";
+import {
+  decodeWireAchievement,
+  WIRE_ACHIEVEMENT_CMD,
+  wireAchievementNote,
+  WireAchievementSnapshot,
+} from "./protocol/wireAchievement";
 import { wireBody } from "./protocol/wireLogin";
 
 /**
  * ?transport=ws 登录进主城后，这条 NetClient 要活过 Boot 切场景。
  * 心跳 1004 继续发。
- * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3004、wire.3005、wire.15000、wire.4001 和 wire.17000。
+ * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3004、wire.3005、wire.15000、wire.4001、wire.17000 和 wire.12010。
  * 登录成功后先发空的 c2s 2001（日志里的拉角色资料）。pullRoleProfile 紧接着发空的 c2s 5001。
- * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。pullIdle 在 3004 之后再发空的 c2s 15000，然后 c2s 4001 page=1，再发空的 c2s 17000。
- * 相对顺序是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000。不等 s2c 2001，也不夹那一长串别的号。
- * 不发 5010，也不发 5004–5009、5011–5013。不发邮件领取、已读、删除。不发英雄升级，不发 18001，不发 20001。不领取 17000。
+ * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。pullIdle 在 3004 之后再发空的 c2s 15000，然后 c2s 4001 page=1，再发空的 c2s 17000，再发空的 c2s 12010。
+ * 相对顺序是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010。不等 s2c 2001，也不夹那一长串别的号。
+ * 不发 5010，也不发 5004–5009、5011–5013。不发邮件领取、已读、删除。不发英雄升级，不发 18001，不发 20001。不点金。不发 12020，不领奖。
  * s2c 2001 按 Role.proto：字段 9 角色名、字段 6 等级、字段 2 金币、字段 1 宝石（顶栏钻石）。
  * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。
  * 不写 Session.stageId，主城按钮用 mainlineLabel()。
@@ -88,10 +94,13 @@ import { wireBody } from "./protocol/wireLogin";
  * send_status=0 时接着发下一页，未收齐前不替换名册。
  * 从未收到 4001 时主城英雄只 Toast，不打开 Mock 英雄页。
  * 不升级，不写顶栏。类型对不上 CHeroType 就写类型号。
- * s2c 17000 替换本地活动进度。空包体是已同步的空表。
- * 外层字段 1 只记日志。外层字段 2 记原数，不推开服天。字段 3 按「字段1=N / 字段2=0」展示。
- * 从未收到 17000 时主城七日入口只 Toast，不打开 Mock 七日登录。
- * 不领取，不写顶栏。占位 login7.* 仍是 2201–2203。
+ * s2c 17000 替换本地点金记录。空包体、以及 list 为 0 条，都是已同步的空表。
+ * 按 GResBuyGoldLog 写 status、time 和 idx / num。time 不推开服天。
+ * 从未收到 17000 时主城「点金」只 Toast。不从七日登录进入，也不打开 Mock 七日登录。
+ * 不点金，不写顶栏。占位 login7.* 仍是 2201–2203。
+ * s2c 12010 替换本地成就记录。空包体和 task 为 0 条都是空成就表。
+ * 按 PSTaskData 写 idx / process / state。同步可能在服上补成就。不领奖，不改 state。
+ * 从未收到 12010 时主城「成就记录」只 Toast，不回落 Mock。
  * 缺的顶栏字段不写，那个格子保持未同步。字段 5 是奖杯，不写进金币。开服天不推。
  * 别的 s2c 仍只记 wire.<cmdId>。解不开就忽略，不抛进拆帧循环。
  */
@@ -130,6 +139,11 @@ export class WireSession {
    * 空表是已同步，不是未同步。
    */
   static activity: WireActivitySnapshot | null = null;
+  /**
+   * 收到的 s2c 12010。null 表示这次进主城还没收到 12010。
+   * 空 tasks 是已同步的空成就表，不是未同步。
+   */
+  static achievements: WireAchievementSnapshot | null = null;
 
   private static watched: NetClient | null = null;
   private static offProfile: (() => void) | null = null;
@@ -141,6 +155,7 @@ export class WireSession {
   private static offMail: (() => void) | null = null;
   private static offHero: (() => void) | null = null;
   private static offActivity: (() => void) | null = null;
+  private static offAchievement: (() => void) | null = null;
   private static pending: WireRoleProfile | null = null;
   private static pendingChapter: WireChapterProgress | null = null;
   private static pendingIdle: WireIdleSnapshot | null = null;
@@ -158,6 +173,8 @@ export class WireSession {
   private static heroExpect = 1;
   /** null 表示登录过程里还没看到 17000。空表的 rows 是空数组。 */
   private static pendingActivity: WireActivitySnapshot | null = null;
+  /** null 表示登录过程里还没看到 12010。空表的 tasks 是空数组。 */
+  private static pendingAchievement: WireAchievementSnapshot | null = null;
   private static listeners = new Set<() => void>();
 
   /** 套接字一开就听。登录回包里如果已经夹着 2001、5001、3007 或 3004，先记下，等角色写入后再套上。 */
@@ -172,7 +189,8 @@ export class WireSession {
       this.offBagGain &&
       this.offMail &&
       this.offHero &&
-      this.offActivity
+      this.offActivity &&
+      this.offAchievement
     ) {
       return;
     }
@@ -187,6 +205,7 @@ export class WireSession {
     this.offMail = net.subscribe(WIRE_MAIL_CMD, (msg) => this.onMail(msg.data));
     this.offHero = net.subscribe(WIRE_HERO_CMD, (msg) => this.onHero(msg.data));
     this.offActivity = net.subscribe(WIRE_ACTIVITY_CMD, (msg) => this.onActivity(msg.data));
+    this.offAchievement = net.subscribe(WIRE_ACHIEVEMENT_CMD, (msg) => this.onAchievement(msg.data));
   }
 
   static hold(net: NetClient): void {
@@ -196,7 +215,7 @@ export class WireSession {
   }
 
   /**
-   * 这次进主城还没看到新的 s2c 3007 / 3004 / 5001 / 15000 / 4001 / 17000。丢掉上一名角色的 idx、挂机时间、背包、邮件、英雄和活动进度。
+   * 这次进主城还没看到新的 s2c 3007 / 3004 / 5001 / 15000 / 4001 / 17000 / 12010。丢掉上一名角色的 idx、挂机时间、背包、邮件、英雄、点金和成就。
    * 登录过程中先到的包仍留在 pending，接着 flush 再写。
    */
   static prepareCity(): void {
@@ -210,6 +229,7 @@ export class WireSession {
     this.mailEntries = null;
     this.heroes = null;
     this.activity = null;
+    this.achievements = null;
   }
 
   /** 只放下引用。调用方自己 close。 */
@@ -226,6 +246,7 @@ export class WireSession {
       this.pendingMail = null;
       this.pendingHero = null;
       this.pendingActivity = null;
+      this.pendingAchievement = null;
       this.resetHeroGather();
       this.nowIdx = null;
       this.maxIdx = null;
@@ -237,6 +258,7 @@ export class WireSession {
       this.mailEntries = null;
       this.heroes = null;
       this.activity = null;
+      this.achievements = null;
     }
   }
 
@@ -253,6 +275,7 @@ export class WireSession {
     this.pendingMail = null;
     this.pendingHero = null;
     this.pendingActivity = null;
+    this.pendingAchievement = null;
     this.resetHeroGather();
     this.nowIdx = null;
     this.maxIdx = null;
@@ -264,6 +287,7 @@ export class WireSession {
     this.mailEntries = null;
     this.heroes = null;
     this.activity = null;
+    this.achievements = null;
     if (net) net.close();
   }
 
@@ -284,13 +308,14 @@ export class WireSession {
     this.commitMail();
     this.commitHero();
     this.commitActivity();
+    this.commitAchievement();
   }
 
   /**
    * 空的 c2s 2001，紧接着空的 c2s 5001。
    * Boot 仍只调用这一处再调用 pullChapter / pullIdle，所以不改 Boot.ts。
-   * 相对顺序因此是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000。
-   * 15000、4001 和 17000 在 pullIdle 里，跟在 3004 后面。4001 带 page=1，不是空体。17000 是空体。
+   * 相对顺序因此是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010。
+   * 15000、4001、17000 和 12010 在 pullIdle 里，跟在 3004 后面。4001 带 page=1，不是空体。17000 和 12010 是空体。
    */
   static pullRoleProfile(): void {
     const net = this.net || this.watched;
@@ -333,10 +358,10 @@ export class WireSession {
   }
 
   /**
-   * 空的 c2s 3004，紧接着空的 c2s 15000，再发 c2s 4001 page=1，然后空的 c2s 17000。
+   * 空的 c2s 3004，紧接着空的 c2s 15000，再发 c2s 4001 page=1，然后空的 c2s 17000，再发空的 c2s 12010。
    * 跟在 pullChapter 后面发，不等 s2c 2001。
-   * 3004 在空 c2s 3007 之后，包体是空的。15000、4001 和 17000 接在 3004 后，不改 Boot.ts。
-   * 不发 20001，也不发 18001。17000 不领取。
+   * 3004 在空 c2s 3007 之后，包体是空的。15000、4001、17000 和 12010 接在 3004 后，不改 Boot.ts。
+   * 不发 20001，也不发 18001，也不发 12020。17000 不点金。12010 不领奖。
    */
   static pullIdle(): void {
     const net = this.net || this.watched;
@@ -345,6 +370,7 @@ export class WireSession {
     this.pullMail();
     this.pullHero();
     this.pullActivity();
+    this.pullAchievement();
   }
 
   /** 空的 c2s 15000。没有包体。不发领取和删除。 */
@@ -376,7 +402,7 @@ export class WireSession {
     return this.heroes !== null;
   }
 
-  /** 空的 c2s 17000。没有包体。不领取。 */
+  /** 空的 c2s 17000。没有包体。不点金。 */
   static pullActivity(): void {
     const net = this.net || this.watched;
     if (!net || net.state !== "connected") return;
@@ -386,6 +412,18 @@ export class WireSession {
   /** 收到过 s2c 17000（含空包体）才算同步。解不开的包不算。 */
   static hasActivity(): boolean {
     return this.activity !== null;
+  }
+
+  /** 空的 c2s 12010。没有包体。不领奖。服端可能因此补成就。 */
+  static pullAchievement(): void {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return;
+    net.send(WIRE_ACHIEVEMENT_CMD);
+  }
+
+  /** 收到过 s2c 12010（含空包体、含空 task）才算同步。解不开的包不算。 */
+  static hasAchievement(): boolean {
+    return this.achievements !== null;
   }
 
   /** 空的 c2s 3005。没连上时返回 false，调用方 Toast。 */
@@ -610,7 +648,7 @@ export class WireSession {
       return;
     }
     if (!snap) {
-      GameLog.shared.info("Wire", "s2c 17000 解不开，活动进度不改");
+      GameLog.shared.info("Wire", "s2c 17000 解不开，点金不改");
       return;
     }
     this.pendingActivity = copyActivity(snap);
@@ -619,6 +657,26 @@ export class WireSession {
       return;
     }
     this.commitActivity();
+  }
+
+  private static onAchievement(data: unknown): void {
+    let snap: WireAchievementSnapshot | null = null;
+    try {
+      snap = decodeWireAchievement(wireBody(data));
+    } catch (err) {
+      GameLog.shared.error("Wire", "s2c 12010 解不开 " + (err instanceof Error ? err.message : "未知错误"));
+      return;
+    }
+    if (!snap) {
+      GameLog.shared.info("Wire", "s2c 12010 解不开，成就不改");
+      return;
+    }
+    this.pendingAchievement = copyAchievement(snap);
+    if (Session.source !== "wire" || !Session.role) {
+      GameLog.shared.info("Wire", "s2c 12010 先记下：" + wireAchievementNote(snap));
+      return;
+    }
+    this.commitAchievement();
   }
 
   /**
@@ -770,6 +828,17 @@ export class WireSession {
     this.emit();
   }
 
+  private static commitAchievement(): void {
+    const snap = this.pendingAchievement;
+    if (!snap) return;
+    if (Session.source !== "wire" || !Session.role) return;
+    const next = copyAchievement(snap);
+    this.pendingAchievement = null;
+    this.achievements = next;
+    GameLog.shared.info("Wire", "s2c 12010 " + wireAchievementNote(next));
+    this.emit();
+  }
+
   private static commitIdle(): void {
     const snapshot = this.pendingIdle;
     if (!snapshot || !wireIdleHasTime(snapshot)) return;
@@ -834,6 +903,10 @@ export class WireSession {
       this.offActivity();
       this.offActivity = null;
     }
+    if (this.offAchievement) {
+      this.offAchievement();
+      this.offAchievement = null;
+    }
   }
 }
 
@@ -856,14 +929,20 @@ function copyMail(entry: WireMailEntry): WireMailEntry {
 
 function copyActivity(snap: WireActivitySnapshot): WireActivitySnapshot {
   return {
-    field1: snap.field1,
-    field2: snap.field2,
+    status: snap.status,
+    time: snap.time,
     rows: snap.rows.map(copyActivityRow),
   };
 }
 
 function copyActivityRow(row: WireActivityRow): WireActivityRow {
-  return { field1: row.field1, field2: row.field2 };
+  return { idx: row.idx, num: row.num };
+}
+
+function copyAchievement(snap: WireAchievementSnapshot): WireAchievementSnapshot {
+  return {
+    tasks: snap.tasks.map((task) => ({ idx: task.idx, process: task.process, state: task.state })),
+  };
 }
 
 function copyHero(entry: WireHeroEntry): WireHeroEntry {
