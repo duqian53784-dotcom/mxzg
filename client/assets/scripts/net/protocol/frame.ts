@@ -133,6 +133,15 @@ export const WireCmd = {
    * 不是英雄列表 4001。不是先知召唤 13044。
    */
   heroJewel: 4101,
+  /**
+   * c2s 空体。进主城、空 c2s 4101 之后发。
+   * 整帧 `04 00 00 00 ad 0f 00 00`。4013 = 0x0FAD，小端 ad 0f 00 00。
+   * GReqIllustratReward / GResIllustratReward。名字像领奖，实为查看。空体安全。
+   * 不发 4014。4014 仅 s2c 推送。不把 4013 当领奖再发写号。
+   * 无档时服端可能懒建空记录，可接受。
+   * 不是英雄列表 4001。不是英雄宝石 4101。
+   */
+  illustratReward: 4013,
 } as const;
 
 /**
