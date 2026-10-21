@@ -14,6 +14,8 @@ export interface CreateRolePanelOptions {
   serverName: string;
   /** 该账号在 Mock 里已经有角色。确认后会换成新名字，并重置主线。 */
   hadRole: boolean;
+  /** 有这段时盖过 Mock 的提示。WS 创角用来说明只发 1002。 */
+  hint?: string;
 }
 
 /**
@@ -34,9 +36,11 @@ export function buildCreateRolePanel(
   place(card, root, 0, 20);
 
   place(createLabel("创角", 48, { color: new Color(255, 228, 170, 255), width: 500 }), root, 0, 200);
-  const hint = options.hadRole
-    ? "已有角色。确认后换成新名字，主线回到第 1 关"
-    : "这个账号还没有角色";
+  const hint = options.hint
+    ? options.hint
+    : options.hadRole
+      ? "已有角色。确认后换成新名字，主线回到第 1 关"
+      : "这个账号还没有角色";
   place(createLabel(hint, 20, { color: new Color(180, 196, 220, 255), width: 500 }), root, 0, 140);
   place(
     createLabel(options.serverName + " · " + options.account, 22, { color: new Color(240, 240, 240, 255), width: 500 }),

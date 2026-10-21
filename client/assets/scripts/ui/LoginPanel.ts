@@ -27,7 +27,7 @@ const IDLE = new Color(46, 110, 190, 255);
  * Boot 场景上的登录面板（不另建 Login 场景）。
  * 账号、密码、选服都在这里。密码 Mock 不校验、也不下发。
  * Mock 下「进入游戏」/「创角」由调用方走 Proto.login。
- * mode 为 ws 时这两颗按钮只测套接字，协议仍由 Boot 决定，这里不发。
+ * mode 为 ws 时这两颗按钮由 Boot 发登录 1001 或创角 1002，这里仍不自己组包。
  */
 export function buildLoginPanel(
   parent: Node,
@@ -80,7 +80,7 @@ export function buildLoginPanel(
   const status = createLabel("准备登录", 20, { color: new Color(240, 240, 240, 255), width: 520 });
   place(status, root, 0, ws ? -148 : -156);
   const detail = ws
-    ? place(createLabel("进入游戏只测连通", 18, { color: new Color(180, 196, 220, 255), width: 520 }), root, 0, -186)
+    ? place(createLabel("进入游戏发登录 1001，不进主城", 18, { color: new Color(180, 196, 220, 255), width: 520 }), root, 0, -186)
     : null;
 
   const enterNode = createButton("进入游戏", handlers.onEnter, 280, 56);

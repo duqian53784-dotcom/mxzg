@@ -3,7 +3,7 @@
 > **来源：** 本文按 2026-10-19《项目分析与启动指南》写成。端口、密码、路径和命令只取那份分析，不另补。  
 > **D1 已在倩本机验证（2026-10-21，Asia/Shanghai）。** 双击 `scripts\start-local-server.bat`：`netstat` 见 TCP `11122`、TCP `9902`、WS `13101` 均在听，脚本打出「[启动成功]」。`PROJECT_PLAN.md` 里 D1 已勾选。  
 > **cross 默认不启。** 游戏服连 `127.0.0.1:11422` 失败、中心服「游戏服加载跨服失败」类日志是预期，不算启动失败。分析里 cross 曾因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败；单机只需 center + gameserver。  
-> **客户端默认仍走 Mock。** 预览加 `?transport=ws` 可测 WebSocket **13101** 连通（不发登录包）。步骤见 `docs/h5-websocket.md`。D2 勾选仍等倩本机验证。
+> **客户端默认仍走 Mock。** 预览加 `?transport=ws` 连 WebSocket **13101**，打开后发心跳 1004，点登录发 1001。步骤见 `docs/h5-websocket.md`。D2 勾选仍等倩本机验证。
 
 `server/`、`config/` 是本机 junction，不在 Git 里。不要把 junction 背后的内容推进这个仓库。
 

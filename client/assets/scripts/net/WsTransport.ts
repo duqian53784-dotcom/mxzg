@@ -1,12 +1,14 @@
 import { GameLog } from "../core/GameLog";
 import { ErrorCode, logErrorCode } from "../core/errors";
 import { ITransport, NetHandler, NetMessage } from "./NetTypes";
+import { Cmd } from "./protocol/cmds";
+import { bytesToHex, concatBytes, decodeFrames, exactBuffer } from "./protocol/frame";
+import { decodeProtoFields, encodeWireMessage, formatProtoFields, WireInbound } from "./protocol/wireLogin";
 
 /**
  * 浏览器 WebSocket，默认连本机游戏服 ws://127.0.0.1:13101。
- * 只负责连通：open / error / close，以及记下收到的字节数。
- * 不把占位 cmd 写到线上。旧桥日志只说明第 5–8 字节是协议号，帧头和 Protobuf 还没对齐。
- * 见 docs/h5-websocket.md。
+ * 线上只写 frame.ts 里的长度前缀帧：心跳 1004 空体、登录 1001、创角 1002。
+ * 占位 cmd 没有日志里的帧时不发送。粘包按 TCP 帧切开。见 docs/h5-websocket.md。
  */
 
 export interface WsSocketLike {
@@ -34,13 +36,14 @@ export interface WsTransportOptions {
 const DEFAULT_TIMEOUT_MS = 5000;
 
 /**
- * 旧 H5 桥日志：一帧原始字节里，从 1 起算的第 5–8 字节小端是协议号。
- * 不够 8 字节返回 null。这不是完整解码，调用方不要据此登录。
+ * 第一帧的 cmdId。半帧、坏长度返回 null。
+ * 保留这个名字，是为了自检还能点到「第 5–8 字节」。
  */
 export function readObservedCmdId(data: ArrayBuffer): number | null {
   if (!data || data.byteLength < 8) return null;
-  const view = new DataView(data);
-  return view.getUint32(4, true);
+  const decoded = decodeFrames(new Uint8Array(data));
+  if (decoded.fatal || decoded.frames.length === 0) return null;
+  return decoded.frames[0].cmdId;
 }
 
 export class WsTransport implements ITransport {
@@ -52,7 +55,7 @@ export class WsTransport implements ITransport {
   private messageHandler: NetHandler | null = null;
   private closeHandler: (() => void) | null = null;
   private pendingReject: ((err: Error) => void) | null = null;
-  private noted = new Set<string>();
+  private pendingBytes: Uint8Array = new Uint8Array(0);
   private openListener: ((ev: WsSocketEvent) => void) | null = null;
   private errorListener: ((ev: WsSocketEvent) => void) | null = null;
   private closeListener: ((ev: WsSocketEvent) => void) | null = null;
@@ -100,7 +103,7 @@ export class WsTransport implements ITransport {
         clearTimeout(timer);
         if (this.pendingReject === fail) this.pendingReject = null;
         this.opened = false;
-        this.noted.clear();
+        this.pendingBytes = new Uint8Array(0);
         if (this.socket === socket) this.socket = null;
         this.detach(socket);
         try {
@@ -136,7 +139,7 @@ export class WsTransport implements ITransport {
           return;
         }
         this.opened = false;
-        this.noted.clear();
+        this.pendingBytes = new Uint8Array(0);
         if (this.socket === socket) this.socket = null;
         this.detach(socket);
         const handler = this.closeHandler;
@@ -157,18 +160,30 @@ export class WsTransport implements ITransport {
   }
 
   /**
-   * 不写字节。占位心跳 1002 和旧桥日志里的心跳 1004 都不会组包。
-   * 同一 cmd 只记一次，避免心跳刷屏。
+   * 编成日志里的帧再写。heartbeat 是 1004 空体，不是占位号 1002。
+   * 没有证明过的 cmd 只记日志，不写字节。
    */
   send(msg: NetMessage): void {
-    if (!this.opened) {
-      logErrorCode("Ws", ErrorCode.NET_CLOSED, "drop " + (msg && msg.cmd ? msg.cmd : ""));
+    const cmd = msg && msg.cmd ? msg.cmd : "(empty)";
+    if (!this.opened || !this.socket) {
+      logErrorCode("Ws", ErrorCode.NET_CLOSED, "drop " + cmd);
       return;
     }
-    const cmd = msg && msg.cmd ? msg.cmd : "(empty)";
-    if (this.noted.has(cmd)) return;
-    this.noted.add(cmd);
-    GameLog.shared.info("Ws", "未发送 " + cmd + "：二进制帧未对齐，线上只保持连通");
+    const packet = encodeWireMessage(msg);
+    if (!packet) {
+      const why = cmd === Cmd.roleCreate ? "创角名字是空的或日志里没有这条帧" : "日志里没有这条 c2s 帧";
+      GameLog.shared.info("Ws", "未发送 " + cmd + "：" + why);
+      return;
+    }
+    GameLog.shared.info(
+      "Ws",
+      "发送 c2s " + packet.cmdId + " 帧长 " + packet.bytes.length + " " + bytesToHex(packet.bytes) + " " + packet.note
+    );
+    try {
+      this.socket.send(exactBuffer(packet.bytes));
+    } catch (err) {
+      GameLog.shared.error("Ws", "发送失败 " + errText(err));
+    }
   }
 
   close(): void {
@@ -183,7 +198,7 @@ export class WsTransport implements ITransport {
     const wasOpen = this.opened;
     const socket = this.socket;
     this.opened = false;
-    this.noted.clear();
+    this.pendingBytes = new Uint8Array(0);
     this.socket = null;
     if (socket) {
       this.detach(socket);
@@ -221,6 +236,7 @@ export class WsTransport implements ITransport {
   private dropOpenSocket(): void {
     const socket = this.socket;
     this.opened = false;
+    this.pendingBytes = new Uint8Array(0);
     this.socket = null;
     if (!socket) return;
     this.detach(socket);
@@ -242,10 +258,7 @@ export class WsTransport implements ITransport {
     this.messageListener = null;
   }
 
-  /**
-   * 收到的包只记日志，不调用 messageHandler。
-   * 二进制帧还不能派发成占位 cmd，否则会被当成心跳或登录回包。
-   */
+  /** 文本只记日志。二进制按长度前缀拆帧，半帧留在 pendingBytes。 */
   private noteIncoming(data: unknown): void {
     if (typeof data === "string") {
       const preview = data.length > 60 ? data.slice(0, 60) : data;
@@ -257,10 +270,42 @@ export class WsTransport implements ITransport {
       GameLog.shared.info("Ws", "收到无法读取的帧");
       return;
     }
-    const cmdId = readObservedCmdId(bytes);
-    const tail = cmdId === null ? "" : "，第5-8字节协议号 " + cmdId;
-    GameLog.shared.info("Ws", "收到二进制 " + bytes.byteLength + " 字节" + tail);
+    this.pendingBytes = concatBytes(this.pendingBytes, new Uint8Array(bytes));
+    const decoded = decodeFrames(this.pendingBytes);
+    for (let i = 0; i < decoded.frames.length; i++) {
+      const frame = decoded.frames[i];
+      this.emitFrame(frame.cmdId, frame.body);
+    }
+    if (decoded.fatal) {
+      GameLog.shared.error("Ws", "帧长度异常，丢掉剩余 " + this.pendingBytes.length + " 字节");
+      this.pendingBytes = new Uint8Array(0);
+      return;
+    }
+    this.pendingBytes = decoded.rest;
   }
+
+  private emitFrame(cmdId: number, body: Uint8Array): void {
+    const frameLength = 4 + 4 + body.length;
+    const hex = body.length === 0 ? "" : bytesToHex(body);
+    const fields = body.length > 0 && body.length <= 64 ? decodeProtoFields(body) : null;
+    const fieldText = fields && fields.length > 0 ? " " + formatProtoFields(fields) : "";
+    const empty = body.length === 0 ? " 空体" : "";
+    GameLog.shared.info(
+      "Ws",
+      "收到 s2c " + cmdId + " 帧长 " + frameLength + " 体长 " + body.length + (hex ? " " + hex : "") + empty + fieldText
+    );
+    const inbound: WireInbound = { cmdId, frameLength, body, hex };
+    const handler = this.messageHandler;
+    if (!handler) return;
+    handler({ cmd: inboundCmd(cmdId), data: inbound });
+  }
+}
+
+function inboundCmd(cmdId: number): string {
+  if (cmdId === 1001) return Cmd.login;
+  if (cmdId === 1002) return Cmd.roleCreate;
+  if (cmdId === 1004) return Cmd.heartbeat;
+  return "wire." + cmdId;
 }
 
 function defaultFactory(url: string): WsSocketLike {
