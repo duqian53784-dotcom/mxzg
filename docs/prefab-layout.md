@@ -447,3 +447,134 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | `BtnBack` | (0, -360) | 240×48 | `返回` |
 
 `Title` 字号 40，颜色 `TITLE` `(255, 228, 170)`。`Hint` 字号 20，颜色 `MUTED`。`Diamond` 字号 24，颜色 `TITLE`，句子是 `ownedDiamondText(0)`。`BtnSingle` 是 `singleButtonText()`（`SUMMON_SINGLE_COST = 10`），橙色按钮，不另染色。`BtnTen` 是 `tenButtonText()`（`SUMMON_TEN_COST = 90`），蓝底再染 `TEN_FILL`。`ResultTitle` 字号 22，代码没传宽，所以是默认 680，高是 22 + 16。`ResultCard` 对应代码里的 `result-bg`。`Result` 是 `summonResultText([])`，左对齐、顶对齐、可换行，颜色 `RESULT` `(214, 224, 236)`。`Footer` 字号 18，颜色 `MUTED`。`BtnBack` 蓝色按钮。三个按钮的 `clickEvents` 都是空的。
+
+## Shop（未接线）
+
+只有 Mock 商店页。仓内没有 `WireShopPage`，本波不做真服只读 Prefab。`ShopPage.ts` 的 `ShopController` 画出限购货架：开服天、钱包、三行 SKU、购买结果和返回。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| ShopPage | `prefabs/ui/shop/ShopPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/shop/ShopPage.prefab`
+- **状态**：**未接** Boot、`MainApp`、`ShopPage.ts`，以及任何 `USE_*_PREFAB`。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` / `render()` 一致）。`RowsHost`、`Rows`、`Row_0`、`Row_1`、`Row_2` 都放在 (0, 0) 且铺满 720×1280，所以 `Line` 和 `BtnBuy` 的 y 就是页面坐标。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid。Prefab 目录里没有 PNG。页面底用 `win-bg_win-bg-12` 染成暖棕 `(22, 16, 10)`（`PAGE_BG`），不是挂机或邮件那种深蓝 `(8, 16, 32)`。购买钮用 `button_btn-orange-big`，对应 `BUY_FILL` `(168, 112, 36)`。返回用 `button_btn-blue-big`，对应 `BACK_FILL` `(36, 72, 120)`。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 代码把底画在页面根上，其余放进 `body`，`render()` 会拆掉并重建 `rows`。Prefab 里 `Bg` 与内容同级，不放 `body`。三行是编辑器预览，不是代码去克隆的模板。代码容器名是小写 `rows-host` / `rows`；预制用下面表里的 PascalCase。
+- 再生：`python3 client/tools/gen_shop_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `ShopPage.ts`、`catalog.ts`、`rewards.ts` 的 `IDLE_ITEM_NAME`，以及 `MockGameSession.ts` 的起步金币和钻石）
+
+### ShopPage（Mock）
+
+根 `ShopPage`。对齐 `ShopController` 构造和 `render()`。默认态是已经读到开服第 1 天、三件都没买、背包持有按干净货架写成 0。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | 暖棕 `(22, 16, 10)` |
+| `Title` | (0, 460) | 680×56 | `基础商店` |
+| `Hint` | (0, 408) | 640×34 | `新号可买。召唤仍直接花钻石` |
+| `Refresh` | (0, 352) | 640×38 | `限购随开服天刷新 · 当前开服第 1 天` |
+| `Wallet` | (0, 308) | 640×38 | `持有金币 100 · 钻石 20` |
+| `RowsHost` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_0` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_0/Line` | (0, 210) | 640×36 | `强化石 ×5 · 金币 40 · 今日 0/3 · 背包 ×0` |
+| `RowsHost/Rows/Row_0/BtnBuy` | (0, 162) | 280×48 | `购买` |
+| `RowsHost/Rows/Row_1` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_1/Line` | (0, 90) | 640×36 | `小金币袋 ×1 · 钻石 8 · 今日 0/2 · 背包 ×0` |
+| `RowsHost/Rows/Row_1/BtnBuy` | (0, 42) | 280×48 | `购买` |
+| `RowsHost/Rows/Row_2` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_2/Line` | (0, -30) | 640×36 | `经验药水 ×1 · 金币 50 · 今日 0/2 · 背包 ×0` |
+| `RowsHost/Rows/Row_2/BtnBuy` | (0, -78) | 280×48 | `购买` |
+| `Result` | (0, -250) | 640×56 | `点购买。金币或钻石不够、今日卖完都会提示` |
+| `BtnBack` | (0, -330) | 240×48 | `返回` |
+
+`Refresh` 是 `shopRefreshLine(1)`。`view()` 返回前代码写的是 `读取中…`；预制展示的是已经读到开服第 1 天之后的句子。`Wallet` 是 `shopWalletLine(MOCK_STARTER_GOLD, MOCK_STARTER_DIAMOND)`。仓内这两个常量是 `100` 和 `20`，所以句子是 `持有金币 100 · 钻石 20`。打开时代码先放空字符串，预制不留那一帧。
+
+三行来自 `SHOP_OFFERS`，名字以仓内为准：强化石是 `IDLE_ITEM_NAME`（`强化石`），另外两件是目录里的 `小金币袋`、`经验药水`。数量和价格是 `SHOP_STONE_COUNT` 5、`SHOP_STONE_PRICE` 40、限购 3；小金币袋 ×1、`SHOP_BAG_PRICE` 8 钻、限购 2；经验药水 ×1、`SHOP_POTION_PRICE` 50 金、限购 2。行文案是 `shopSkuLine`，钮文案是 `shopBuyButton`。未售罄是 `购买`。`top = 210`，`step = 120`，按钮在该行 `y - 48`。
+
+背包 ×0 是这份干净预览（已购 0、持有 0）。Mock 新号 `grantStarterItems()` 会另发小金币袋 ×2（`STARTER_GOLD_BAG`）和经验药水 ×2（`STARTER_EXP_POTION`），强化石起步仍是 0。预制不把那两份起步消耗品写进货架行。
+
+`Result` 是构造时的 `lastReport`。它指定了高度 56，所以纵向顶对齐。购买钮字号是调用里的 22，橙色按钮底。返回没传字号，走 `createButton` 默认 24，蓝色按钮底。售罄时代码会把钮写成 `已售罄` 并改用 `SOLD_FILL` `(78, 84, 98)`；默认三行都可买，不另放第四行。空货架的 `商店暂时没有商品` 也不放进这份预制。
+
+## BuyGold / 点金（未接线）
+
+只有真服只读页一份 Prefab。对齐 `WireActivityPage.ts` 的 `WireActivityController.build()` / `render()`，以及 `wireActivity.ts` 的 s2c **17000** / `GResBuyGoldLog`（`WIRE_ACTIVITY_CMD = "wire.17000"`）。点金只读：不点金，不写金币。仓内没有独立的 Mock 点金页。`DailyGoldPage.ts` 是日常金币副本，不是这一页，不要混。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| WireBuyGoldPage | `prefabs/ui/buygold/WireBuyGoldPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/buygold/WireBuyGoldPage.prefab`（目录 `buygold/`）
+- **状态**：**未接** Boot、`MainApp`、`WireActivityPage.ts`，以及任何 `USE_*_PREFAB`。不改协议。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` / `render()` 一致）。`ListHost`、`Rows` 都放在 (0, 0) 且铺满 720×1280，子节点的 y 就是代码里的页面坐标。
+- 代码根节点名是 `WireActivityPage`，容器是小写 `list-host` / `rows`。预制根叫 `WireBuyGoldPage`，容器用下面表里的 PascalCase，方便在编辑器里对位置。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid（`@f9941`）。Prefab 目录里没有 PNG。没有点金专用图集：页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；返回用 `button_btn-blue-big`。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 运行时 `render()` 会拆掉并重建 `rows`。Prefab 里的 Stamp、空表、行和溢出是编辑器预览，不是代码去克隆的模板。
+- 再生：`python3 client/tools/gen_buygold_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `WireActivityPage.ts` 的坐标和 `wireActivity.ts` 的文案、`formatWireActivityLine`、`formatWireActivityStamp`）
+
+### WireBuyGoldPage（真服只读，17000）
+
+根 `WireBuyGoldPage`。`VISIBLE_ROWS = 10`。默认是未同步占位，对应 `WireSession.activity == null`：只显示 `Unsynced`，Stamp、空表、十行和溢出都是 `_active: false`。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | 深蓝 `(8, 16, 32)` |
+| `Title` | (0, 470) | 680×56 | `点金（真服只读）` |
+| `Note` | (0, 420) | 640×38 | `只读。不点金，不写金币` |
+| `Status` | (0, 380) | 640×36 | `status、time 写原数。行上写 idx / num` |
+| `ListHost` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows/Unsynced` | (0, 280) | 640×44 | `真服未同步`（默认显示） |
+| `ListHost/Rows/Stamp` | (0, 320) | 640×38 | `status=1 / time=无`（`_active: false`） |
+| `ListHost/Rows/Empty` | (0, 320) | 640×44 | `已同步空表`（`_active: false`） |
+| `ListHost/Rows/Row_0` … `Row_9` | (0, 320 − i×44) | 640×38 | `idx=1 / num=0` 起，左对齐，`_active: false` |
+| `ListHost/Rows/More` | (0, -120) | 640×36 | `还有 2 条`（`_active: false`） |
+| `BtnBack` | (0, -460) | 240×48 | `返回`（蓝） |
+
+`Title` / `Note` / `Status` / `Empty` / `Unsynced` 与 `WIRE_ACTIVITY_READONLY_TITLE` / `WIRE_ACTIVITY_READONLY_NOTE` / `WIRE_ACTIVITY_FIELD_NOTE` / `WIRE_ACTIVITY_EMPTY` / `WIRE_ACTIVITY_UNSYNCED_TOAST` 相同。`Stamp` 是 `formatWireActivityStamp` 在 status 为 1、time 缺失时的句子（`time` 写成 `无`，不补 0）。行文案是 `formatWireActivityLine`。日志三例是 idx 1 / 2 / 3、num 都是 0，所以 `Row_0` … `Row_2` 为 `idx=1 / num=0`、`idx=2 / num=0`、`idx=3 / num=0`。后面七行按同一句式续到 `idx=10 / num=0`，把 `VISIBLE_ROWS` 的窗口填满。节点锚点在中心、放在 x=0，行 Label 水平对齐为左，宽 640，和 `align: "left"` 一致。
+
+没有 stamp 时 `render()` 的 `top` 是 320，行在 `320 − i×44`，空表也在 320。这份预制按这个坐标摆 `Row_*`、`Empty` 和 `More`（`More` 的 y 是 `320 − 10×44 = -120`）。已同步而且 `formatWireActivityStamp` 有字时，Stamp 占 y=320，然后 `top -= 44`，空表和行从 276 起，每行仍隔 44。运行时溢出文案是 `还有 N 条`；预制里的 `还有 2 条` 只是占位。`BtnBack` 用蓝色按钮，字号走 `createButton` 默认 24。
+
+## Achievement / 成就（未接线）
+
+只有真服只读页一份 Prefab。对齐 `WireAchievementPage.ts` 的 `WireAchievementController.build()` / `render()`，以及 `wireAchievement.ts` 的 s2c **12010** / `GResAchievementList`（`WIRE_ACHIEVEMENT_CMD = "wire.12010"`）。成就只读：不领奖，不改 state，不写金币。仓内没有 Mock 成就页，这一份不另造。
+
+打开或同步会在服上懒建未接取的首链成就。页上必须带着侧效提示 `WIRE_ACHIEVEMENT_SIDE_EFFECT`（`打开/同步可能在服上补成就`），节点 `SideEffect`，默认显示。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| WireAchievementPage | `prefabs/ui/achievement/WireAchievementPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/achievement/WireAchievementPage.prefab`（目录 `achievement/`）
+- **状态**：**未接** Boot、`MainApp`、`WireAchievementPage.ts`，以及任何 `USE_*_PREFAB`。不改协议。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` / `render()` 一致）。`ListHost`、`Rows` 都放在 (0, 0) 且铺满 720×1280，子节点的 y 就是代码里的页面坐标。
+- 代码根节点名是 `WireAchievementPage`，容器是小写 `list-host` / `rows`。预制根同名，容器用下面表里的 PascalCase，方便在编辑器里对位置。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid（`@f9941`）。Prefab 目录里没有 PNG。没有成就专用图集：页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；返回用 `button_btn-blue-big`。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 运行时 `render()` 会拆掉并重建 `rows`。Prefab 里的空表、行和溢出是编辑器预览，不是代码去克隆的模板。`SideEffect`、`Title`、`Note`、`FieldNote` 是 `build()` 层，不随列表隐藏。
+- 再生：`python3 client/tools/gen_achievement_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对 `WireAchievementPage.ts` 的坐标和 `wireAchievement.ts` 的文案、`formatWireAchievementLine`）
+
+### WireAchievementPage（真服只读，12010）
+
+根 `WireAchievementPage`。`VISIBLE_ROWS = 22`。默认是未同步占位，对应 `WireSession.achievements == null`：只显示 `Unsynced`，空表、二十二行和溢出都是 `_active: false`。`SideEffect` 始终显示。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | 深蓝 `(8, 16, 32)` |
+| `Title` | (0, 520) | 680×48 | `成就记录（真服只读）` |
+| `SideEffect` | (0, 470) | 640×36 | `打开/同步可能在服上补成就`（默认显示，TITLE 色） |
+| `Note` | (0, 430) | 640×32 | `只读。不领奖，不改 state，不写金币` |
+| `FieldNote` | (0, 396) | 640×28 | `idx 任务号，process 进度，state 即 hadReward` |
+| `ListHost` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows/Unsynced` | (0, 320) | 640×44 | `真服未同步`（默认显示） |
+| `ListHost/Rows/Empty` | (0, 320) | 640×44 | `空成就表`（`_active: false`） |
+| `ListHost/Rows/Row_0` … `Row_21` | (0, 340 − i×28) | 640×26 | `idx=1 / process=0 / state=0` 起，左对齐，`_active: false` |
+| `ListHost/Rows/More` | (0, -276) | 640×28 | `还有 3 条`（`_active: false`） |
+| `BtnBack` | (0, -520) | 240×48 | `返回`（蓝） |
+
+`Title` / `SideEffect` / `Note` / `FieldNote` / `Empty` / `Unsynced` 与 `WIRE_ACHIEVEMENT_READONLY_TITLE` / `WIRE_ACHIEVEMENT_SIDE_EFFECT` / `WIRE_ACHIEVEMENT_READONLY_NOTE` / `WIRE_ACHIEVEMENT_FIELD_NOTE` / `WIRE_ACHIEVEMENT_EMPTY` / `WIRE_ACHIEVEMENT_UNSYNCED_TOAST` 相同。行文案是 `formatWireAchievementLine`。预览从 `idx=1 / process=0 / state=0` 续到 `idx=22 / process=0 / state=0`，把 `VISIBLE_ROWS` 的窗口填满。缺字段时 `numText` 写 `无`，不补 0；这二十二行是有数的样例。节点锚点在中心、放在 x=0，行 Label 水平对齐为左，宽 640，和 `align: "left"` 一致。
+
+未同步时 `render()` 只放 `Unsynced`（y=320）就返回，不画空表和行。已同步且任务表为空时，在同一位置放 `空成就表`。有任务时 `top = 340`、`step = 28`，行在 `340 − i×28`，最多 22 行。`More` 的 y 是 `340 − 22×28 = -276`。运行时溢出文案是 `还有 N 条`；预制里的 `还有 3 条` 只是占位。`BtnBack` 用蓝色按钮，字号走 `createButton` 默认 24。字号：标题 36，侧效 22，说明 20，字段说明 18，未同步和空表 28，行 20，溢出 18。
