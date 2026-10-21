@@ -144,3 +144,63 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | `BtnBack` | (0, -140) | 240×48 | `返回` |
 
 `Title` / `Note` 与 `WIRE_MAINLINE_READONLY_TITLE` / `WIRE_MAINLINE_READONLY_NOTE` 相同。`Now` / `Max` 是 `formatWireChapterIdx` 在 idx 还没同步时的句子（`当前 idx` / `最高 idx` + `未同步`）。
+
+## Bag（P1，未接线）
+
+真服只读页和 Mock 背包页各一份 Prefab。`WireBagPage.ts` 只展示已同步的格子，不使用、不写金币。`BagPage.ts` 是 Mock：点一行再使用。两页没有可以共用的内容根。规格里 Mock 页可以后做，这一份一起带上。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| WireBagPage | `prefabs/ui/bag/WireBagPage` | **未接** |
+| BagPage | `prefabs/ui/bag/BagPage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/bag/WireBagPage.prefab`、`client/assets/prefabs/ui/bag/BagPage.prefab`
+- **状态**：**未接** Boot、`MainApp`、`WireBagPage.ts`、`BagPage.ts`，以及任何 `USE_*_PREFAB`。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` 一致）。`ListHost`、`Rows`、`RowsHost`、`DetailHost`、`Detail` 都放在 (0, 0) 且铺满 720×1280，子节点的 y 就是代码里的页面坐标。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid。Prefab 目录里没有 PNG。没有背包专用图集：页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；详情卡用 `win-bg_block-bg-5` 染成 `(16, 28, 48)`；返回和未选行用 `button_btn-blue-big`；已选行用 `button_btn-orange-big`；使用钮用 `button_btn-green-big`。后续可以再补 backpack 图集，本页不依赖它。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 运行时 `render()` 会拆掉并重建 `rows` / `detail`。Prefab 里的行和详情是编辑器预览，不是代码去克隆的模板。
+- 再生：`python3 client/tools/gen_bag_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对页面脚本里的坐标和文案常量）
+
+### WireBagPage（真服只读）
+
+根 `WireBagPage`。对齐 `WireBagController.build()` / `render()`。默认只打开未同步占位，对应 `bagItems == null`。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | — |
+| `Title` | (0, 470) | 680×56 | `背包（真服只读）` |
+| `Note` | (0, 410) | 640×38 | `只读。不使用，不写金币` |
+| `ListHost` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `ListHost/Rows/Empty` | (0, 280) | 640×44 | `空背包`（`_active: false`） |
+| `ListHost/Rows/Unsynced` | (0, 280) | 640×44 | `真服背包未同步`（默认显示） |
+| `ListHost/Rows/Row_0` … `Row_10` | (0, 340 − i×44) | 640×38 | `类型 1 · id 1001 ×1` 起，左对齐，`_active: false` |
+| `ListHost/Rows/More` | (0, -144) | 640×36 | `还有 3 件`（`_active: false`） |
+| `BtnBack` | (0, -460) | 240×48 | `返回` |
+
+`Title` / `Note` / `Empty` / `Unsynced` 与 `WIRE_BAG_READONLY_TITLE` / `WIRE_BAG_READONLY_NOTE` / `WIRE_BAG_EMPTY` / `WIRE_BAG_UNSYNCED_TOAST` 相同。行文案是 `formatWireBagLine` 在没有配置名时的句子（`类型 T · id ID ×N`，中间有空格）。`Row_i` 占位为类型 `i+1`、id `1001+i`、数量 1，最多 11 行（`VISIBLE_ROWS`）。节点锚点在中心、放在 x=0，Label 水平对齐为左，宽 640，和 `align: "left"` 一致。`More` 的 y 是 `340 − 11×44`。运行时溢出文案是 `还有 N 件`；预制里的 `还有 3 件` 只是占位。`Empty` 与 `Unsynced` 同一位置，默认只显示未同步，避免和空背包叠字。
+
+### BagPage（Mock）
+
+根 `BagPage`。对齐 `BagController` 的列表和详情。短列表样例 3 行，`detailAnchor()` 停在 -40，所以详情卡在 (0, -60)。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | — |
+| `Title` | (0, 470) | 680×56 | `背包` |
+| `Count` | (0, 418) | 640×36 | `3 种道具 · 点一项再使用` |
+| `RowsHost` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows` | (0, 0) | 720×1280 | 容器 |
+| `RowsHost/Rows/Row_0` | (0, 350) | 640×46 | `已选 小金币袋 ×10 · 可使用` |
+| `RowsHost/Rows/Row_1` | (0, 298) | 640×46 | `经验药水 ×2 · 可使用` |
+| `RowsHost/Rows/Row_2` | (0, 246) | 640×46 | `许愿符 ×1 · 材料` |
+| `DetailHost` | (0, 0) | 720×1280 | 容器 |
+| `DetailHost/Detail` | (0, 0) | 720×1280 | 容器 |
+| `DetailHost/Detail/Card` | (0, -60) | 640×150 | — |
+| `DetailHost/Detail/Name` | (0, -24) | 600×42 | `小金币袋 ×10` |
+| `DetailHost/Detail/Desc` | (0, -68) | 600×48 | `使用后获得 50 金币` |
+| `DetailHost/Detail/BtnUse` | (0, -170) | 420×56 | `使用` |
+| `BtnBack` | (0, -430) | 240×48 | `返回` |
+
+行文案是 `bagRowText`（名字、数量、`可使用` / `材料`）。`Row_0` 带代码里的 `已选 ` 前缀，底图用橙色按钮，对应 `SELECT_FILL`。其余行用蓝色按钮。名字用目录里的 `小金币袋`，不是缩短的「金币袋」。数量 ×10 是预览占位，不是新号初始持有。`Count` 在 `list()` 返回前代码写的是 `读取背包…`；预制展示的是已经读到 3 行之后的句子。`Name` 是 `名字 ×数量`。`Desc` 顶对齐、可换行。`BtnUse` 因为这一行可用，文案是 `使用`（`useButtonText(true)`）；不可使用时代码会写成 `不可使用`。列表变长时 `detailAnchor()` 会把详情往下放到不盖住格子的位置，最低 -210。这份预制只放 3 行短列表。
