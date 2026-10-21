@@ -1,4 +1,4 @@
-import { Color, Node } from "cc";
+import { Color, Node, UITransform } from "cc";
 import { BOTTOM_TABS } from "../config/nav";
 import {
   bindClick,
@@ -117,6 +117,15 @@ const PREFAB_TAB_OPEN = new Color(255, 255, 255, 255);
 const PREFAB_TAB_LOCKED = new Color(160, 164, 176, 255);
 
 /**
+ * main-scene_spr-bottom-bg 原始 640×129，Prefab 里 CUSTOM 拉到 720×129。
+ * 左右装饰没有铺满：左侧约 9–25px 全透明，外缘描边约 (52, 30, 26)。
+ * 拉宽后这块透出清屏黑。垫色取这条描边，避免透缝变成另一条色带。
+ */
+const BOTTOM_BG_WIDTH = 724;
+const BOTTOM_PAD_WIDTH = 728;
+const BOTTOM_PAD_COLOR = new Color(46, 26, 22, 255);
+
+/**
  * 绑定 CityChrome.prefab。Top/Bottom 下是 Name、Sub、Gold、Diamond 和 Tab_*。
  * 路径相对 assets：prefabs/ui/city/CityChrome。不走 resources.load。
  */
@@ -132,6 +141,7 @@ export async function mountCityChromePrefab(parent: Node, onTab: (id: string) =>
 }
 
 function bindCityChromePrefab(root: Node, onTab: (id: string) => void): CityChrome {
+  sealBottomBg(root);
   const nameNode = requireNode(root, "Top/Name");
   const subNode = requireNode(root, "Top/Sub");
   const goldNode = requireNode(root, "Top/Gold");
@@ -169,6 +179,24 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void): CityChro
       }
     },
   };
+}
+
+/**
+ * Bottom/Bg 背后垫满宽实色，并略加宽贴图节点，盖住 640→720 的左右透边。
+ * 不改五个 Tab 的位置。Top/Bg 原始 616×146 且左缘不透明，这里不垫。
+ */
+function sealBottomBg(root: Node): void {
+  const bg = requireNode(root, "Bottom/Bg");
+  const ui = bg.getComponent(UITransform);
+  const height = ui && ui.contentSize && typeof ui.contentSize.height === "number" ? ui.contentSize.height : 129;
+  if (ui) ui.setContentSize(BOTTOM_BG_WIDTH, height);
+  const bottom = bg.parent;
+  if (!bottom) return;
+  const pad = createRect("BgPad", BOTTOM_PAD_WIDTH, height, BOTTOM_PAD_COLOR);
+  pad.setPosition(bg.position.x, bg.position.y, 0);
+  const index = bg.getSiblingIndex();
+  pad.parent = bottom;
+  pad.setSiblingIndex(index);
 }
 
 function prefabTabColor(state: TabVisual): Color {
