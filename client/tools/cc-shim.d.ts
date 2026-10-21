@@ -30,7 +30,14 @@ declare module "cc" {
     addComponent(type: unknown): any;
     getComponent(type: unknown): any;
     on(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
+    off(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
     destroy(): void;
+    static EventType: {
+      TOUCH_START: string;
+      TOUCH_MOVE: string;
+      TOUCH_END: string;
+      TOUCH_CANCEL: string;
+    };
   }
 
   export class Component {
@@ -41,7 +48,11 @@ declare module "cc" {
 
   export class UITransform {
     setContentSize(width: number, height: number): void;
+    setAnchorPoint(x: number, y: number): void;
     contentSize: { width: number; height: number };
+    anchorX: number;
+    anchorY: number;
+    anchorPoint: { x: number; y: number };
   }
 
   export class Label {
@@ -120,14 +131,26 @@ declare module "cc" {
     };
   };
 
+  export class EventTouch {
+    getUIDelta(): { x: number; y: number };
+  }
+
+  export class SpriteFrame {
+    originalSize: { width: number; height: number };
+  }
+
   export const resources: {
-    load(path: string, type: unknown, cb: (err: Error | null, asset: JsonAsset | null) => void): void;
+    load(path: string, type: unknown, cb: (err: Error | null, asset: any) => void): void;
   };
 
   export class Prefab {}
 
   export class Sprite {
+    static SizeMode: { CUSTOM: number; TRIMMED: number; RAW: number };
     color: Color;
+    grayscale: boolean;
+    spriteFrame: SpriteFrame | null;
+    sizeMode: number;
   }
 
   export function instantiate(original: Prefab | Node): Node;

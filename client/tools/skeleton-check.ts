@@ -7,12 +7,27 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isEntryOpen, isServerGateOpen, listOpenEntries } from "../assets/scripts/config/gates";
 import {
+  BOTTOM_TABS,
   entryAccess,
   findNavEntry,
   NavHistory,
   rootTabFor,
   tabLabel,
 } from "../assets/scripts/config/nav";
+import {
+  activityIconCandidates,
+  buildCityMapLayout,
+  buildingScreen,
+  cityAtomLabel,
+  cityAtomLocked,
+  cityAtomRoute,
+  CITY_PARALLAX_SPEEDS,
+  effectFramePath,
+  layerWindowX,
+  MainCityBtnFile,
+  MainCityEffectFile,
+  MainCityPosFile,
+} from "../assets/scripts/ui/cityMapLayout";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
 import {
   applyBagUse,
@@ -1460,6 +1475,93 @@ function checkPanelNav(): void {
   assert(nav.back() && nav.current === "goal7", "back from idle to goals");
   nav.openChild("summon");
   assert(nav.rootTab === "summon" && nav.back() && nav.current === "goal7", "summon returns to goals");
+}
+
+function checkCityMap(): void {
+  const ids: string[] = [];
+  for (let i = 0; i < BOTTOM_TABS.length; i++) ids.push(BOTTOM_TABS[i].id);
+  assert(ids.length === 5 && ids.join(",") === "city,hero,summon,smith,plays", "city bar stays five");
+
+  const config = configDir();
+  const resources = join(config, "..");
+  const pos = JSON.parse(readFileSync(join(config, "maincity", "maincitypos.json"), "utf8")) as MainCityPosFile;
+  const btn = JSON.parse(readFileSync(join(config, "maincity", "createmaincitybtn.json"), "utf8")) as MainCityBtnFile;
+  const effect = JSON.parse(readFileSync(join(config, "maincity", "maincityeffect.json"), "utf8")) as MainCityEffectFile;
+  const layout = buildCityMapLayout(pos, btn, effect);
+  assert(layout.buildings.length === 19, "nineteen buildings");
+  assert(layout.activities.length === 33, "thirty three activities");
+  let lowestAct = 9999;
+  for (let i = 0; i < layout.activities.length; i++) {
+    if (layout.activities[i].y < lowestAct) lowestAct = layout.activities[i].y;
+  }
+  assert(lowestAct > 400, "activity strip stays above the buildings");
+  assert(layout.scroll === -390 && layout.minScroll === -780 && layout.maxScroll === 0, "map starts centered");
+  assert(layout.nodes.filter((node) => node.parallax).length === 4, "four parallax layers");
+  const speeds: number[] = [];
+  for (let i = 0; i < layout.nodes.length; i++) {
+    const layer = layout.nodes[i].parallax;
+    if (layer) speeds.push(layer.ratio);
+  }
+  assert(speeds.join(",") === CITY_PARALLAX_SPEEDS.slice().reverse().join(","), "far to near speeds");
+
+  const summon = buildingScreen(layout, "main_summon", layout.scroll);
+  const ancient = buildingScreen(layout, "main_ancient", layout.scroll);
+  const ancientLeft = buildingScreen(layout, "main_ancient", layout.minScroll);
+  assert(summon !== null && Math.abs(summon.x - 13) < 1 && Math.abs(summon.y + 296) < 1, "summon sits near center");
+  assert(ancient !== null && ancient.x > 360, "ancient waits off the right");
+  assert(ancientLeft !== null && ancientLeft.x > -360 && ancientLeft.x < 360, "scroll brings ancient in");
+
+  const near = Math.abs(layerWindowX(-390, 1.3, 0) - layerWindowX(0, 1.3, 0));
+  const far = Math.abs(layerWindowX(-390, 0.63, 750) - layerWindowX(0, 0.63, 750));
+  assert(near > far, "near layer moves farther");
+
+  assert(cityAtomRoute("main_summon")?.panel === "summon" && cityAtomRoute("main_summon")?.via === "tab", "summon uses the tab");
+  assert(cityAtomRoute("main_smith_shop")?.panel === "smith" && cityAtomRoute("main_shop")?.panel === "shop", "smith and shop routes");
+  assert(cityAtomRoute("main_blessingpool")?.panel === "wish" && cityAtomRoute("main_pvp")?.panel === "arena", "wish and arena routes");
+  assert(cityAtomRoute("main_fantasy_tower")?.panel === "tower" && cityAtomRoute("main_prophet_tree")?.panel === "prophet", "tower and prophet routes");
+  assert(cityAtomRoute("act_sevent_day_target")?.panel === "goal7" && cityAtomRoute("act_limit_time_activity")?.panel === "limited", "activity routes");
+  assert(cityAtomRoute("main_country_war") === null && cityAtomLabel("main_country_war") === "国战", "country war stays a label");
+  assert(cityAtomRoute("main_ancient") === null, "unmapped building still has no private navigator");
+
+  const privilege = activityIconCandidates("act_privilege", "main-city/btn-login-3.png");
+  assert(privilege[0] === "ui/city/main-city_btn-login-3" && privilege[1] === "ui/city/main-city_icon-act_privilege", "activity icon falls back");
+  assert(effectFramePath("eff_main_city_summon") === "ui/city/main-city-effect_summon-0", "summon effect frame");
+  assert(effectFramePath("dx") === null && effectFramePath("chuanghu") === null, "spine effects are not bitmaps");
+  let spine = 0;
+  let still = 0;
+  for (let i = 0; i < layout.effects.length; i++) {
+    if (layout.effects[i].frame) still += 1;
+    else spine += 1;
+    assert(layout.effects[i].frame === null || layout.effects[i].frame.indexOf("lang") < 0, "no locale bitmap");
+  }
+  assert(layout.effects.length === 7 && still === 5 && spine === 2, "effect table");
+
+  const gates = {
+    opencondition: [
+      { id: "main_smith_shop", name: "铁匠铺", condition_type: 1, level: 5, open_server_day: 0 },
+      { id: "main_summon", name: "召唤", condition_type: 1, level: 1, open_server_day: 0 },
+    ],
+    systemGate: [],
+  };
+  assert(cityAtomLocked("main_smith_shop", 1, 1, gates) && !cityAtomLocked("main_smith_shop", 5, 1, gates), "smith lock follows the gate");
+  assert(!cityAtomLocked("main_summon", 1, 1, gates) && !cityAtomLocked("main_country_war", 1, 1, gates), "open summon and unmapped war");
+
+  const summonIcon = join(resources, "ui", "city", "main-city_icon-main_summon.png");
+  const warIcon = join(resources, "ui", "city", "main-city_icon-main_country_war.png");
+  const plate = join(resources, "ui", "maps", "map-bg-city-2-1-1.png");
+  assert(readFileSync(summonIcon).length > 0 && readFileSync(plate).length > 0, "map plate and summon icon exist");
+  let warMissing = false;
+  try {
+    readFileSync(warIcon);
+  } catch {
+    warMissing = true;
+  }
+  assert(warMissing, "country war icon is absent");
+  for (let i = 0; i < layout.nodes.length; i++) {
+    const frame = layout.nodes[i].frame;
+    if (!frame) continue;
+    assert(frame.indexOf("lang") < 0 && frame.indexOf("lbl-") < 0, "map frame is not a locale label");
+  }
 }
 
 function checkMainline(): void {
@@ -5797,6 +5899,7 @@ async function main(): Promise<void> {
   checkPopups();
   checkGates();
   checkPanelNav();
+  checkCityMap();
   checkSafeArea();
   checkLog();
   checkLoginPrefs();

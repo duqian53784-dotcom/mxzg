@@ -4,6 +4,7 @@
  * 从 Boot 进来时，若场景上没挂本组件，Boot 会 addComponent。
  * 单独预览 Main：把 MainApp 挂到 Main 场景的 Canvas 上。
  * 顶栏和底栏在 UIShell 的 chrome 层，不进页面栈。系统面板走 PanelNav。
+ * 主城页中间是 CityMap：视差底图和建筑点。底栏仍是五项，不改 CityChrome。
  */
 import { _decorator, BlockInputEvents, Color, Component, Node, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
@@ -82,6 +83,8 @@ import { WIRE_JEWEL_UNSYNCED_TOAST } from "../net/protocol/wireJewel";
 import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
+import { CityMapHandle, mountCityMap } from "./CityMap";
+import { cityAtomRoute } from "./cityMapLayout";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 /** 默认挂 CityChrome Prefab。false 时仍走 mountCityChrome，和接 Prefab 之前一样。 */
@@ -143,6 +146,7 @@ export class MainApp extends Component {
   private selectedHeroId = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
+  private cityMap: CityMapHandle | null = null;
   private logLabel: Node | null = null;
   private offLog: (() => void) | null = null;
   private offWire: (() => void) | null = null;
@@ -155,6 +159,10 @@ export class MainApp extends Component {
   }
 
   onDestroy() {
+    if (this.cityMap) {
+      this.cityMap.dispose();
+      this.cityMap = null;
+    }
     this.detachWire();
     this.detachLog();
     this.mainline?.dispose();
@@ -359,39 +367,28 @@ export class MainApp extends Component {
 
   private buildCity(): Node {
     const page = this.pageRoot("CityPage");
-    place(createLabel("主城", 48, { color: TITLE_COLOR }), page, 0, 400);
+    const mapHost = uiNode("CityMapHost");
+    mapHost.parent = page;
+    void this.mountCityMap(mapHost);
+
+    place(createLabel("左右拖动地图，点建筑进入", 16, { color: MUTED, width: 420 }), page, -120, 360);
+    this.gateNode = place(
+      createLabel(this.gateText(), 16, { color: GATE_COLOR, width: 680, height: 28 }),
+      page,
+      0,
+      328
+    );
+
     this.mainButton = place(
-      createButton(this.stageButtonText(), () => this.openMainline(), 420, 76),
+      createButton(this.stageButtonText(), () => this.openMainline(), 168, 36, OPEN_FILL, 15),
       page,
-      0,
-      280
+      -246,
+      -380
     );
-    place(createButton("挂机", () => this.openIdle(), 420, 64, IDLE_FILL), page, 0, 200);
-    place(createButton("背包", () => this.openBag(), 420, 64, BAG_FILL), page, 0, 120);
-    place(createButton("邮件", () => this.openMail(), 420, 64, MAIL_FILL), page, 0, 40);
-    place(createButton("七日登录", () => this.openLogin7(), 156, 52, LOGIN7_FILL, 18), page, -249, -120);
-    place(createButton("七日目标", () => this.openGoal7(), 156, 52, GOAL7_FILL, 18), page, -83, -120);
-    place(createButton("商店", () => this.openShop(), 156, 52, SHOP_FILL, 18), page, 83, -120);
-    place(createButton("礼包", () => this.openGift(), 156, 52, GIFT_FILL, 18), page, 249, -120);
-    place(createButton("限时活动", () => this.openLimited(), 420, 48, LIMITED_FILL, 22), page, 0, -188);
-    place(createButton("成就记录", () => this.openAchievement(), 200, 44, ACHIEVE_FILL, 18), page, -110, -248);
-    place(createButton("点金", () => this.openBuyGold(), 200, 44, BUYGOLD_FILL, 18), page, 110, -248);
-    place(createButton("先知召唤", () => this.openProphet(), 200, 44, PROPHET_FILL, 18), page, -110, -308);
-    place(createButton("英雄宝石", () => this.openJewel(), 200, 44, JEWEL_FILL, 18), page, 110, -308);
-    place(createButton("英雄图鉴", () => this.openIllustrat(), 200, 44, ILLUSTRAT_FILL, 18), page, -110, -368);
-    place(createButton("宠物信息", () => this.openPet(), 200, 44, PET_FILL, 18), page, 110, -368);
-    place(createButton("日志", () => this.openChild("log"), 140, 48), page, -180, -40);
-    place(
-      createButton("公告", () => {
-        GameLog.shared.info("MainApp", "click notice");
-        this.shell?.enqueuePopup("notice", this.buildPopup("公告", "弹窗队列 1/2"));
-        this.shell?.enqueuePopup("notice-next", this.buildPopup("后续", "关闭上一张后出现"));
-        this.shell?.showToast("公告已入队");
-      }, 140, 48),
-      page,
-      0,
-      -40
-    );
+    place(createButton("挂机", () => this.openIdle(), 88, 36, IDLE_FILL, 15), page, -100, -380);
+    place(createButton("背包", () => this.openBag(), 88, 36, BAG_FILL, 15), page, -4, -380);
+    place(createButton("邮件", () => this.openMail(), 88, 36, MAIL_FILL, 15), page, 92, -380);
+    place(createButton("日志", () => this.openChild("log"), 72, 36, undefined, 15), page, 172, -380);
     place(
       createButton("模拟断线", () => {
         GameLog.shared.info("MainApp", "click net-drop");
@@ -401,26 +398,43 @@ export class MainApp extends Component {
         }
         this.cityNet().simulateDrop();
         this.shell?.showToast("已模拟断线");
-      }, 160, 48),
+      }, 104, 36, undefined, 14),
       page,
-      190,
-      -40
+      268,
+      -380
     );
-    place(createLabel("系统从底栏进入。带「锁」的点开会提示条件", 18, { color: MUTED, width: 640 }), page, 0, -428);
 
-    this.gateNode = place(
-      createLabel(this.gateText(), 20, { color: GATE_COLOR, width: 680, height: 72 }),
+    place(createButton("七日登录", () => this.openLogin7(), 108, 34, LOGIN7_FILL, 14), page, -285, -426);
+    place(createButton("七日目标", () => this.openGoal7(), 108, 34, GOAL7_FILL, 14), page, -171, -426);
+    place(createButton("商店", () => this.openShop(), 96, 34, SHOP_FILL, 14), page, -57, -426);
+    place(createButton("礼包", () => this.openGift(), 96, 34, GIFT_FILL, 14), page, 51, -426);
+    place(createButton("限时活动", () => this.openLimited(), 108, 34, LIMITED_FILL, 14), page, 165, -426);
+    place(
+      createButton("公告", () => {
+        GameLog.shared.info("MainApp", "click notice");
+        this.shell?.enqueuePopup("notice", this.buildPopup("公告", "弹窗队列 1/2"));
+        this.shell?.enqueuePopup("notice-next", this.buildPopup("后续", "关闭上一张后出现"));
+        this.shell?.showToast("公告已入队");
+      }, 84, 34, undefined, 14),
       page,
-      0,
-      -500
+      276,
+      -426
     );
+
+    place(createButton("成就记录", () => this.openAchievement(), 108, 34, ACHIEVE_FILL, 14), page, -285, -472);
+    place(createButton("点金", () => this.openBuyGold(), 84, 34, BUYGOLD_FILL, 14), page, -177, -472);
+    place(createButton("先知召唤", () => this.openProphet(), 108, 34, PROPHET_FILL, 14), page, -69, -472);
+    place(createButton("英雄宝石", () => this.openJewel(), 108, 34, JEWEL_FILL, 14), page, 51, -472);
+    place(createButton("英雄图鉴", () => this.openIllustrat(), 108, 34, ILLUSTRAT_FILL, 14), page, 171, -472);
+    place(createButton("宠物信息", () => this.openPet(), 108, 34, PET_FILL, 14), page, 291, -472);
+
     const net = this.cityNet();
     this.netState = net.state;
-    const netNode = createLabel("网络 " + net.state, 20, {
+    const netNode = createLabel("网络 " + net.state, 16, {
       color: new Color(160, 180, 210, 255),
-      width: 680,
+      width: 220,
     });
-    place(netNode, page, 0, -580);
+    place(netNode, page, 230, 360);
     net.onState((state) => {
       if (!this.isValid) return;
       if (netNode.isValid) setText(netNode, "网络 " + state);
@@ -432,6 +446,67 @@ export class MainApp extends Component {
       this.netState = state;
     });
     return page;
+  }
+
+  /** 地图加载失败时主城按钮还在，不挡住进页面。 */
+  private async mountCityMap(host: Node): Promise<void> {
+    try {
+      const handle = await mountCityMap(host, (atom) => this.onCityAtom(atom), {
+        level: () => this.level(),
+        openDay: () => this.day(),
+        db: () => ConfigDb.current,
+      });
+      if (!this.isValid || !host.isValid) {
+        handle.dispose();
+        handle.root.destroy();
+        return;
+      }
+      this.cityMap = handle;
+    } catch (err) {
+      GameLog.shared.error("MainApp", "city map " + messageOf(err));
+    }
+  }
+
+  /**
+   * 建筑和活动图标。能对上的走原来的 onTab / open*，这样真服 Toast 和门槛还在。
+   * 对不上的压进 PanelNav，Mock 出占位页，真服仍是「还没接」。
+   */
+  private onCityAtom(atom: string): void {
+    GameLog.shared.info("MainApp", "city " + atom);
+    const route = cityAtomRoute(atom);
+    if (!route) {
+      this.openChild(atom);
+      return;
+    }
+    if (route.via === "tab") {
+      this.onTab(route.panel);
+      return;
+    }
+    if (route.panel === "shop") {
+      this.openShop();
+      return;
+    }
+    if (route.panel === "prophet") {
+      this.openProphet();
+      return;
+    }
+    if (route.panel === "login7") {
+      this.openLogin7();
+      return;
+    }
+    if (route.panel === "goal7") {
+      this.openGoal7();
+      return;
+    }
+    if (route.panel === "gift") {
+      this.openGift();
+      return;
+    }
+    if (route.panel === "limited") {
+      this.openLimited();
+      return;
+    }
+    this.openChild(route.panel);
   }
 
   private buildPlays(): Node {
@@ -489,6 +564,7 @@ export class MainApp extends Component {
   private refreshHub(): void {
     if (this.gateNode && this.gateNode.isValid) setText(this.gateNode, this.gateText());
     this.setMainButton(this.stageButtonText());
+    if (this.cityMap) this.cityMap.refreshLocks();
     this.refreshChrome();
   }
 
