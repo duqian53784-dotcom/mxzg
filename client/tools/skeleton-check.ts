@@ -779,6 +779,19 @@ import {
   WIRE_DRAGON_UNSYNCED_TOAST,
   wireDragonNote,
 } from "../assets/scripts/net/protocol/wireDragon";
+import {
+  decodeWireDragonCollection,
+  formatWireDragonCollectionHead,
+  formatWireDragonCollectionLine,
+  WIRE_DRAGON_COLLECTION_CMD,
+  WIRE_DRAGON_COLLECTION_EMPTY,
+  WIRE_DRAGON_COLLECTION_FIELD_NOTE,
+  WIRE_DRAGON_COLLECTION_READONLY_NOTE,
+  WIRE_DRAGON_COLLECTION_READONLY_TITLE,
+  WIRE_DRAGON_COLLECTION_SIDE_EFFECT,
+  WIRE_DRAGON_COLLECTION_UNSYNCED_TOAST,
+  wireDragonCollectionNote,
+} from "../assets/scripts/net/protocol/wireDragonCollection";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1504,6 +1517,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("astrolabe") === "city", "astrolabe stays on the city tab");
   assert(rootTabFor("tweakCube") === "city", "tweak cube stays on the city tab");
   assert(rootTabFor("dragon") === "city", "dragon scan stays on the city tab");
+  assert(rootTabFor("dragonCollection") === "city", "dragon collection stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -4113,6 +4127,15 @@ async function checkWs(): Promise<void> {
   const dragonWide = fieldVarint(5, 1099511627776);
   const dragonOuterOnly = fieldVarint(8, 1);
   const dragonPush = fieldVarint(1, 99);
+  const collectionUnpacked = concatBytes(
+    concatBytes(fieldVarint(1, 8), fieldVarint(1, 0)),
+    concatBytes(fieldVarint(1, 9), fieldVarint(8, 1))
+  );
+  const collectionPacked = concatBytes(fieldBytes(1, Uint8Array.from([8, 0, 9])), fieldVarint(8, 2));
+  const collectionZero = fieldVarint(1, 0);
+  const collectionOuterOnly = fieldVarint(8, 1);
+  const collectionWide = fieldVarint(1, 1099511627776);
+  const emptyCollection = { sysIds: [] as number[], marks: [] as { field: number; text: string }[] };
   const emptyDragon = {
     identifyLevel: null as number | null,
     attrLevel: null as number | null,
@@ -5591,7 +5614,8 @@ async function checkWs(): Promise<void> {
       WIRE_DRAGON_SIDE_EFFECT.indexOf("59013") >= 0 &&
       WIRE_DRAGON_SIDE_EFFECT.indexOf("另只读") >= 0 &&
       WIRE_DRAGON_SIDE_EFFECT.indexOf("勿当写号") >= 0 &&
-      WIRE_DRAGON_SIDE_EFFECT.indexOf("勿当本刀拉包") >= 0 &&
+      WIRE_DRAGON_SIDE_EFFECT.indexOf("单独在 59001 之后拉包") >= 0 &&
+      WIRE_DRAGON_SIDE_EFFECT.indexOf("勿与 59001 合并") >= 0 &&
       WIRE_DRAGON_SIDE_EFFECT.indexOf("34001") >= 0 &&
       WIRE_DRAGON_SIDE_EFFECT.indexOf("20011") >= 0 &&
       WIRE_DRAGON_READONLY_NOTE.indexOf("放源石") >= 0 &&
@@ -5721,6 +5745,136 @@ async function checkWs(): Promise<void> {
       formatWireDragonHead(decodeWireDragon(dragonOuterOnly) || emptyDragon) ===
         "identify_level=无 / attr_level=无 / identities=空鉴定 / slots=空槽位 / privilege_end_time=无 / 字段8=1",
     "non-empty 59001 without the named fields stays synced and does not invent them"
+  );
+  const loggedCollection = decodeWireDragonCollection(collectionUnpacked);
+  const loggedCollectionPacked = decodeWireDragonCollection(collectionPacked);
+  assert(
+    WireCmd.dragonCollection === 59010 && WireCmd.dragonScan === 59001 && WireCmd.tweakCubeData === 75501,
+    "online 59010 stays off 59001 and 75501"
+  );
+  assert(
+    WireCmd.dragonCollection !== WireCmd.roleProfile && WireCmd.dragonCollection !== WireCmd.dragonScan,
+    "59010 stays off 2001 and is not the 59001 cmd"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.dragonCollection)) === "0400000082e60000", "empty c2s 59010");
+  assert(bytesToHex(encodeFrame(WireCmd.dragonCollection)) !== "0400000079e60000", "59010 is not the 59001 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.dragonScan)) !== "0400000082e60000", "59001 is not the 59010 frame");
+  assert(bytesToHex(encodeFrame(59002)) !== "0400000082e60000", "59002 is not the 59010 frame");
+  assert(bytesToHex(encodeFrame(59013)) !== "0400000082e60000", "59013 is not the 59010 frame");
+  assert(bytesToHex(encodeFrame(34001)) !== "0400000082e60000", "34001 is not the 59010 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "0400000082e60000", "20011 is not the 59010 frame");
+  assert(WIRE_DRAGON_COLLECTION_READONLY_TITLE === "圣物图鉴（真服只读）", "readonly dragon collection title");
+  assert(WIRE_DRAGON_COLLECTION_UNSYNCED_TOAST === "真服未同步", "unsynced dragon collection toast");
+  assert(WIRE_DRAGON_COLLECTION_EMPTY === "空图鉴", "empty dragon collection label");
+  assert(
+    WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("getDragon") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("dragonDao.add") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59001") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59002") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59003") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59005") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59006") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59007") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59008") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59009") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59011") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59012") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("59013") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("勿与 59001 合并") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("34001") >= 0 &&
+      WIRE_DRAGON_COLLECTION_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("放源石") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("提升鉴定") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("加速鉴定") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("鉴定领奖") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("提升圣龙等级") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("圣物替换") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("调顺序") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("升星") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("分解") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("勿与 59001 合并") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_DRAGON_COLLECTION_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_DRAGON_COLLECTION_FIELD_NOTE.indexOf("sys_id") >= 0 &&
+      WIRE_DRAGON_COLLECTION_FIELD_NOTE.indexOf("manuals") >= 0 &&
+      WIRE_DRAGON_COLLECTION_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "dragon collection page names sys_id and refuses the write cmds"
+  );
+  assert(
+    decodeWireDragonCollection(new Uint8Array(0)) !== null &&
+      decodeWireDragonCollection(new Uint8Array(0))?.sysIds.length === 0 &&
+      formatWireDragonCollectionHead(decodeWireDragonCollection(new Uint8Array(0)) || emptyCollection) === "sys_id=空图鉴",
+    "empty 59010 body is synced and does not invent zero"
+  );
+  assert(decodeWireDragonCollection(new Uint8Array([0x80])) === null, "bad 59010 ignored");
+  assert(
+    decodeWireDragonCollection(collectionZero) !== null &&
+      decodeWireDragonCollection(collectionZero)?.sysIds.length === 1 &&
+      decodeWireDragonCollection(collectionZero)?.sysIds[0] === 0 &&
+      formatWireDragonCollectionHead(decodeWireDragonCollection(collectionZero) || emptyCollection) === "sys_id=0" &&
+      formatWireDragonCollectionLine(0) === "sys_id=0",
+    "present 59010 sys_id zero stays zero"
+  );
+  const collectionWideSnap = decodeWireDragonCollection(collectionWide);
+  assert(
+    collectionWideSnap !== null && collectionWideSnap.sysIds.length === 1 && collectionWideSnap.sysIds[0] === 1099511627776,
+    "59010 sys_id keeps the wide integer and does not invent another id"
+  );
+  assert(
+    loggedCollection !== null &&
+      loggedCollection.sysIds.length === 3 &&
+      loggedCollection.sysIds[0] === 8 &&
+      loggedCollection.sysIds[1] === 0 &&
+      loggedCollection.sysIds[2] === 9 &&
+      loggedCollection.marks.length === 1 &&
+      loggedCollection.marks[0].field === 8 &&
+      formatWireDragonCollectionHead(loggedCollection) === "sys_id=8,0,9 / 字段8=1" &&
+      formatWireDragonCollectionLine(loggedCollection.sysIds[0]) === "sys_id=8" &&
+      formatWireDragonCollectionLine(loggedCollection.sysIds[1]) === "sys_id=0" &&
+      wireDragonCollectionNote(loggedCollection).indexOf(WIRE_DRAGON_COLLECTION_SIDE_EFFECT) >= 0 &&
+      wireDragonCollectionNote(loggedCollection).indexOf("不写金币") >= 0 &&
+      wireDragonCollectionNote(loggedCollection).indexOf("不写钻石") >= 0,
+    "59010 unpacked sample keeps sys_id including zero and does not fill a missing list with 0"
+  );
+  assert(
+    loggedCollectionPacked !== null &&
+      loggedCollectionPacked.sysIds.length === 3 &&
+      loggedCollectionPacked.sysIds[0] === 8 &&
+      loggedCollectionPacked.sysIds[1] === 0 &&
+      loggedCollectionPacked.sysIds[2] === 9 &&
+      loggedCollectionPacked.marks.length === 1 &&
+      loggedCollectionPacked.marks[0].field === 8 &&
+      formatWireDragonCollectionHead(loggedCollectionPacked) === "sys_id=8,0,9 / 字段8=2",
+    "59010 packed sys_id keeps 8, 0 and 9"
+  );
+  const collectionSticky = decodeFrames(
+    concatBytes(encodeFrame(WireCmd.dragonCollection, collectionUnpacked), encodeFrame(WireCmd.heartbeat))
+  );
+  assert(
+    collectionSticky.frames.length === 2 &&
+      collectionSticky.frames[0].cmdId === 59010 &&
+      collectionSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireDragonCollection(collectionSticky.frames[0].body)?.sysIds.length === 3,
+    "sticky 59010 frame stops at its length prefix"
+  );
+  assert(decodeWireDragonCollection(fieldBytes(1, new Uint8Array([0x80]))) === null, "59010 packed sys_id that will not decode is ignored");
+  assert(
+    decodeWireDragonCollection(collectionOuterOnly) !== null &&
+      decodeWireDragonCollection(collectionOuterOnly)?.sysIds.length === 0 &&
+      formatWireDragonCollectionHead(decodeWireDragonCollection(collectionOuterOnly) || emptyCollection) === "sys_id=空图鉴 / 字段8=1",
+    "non-empty 59010 without sys_id stays synced and does not invent zero"
+  );
+  assert(
+    decodeWireDragon(collectionUnpacked)?.identifyLevel === 8 &&
+      decodeWireDragon(collectionUnpacked)?.slots.length === 0 &&
+      decodeWireDragonCollection(dragonBody)?.sysIds[0] === 4,
+    "59010 body is not the 59001 snapshot and 59001 body is not treated as this request"
   );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
@@ -6581,7 +6735,8 @@ async function checkWs(): Promise<void> {
           WireSession.tweakCube !== null &&
           WireSession.tweakCube.openCount === 3 &&
           WireSession.astrolabe !== null &&
-          WireSession.astrolabe.maxStar === 12,
+          WireSession.astrolabe.maxStar === 12 &&
+          !WireSession.hasDragonCollection(),
         "s2c 59001 writes identify_level attr_level identities slots and privilege_end_time and leaves the 75501 record and the 68001 record"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "59001 stays off the wallet");
@@ -6829,7 +6984,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 23, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 24, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -6923,6 +7078,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 59001 after 75501"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 23] as ArrayBuffer)) === "0400000082e60000",
+        "pullIdle sends empty c2s 59010 after 59001"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -6945,6 +7104,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 68001") &&
           sawLog(lines, "发送 c2s 75501") &&
           sawLog(lines, "发送 c2s 59001") &&
+          sawLog(lines, "发送 c2s 59010") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -6961,6 +7121,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000a1090100") &&
           sawLog(lines, "04000000ed260100") &&
           sawLog(lines, "0400000079e60000") &&
+          sawLog(lines, "0400000082e60000") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -7032,7 +7193,6 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 59007") === false &&
           sawLog(lines, "发送 c2s 59008") === false &&
           sawLog(lines, "发送 c2s 59009") === false &&
-          sawLog(lines, "发送 c2s 59010") === false &&
           sawLog(lines, "发送 c2s 59011") === false &&
           sawLog(lines, "发送 c2s 59012") === false &&
           sawLog(lines, "发送 c2s 59013") === false,
@@ -7400,7 +7560,6 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.59007");
       roleNet.send("wire.59008");
       roleNet.send("wire.59009");
-      roleNet.send("wire.59010");
       roleNet.send("wire.59011");
       roleNet.send("wire.59012");
       roleNet.send("wire.59013");
@@ -7408,7 +7567,7 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.20011");
       assert(
         roleSockets[0].sent.length === sentBeforeDragonOther,
-        "59002 59003 59005-59013 59010 34001 and 20011 stay off the dragon wire"
+        "59002 59003 59005-59009 59011-59013 34001 and 20011 stay off the dragon wire"
       );
       assert(
         sawLog(lines, "未发送 wire.59002") &&
@@ -7418,13 +7577,23 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.59007") &&
           sawLog(lines, "未发送 wire.59008") &&
           sawLog(lines, "未发送 wire.59009") &&
-          sawLog(lines, "未发送 wire.59010") &&
           sawLog(lines, "未发送 wire.59011") &&
           sawLog(lines, "未发送 wire.59012") &&
           sawLog(lines, "未发送 wire.59013") &&
           sawLog(lines, "未发送 wire.34001") &&
           sawLog(lines, "未发送 wire.20011"),
-        "dragon write cmds and the other readonly 59010 are not encoded"
+        "dragon write cmds are not encoded"
+      );
+      roleNet.send(WIRE_DRAGON_COLLECTION_CMD);
+      const collectionSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(collectionSent as ArrayBuffer)) === "0400000082e60000", "wire.59010 frame");
+      assert(roleSockets[0].sent.length === sentBeforeDragonOther + 1, "59010 is its own frame and is not merged into 59001");
+      const sentAfterCollection = roleSockets[0].sent.length;
+      roleNet.send(WIRE_DRAGON_CMD);
+      assert(
+        roleSockets[0].sent.length === sentAfterCollection + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0400000079e60000",
+        "sending 59001 does not also send 59010"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -8299,8 +8468,12 @@ async function checkWs(): Promise<void> {
           WireSession.dragon.slots.length === 2 &&
           WireSession.dragon.privilegeEndTime === 6 &&
           WireSession.tweakCube !== null &&
-          WireSession.tweakCube.marks.length === 1,
-        "59002 59003 59005-59013 59010 34001 and 20011 do not replace the 59001 record"
+          WireSession.tweakCube.marks.length === 1 &&
+          WireSession.hasDragonCollection() &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds.length === 1 &&
+          WireSession.dragonCollection.sysIds[0] === 99,
+        "59010 writes sys_id and 59002 59003 59005-59013 34001 and 20011 do not replace the 59001 record"
       );
       roleSockets[0].push(encodeFrame(WireCmd.dragonScan, new Uint8Array([0x80])));
       assert(
@@ -8326,7 +8499,10 @@ async function checkWs(): Promise<void> {
           formatWireDragonHead(WireSession.dragon) ===
             "identify_level=无 / attr_level=无 / identities=空鉴定 / slots=空槽位 / privilege_end_time=无" &&
           WireSession.tweakCube !== null &&
-          WireSession.tweakCube.marks[0].field === 8,
+          WireSession.tweakCube.marks[0].field === 8 &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds.length === 1 &&
+          WireSession.dragonCollection.sysIds[0] === 99,
         "empty 59001 body clears the named fields without writing zero and stays synced"
       );
       assert(
@@ -8363,8 +8539,130 @@ async function checkWs(): Promise<void> {
           WireSession.tweakCube !== null &&
           WireSession.tweakCube.marks[0].field === 8 &&
           WireSession.astrolabe !== null &&
-          WireSession.astrolabe.marks[0].field === 8,
+          WireSession.astrolabe.marks[0].field === 8 &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds[0] === 99,
         "non-empty 59001 without the named fields stays synced and leaves 75501 and 68001"
+      );
+      const goldBeforeBadCollection = Session.gold;
+      const diamondBeforeBadCollection = Session.diamond;
+      roleSockets[0].push(encodeFrame(59002, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(59003, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(59005, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(59006, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(59007, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(59008, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(59009, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(59011, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(59012, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(59013, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(59001, collectionUnpacked));
+      roleSockets[0].push(encodeFrame(34001, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 3)));
+      assert(
+        WireSession.hasDragonCollection() &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds.length === 1 &&
+          WireSession.dragonCollection.sysIds[0] === 99 &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.marks.length === 1 &&
+          WireSession.dragon.marks[0].field === 8,
+        "59001 and the write cmds do not replace the 59010 record"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dragonCollection, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasDragonCollection() &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds[0] === 99 &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.marks[0].field === 8 &&
+          sawWire("59010 解不开"),
+        "bad 59010 keeps the collection and the 59001 record"
+      );
+      assert(
+        Session.gold === goldBeforeBadCollection && Session.diamond === diamondBeforeBadCollection,
+        "bad 59010 stays off the wallet"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dragonCollection));
+      assert(
+        WireSession.hasDragonCollection() &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds.length === 0 &&
+          formatWireDragonCollectionHead(WireSession.dragonCollection) === "sys_id=空图鉴" &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.marks[0].field === 8,
+        "empty 59010 body clears sys_id without writing zero and stays synced"
+      );
+      assert(
+        Session.gold === goldBeforeBadCollection && Session.diamond === diamondBeforeBadCollection,
+        "empty 59010 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dragonCollection, collectionZero));
+      assert(
+        WireSession.hasDragonCollection() &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds.length === 1 &&
+          WireSession.dragonCollection.sysIds[0] === 0 &&
+          formatWireDragonCollectionHead(WireSession.dragonCollection) === "sys_id=0" &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.identifyLevel === 8,
+        "present 59010 zero stays zero and leaves 59001"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dragonCollection, collectionUnpacked));
+      assert(
+        WireSession.hasDragonCollection() &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds.length === 3 &&
+          WireSession.dragonCollection.sysIds[0] === 8 &&
+          WireSession.dragonCollection.sysIds[1] === 0 &&
+          WireSession.dragonCollection.sysIds[2] === 9 &&
+          formatWireDragonCollectionHead(WireSession.dragonCollection) === "sys_id=8,0,9 / 字段8=1" &&
+          formatWireDragonCollectionLine(WireSession.dragonCollection.sysIds[1]) === "sys_id=0" &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.marks[0].field === 8 &&
+          WireSession.tweakCube !== null &&
+          WireSession.tweakCube.marks[0].field === 8,
+        "59010 unpacked sys_id replaces the collection and leaves 59001 and 75501"
+      );
+      assert(
+        Session.gold === goldBeforeBadCollection && Session.diamond === diamondBeforeBadCollection,
+        "59010 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dragonScan, dragonBody));
+      assert(
+        WireSession.hasDragon() &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.identifyLevel === 4 &&
+          WireSession.dragon.slots.length === 2 &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds.length === 3 &&
+          WireSession.dragonCollection.sysIds[2] === 9,
+        "59001 refresh does not clear the 59010 manuals"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dragonCollection, collectionPacked));
+      assert(
+        WireSession.hasDragonCollection() &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds.length === 3 &&
+          WireSession.dragonCollection.sysIds[1] === 0 &&
+          WireSession.dragonCollection.marks.length === 1 &&
+          WireSession.dragonCollection.marks[0].field === 8 &&
+          formatWireDragonCollectionHead(WireSession.dragonCollection) === "sys_id=8,0,9 / 字段8=2" &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.identifyLevel === 4,
+        "59010 packed sys_id replaces the collection and leaves 59001"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.dragonCollection, collectionOuterOnly));
+      assert(
+        WireSession.hasDragonCollection() &&
+          WireSession.dragonCollection !== null &&
+          WireSession.dragonCollection.sysIds.length === 0 &&
+          formatWireDragonCollectionHead(WireSession.dragonCollection) === "sys_id=空图鉴 / 字段8=1" &&
+          WireSession.dragon !== null &&
+          WireSession.dragon.identifyLevel === 4 &&
+          WireSession.tweakCube !== null &&
+          WireSession.tweakCube.marks[0].field === 8,
+        "non-empty 59010 without sys_id stays synced and leaves 59001 and 75501"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
