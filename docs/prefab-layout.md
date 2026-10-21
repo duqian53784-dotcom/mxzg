@@ -349,3 +349,65 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | `BtnUpgrade` | (0, -80) | 460×68 | `升级（金币 30）`（橙） |
 | `Hint` | (0, -160) | 640×34 | `属性为占位。升级不改武器，武器到铁匠铺强化` |
 | `BtnBack` | (0, -250) | 240×48 | `返回` |
+
+## Idle（未接线）
+
+真服挂机页和 Mock 挂机页各一份 Prefab。`WireIdlePage.ts` 只展示 s2c 3004 的时间，领取只发空的 c2s 3005，不写金币。`IdlePage.ts` 是 Mock：领取、快速作战、推关。两页没有可以共用的内容根。
+
+| Prefab | 路径（相对 assets） | 状态 |
+|--------|---------------------|------|
+| WireIdlePage | `prefabs/ui/idle/WireIdlePage` | **未接** |
+| IdlePage | `prefabs/ui/idle/IdlePage` | **未接** |
+
+- **路径**：`client/assets/prefabs/ui/idle/WireIdlePage.prefab`、`client/assets/prefabs/ui/idle/IdlePage.prefab`
+- **状态**：**未接** Boot、`MainApp`、`WireIdlePage.ts`、`IdlePage.ts`，以及任何 `USE_*_PREFAB`。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
+- 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` 一致）。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid。Prefab 目录里没有 PNG。没有挂机专用图集：页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；详情卡用 `win-bg_block-bg-5` 染成 `(16, 28, 48)`；返回和快速作战用 `button_btn-blue-big`；领取用 `button_btn-orange-big`；推关调试用 `button_btn-green-big`。
+- 按钮节点是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空），文案在子节点 `Label`。普通文案节点自身带 `cc.Label`。
+- 再生：`python3 client/tools/gen_idle_prefab.py`（从现有 `.meta` 读 `@f9941`，并核对页面脚本、`wireIdle.ts`、`rewards.ts` 里的坐标和文案）
+
+### WireIdlePage（真服 3004 / 3005）
+
+根 `WireIdlePage`。对齐 `WireIdleController.build()`。默认文案是还没同步到 3004 时间时的句子，和打开后第一次 `formatWireIdle` 一致。没有快速作战，没有推关。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | — |
+| `Title` | (0, 470) | 680×56 | `挂机` |
+| `Last` | (0, 400) | 640×36 | `上次领取 未同步` |
+| `Duration` | (0, 340) | 640×44 | `已挂机 未同步` |
+| `Status` | (0, 285) | 640×34 | `时长只按 3004 的时间推。不按 Mock 的每分钟金币计算` |
+| `Card` | (0, 150) | 640×180 | — |
+| `PreviewTitle` | (0, 210) | 680×34 | `当前可领` |
+| `Preview` | (0, 150) | 600×80 | `这一包没有奖励清单。不写金币，不写强化石` |
+| `Cap` | (0, 80) | 600×34 | `最大挂机 未同步` |
+| `BtnClaim` | (0, -40) | 420×64 | `领取` |
+| `Hint` | (0, -140) | 640×64 | `领取只发空的 3005 并记下回包。没有奖励清单，不改金币。快速作战仍是 Mock，这一页不放` |
+| `BtnBack` | (0, -230) | 240×48 | `返回` |
+
+`Last` / `Duration` / `Cap` 与 `formatWireIdle` 在 `rewardTime`、`maxRewardTime` 都缺时的句子相同。`Preview` 是 `formatWireIdle` 固定的 `preview`，顶对齐。`Status` 是未封顶那句；封顶后代码写成 `已达上限。奖励清单仍不在这包里`。`Hint` 顶对齐，可换行。`BtnClaim` 用橙色按钮，`BtnBack` 用蓝色按钮。
+
+### IdlePage（Mock）
+
+根 `IdlePage`。坐标对齐 `IdleController.build()`。文案是新号查询回来之后 `render()` 写出的句子：已通关 0、已挂机 0、持有 0、当前第 1 关。`build()` 在查询返回前写的是 `读取进度…`、`已挂机 --:--:-- / 08:00:00`、`金币 +0`、`IDLE_ITEM_NAME + " +0"`，状态、上限和持有是空串。
+
+| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
+|------|-------------|------|----------|
+| `Bg` | (0, 0) | 720×1280 | — |
+| `Title` | (0, 470) | 680×56 | `挂机` |
+| `Progress` | (0, 415) | 640×36 | `已通关 0 关 · 当前第 1 关` |
+| `Duration` | (0, 360) | 640×44 | `已挂机 00:00:00 / 08:00:00` |
+| `Status` | (0, 315) | 640×34 | `未到上限。整段时长按当前已通关关数计算` |
+| `Card` | (0, 150) | 640×250 | — |
+| `PreviewTitle` | (0, 245) | 680×34 | `当前可领` |
+| `Gold` | (0, 195) | 600×42 | `金币 +0（每分钟 6）` |
+| `Item` | (0, 145) | 600×42 | `强化石 +0（每 30 秒 1 个）` |
+| `Cap` | (0, 90) | 600×34 | `挂满 8 小时约可领 金币 2880、强化石 960` |
+| `Owned` | (0, -10) | 640×34 | `已有强化石 0（可在背包查看）` |
+| `BtnClaim` | (0, -80) | 420×64 | `领取` |
+| `BtnQuick` | (0, -165) | 420×64 | `快速作战 · 第1关` |
+| `BtnPush` | (0, -245) | 420×52 | `推关到70（调试）` |
+| `Hint` | (0, -310) | 640×32 | `快速作战结算当前关。调试按钮连推到第70关，每关金币相同，不播战报` |
+| `BtnBack` | (0, -375) | 240×48 | `返回` |
+
+`Gold` 用 `goldPerMin(0)`，未通关是 6。`Item` 的名字是 `IDLE_ITEM_NAME`（`强化石`），后面的间隔是 `formatItemEvery(30000)`（`每 30 秒 1 个`）。`Cap` 是 `capPreviewLine(2880, 960)`，也就是未通关挂满 8 小时的那句。`Owned` 是 `已有` + 道具名 + ` 0（可在背包查看）`。`BtnQuick` 是 `quickLabel(1)`；`QUICK_BATTLE_COUNT` 为 1 时不带「起 N 关」。`BtnPush` 是 `pushButtonText()`，字号 22。`BtnClaim` 橙色，`BtnQuick` 和 `BtnBack` 蓝色，`BtnPush` 绿色（代码填充是 `DEBUG_FILL`，素材里没有紫色按钮）。封顶后 `Status` 会写成 `已达 8 小时上限，请领取`。
