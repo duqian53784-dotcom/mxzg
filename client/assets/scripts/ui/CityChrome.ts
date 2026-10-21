@@ -1,5 +1,13 @@
 import { Color, Node } from "cc";
 import { BOTTOM_TABS } from "../config/nav";
+import {
+  bindClick,
+  CITY_CHROME_PREFAB_PATH,
+  loadPrefab,
+  requireNode,
+  spawnPrefab,
+  tintSprite,
+} from "./prefabLoad";
 import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
 
 export type TabVisual = "selected" | "open" | "locked";
@@ -28,6 +36,7 @@ const DIAMOND_COLOR = new Color(150, 216, 235, 255);
 /**
  * 顶栏和底栏。挂在 UIShell 的 chrome 层，不进页面栈。
  * 设计分辨率 720×1280，原点在画面中心。
+ * USE_CITY_CHROME_PREFAB 为 false，或 Prefab 加载失败时，MainApp 仍调用这里。
  */
 export function mountCityChrome(parent: Node, onTab: (id: string) => void): CityChrome {
   const root = uiNode("CityChrome");
@@ -101,4 +110,69 @@ function fillOf(state: TabVisual): Color {
   if (state === "locked") return TAB_LOCKED;
   if (state === "selected") return TAB_SELECTED;
   return TAB_OPEN;
+}
+
+const PREFAB_TAB_SELECTED = new Color(255, 210, 140, 255);
+const PREFAB_TAB_OPEN = new Color(255, 255, 255, 255);
+const PREFAB_TAB_LOCKED = new Color(160, 164, 176, 255);
+
+/**
+ * 绑定 CityChrome.prefab。Top/Bottom 下是 Name、Sub、Gold、Diamond 和 Tab_*。
+ * 路径相对 assets：prefabs/ui/city/CityChrome。不走 resources.load。
+ */
+export async function mountCityChromePrefab(parent: Node, onTab: (id: string) => void): Promise<CityChrome> {
+  const prefab = await loadPrefab(CITY_CHROME_PREFAB_PATH);
+  const root = spawnPrefab(prefab, parent);
+  try {
+    return bindCityChromePrefab(root, onTab);
+  } catch (err) {
+    root.destroy();
+    throw err;
+  }
+}
+
+function bindCityChromePrefab(root: Node, onTab: (id: string) => void): CityChrome {
+  const nameNode = requireNode(root, "Top/Name");
+  const subNode = requireNode(root, "Top/Sub");
+  const goldNode = requireNode(root, "Top/Gold");
+  const diamondNode = requireNode(root, "Top/Diamond");
+  const buttons: { [id: string]: Node } = {};
+  for (let i = 0; i < BOTTOM_TABS.length; i++) {
+    const entry = BOTTOM_TABS[i];
+    const button = requireNode(root, "Bottom/Tab_" + entry.id);
+    const lock = button.getChildByName("Lock");
+    if (lock) lock.active = false;
+    bindClick(button, () => onTab(entry.id));
+    buttons[entry.id] = button;
+  }
+
+  return {
+    root,
+    setIdentity(nameLine: string, subLine: string): void {
+      setText(nameNode, nameLine);
+      setText(subNode, subLine);
+    },
+    setCurrencies(goldLine: string, diamondLine: string): void {
+      setText(goldNode, goldLine);
+      setText(diamondNode, diamondLine);
+    },
+    setTabs(tabs: TabState[]): void {
+      for (let i = 0; i < tabs.length; i++) {
+        const tab = tabs[i];
+        const button = buttons[tab.id];
+        if (!button) continue;
+        const label = button.getChildByName("Label");
+        if (label) setText(label, tab.text);
+        tintSprite(button, prefabTabColor(tab.state));
+        const lock = button.getChildByName("Lock");
+        if (lock) lock.active = tab.state === "locked";
+      }
+    },
+  };
+}
+
+function prefabTabColor(state: TabVisual): Color {
+  if (state === "locked") return PREFAB_TAB_LOCKED;
+  if (state === "selected") return PREFAB_TAB_SELECTED;
+  return PREFAB_TAB_OPEN;
 }

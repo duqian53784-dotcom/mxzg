@@ -1,4 +1,14 @@
 import { BlockInputEvents, Button, Color, Node, UITransform } from "cc";
+import {
+  bindClick,
+  CREATE_ROLE_PREFAB_PATH,
+  loadPrefab,
+  readEditBox,
+  requireNode,
+  setInteractable,
+  spawnPrefab,
+  writeEditBox,
+} from "./prefabLoad";
 import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
 export interface CreateRolePanelView {
@@ -20,6 +30,7 @@ export interface CreateRolePanelOptions {
 
 /**
  * 创角面板。确认由调用方走 Proto.roleCreate，再 Proto.roleEnter。
+ * USE_CREATE_ROLE_PREFAB 为 false，或 Prefab 加载失败时，Boot 仍调用这里。
  */
 export function buildCreateRolePanel(
   parent: Node,
@@ -81,4 +92,60 @@ export function buildCreateRolePanel(
 
 function readField(field: TextField): string {
   return field.getValue();
+}
+
+/**
+ * 绑定 CreateRolePanel.prefab。节点：Mask,Bg,Card/{CardBg,Title,Hint,Meta,NameLabel,NameField,Status,BtnConfirm,BtnBack}。
+ * 路径相对 assets：prefabs/ui/login/CreateRolePanel。不走 resources.load。
+ */
+export async function mountCreateRolePrefab(
+  parent: Node,
+  handlers: { onConfirm: () => void; onBack: () => void },
+  options: CreateRolePanelOptions
+): Promise<CreateRolePanelView> {
+  const prefab = await loadPrefab(CREATE_ROLE_PREFAB_PATH);
+  const root = spawnPrefab(prefab, parent);
+  try {
+    return bindCreateRolePrefab(root, handlers, options);
+  } catch (err) {
+    root.destroy();
+    throw err;
+  }
+}
+
+function bindCreateRolePrefab(
+  root: Node,
+  handlers: { onConfirm: () => void; onBack: () => void },
+  options: CreateRolePanelOptions
+): CreateRolePanelView {
+  const hint = options.hint
+    ? options.hint
+    : options.hadRole
+      ? "已有角色。确认后换成新名字，主线回到第 1 关"
+      : "这个账号还没有角色";
+  setText(requireNode(root, "Card/Hint"), hint);
+  setText(requireNode(root, "Card/Meta"), options.serverName + " · " + options.account);
+  const nameField = requireNode(root, "Card/NameField");
+  writeEditBox(nameField, "");
+  const status = requireNode(root, "Card/Status");
+  setText(status, "填写名字后确认");
+
+  const confirmNode = requireNode(root, "Card/BtnConfirm");
+  const backNode = requireNode(root, "Card/BtnBack");
+  bindClick(confirmNode, handlers.onConfirm);
+  bindClick(backNode, handlers.onBack);
+
+  return {
+    root,
+    setStatus(text: string) {
+      setText(status, text);
+    },
+    setBusy(busy: boolean) {
+      setInteractable(confirmNode, !busy);
+      setInteractable(backNode, !busy);
+    },
+    name(): string {
+      return readEditBox(nameField);
+    },
+  };
 }
