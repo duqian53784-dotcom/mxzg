@@ -180,7 +180,7 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | `ListHost/Rows/More` | (0, -144) | 640×36 | `还有 3 件`（`_active: false`） |
 | `BtnBack` | (0, -460) | 240×48 | `返回` |
 
-`Title` / `Note` / `Empty` / `Unsynced` 与 `WIRE_BAG_READONLY_TITLE` / `WIRE_BAG_READONLY_NOTE` / `WIRE_BAG_EMPTY` / `WIRE_BAG_UNSYNCED_TOAST` 相同。行文案是 `formatWireBagLine` 在没有配置名时的句子（`类型 T · id ID ×N`，中间有空格）。`Row_i` 占位为类型 `i+1`、id `1001+i`、数量 1，最多 11 行（`VISIBLE_ROWS`）。节点锚点在中心、放在 x=0，Label 水平对齐为左，宽 640，和 `align: "left"` 一致。`More` 的 y 是 `340 − 11×44`。运行时溢出文案是 `还有 N 件`；预制里的 `还有 3 件` 只是占位。`Empty` 与 `Unsynced` 同一位置，默认只显示未同步，避免和空背包叠字。
+这份 Prefab 仍是未验收的预览，不接 `USE_*`。运行时 `WireBagPage.ts` 已经改成和后面的只读页一样：标题下写无写库和禁发号，行上写 `item_id` / `item_type` / `num`，未同步文案是 `真服未同步`。Prefab 里的旧文案（`只读。不使用，不写金币`、`真服背包未同步`、`类型 T · id N ×数量`）先留着，验收前不删。
 
 ### BagPage（Mock）
 

@@ -484,12 +484,17 @@ import {
   applyWireBagGain,
   decodeWireBagGain,
   decodeWireBagList,
+  formatWireBagHead,
   formatWireBagLine,
   WIRE_BAG_CMD,
   WIRE_BAG_EMPTY,
+  WIRE_BAG_FIELD_NOTE,
   WIRE_BAG_GAIN_CMD,
+  WIRE_BAG_READONLY_NOTE,
   WIRE_BAG_READONLY_TITLE,
+  WIRE_BAG_SIDE_EFFECT,
   WIRE_BAG_UNSYNCED_TOAST,
+  wireBagNote,
 } from "../assets/scripts/net/protocol/wireBag";
 import {
   decodeWireMailList,
@@ -3215,21 +3220,87 @@ async function checkWs(): Promise<void> {
   assert(WireCmd.backpackList === 5001 && CmdId.bagList === 1601 && CmdId.bagUse === 1602, "online 5001 stays off the placeholder bag ids");
   assert(WireCmd.backpackGain === 5002, "online 5002 is gain, not bag.use");
   assert(bytesToHex(encodeFrame(WireCmd.backpackList)) === "0400000089130000", "empty c2s 5001");
+  assert(bytesToHex(encodeFrame(5002)) !== "0400000089130000", "5002 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(5004)) !== "0400000089130000", "5004 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(5005)) !== "0400000089130000", "5005 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(5006)) !== "0400000089130000", "5006 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(5008)) !== "0400000089130000", "5008 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(5009)) !== "0400000089130000", "5009 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(5011)) !== "0400000089130000", "5011 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(5012)) !== "0400000089130000", "5012 is not the 5001 frame");
   assert(WIRE_BAG_READONLY_TITLE === "背包（真服只读）", "readonly bag title");
-  assert(WIRE_BAG_EMPTY === "空背包" && WIRE_BAG_UNSYNCED_TOAST === "真服背包未同步", "bag empty is not the unsynced toast");
-  assert(formatWireBagLine({ itemId: 101, itemType: 3, num: 5 }, null) === "类型 3 · id 101 ×5", "bag line without a config name");
-  assert(formatWireBagLine({ itemId: 101, itemType: 3, num: 5 }, "强化石") === "强化石 ×5", "bag line uses a config name");
-  assert(decodeWireBagList(new Uint8Array(0)) !== null && decodeWireBagList(new Uint8Array(0))?.items.length === 0, "empty 5001 is a synced empty bag");
+  assert(WIRE_BAG_EMPTY === "空背包" && WIRE_BAG_UNSYNCED_TOAST === "真服未同步", "bag empty is not the unsynced toast");
+  assert(
+    WIRE_BAG_SIDE_EFFECT.indexOf("无写库") >= 0 &&
+      WIRE_BAG_SIDE_EFFECT.indexOf("空体安全") >= 0 &&
+      WIRE_BAG_SIDE_EFFECT.indexOf("不再补发") >= 0 &&
+      WIRE_BAG_READONLY_NOTE.indexOf("5004") >= 0 &&
+      WIRE_BAG_READONLY_NOTE.indexOf("5005") >= 0 &&
+      WIRE_BAG_READONLY_NOTE.indexOf("5006") >= 0 &&
+      WIRE_BAG_READONLY_NOTE.indexOf("5008") >= 0 &&
+      WIRE_BAG_READONLY_NOTE.indexOf("5009") >= 0 &&
+      WIRE_BAG_READONLY_NOTE.indexOf("5011") >= 0 &&
+      WIRE_BAG_READONLY_NOTE.indexOf("5012") >= 0 &&
+      WIRE_BAG_READONLY_NOTE.indexOf("5002") >= 0 &&
+      WIRE_BAG_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_BAG_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_BAG_FIELD_NOTE.indexOf("item_id") >= 0 &&
+      WIRE_BAG_FIELD_NOTE.indexOf("item_type") >= 0 &&
+      WIRE_BAG_FIELD_NOTE.indexOf("num") >= 0 &&
+      WIRE_BAG_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "bag page names item_id item_type and num and refuses writes"
+  );
+  assert(formatWireBagLine({ itemId: 101, itemType: 3, num: 5, marks: [] }) === "item_id=101 / item_type=3 / num=5", "bag line writes the three fields");
+  assert(
+    decodeWireBagList(new Uint8Array(0)) !== null &&
+      decodeWireBagList(new Uint8Array(0))?.items.length === 0 &&
+      formatWireBagHead(decodeWireBagList(new Uint8Array(0)) || { items: [], marks: [] }) === "空背包",
+    "empty 5001 is a synced empty bag"
+  );
   const bagItem = fieldBytes(1, concatBytes(concatBytes(fieldVarint(1, 101), fieldVarint(2, 3)), fieldVarint(3, 5)));
   const bagListed = decodeWireBagList(bagItem);
   assert(
     bagListed !== null && bagListed.items.length === 1 && bagListed.items[0].itemId === 101 && bagListed.items[0].itemType === 3 && bagListed.items[0].num === 5,
     "5001 field 1 is one ResBackPackItem"
   );
+  const bagMissing = decodeWireBagList(fieldBytes(1, fieldVarint(1, 8)));
+  assert(
+    bagMissing !== null &&
+      bagMissing.items.length === 1 &&
+      bagMissing.items[0].itemId === 8 &&
+      bagMissing.items[0].itemType === null &&
+      bagMissing.items[0].num === null &&
+      formatWireBagLine(bagMissing.items[0]) === "item_id=8 / item_type=无 / num=无",
+    "missing 5001 numbers stay blank"
+  );
   const bagTwo = decodeWireBagList(
     concatBytes(bagItem, fieldBytes(1, concatBytes(concatBytes(fieldVarint(1, 7), fieldVarint(2, 1)), fieldVarint(3, 0))))
   );
-  assert(bagTwo !== null && bagTwo.items.length === 1 && bagTwo.items[0].itemId === 101, "5001 num 0 drops that row");
+  assert(
+    bagTwo !== null &&
+      bagTwo.items.length === 2 &&
+      bagTwo.items[1].itemId === 7 &&
+      bagTwo.items[1].itemType === 1 &&
+      bagTwo.items[1].num === 0 &&
+      formatWireBagLine(bagTwo.items[1]) === "item_id=7 / item_type=1 / num=0",
+    "5001 present num 0 stays zero"
+  );
+  const bagMarked = decodeWireBagList(concatBytes(fieldVarint(4, 9), fieldBytes(1, concatBytes(fieldVarint(2, 0), fieldVarint(6, 4)))));
+  assert(
+    bagMarked !== null &&
+      bagMarked.items.length === 1 &&
+      bagMarked.items[0].itemId === null &&
+      bagMarked.items[0].itemType === 0 &&
+      bagMarked.items[0].num === null &&
+      bagMarked.marks.length === 1 &&
+      bagMarked.marks[0].field === 4 &&
+      formatWireBagLine(bagMarked.items[0]) === "item_id=无 / item_type=0 / num=无 / 字段6=4" &&
+      formatWireBagHead(bagMarked) === "1 件 / 字段4=9" &&
+      wireBagNote(bagMarked).indexOf(WIRE_BAG_SIDE_EFFECT) >= 0 &&
+      wireBagNote(bagMarked).indexOf("不写金币") >= 0 &&
+      wireBagNote(bagMarked).indexOf("不写钻石") >= 0,
+    "5001 keeps item_id item_type and num and does not fill missing numbers with 0"
+  );
   assert(decodeWireBagList(new Uint8Array([0x80])) === null, "bad 5001 ignored");
   assert(decodeWireBagList(fieldBytes(1, new Uint8Array([0x80]))) === null, "bad nested item does not become an empty bag");
   const bagGain = decodeWireBagGain(
@@ -5062,6 +5133,15 @@ async function checkWs(): Promise<void> {
       );
       assert(WireSession.hasBag() && WireSession.bagItems !== null && WireSession.bagItems.length === 0, "5002 num 0 deletes and stays synced");
       assert(Session.gold === 40, "5002 does not write gold");
+      roleSockets[0].push(encodeFrame(WireCmd.backpackList, fieldBytes(1, fieldVarint(1, 8))));
+      assert(
+        WireSession.bagItems !== null &&
+          WireSession.bagItems.length === 1 &&
+          WireSession.bagItems[0].itemId === 8 &&
+          WireSession.bagItems[0].itemType === null &&
+          WireSession.bagItems[0].num === null,
+        "missing 5001 numbers stay blank in the session"
+      );
       roleSockets[0].push(encodeFrame(WireCmd.mailList, new Uint8Array([0x80])));
       assert(
         WireSession.hasMail() && WireSession.mailEntries !== null && WireSession.mailEntries.length === 1 && sawWire("15000 解不开"),
@@ -5169,12 +5249,26 @@ async function checkWs(): Promise<void> {
       const sentBeforeBagOther = roleSockets[0].sent.length;
       roleNet.send(WIRE_BAG_GAIN_CMD);
       roleNet.send("wire.5004");
+      roleNet.send("wire.5005");
+      roleNet.send("wire.5006");
+      roleNet.send("wire.5008");
       roleNet.send("wire.5009");
       roleNet.send("wire.5010");
       roleNet.send("wire.5011");
+      roleNet.send("wire.5012");
       roleNet.send("wire.5013");
       assert(roleSockets[0].sent.length === sentBeforeBagOther, "5002 and 5004-5013 stay off the wire");
-      assert(sawLog(lines, "未发送 wire.5004") && sawLog(lines, "未发送 wire.5010") && sawLog(lines, "未发送 wire.5002"), "bag mutations are not encoded");
+      assert(
+        sawLog(lines, "未发送 wire.5002") &&
+          sawLog(lines, "未发送 wire.5004") &&
+          sawLog(lines, "未发送 wire.5005") &&
+          sawLog(lines, "未发送 wire.5006") &&
+          sawLog(lines, "未发送 wire.5008") &&
+          sawLog(lines, "未发送 wire.5009") &&
+          sawLog(lines, "未发送 wire.5011") &&
+          sawLog(lines, "未发送 wire.5012"),
+        "bag mutations are not encoded"
+      );
       const sentBeforeOther = roleSockets[0].sent.length;
       roleNet.send("wire.3002");
       roleNet.send("wire.3010");
@@ -5182,7 +5276,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 14, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 14, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
