@@ -725,6 +725,19 @@ import {
   WIRE_ISLANDS_UNSYNCED_TOAST,
   wireIslandsNote,
 } from "../assets/scripts/net/protocol/wireFloatingIslands";
+import {
+  decodeWireTotems,
+  formatWireTotemsHead,
+  formatWireTotemsLine,
+  WIRE_TOTEMS_CMD,
+  WIRE_TOTEMS_EMPTY,
+  WIRE_TOTEMS_FIELD_NOTE,
+  WIRE_TOTEMS_READONLY_NOTE,
+  WIRE_TOTEMS_READONLY_TITLE,
+  WIRE_TOTEMS_SIDE_EFFECT,
+  WIRE_TOTEMS_UNSYNCED_TOAST,
+  wireTotemsNote,
+} from "../assets/scripts/net/protocol/wireTotems";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1446,6 +1459,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("firstRecharge") === "city", "first recharge stays on the city tab");
   assert(rootTabFor("reiki") === "city", "reiki equip stays on the city tab");
   assert(rootTabFor("islands") === "city", "floating islands time stays on the city tab");
+  assert(rootTabFor("totems") === "city", "totems info stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -4006,6 +4020,17 @@ async function checkWs(): Promise<void> {
   const islandsZeroStage = fieldVarint(3, 0);
   const islandsWide = fieldVarint(2, 1099511627776);
   const islandsOuterOnly = fieldVarint(1, 4);
+  const totemsRowA = concatBytes(
+    concatBytes(concatBytes(fieldVarint(1, 11), fieldVarint(2, 22)), concatBytes(fieldVarint(3, 33), fieldVarint(4, 4))),
+    fieldVarint(5, 5)
+  );
+  const totemsRowB = concatBytes(fieldVarint(2, 0), fieldVarint(6, 4));
+  const totemsBody = concatBytes(concatBytes(fieldBytes(1, totemsRowA), fieldBytes(1, totemsRowB)), fieldVarint(7, 9));
+  const totemsMissing = fieldBytes(1, fieldVarint(1, 8));
+  const totemsZero = fieldBytes(1, fieldVarint(1, 0));
+  const totemsWide = fieldBytes(1, fieldVarint(5, 1099511627776));
+  const totemsOuterOnly = fieldVarint(7, 1);
+  const totemsPush = fieldBytes(1, fieldVarint(1, 99));
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -4980,6 +5005,137 @@ async function checkWs(): Promise<void> {
       formatWireReikiHead(decodeWireReiki(reikiOuterOnly) || { rows: [], marks: [] }) === "空列表 / 字段5=1",
     "non-empty 70001 without list stays synced and does not invent a row"
   );
+  const loggedTotems = decodeWireTotems(totemsBody);
+  assert(
+    WireCmd.totemsInfoList === 74300 && WireCmd.floatingIslandsTime === 73001 && WireCmd.petInfoList === 74100,
+    "online 74300 stays off 73001 and pet list 74100"
+  );
+  assert(
+    WireCmd.totemsInfoList !== WireCmd.reikiEquipData &&
+      WireCmd.totemsInfoList !== WireCmd.roleProfile &&
+      WireCmd.totemsInfoList !== WireCmd.worldLevel,
+    "74300 stays off 70001, 2001 and 51001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.totemsInfoList)) === "040000003c220100", "empty c2s 74300");
+  assert(bytesToHex(encodeFrame(74301)) === "040000003d220100", "74301 upgrade frame stays distinct");
+  assert(bytesToHex(encodeFrame(74302)) === "040000003e220100", "74302 equip frame stays distinct");
+  assert(bytesToHex(encodeFrame(74303)) === "040000003f220100", "74303 reset frame stays distinct");
+  assert(bytesToHex(encodeFrame(74304)) === "0400000040220100", "74304 push frame stays distinct");
+  assert(bytesToHex(encodeFrame(20011)) === "040000002b4e0000", "20011 stays off the 74300 frame");
+  assert(bytesToHex(encodeFrame(74301)) !== "040000003c220100", "74301 is not the 74300 frame");
+  assert(bytesToHex(encodeFrame(74302)) !== "040000003c220100", "74302 is not the 74300 frame");
+  assert(bytesToHex(encodeFrame(74303)) !== "040000003c220100", "74303 is not the 74300 frame");
+  assert(bytesToHex(encodeFrame(74304)) !== "040000003c220100", "74304 is not the 74300 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "040000003c220100", "20011 is not the 74300 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.floatingIslandsTime)) !== "040000003c220100", "73001 is not the 74300 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.petInfoList)) !== "040000003c220100", "74100 is not the 74300 frame");
+  assert(WIRE_TOTEMS_READONLY_TITLE === "图腾信息（真服只读）", "readonly totems title");
+  assert(WIRE_TOTEMS_UNSYNCED_TOAST === "真服未同步", "unsynced totems toast");
+  assert(WIRE_TOTEMS_EMPTY === "空表", "empty totems list label");
+  assert(
+    WIRE_TOTEMS_SIDE_EFFECT.indexOf("本号无写库") >= 0 &&
+      WIRE_TOTEMS_SIDE_EFFECT.indexOf("73001") >= 0 &&
+      WIRE_TOTEMS_SIDE_EFFECT.indexOf("74301") >= 0 &&
+      WIRE_TOTEMS_SIDE_EFFECT.indexOf("74302") >= 0 &&
+      WIRE_TOTEMS_SIDE_EFFECT.indexOf("74303") >= 0 &&
+      WIRE_TOTEMS_SIDE_EFFECT.indexOf("74304") >= 0 &&
+      WIRE_TOTEMS_SIDE_EFFECT.indexOf("不当拉包") >= 0 &&
+      WIRE_TOTEMS_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("无升级") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("升阶") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("装备") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("卸下") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("更换") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("重置") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("勿当拉包") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_TOTEMS_READONLY_NOTE.indexOf("74100") >= 0 &&
+      WIRE_TOTEMS_FIELD_NOTE.indexOf("t_id") >= 0 &&
+      WIRE_TOTEMS_FIELD_NOTE.indexOf("sys_id") >= 0 &&
+      WIRE_TOTEMS_FIELD_NOTE.indexOf("hero_id") >= 0 &&
+      WIRE_TOTEMS_FIELD_NOTE.indexOf("level") >= 0 &&
+      WIRE_TOTEMS_FIELD_NOTE.indexOf("quality") >= 0 &&
+      WIRE_TOTEMS_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "totems page names list fields and refuses upgrade equip reset and the 74304 pull"
+  );
+  assert(
+    decodeWireTotems(new Uint8Array(0)) !== null &&
+      decodeWireTotems(new Uint8Array(0))?.rows.length === 0 &&
+      formatWireTotemsHead(decodeWireTotems(new Uint8Array(0)) || { rows: [], marks: [] }) === "空表",
+    "empty 74300 body is synced and does not invent zero"
+  );
+  assert(decodeWireTotems(new Uint8Array([0x80])) === null, "bad 74300 ignored");
+  const totemsMissingSnap = decodeWireTotems(totemsMissing);
+  assert(
+    totemsMissingSnap !== null &&
+      totemsMissingSnap.rows.length === 1 &&
+      totemsMissingSnap.rows[0].tId === 8 &&
+      totemsMissingSnap.rows[0].sysId === null &&
+      totemsMissingSnap.rows[0].heroId === null &&
+      totemsMissingSnap.rows[0].level === null &&
+      totemsMissingSnap.rows[0].quality === null &&
+      formatWireTotemsLine(totemsMissingSnap.rows[0]) === "t_id=8 / sys_id=无 / hero_id=无 / level=无 / quality=无",
+    "missing 74300 sys_id hero_id level and quality stay blank"
+  );
+  assert(
+    decodeWireTotems(totemsZero) !== null &&
+      decodeWireTotems(totemsZero)?.rows.length === 1 &&
+      decodeWireTotems(totemsZero)?.rows[0].tId === 0 &&
+      decodeWireTotems(totemsZero)?.rows[0].sysId === null &&
+      decodeWireTotems(totemsZero)?.rows[0].quality === null &&
+      formatWireTotemsLine((decodeWireTotems(totemsZero) || { rows: [], marks: [] }).rows[0]) ===
+        "t_id=0 / sys_id=无 / hero_id=无 / level=无 / quality=无",
+    "present 74300 zero stays zero and does not fill the other ids"
+  );
+  const totemsWideSnap = decodeWireTotems(totemsWide);
+  assert(
+    totemsWideSnap !== null &&
+      totemsWideSnap.rows.length === 1 &&
+      totemsWideSnap.rows[0].tId === null &&
+      totemsWideSnap.rows[0].level === null &&
+      totemsWideSnap.rows[0].quality === 1099511627776,
+    "74300 quality keeps the wide int64 and does not invent t_id"
+  );
+  assert(
+    loggedTotems !== null &&
+      loggedTotems.rows.length === 2 &&
+      loggedTotems.rows[0].tId === 11 &&
+      loggedTotems.rows[0].sysId === 22 &&
+      loggedTotems.rows[0].heroId === 33 &&
+      loggedTotems.rows[0].level === 4 &&
+      loggedTotems.rows[0].quality === 5 &&
+      loggedTotems.rows[1].tId === null &&
+      loggedTotems.rows[1].sysId === 0 &&
+      loggedTotems.rows[1].heroId === null &&
+      loggedTotems.rows[1].level === null &&
+      loggedTotems.rows[1].quality === null &&
+      loggedTotems.marks.length === 1 &&
+      loggedTotems.marks[0].field === 7 &&
+      formatWireTotemsHead(loggedTotems) === "2 条 / 字段7=9" &&
+      formatWireTotemsLine(loggedTotems.rows[0]) === "t_id=11 / sys_id=22 / hero_id=33 / level=4 / quality=5" &&
+      formatWireTotemsLine(loggedTotems.rows[1]) === "t_id=无 / sys_id=0 / hero_id=无 / level=无 / quality=无 / 字段6=4" &&
+      wireTotemsNote(loggedTotems).indexOf(WIRE_TOTEMS_SIDE_EFFECT) >= 0 &&
+      wireTotemsNote(loggedTotems).indexOf("不写金币") >= 0 &&
+      wireTotemsNote(loggedTotems).indexOf("不写钻石") >= 0,
+    "74300 sample keeps t_id sys_id hero_id level and quality and does not fill missing numbers with 0"
+  );
+  const totemsSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.totemsInfoList, totemsBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    totemsSticky.frames.length === 2 &&
+      totemsSticky.frames[0].cmdId === 74300 &&
+      totemsSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireTotems(totemsSticky.frames[0].body)?.rows[0].tId === 11,
+    "sticky 74300 frame stops at its length prefix"
+  );
+  assert(decodeWireTotems(fieldBytes(1, new Uint8Array([0x80]))) === null, "74300 list blob that will not decode is ignored");
+  assert(
+    decodeWireTotems(totemsOuterOnly) !== null &&
+      decodeWireTotems(totemsOuterOnly)?.rows.length === 0 &&
+      formatWireTotemsHead(decodeWireTotems(totemsOuterOnly) || { rows: [], marks: [] }) === "空表 / 字段7=1",
+    "non-empty 74300 without list stays synced and does not invent a row"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -5465,6 +5621,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasFirstRecharge() && WireSession.firstRecharge === null, "first recharge stays unsynced before the city role");
       assert(!WireSession.hasReiki() && WireSession.reiki === null, "reiki stays unsynced before the city role");
       assert(!WireSession.hasIslands() && WireSession.islands === null, "floating islands stays unsynced before the city role");
+      assert(!WireSession.hasTotems() && WireSession.totems === null, "totems stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -5735,6 +5892,31 @@ async function checkWs(): Promise<void> {
         "s2c 70001 writes the reiki list and leaves the 20012 record and the 73001 time"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "70001 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.totemsInfoList, totemsBody));
+      assert(
+        WireSession.hasTotems() &&
+          WireSession.totems !== null &&
+          WireSession.totems.rows.length === 2 &&
+          WireSession.totems.rows[0].tId === 11 &&
+          WireSession.totems.rows[0].sysId === 22 &&
+          WireSession.totems.rows[0].heroId === 33 &&
+          WireSession.totems.rows[0].level === 4 &&
+          WireSession.totems.rows[0].quality === 5 &&
+          WireSession.totems.rows[1].tId === null &&
+          WireSession.totems.rows[1].sysId === 0 &&
+          WireSession.totems.rows[1].quality === null &&
+          formatWireTotemsLine(WireSession.totems.rows[0]) === "t_id=11 / sys_id=22 / hero_id=33 / level=4 / quality=5" &&
+          formatWireTotemsLine(WireSession.totems.rows[1]) === "t_id=无 / sys_id=0 / hero_id=无 / level=无 / quality=无 / 字段6=4" &&
+          formatWireTotemsHead(WireSession.totems) === "2 条 / 字段7=9" &&
+          WireSession.reiki !== null &&
+          WireSession.reiki.rows.length === 2 &&
+          WireSession.islands !== null &&
+          WireSession.islands.nextTime === 1792464848 &&
+          WireSession.pet !== null &&
+          WireSession.pet.rows.length === 2,
+        "s2c 74300 writes the totems list and leaves the 70001 list, the 73001 time and the 74100 rows"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "74300 stays off the wallet");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
       assert(Session.wireSync.level && Session.role?.level === 1 && formatNameLine() === "见习冒险家 Lv1", "flush writes field 6");
@@ -5979,7 +6161,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 19, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 20, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -6057,6 +6239,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 73001 after 70001"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 19] as ArrayBuffer)) === "040000003c220100",
+        "pullIdle sends empty c2s 74300 after 73001"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -6075,6 +6261,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 20012") &&
           sawLog(lines, "发送 c2s 70001") &&
           sawLog(lines, "发送 c2s 73001") &&
+          sawLog(lines, "发送 c2s 74300") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -6087,6 +6274,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "040000002c4e0000") &&
           sawLog(lines, "0400000071110100") &&
           sawLog(lines, "04000000291d0100") &&
+          sawLog(lines, "040000003c220100") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -6135,7 +6323,11 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 20011") === false &&
           sawLog(lines, "发送 c2s 73002") === false &&
           sawLog(lines, "发送 c2s 73003") === false &&
-          sawLog(lines, "发送 c2s 73004") === false,
+          sawLog(lines, "发送 c2s 73004") === false &&
+          sawLog(lines, "发送 c2s 74301") === false &&
+          sawLog(lines, "发送 c2s 74302") === false &&
+          sawLog(lines, "发送 c2s 74303") === false &&
+          sawLog(lines, "发送 c2s 74304") === false,
         "mail hero buy gold achievement arena seven day goal wish summon prophet jewel illustrat pet and world pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
@@ -6428,6 +6620,24 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.73004") &&
           sawLog(lines, "未发送 wire.20011"),
         "floating islands lazy refresh challenge buy and 20011 are not encoded"
+      );
+      roleNet.send(WIRE_TOTEMS_CMD);
+      const totemsSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(totemsSent as ArrayBuffer)) === "040000003c220100", "wire.74300 frame");
+      const sentBeforeTotemsOther = roleSockets[0].sent.length;
+      roleNet.send("wire.74301");
+      roleNet.send("wire.74302");
+      roleNet.send("wire.74303");
+      roleNet.send("wire.74304");
+      roleNet.send("wire.20011");
+      assert(roleSockets[0].sent.length === sentBeforeTotemsOther, "74301 74302 74303 74304 and 20011 stay off the totems wire");
+      assert(
+        sawLog(lines, "未发送 wire.74301") &&
+          sawLog(lines, "未发送 wire.74302") &&
+          sawLog(lines, "未发送 wire.74303") &&
+          sawLog(lines, "未发送 wire.74304") &&
+          sawLog(lines, "未发送 wire.20011"),
+        "totems upgrade equip reset and the 74304 push are not encoded"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -7044,6 +7254,82 @@ async function checkWs(): Promise<void> {
           WireSession.reiki !== null &&
           WireSession.reiki.marks[0].field === 5,
         "non-empty 73001 without next_time and stage stays synced and leaves 70001"
+      );
+      const goldBeforeBadTotems = Session.gold;
+      const diamondBeforeBadTotems = Session.diamond;
+      roleSockets[0].push(encodeFrame(74301, totemsPush));
+      roleSockets[0].push(encodeFrame(74302, totemsPush));
+      roleSockets[0].push(encodeFrame(74303, totemsPush));
+      roleSockets[0].push(encodeFrame(74304, totemsPush));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 3)));
+      assert(
+        WireSession.hasTotems() &&
+          WireSession.totems !== null &&
+          WireSession.totems.rows.length === 2 &&
+          WireSession.totems.rows[0].tId === 11 &&
+          WireSession.totems.rows[0].quality === 5 &&
+          WireSession.islands !== null &&
+          WireSession.islands.marks.length === 1,
+        "74301 74302 74303 74304 and 20011 do not replace the 74300 list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.totemsInfoList, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasTotems() &&
+          WireSession.totems !== null &&
+          WireSession.totems.rows.length === 2 &&
+          WireSession.totems.rows[0].tId === 11 &&
+          WireSession.totems.rows[0].quality === 5 &&
+          WireSession.islands !== null &&
+          WireSession.islands.marks[0].field === 1 &&
+          sawWire("74300 解不开"),
+        "bad 74300 keeps the totems list and the 73001 time"
+      );
+      assert(Session.gold === goldBeforeBadTotems && Session.diamond === diamondBeforeBadTotems, "bad 74300 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.totemsInfoList));
+      assert(
+        WireSession.hasTotems() &&
+          WireSession.totems !== null &&
+          WireSession.totems.rows.length === 0 &&
+          formatWireTotemsHead(WireSession.totems) === "空表" &&
+          WireSession.islands !== null &&
+          WireSession.islands.marks[0].field === 1,
+        "empty 74300 body clears the list without writing zero and stays synced"
+      );
+      assert(
+        Session.gold === goldBeforeBadTotems && Session.diamond === diamondBeforeBadTotems,
+        "empty 74300 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.totemsInfoList, totemsMissing));
+      assert(
+        WireSession.hasTotems() &&
+          WireSession.totems !== null &&
+          WireSession.totems.rows.length === 1 &&
+          WireSession.totems.rows[0].tId === 8 &&
+          WireSession.totems.rows[0].sysId === null &&
+          WireSession.totems.rows[0].heroId === null &&
+          WireSession.totems.rows[0].level === null &&
+          WireSession.totems.rows[0].quality === null &&
+          WireSession.islands !== null &&
+          WireSession.islands.marks[0].field === 1,
+        "74300 without sys_id hero_id level and quality stays blank and leaves 73001"
+      );
+      assert(
+        Session.gold === goldBeforeBadTotems && Session.diamond === diamondBeforeBadTotems,
+        "missing 74300 field does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.totemsInfoList, totemsOuterOnly));
+      assert(
+        WireSession.hasTotems() &&
+          WireSession.totems !== null &&
+          WireSession.totems.rows.length === 0 &&
+          WireSession.totems.marks.length === 1 &&
+          WireSession.totems.marks[0].field === 7 &&
+          WireSession.islands !== null &&
+          WireSession.islands.marks[0].field === 1 &&
+          WireSession.pet !== null &&
+          WireSession.pet.rows.length === 0 &&
+          WireSession.pet.marks.length === 1,
+        "non-empty 74300 without list stays synced and leaves 73001 and 74100"
       );
       if (roleNet) roleNet.close();
       WireSession.close();

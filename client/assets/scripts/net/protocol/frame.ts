@@ -195,6 +195,16 @@ export const WireCmd = {
    * 不夹在 2001 和 3007 中间。不是角色资料 2001。不是灵器数据 70001。
    */
   floatingIslandsTime: 73001,
+  /**
+   * c2s 空体。进主城、空 c2s 73001 之后发，只发一次。
+   * 整帧 `04 00 00 00 3c 22 01 00`。74300 = 0x1223C，小端 3c 22 01 00。
+   * GReqTotemsInfoList / GResTotemsInfoList。list 是字段 1，repeated PSTotemsInfo。
+   * t_id、sys_id、hero_id、level、quality 按声明顺序是 1、2、3、4、5。
+   * 不发 74301 升级/升阶、74302 装备/卸/换、74303 重置。
+   * 74304 仅 s2c 推送，勿发、勿当拉包请求。本号无写库。不做 20011。
+   * 不夹在 2001 和 3007 中间。与 74100 宠物同城养成段。不是浮空岛时间 73001。不是宠物信息 74100。
+   */
+  totemsInfoList: 74300,
 } as const;
 
 /**
