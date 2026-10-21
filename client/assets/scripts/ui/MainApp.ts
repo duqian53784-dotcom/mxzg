@@ -48,6 +48,7 @@ import { buildWireReikiPage, WireReikiPage } from "./WireReikiPage";
 import { buildWireIslandsPage, WireIslandsPage } from "./WireFloatingIslandsPage";
 import { buildWireTotemsPage, WireTotemsPage } from "./WireTotemsPage";
 import { buildWireAstrolabePage, WireAstrolabePage } from "./WireAstrolabePage";
+import { buildWireTweakCubePage, WireTweakCubePage } from "./WireTweakCubePage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -57,6 +58,7 @@ import { WIRE_REIKI_UNSYNCED_TOAST } from "../net/protocol/wireReiki";
 import { WIRE_ISLANDS_UNSYNCED_TOAST } from "../net/protocol/wireFloatingIslands";
 import { WIRE_TOTEMS_UNSYNCED_TOAST } from "../net/protocol/wireTotems";
 import { WIRE_ASTROLABE_UNSYNCED_TOAST } from "../net/protocol/wireAstrolabe";
+import { WIRE_CUBE_UNSYNCED_TOAST } from "../net/protocol/wireTweakCube";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -133,6 +135,7 @@ const REIKI_FILL = new Color(36, 120, 112, 255);
 const ISLANDS_FILL = new Color(48, 112, 156, 255);
 const TOTEMS_FILL = new Color(132, 84, 56, 255);
 const ASTROLABE_FILL = new Color(88, 72, 148, 255);
+const CUBE_FILL = new Color(36, 108, 128, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -156,6 +159,7 @@ export class MainApp extends Component {
   private islands: WireIslandsPage | null = null;
   private totems: WireTotemsPage | null = null;
   private astrolabe: WireAstrolabePage | null = null;
+  private tweakCube: WireTweakCubePage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -225,6 +229,8 @@ export class MainApp extends Component {
     this.totems = null;
     this.astrolabe?.dispose();
     this.astrolabe = null;
+    this.tweakCube?.dispose();
+    this.tweakCube = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -338,7 +344,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -393,6 +399,7 @@ export class MainApp extends Component {
     if (id === "islands") return this.mountIslands();
     if (id === "totems") return this.mountTotems();
     if (id === "astrolabe") return this.mountAstrolabe();
+    if (id === "tweakCube") return this.mountTweakCube();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -483,6 +490,7 @@ export class MainApp extends Component {
     place(createButton("浮空岛时间", () => this.openIslands(), 180, 32, ISLANDS_FILL, 14), page, 200, -290);
     place(createButton("图腾信息", () => this.openTotems(), 160, 32, TOTEMS_FILL, 14), page, -200, -290);
     place(createButton("星盘数据", () => this.openAstrolabe(), 160, 32, ASTROLABE_FILL, 14), page, 0, -244);
+    place(createButton("魔方数据", () => this.openTweakCube(), 160, 32, CUBE_FILL, 14), page, 200, -244);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -652,7 +660,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。英雄图鉴收到 4013 时另走只读页，不发 4014。宠物信息收到 74100 时另走只读页，不发 74101、74102、74103。世界等级收到 51001 时另走只读页，不做 20101。基金列表收到 20001 时另走只读页，不发 20018，不发 20004、20010，不做 3007。超值首充收到 20012 时另走只读页，不发 20013，不做 13260。灵器数据收到 70001 时另走只读页，不发 70002、70003、70004、70005、70006，70007、70008 不当拉包请求，不做 20011。浮空岛时间收到 73001 时另走只读页，不发 73002、73003、73004，不做 20011。图腾信息收到 74300 时另走只读页，不发 74301、74302、74303。74304 是推送，勿发、勿当拉包。不做 20011。星盘数据收到 68001 时另走只读页，不发 68002、68003、68004、68006。68005 是更新星数常量，勿当拉包。不做 20011。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
+  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。英雄图鉴收到 4013 时另走只读页，不发 4014。宠物信息收到 74100 时另走只读页，不发 74101、74102、74103。世界等级收到 51001 时另走只读页，不做 20101。基金列表收到 20001 时另走只读页，不发 20018，不发 20004、20010，不做 3007。超值首充收到 20012 时另走只读页，不发 20013，不做 13260。灵器数据收到 70001 时另走只读页，不发 70002、70003、70004、70005、70006，70007、70008 不当拉包请求，不做 20011。浮空岛时间收到 73001 时另走只读页，不发 73002、73003、73004，不做 20011。图腾信息收到 74300 时另走只读页，不发 74301、74302、74303。74304 是推送，勿发、勿当拉包。不做 20011。星盘数据收到 68001 时另走只读页，不发 68002、68003、68004、68006。68005 是更新星数常量，勿当拉包。不做 20011。魔方数据收到 75501 时另走只读页，不发 75502、75503、75504、75505。75506 是等级推送，勿当拉包。不做 34001。不做 20011。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。 */
   private blockWirePage(id: string): boolean {
     if (id === "achieve") return this.blockWireAchievement();
     if (id === "buygold") return this.blockWireBuyGold();
@@ -672,6 +680,7 @@ export class MainApp extends Component {
     if (id === "islands") return this.blockWireIslands();
     if (id === "totems") return this.blockWireTotems();
     if (id === "astrolabe") return this.blockWireAstrolabe();
+    if (id === "tweakCube") return this.blockWireTweakCube();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -820,6 +829,14 @@ export class MainApp extends Component {
     if (Session.source === "wire" && WireSession.hasAstrolabe()) return false;
     GameLog.shared.info("MainApp", "wire astrolabe unsynced");
     this.shell?.showToast(WIRE_ASTROLABE_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 75501 就停在主城。空包体也算同步。不发 75502、75503、75504、75505。75506 不当拉包。不做 34001。不做 20011。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireTweakCube(): boolean {
+    if (Session.source === "wire" && WireSession.hasTweakCube()) return false;
+    GameLog.shared.info("MainApp", "wire tweak cube unsynced");
+    this.shell?.showToast(WIRE_CUBE_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -1275,6 +1292,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.astrolabe = page;
+    return page.node;
+  }
+
+  /** 真服魔方数据。未同步 Toast。已同步压入只读页，不添加，不卸下，不开格子，不清 cd。不发 75502、75503、75504、75505。75506 勿当拉包。不做 34001。不做 20011。 */
+  private openTweakCube(): void {
+    GameLog.shared.info("MainApp", "click tweak cube");
+    if (this.blockWirePage("tweakCube")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("tweakCube");
+    this.refreshChrome();
+  }
+
+  private mountTweakCube(): Node {
+    this.tweakCube?.dispose();
+    const page = buildWireTweakCubePage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.tweakCube = page;
     return page.node;
   }
 
@@ -2017,6 +2057,10 @@ export class MainApp extends Component {
     if (id === "astrolabe") {
       this.astrolabe?.dispose();
       this.astrolabe = null;
+    }
+    if (id === "tweakCube") {
+      this.tweakCube?.dispose();
+      this.tweakCube = null;
     }
     if (id === "bag") {
       this.bag?.dispose();

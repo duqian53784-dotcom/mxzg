@@ -217,6 +217,18 @@ export const WireCmd = {
    * 不夹在 2001 和 3007 中间。不是图腾信息 74300。不是浮空岛时间 73001。
    */
   astrolabeData: 68001,
+  /**
+   * c2s 空体。进主城、空 c2s 68001 之后发，只发一次。无 page。
+   * 整帧 `04 00 00 00 ed 26 01 00`。75501 = 0x126ED，小端 ed 26 01 00。
+   * GReqTweakCube / GResTweakCube。handler getData 不读 req。
+   * rank_hero 是字段 1，repeated int64。open_count 是字段 2。
+   * trench 是字段 3，repeated PSTrench 的 index、hero_id、last_change_time。
+   * 不发 75502 添加、75503 卸下、75504 开格子、75505 清 cd。
+   * 75506 是等级推送，勿发、勿当拉包请求。不做 34001。不做 20011。
+   * 服侧轻懒建：首次 get 可能 doCreate + tweakCubeDao.add，建免费槽并按战力塞供奉。无扣费，无领奖。管理员认定可接受，同星盘。
+   * 不夹在 2001 和 3007 中间。不是星盘数据 68001。不是图腾信息 74300。
+   */
+  tweakCubeData: 75501,
 } as const;
 
 /**

@@ -751,6 +751,19 @@ import {
   WIRE_ASTROLABE_UNSYNCED_TOAST,
   wireAstrolabeNote,
 } from "../assets/scripts/net/protocol/wireAstrolabe";
+import {
+  decodeWireTweakCube,
+  formatWireTweakCubeHead,
+  formatWireTweakCubeLine,
+  WIRE_CUBE_CMD,
+  WIRE_CUBE_EMPTY,
+  WIRE_CUBE_FIELD_NOTE,
+  WIRE_CUBE_READONLY_NOTE,
+  WIRE_CUBE_READONLY_TITLE,
+  WIRE_CUBE_SIDE_EFFECT,
+  WIRE_CUBE_UNSYNCED_TOAST,
+  wireTweakCubeNote,
+} from "../assets/scripts/net/protocol/wireTweakCube";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1473,6 +1486,8 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("reiki") === "city", "reiki equip stays on the city tab");
   assert(rootTabFor("islands") === "city", "floating islands time stays on the city tab");
   assert(rootTabFor("totems") === "city", "totems info stays on the city tab");
+  assert(rootTabFor("astrolabe") === "city", "astrolabe stays on the city tab");
+  assert(rootTabFor("tweakCube") === "city", "tweak cube stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -4056,6 +4071,18 @@ async function checkWs(): Promise<void> {
   const astroWide = fieldVarint(4, 1099511627776);
   const astroOuterOnly = fieldVarint(8, 1);
   const astroPush = fieldVarint(1, 99);
+  const cubeTrenchA = concatBytes(concatBytes(fieldVarint(1, 1), fieldVarint(2, 100)), fieldVarint(3, 1792464848));
+  const cubeTrenchB = concatBytes(fieldVarint(2, 0), fieldVarint(6, 4));
+  const cubeBody = concatBytes(
+    concatBytes(concatBytes(fieldVarint(1, 11), fieldBytes(1, new Uint8Array([22]))), fieldVarint(2, 3)),
+    concatBytes(concatBytes(fieldBytes(3, cubeTrenchA), fieldBytes(3, cubeTrenchB)), fieldVarint(8, 9))
+  );
+  const cubeMissing = fieldVarint(1, 8);
+  const cubeZero = fieldVarint(2, 0);
+  const cubeRankZero = fieldVarint(1, 0);
+  const cubeWide = fieldBytes(3, fieldVarint(3, 1099511627776));
+  const cubeOuterOnly = fieldVarint(8, 1);
+  const cubePush = fieldVarint(2, 99);
   const loggedWish = decodeWireWish(wishBody);
   const wishEmptyOuter = decodeWireWish(wishOuterOnly);
   assert(
@@ -5314,6 +5341,165 @@ async function checkWs(): Promise<void> {
         "maxStar=无 / active=空记录 / activeElem=无 / activeAstrolabe=无 / 字段8=1",
     "non-empty 68001 without maxStar active activeElem and activeAstrolabe stays synced and does not invent them"
   );
+  const loggedCube = decodeWireTweakCube(cubeBody);
+  assert(
+    WireCmd.tweakCubeData === 75501 && WireCmd.astrolabeData === 68001 && WireCmd.totemsInfoList === 74300,
+    "online 75501 stays off 68001 and 74300"
+  );
+  assert(
+    WireCmd.tweakCubeData !== WireCmd.roleProfile &&
+      WireCmd.tweakCubeData !== WireCmd.worldLevel &&
+      WireCmd.tweakCubeData !== WireCmd.floatingIslandsTime,
+    "75501 stays off 2001, 51001 and 73001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.tweakCubeData)) === "04000000ed260100", "empty c2s 75501");
+  assert(bytesToHex(encodeFrame(75502)) === "04000000ee260100", "75502 add frame stays distinct");
+  assert(bytesToHex(encodeFrame(75503)) === "04000000ef260100", "75503 unequip frame stays distinct");
+  assert(bytesToHex(encodeFrame(75504)) === "04000000f0260100", "75504 open grid frame stays distinct");
+  assert(bytesToHex(encodeFrame(75505)) === "04000000f1260100", "75505 clear cd frame stays distinct");
+  assert(bytesToHex(encodeFrame(75506)) === "04000000f2260100", "75506 level push frame stays distinct");
+  assert(bytesToHex(encodeFrame(34001)) === "04000000d1840000", "34001 stays off the 75501 frame");
+  assert(bytesToHex(encodeFrame(20011)) === "040000002b4e0000", "20011 stays off the 75501 frame");
+  assert(bytesToHex(encodeFrame(75502)) !== "04000000ed260100", "75502 is not the 75501 frame");
+  assert(bytesToHex(encodeFrame(75503)) !== "04000000ed260100", "75503 is not the 75501 frame");
+  assert(bytesToHex(encodeFrame(75504)) !== "04000000ed260100", "75504 is not the 75501 frame");
+  assert(bytesToHex(encodeFrame(75505)) !== "04000000ed260100", "75505 is not the 75501 frame");
+  assert(bytesToHex(encodeFrame(75506)) !== "04000000ed260100", "75506 is not the 75501 frame");
+  assert(bytesToHex(encodeFrame(34001)) !== "04000000ed260100", "34001 is not the 75501 frame");
+  assert(bytesToHex(encodeFrame(20011)) !== "04000000ed260100", "20011 is not the 75501 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.astrolabeData)) !== "04000000ed260100", "68001 is not the 75501 frame");
+  assert(WIRE_CUBE_READONLY_TITLE === "魔方数据（真服只读）", "readonly tweak cube title");
+  assert(WIRE_CUBE_UNSYNCED_TOAST === "真服未同步", "unsynced tweak cube toast");
+  assert(WIRE_CUBE_EMPTY === "空槽", "empty tweak cube trench label");
+  assert(
+    WIRE_CUBE_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("doCreate") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("tweakCubeDao.add") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("免费槽") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("战力") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("可接受") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("同星盘") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("68001") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("75502") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("75503") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("75504") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("75505") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("75506") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("勿当拉包") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("34001") >= 0 &&
+      WIRE_CUBE_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_CUBE_READONLY_NOTE.indexOf("无添加") >= 0 &&
+      WIRE_CUBE_READONLY_NOTE.indexOf("卸下") >= 0 &&
+      WIRE_CUBE_READONLY_NOTE.indexOf("开格子") >= 0 &&
+      WIRE_CUBE_READONLY_NOTE.indexOf("清 cd") >= 0 &&
+      WIRE_CUBE_READONLY_NOTE.indexOf("勿当拉包") >= 0 &&
+      WIRE_CUBE_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_CUBE_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_CUBE_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_CUBE_READONLY_NOTE.indexOf("无 page") >= 0 &&
+      WIRE_CUBE_FIELD_NOTE.indexOf("rank_hero") >= 0 &&
+      WIRE_CUBE_FIELD_NOTE.indexOf("open_count") >= 0 &&
+      WIRE_CUBE_FIELD_NOTE.indexOf("index") >= 0 &&
+      WIRE_CUBE_FIELD_NOTE.indexOf("hero_id") >= 0 &&
+      WIRE_CUBE_FIELD_NOTE.indexOf("last_change_time") >= 0 &&
+      WIRE_CUBE_FIELD_NOTE.indexOf("不写成 0") >= 0,
+    "tweak cube page names fields and refuses add unequip open and clear"
+  );
+  assert(
+    decodeWireTweakCube(new Uint8Array(0)) !== null &&
+      decodeWireTweakCube(new Uint8Array(0))?.rankHero.length === 0 &&
+      decodeWireTweakCube(new Uint8Array(0))?.openCount === null &&
+      decodeWireTweakCube(new Uint8Array(0))?.trenches.length === 0 &&
+      formatWireTweakCubeHead(decodeWireTweakCube(new Uint8Array(0)) || { rankHero: [], openCount: null, trenches: [], marks: [] }) ===
+        "rank_hero=无 / open_count=无 / trench=空槽",
+    "empty 75501 body is synced and does not invent zero"
+  );
+  assert(decodeWireTweakCube(new Uint8Array([0x80])) === null, "bad 75501 ignored");
+  const cubeMissingSnap = decodeWireTweakCube(cubeMissing);
+  assert(
+    cubeMissingSnap !== null &&
+      cubeMissingSnap.rankHero.length === 1 &&
+      cubeMissingSnap.rankHero[0] === 8 &&
+      cubeMissingSnap.openCount === null &&
+      cubeMissingSnap.trenches.length === 0 &&
+      formatWireTweakCubeHead(cubeMissingSnap) === "rank_hero=8 / open_count=无 / trench=空槽",
+    "missing 75501 open_count and trench stay blank"
+  );
+  assert(
+    decodeWireTweakCube(cubeZero) !== null &&
+      decodeWireTweakCube(cubeZero)?.openCount === 0 &&
+      decodeWireTweakCube(cubeZero)?.rankHero.length === 0 &&
+      decodeWireTweakCube(cubeZero)?.trenches.length === 0 &&
+      formatWireTweakCubeHead(decodeWireTweakCube(cubeZero) || { rankHero: [], openCount: null, trenches: [], marks: [] }) ===
+        "rank_hero=无 / open_count=0 / trench=空槽",
+    "present 75501 open_count zero stays zero and does not fill the other fields"
+  );
+  assert(
+    decodeWireTweakCube(cubeRankZero) !== null &&
+      decodeWireTweakCube(cubeRankZero)?.rankHero.length === 1 &&
+      decodeWireTweakCube(cubeRankZero)?.rankHero[0] === 0 &&
+      decodeWireTweakCube(cubeRankZero)?.openCount === null &&
+      formatWireTweakCubeHead(decodeWireTweakCube(cubeRankZero) || { rankHero: [], openCount: null, trenches: [], marks: [] }) ===
+        "rank_hero=0 / open_count=无 / trench=空槽",
+    "present 75501 rank_hero zero stays zero and does not invent open_count"
+  );
+  const cubeWideSnap = decodeWireTweakCube(cubeWide);
+  assert(
+    cubeWideSnap !== null &&
+      cubeWideSnap.rankHero.length === 0 &&
+      cubeWideSnap.openCount === null &&
+      cubeWideSnap.trenches.length === 1 &&
+      cubeWideSnap.trenches[0].index === null &&
+      cubeWideSnap.trenches[0].heroId === null &&
+      cubeWideSnap.trenches[0].lastChangeTime === 1099511627776,
+    "75501 last_change_time keeps the wide int64 and does not invent open_count"
+  );
+  assert(
+    loggedCube !== null &&
+      loggedCube.rankHero.length === 2 &&
+      loggedCube.rankHero[0] === 11 &&
+      loggedCube.rankHero[1] === 22 &&
+      loggedCube.openCount === 3 &&
+      loggedCube.trenches.length === 2 &&
+      loggedCube.trenches[0].index === 1 &&
+      loggedCube.trenches[0].heroId === 100 &&
+      loggedCube.trenches[0].lastChangeTime === 1792464848 &&
+      loggedCube.trenches[1].index === null &&
+      loggedCube.trenches[1].heroId === 0 &&
+      loggedCube.trenches[1].lastChangeTime === null &&
+      loggedCube.marks.length === 1 &&
+      loggedCube.marks[0].field === 8 &&
+      formatWireTweakCubeHead(loggedCube) === "rank_hero=11,22 / open_count=3 / trench=2 条 / 字段8=9" &&
+      formatWireTweakCubeLine(loggedCube.trenches[0]) === "index=1 / hero_id=100 / last_change_time=1792464848" &&
+      formatWireTweakCubeLine(loggedCube.trenches[1]) === "index=无 / hero_id=0 / last_change_time=无 / 字段6=4" &&
+      wireTweakCubeNote(loggedCube).indexOf(WIRE_CUBE_SIDE_EFFECT) >= 0 &&
+      wireTweakCubeNote(loggedCube).indexOf("不写金币") >= 0 &&
+      wireTweakCubeNote(loggedCube).indexOf("不写钻石") >= 0,
+    "75501 sample keeps rank_hero open_count and trench and does not fill missing numbers with 0"
+  );
+  const cubeSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.tweakCubeData, cubeBody), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    cubeSticky.frames.length === 2 &&
+      cubeSticky.frames[0].cmdId === 75501 &&
+      cubeSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireTweakCube(cubeSticky.frames[0].body)?.openCount === 3 &&
+      decodeWireTweakCube(cubeSticky.frames[0].body)?.trenches.length === 2,
+    "sticky 75501 frame stops at its length prefix"
+  );
+  assert(decodeWireTweakCube(fieldBytes(3, new Uint8Array([0x80]))) === null, "75501 trench blob that will not decode is ignored");
+  assert(decodeWireTweakCube(fieldBytes(1, new Uint8Array([0x80]))) === null, "75501 packed rank_hero that will not decode is ignored");
+  assert(
+    decodeWireTweakCube(cubeOuterOnly) !== null &&
+      decodeWireTweakCube(cubeOuterOnly)?.rankHero.length === 0 &&
+      decodeWireTweakCube(cubeOuterOnly)?.openCount === null &&
+      decodeWireTweakCube(cubeOuterOnly)?.trenches.length === 0 &&
+      formatWireTweakCubeHead(decodeWireTweakCube(cubeOuterOnly) || { rankHero: [], openCount: null, trenches: [], marks: [] }) ===
+        "rank_hero=无 / open_count=无 / trench=空槽 / 字段8=1",
+    "non-empty 75501 without rank_hero open_count and trench stays synced and does not invent them"
+  );
   assert(formatWireMainline(null, null) === "主线 · 未同步", "chapter label before 3007");
   assert(formatWireMainline(null, 0) === "主线 · 最高 0", "max_idx 0 is a real zero");
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
@@ -5801,6 +5987,7 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.hasIslands() && WireSession.islands === null, "floating islands stays unsynced before the city role");
       assert(!WireSession.hasTotems() && WireSession.totems === null, "totems stays unsynced before the city role");
       assert(!WireSession.hasAstrolabe() && WireSession.astrolabe === null, "astrolabe stays unsynced before the city role");
+      assert(!WireSession.hasTweakCube() && WireSession.tweakCube === null, "tweak cube stays unsynced before the city role");
       assert(sawWire("21013 只收"), "21013 before 21010 does not open the goal page");
       assert(WireSession.mainlineLabel() === "主线 · 未同步", "label stays unsynced before the city role");
       assert(Session.stageId === 1, "3007 does not rewrite the mock stage id");
@@ -6121,6 +6308,30 @@ async function checkWs(): Promise<void> {
         "s2c 68001 writes maxStar active activeElem and activeAstrolabe and leaves the 74300 list and the 73001 time"
       );
       assert(Session.gold === 0 && Session.diamond === 0, "68001 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.tweakCubeData, cubeBody));
+      assert(
+        WireSession.hasTweakCube() &&
+          WireSession.tweakCube !== null &&
+          WireSession.tweakCube.rankHero.length === 2 &&
+          WireSession.tweakCube.rankHero[0] === 11 &&
+          WireSession.tweakCube.rankHero[1] === 22 &&
+          WireSession.tweakCube.openCount === 3 &&
+          WireSession.tweakCube.trenches.length === 2 &&
+          WireSession.tweakCube.trenches[0].index === 1 &&
+          WireSession.tweakCube.trenches[0].heroId === 100 &&
+          WireSession.tweakCube.trenches[0].lastChangeTime === 1792464848 &&
+          WireSession.tweakCube.trenches[1].index === null &&
+          WireSession.tweakCube.trenches[1].heroId === 0 &&
+          formatWireTweakCubeLine(WireSession.tweakCube.trenches[0]) === "index=1 / hero_id=100 / last_change_time=1792464848" &&
+          formatWireTweakCubeLine(WireSession.tweakCube.trenches[1]) === "index=无 / hero_id=0 / last_change_time=无 / 字段6=4" &&
+          formatWireTweakCubeHead(WireSession.tweakCube) === "rank_hero=11,22 / open_count=3 / trench=2 条 / 字段8=9" &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.maxStar === 12 &&
+          WireSession.totems !== null &&
+          WireSession.totems.rows.length === 2,
+        "s2c 75501 writes rank_hero open_count and trench and leaves the 68001 record and the 74300 list"
+      );
+      assert(Session.gold === 0 && Session.diamond === 0, "75501 stays off the wallet");
       assert(Session.stageId === 1, "3007 does not write Session.stageId");
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
       assert(Session.wireSync.level && Session.role?.level === 1 && formatNameLine() === "见习冒险家 Lv1", "flush writes field 6");
@@ -6365,7 +6576,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 21, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 22, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -6451,6 +6662,10 @@ async function checkWs(): Promise<void> {
         "pullIdle sends empty c2s 68001 after 74300"
       );
       assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 21] as ArrayBuffer)) === "04000000ed260100",
+        "pullIdle sends empty c2s 75501 after 68001"
+      );
+      assert(
         sawLog(lines, "发送 c2s 15000") &&
           sawLog(lines, "发送 c2s 4001") &&
           sawLog(lines, "发送 c2s 17000") &&
@@ -6471,6 +6686,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 73001") &&
           sawLog(lines, "发送 c2s 74300") &&
           sawLog(lines, "发送 c2s 68001") &&
+          sawLog(lines, "发送 c2s 75501") &&
           sawLog(lines, "0400000012520000") &&
           sawLog(lines, "0400000079690000") &&
           sawLog(lines, "04000000a40f0000") &&
@@ -6485,6 +6701,7 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000291d0100") &&
           sawLog(lines, "040000003c220100") &&
           sawLog(lines, "04000000a1090100") &&
+          sawLog(lines, "04000000ed260100") &&
           sawLog(lines, "发送 c2s 20101") === false &&
           sawLog(lines, "发送 c2s 20018") === false &&
           sawLog(lines, "发送 c2s 20004") === false &&
@@ -6542,7 +6759,13 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "发送 c2s 68003") === false &&
           sawLog(lines, "发送 c2s 68004") === false &&
           sawLog(lines, "发送 c2s 68005") === false &&
-          sawLog(lines, "发送 c2s 68006") === false,
+          sawLog(lines, "发送 c2s 68006") === false &&
+          sawLog(lines, "发送 c2s 75502") === false &&
+          sawLog(lines, "发送 c2s 75503") === false &&
+          sawLog(lines, "发送 c2s 75504") === false &&
+          sawLog(lines, "发送 c2s 75505") === false &&
+          sawLog(lines, "发送 c2s 75506") === false &&
+          sawLog(lines, "发送 c2s 34001") === false,
         "mail hero buy gold achievement arena seven day goal wish summon prophet jewel illustrat pet and world pulls are logged"
       );
       roleNet.send(WIRE_MAIL_CMD);
@@ -6873,6 +7096,28 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.68006") &&
           sawLog(lines, "未发送 wire.20011"),
         "astrolabe activate light reset and the 68005 star constant are not encoded"
+      );
+      roleNet.send(WIRE_CUBE_CMD);
+      const tweakCubeSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(tweakCubeSent as ArrayBuffer)) === "04000000ed260100", "wire.75501 frame");
+      const sentBeforeCubeOther = roleSockets[0].sent.length;
+      roleNet.send("wire.75502");
+      roleNet.send("wire.75503");
+      roleNet.send("wire.75504");
+      roleNet.send("wire.75505");
+      roleNet.send("wire.75506");
+      roleNet.send("wire.34001");
+      roleNet.send("wire.20011");
+      assert(roleSockets[0].sent.length === sentBeforeCubeOther, "75502 75503 75504 75505 75506 34001 and 20011 stay off the tweak cube wire");
+      assert(
+        sawLog(lines, "未发送 wire.75502") &&
+          sawLog(lines, "未发送 wire.75503") &&
+          sawLog(lines, "未发送 wire.75504") &&
+          sawLog(lines, "未发送 wire.75505") &&
+          sawLog(lines, "未发送 wire.75506") &&
+          sawLog(lines, "未发送 wire.34001") &&
+          sawLog(lines, "未发送 wire.20011"),
+        "tweak cube add unequip open clear and the 75506 level push are not encoded"
       );
       const goldBeforeBadPvp = Session.gold;
       roleSockets[0].push(encodeFrame(WireCmd.pvpData, new Uint8Array([0x80])));
@@ -7644,6 +7889,85 @@ async function checkWs(): Promise<void> {
           WireSession.islands !== null &&
           WireSession.islands.marks[0].field === 1,
         "non-empty 68001 without maxStar active activeElem and activeAstrolabe stays synced and leaves 74300 and 73001"
+      );
+      const goldBeforeBadCube = Session.gold;
+      const diamondBeforeBadCube = Session.diamond;
+      roleSockets[0].push(encodeFrame(75502, cubePush));
+      roleSockets[0].push(encodeFrame(75503, cubePush));
+      roleSockets[0].push(encodeFrame(75504, cubePush));
+      roleSockets[0].push(encodeFrame(75505, cubePush));
+      roleSockets[0].push(encodeFrame(75506, cubePush));
+      roleSockets[0].push(encodeFrame(34001, fieldVarint(1, 3)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 3)));
+      assert(
+        WireSession.hasTweakCube() &&
+          WireSession.tweakCube !== null &&
+          WireSession.tweakCube.openCount === 3 &&
+          WireSession.tweakCube.trenches.length === 2 &&
+          WireSession.tweakCube.rankHero[0] === 11 &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.maxStar === null &&
+          WireSession.astrolabe.marks.length === 1,
+        "75502 75503 75504 75505 75506 34001 and 20011 do not replace the 75501 record"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.tweakCubeData, new Uint8Array([0x80])));
+      assert(
+        WireSession.hasTweakCube() &&
+          WireSession.tweakCube !== null &&
+          WireSession.tweakCube.openCount === 3 &&
+          WireSession.tweakCube.trenches[0].heroId === 100 &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.marks[0].field === 8 &&
+          sawWire("75501 解不开"),
+        "bad 75501 keeps the tweak cube record and the 68001 record"
+      );
+      assert(Session.gold === goldBeforeBadCube && Session.diamond === diamondBeforeBadCube, "bad 75501 stays off the wallet");
+      roleSockets[0].push(encodeFrame(WireCmd.tweakCubeData));
+      assert(
+        WireSession.hasTweakCube() &&
+          WireSession.tweakCube !== null &&
+          WireSession.tweakCube.rankHero.length === 0 &&
+          WireSession.tweakCube.openCount === null &&
+          WireSession.tweakCube.trenches.length === 0 &&
+          formatWireTweakCubeHead(WireSession.tweakCube) === "rank_hero=无 / open_count=无 / trench=空槽" &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.marks[0].field === 8,
+        "empty 75501 body clears rank_hero open_count and trench without writing zero and stays synced"
+      );
+      assert(
+        Session.gold === goldBeforeBadCube && Session.diamond === diamondBeforeBadCube,
+        "empty 75501 does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.tweakCubeData, cubeMissing));
+      assert(
+        WireSession.hasTweakCube() &&
+          WireSession.tweakCube !== null &&
+          WireSession.tweakCube.rankHero.length === 1 &&
+          WireSession.tweakCube.rankHero[0] === 8 &&
+          WireSession.tweakCube.openCount === null &&
+          WireSession.tweakCube.trenches.length === 0 &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.marks[0].field === 8,
+        "75501 without open_count and trench stays blank and leaves 68001"
+      );
+      assert(
+        Session.gold === goldBeforeBadCube && Session.diamond === diamondBeforeBadCube,
+        "missing 75501 field does not write gold or diamonds"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.tweakCubeData, cubeOuterOnly));
+      assert(
+        WireSession.hasTweakCube() &&
+          WireSession.tweakCube !== null &&
+          WireSession.tweakCube.rankHero.length === 0 &&
+          WireSession.tweakCube.openCount === null &&
+          WireSession.tweakCube.trenches.length === 0 &&
+          WireSession.tweakCube.marks.length === 1 &&
+          WireSession.tweakCube.marks[0].field === 8 &&
+          WireSession.astrolabe !== null &&
+          WireSession.astrolabe.marks[0].field === 8 &&
+          WireSession.totems !== null &&
+          WireSession.totems.marks[0].field === 7,
+        "non-empty 75501 without rank_hero open_count and trench stays synced and leaves 68001 and 74300"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
