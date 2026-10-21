@@ -1,5 +1,9 @@
-﻿# 目录规划
+# 目录规划
 
 - client：新 Creator 客户端（已纳入版本库）
 - config：游戏配置表源与导出（当前本机联接 mxzg-local）
 - server：Java 服务端（当前本机联接 program/server）
+
+## Prefab 与资源分目录（P0）
+
+见 [prefab-layout.md](./prefab-layout.md)。界面 Prefab 在 client/assets/prefabs/ui/，素材在 client/assets/resources/。
