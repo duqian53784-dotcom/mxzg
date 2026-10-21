@@ -73,6 +73,7 @@ import { buildWireSignInListPage, WireSignInListPage } from "./WireSignInListPag
 import { buildWireDailyTaskListPage, WireDailyTaskListPage } from "./WireDailyTaskListPage";
 import { buildWireDailyWelfareListPage, WireDailyWelfareListPage } from "./WireDailyWelfareListPage";
 import { buildWireMouthWelfareListPage, WireMouthWelfareListPage } from "./WireMouthWelfareListPage";
+import { buildWireWeekendGiftPage, WireWeekendGiftPage } from "./WireWeekendGiftPage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -107,6 +108,7 @@ import { WIRE_SIGN_IN_LIST_UNSYNCED_TOAST } from "../net/protocol/wireSignInList
 import { WIRE_DAILY_TASK_LIST_UNSYNCED_TOAST } from "../net/protocol/wireDailyTaskList";
 import { WIRE_DAILY_WELFARE_LIST_UNSYNCED_TOAST } from "../net/protocol/wireDailyWelfareList";
 import { WIRE_MOUTH_WELFARE_LIST_UNSYNCED_TOAST } from "../net/protocol/wireMouthWelfareList";
+import { WIRE_WEEKEND_GIFT_UNSYNCED_TOAST } from "../net/protocol/wireWeekendGift";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -208,6 +210,7 @@ const SIGN_IN_LIST_FILL = new Color(48, 112, 72, 255);
 const DAILY_TASK_LIST_FILL = new Color(88, 72, 140, 255);
 const DAILY_WELFARE_LIST_FILL = new Color(140, 84, 48, 255);
 const MOUTH_WELFARE_LIST_FILL = new Color(96, 64, 128, 255);
+const WEEKEND_GIFT_FILL = new Color(128, 72, 48, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -256,6 +259,7 @@ export class MainApp extends Component {
   private dailyTaskList: WireDailyTaskListPage | null = null;
   private dailyWelfareList: WireDailyWelfareListPage | null = null;
   private mouthWelfareList: WireMouthWelfareListPage | null = null;
+  private weekendGift: WireWeekendGiftPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -375,6 +379,8 @@ export class MainApp extends Component {
     this.dailyWelfareList = null;
     this.mouthWelfareList?.dispose();
     this.mouthWelfareList = null;
+    this.weekendGift?.dispose();
+    this.weekendGift = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -488,7 +494,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -568,6 +574,7 @@ export class MainApp extends Component {
     if (id === "dailyTaskList") return this.mountDailyTaskList();
     if (id === "dailyWelfareList") return this.mountDailyWelfareList();
     if (id === "mouthWelfareList") return this.mountMouthWelfareList();
+    if (id === "weekendGift") return this.mountWeekendGift();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -683,6 +690,7 @@ export class MainApp extends Component {
     place(createButton("每日任务列表", () => this.openDailyTaskList(), 180, 32, DAILY_TASK_LIST_FILL, 14), page, 0, 216);
     place(createButton("每日福利列表", () => this.openDailyWelfareList(), 180, 32, DAILY_WELFARE_LIST_FILL, 14), page, 0, 262);
     place(createButton("每月福利列表", () => this.openMouthWelfareList(), 180, 32, MOUTH_WELFARE_LIST_FILL, 14), page, 0, 308);
+    place(createButton("周末礼包", () => this.openWeekendGift(), 160, 32, WEEKEND_GIFT_FILL, 14), page, 0, 354);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -897,6 +905,7 @@ export class MainApp extends Component {
     if (id === "dailyTaskList") return this.blockWireDailyTaskList();
     if (id === "dailyWelfareList") return this.blockWireDailyWelfareList();
     if (id === "mouthWelfareList") return this.blockWireMouthWelfareList();
+    if (id === "weekendGift") return this.blockWireWeekendGift();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -1240,11 +1249,19 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 26001 就停在主城。空包体也算同步。不重复拉 26002。不发明领奖写号。不发 12021。不发 12022。不做 61001。不做 20011。不是启动链 12010。不是每日福利列表 26002。不是每日任务列表 12020。5001、51001 已有，勿重复。26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。26002 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  /** 没收到过 s2c 26001 就停在主城。空包体也算同步。不重复拉 26002。不发明领奖写号。不发 12021。不发 12022。61001 周末礼包另只读接在其后，勿合并。不做 20011。不是启动链 12010。不是每日福利列表 26002。不是每日任务列表 12020。5001、51001 已有，勿重复。26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。26002 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
   private blockWireMouthWelfareList(): boolean {
     if (Session.source === "wire" && WireSession.hasMouthWelfareList()) return false;
     GameLog.shared.info("MainApp", "wire mouth welfare list unsynced");
     this.shell?.showToast(WIRE_MOUTH_WELFARE_LIST_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 61001 就停在主城。空包体也算同步。不重复拉 26001。不发 61002。不做 62001。不做 63001。不发明领奖写号。不发 12021。不发 12022。不做 20011。不是启动链 12010。不是每月福利列表 26001。不是每日福利列表 26002。5001、51001 已有，勿重复。26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。26001 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireWeekendGift(): boolean {
+    if (Session.source === "wire" && WireSession.hasWeekendGift()) return false;
+    GameLog.shared.info("MainApp", "wire weekend gift unsynced");
+    this.shell?.showToast(WIRE_WEEKEND_GIFT_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -2255,7 +2272,7 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 真服每月福利列表。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 list（giftPackId、num）。无领奖入口。不重复拉 26002。不发明领奖写号。不发 12021。不发 12022。不做 61001。不做 20011。不是启动链 12010。不是每日福利列表 26002。不是每日任务列表 12020。5001、51001 已有，勿重复。26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 26002 分开发，勿合并。本刀不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  /** 真服每月福利列表。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 list（giftPackId、num）。无领奖入口。不重复拉 26002。不发明领奖写号。不发 12021。不发 12022。61001 周末礼包另只读接在其后，勿合并。不做 20011。不是启动链 12010。不是每日福利列表 26002。不是每日任务列表 12020。5001、51001 已有，勿重复。26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 26002 分开发，勿合并。本刀不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
   private openMouthWelfareList(): void {
     GameLog.shared.info("MainApp", "click mouth welfare list");
     if (this.blockWirePage("mouthWelfareList")) return;
@@ -2275,6 +2292,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.mouthWelfareList = page;
+    return page.node;
+  }
+
+  /** 真服周末礼包。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 start_time、end_time、reward_status。无领奖入口。不重复拉 26001。不发 61002。不做 62001。不做 63001。不发明领奖写号。不发 12021。不发 12022。不做 20011。不是启动链 12010。不是每月福利列表 26001。不是每日福利列表 26002。5001、51001 已有，勿重复。26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 26001 分开发，勿合并。本刀不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  private openWeekendGift(): void {
+    GameLog.shared.info("MainApp", "click weekend gift");
+    if (this.blockWirePage("weekendGift")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("weekendGift");
+    this.refreshChrome();
+  }
+
+  private mountWeekendGift(): Node {
+    this.weekendGift?.dispose();
+    const page = buildWireWeekendGiftPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.weekendGift = page;
     return page.node;
   }
 
@@ -3117,6 +3157,10 @@ export class MainApp extends Component {
     if (id === "mouthWelfareList") {
       this.mouthWelfareList?.dispose();
       this.mouthWelfareList = null;
+    }
+    if (id === "weekendGift") {
+      this.weekendGift?.dispose();
+      this.weekendGift = null;
     }
     if (id === "bag") {
       this.bag?.dispose();

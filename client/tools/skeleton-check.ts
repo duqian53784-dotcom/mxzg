@@ -1090,6 +1090,20 @@ import {
   WIRE_MOUTH_WELFARE_LIST_UNSYNCED_TOAST,
   wireMouthWelfareListNote,
 } from "../assets/scripts/net/protocol/wireMouthWelfareList";
+import {
+  decodeWireWeekendGift,
+  formatWireWeekendGiftLine,
+  WIRE_WEEKEND_GIFT_BANNED_CMDS,
+  WIRE_WEEKEND_GIFT_CMD,
+  WIRE_WEEKEND_GIFT_EMPTY,
+  WIRE_WEEKEND_GIFT_FIELD_NOTE,
+  WIRE_WEEKEND_GIFT_FRAME,
+  WIRE_WEEKEND_GIFT_READONLY_NOTE,
+  WIRE_WEEKEND_GIFT_READONLY_TITLE,
+  WIRE_WEEKEND_GIFT_SIDE_EFFECT,
+  WIRE_WEEKEND_GIFT_UNSYNCED_TOAST,
+  wireWeekendGiftNote,
+} from "../assets/scripts/net/protocol/wireWeekendGift";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1838,6 +1852,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("dailyTaskList") === "city", "daily task list stays on the city tab");
   assert(rootTabFor("dailyWelfareList") === "city", "daily welfare list stays on the city tab");
   assert(rootTabFor("mouthWelfareList") === "city", "mouth welfare list stays on the city tab");
+  assert(rootTabFor("weekendGift") === "city", "weekend gift stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -10270,6 +10285,260 @@ async function checkWs(): Promise<void> {
     "26001 empty frame carries 91 65 00 00 and not the 26002, 12020, 12010 or 61001 cmd byte"
   );
   assert(
+    WireCmd.weekendGift === 61001 &&
+      WireCmd.weekendGift !== WireCmd.mouthWelfareList &&
+      WireCmd.weekendGift !== WireCmd.dailyWelfareList &&
+      WireCmd.weekendGift !== WireCmd.dailyTaskList &&
+      WireCmd.weekendGift !== WireCmd.signInList &&
+      WireCmd.weekendGift !== WireCmd.achievementList &&
+      WireCmd.weekendGift !== WireCmd.heroLevelResetTimes &&
+      WireCmd.weekendGift !== WireCmd.towerReward &&
+      WireCmd.weekendGift !== WireCmd.runningPromotion &&
+      WireCmd.weekendGift !== WireCmd.lineUp &&
+      WireCmd.weekendGift !== WireCmd.formation &&
+      WireCmd.weekendGift !== WireCmd.worldLevel &&
+      WireCmd.weekendGift !== WireCmd.backpackList &&
+      WireCmd.weekendGift !== 12010 &&
+      WireCmd.weekendGift !== 26001 &&
+      WireCmd.weekendGift !== 26002,
+    "online 61001 stays off 26001, 26002, 12020, 13010, boot 12010, 4044, tower 3203, running promotion 20101, lineup 3101, formation 3099, world 51001 and bag 5001"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.weekendGift)) === WIRE_WEEKEND_GIFT_FRAME, "empty c2s 61001");
+  assert(bytesToHex(encodeFrame(61001)) === "0400000049ee0000", "empty c2s 61001 hex");
+  assert(WIRE_WEEKEND_GIFT_FRAME === "0400000049ee0000", "61001 frame constant");
+  assert(bytesToHex(encodeFrame(61001)) !== "0400000091650000", "61001 is not the 26001 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "0400000092650000", "61001 is not the 26002 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "04000000f42e0000", "61001 is not the 12020 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "04000000ea2e0000", "61001 is not the boot 12010 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "04000000d2320000", "61001 is not the 13010 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "04000000cc0f0000", "61001 is not the 4044 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "04000000830c0000", "61001 is not the 3203 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "04000000854e0000", "61001 is not the 20101 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "040000001d0c0000", "61001 is not the 3101 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "040000001b0c0000", "61001 is not the 3099 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "0400000039c70000", "61001 is not the 51001 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "0400000089130000", "61001 is not the 5001 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "040000004aee0000", "61001 is not the 61002 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "0400000031f20000", "61001 is not the 62001 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "0400000019f60000", "61001 is not the 63001 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "04000000f52e0000", "61001 is not the 12021 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "04000000f62e0000", "61001 is not the 12022 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "040000002b4e0000", "61001 is not the 20011 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "04000000f9110000", "61001 is not the 4601 frame");
+  assert(bytesToHex(encodeFrame(61001)) !== "0400000049710000", "61001 is not the 29001 frame");
+  assert(bytesToHex(encodeFrame(61002)) === "040000004aee0000" && bytesToHex(encodeFrame(61002)) !== "0400000049ee0000", "61002 is not the 61001 frame");
+  assert(bytesToHex(encodeFrame(62001)) === "0400000031f20000" && bytesToHex(encodeFrame(62001)) !== "0400000049ee0000", "62001 is not the 61001 frame");
+  assert(bytesToHex(encodeFrame(63001)) === "0400000019f60000" && bytesToHex(encodeFrame(63001)) !== "0400000049ee0000", "63001 is not the 61001 frame");
+  for (let i = 0; i < WIRE_WEEKEND_GIFT_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_WEEKEND_GIFT_BANNED_CMDS[i] }) === null, WIRE_WEEKEND_GIFT_BANNED_CMDS[i] + " is not encoded");
+  }
+  const weekendOwn = encodeWireMessage({ cmd: WIRE_WEEKEND_GIFT_CMD });
+  assert(
+    weekendOwn !== null &&
+      bytesToHex(weekendOwn.bytes) === "0400000049ee0000" &&
+      bytesToHex(weekendOwn.bytes) !== "0400000091650000" &&
+      bytesToHex(weekendOwn.bytes) !== "0400000092650000" &&
+      bytesToHex(weekendOwn.bytes) !== "04000000f42e0000" &&
+      bytesToHex(weekendOwn.bytes) !== "04000000ea2e0000" &&
+      bytesToHex(weekendOwn.bytes) !== "04000000d2320000" &&
+      bytesToHex(weekendOwn.bytes) !== "04000000cc0f0000" &&
+      bytesToHex(weekendOwn.bytes) !== "04000000830c0000" &&
+      bytesToHex(weekendOwn.bytes) !== "04000000854e0000" &&
+      bytesToHex(weekendOwn.bytes) !== "040000001d0c0000" &&
+      bytesToHex(weekendOwn.bytes) !== "040000001b0c0000" &&
+      bytesToHex(weekendOwn.bytes) !== "0400000039c70000" &&
+      bytesToHex(weekendOwn.bytes) !== "0400000089130000" &&
+      bytesToHex(weekendOwn.bytes) !== "040000004aee0000" &&
+      bytesToHex(weekendOwn.bytes) !== "0400000031f20000" &&
+      bytesToHex(weekendOwn.bytes) !== "0400000019f60000" &&
+      bytesToHex(weekendOwn.bytes) !== "04000000f52e0000" &&
+      bytesToHex(weekendOwn.bytes) !== "04000000f62e0000" &&
+      bytesToHex(weekendOwn.bytes) !== "040000002b4e0000" &&
+      bytesToHex(weekendOwn.bytes) !== "04000000f9110000" &&
+      bytesToHex(weekendOwn.bytes) !== "0400000049710000",
+    "wire.61001 encodes the empty frame and is not 26001, 26002, 12020, 12010, 13010, 4044, 3203, 20101, 3101, 3099, 51001, 5001, 61002, 62001, 63001, 12021, 12022, 20011, 4601 or 29001"
+  );
+  const weekendStill: Array<[string, string]> = [
+    ["wire.26001", "0400000091650000"],
+    ["wire.26002", "0400000092650000"],
+    ["wire.12020", "04000000f42e0000"],
+    ["wire.13010", "04000000d2320000"],
+    ["wire.12010", "04000000ea2e0000"],
+    ["wire.4044", "04000000cc0f0000"],
+    ["wire.3203", "04000000830c0000"],
+    ["wire.20101", "04000000854e0000"],
+    ["wire.3101", "040000001d0c0000"],
+    ["wire.3099", "040000001b0c0000"],
+    ["wire.5001", "0400000089130000"],
+    ["wire.51001", "0400000039c70000"],
+  ];
+  for (let i = 0; i < weekendStill.length; i++) {
+    const still = encodeWireMessage({ cmd: weekendStill[i][0] });
+    assert(
+      still !== null && bytesToHex(still.bytes) === weekendStill[i][1] && bytesToHex(still.bytes) !== "0400000049ee0000",
+      weekendStill[i][0] + " still encodes its own frame and is not reissued as 61001"
+    );
+  }
+  assert(WIRE_WEEKEND_GIFT_CMD === "wire.61001", "weekend gift wire cmd");
+  assert(WIRE_WEEKEND_GIFT_READONLY_TITLE === "周末礼包（真服只读）", "readonly weekend gift title");
+  assert(WIRE_WEEKEND_GIFT_UNSYNCED_TOAST === "真服未同步", "unsynced weekend gift toast");
+  assert(WIRE_WEEKEND_GIFT_EMPTY === "已同步空表", "empty weekend gift label");
+  assert(
+    WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("轻日刷") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("0400000049ee0000") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("61002") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("62001") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("63001") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("26001") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("26002") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("12021") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("12022") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("12020") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("12010") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("20011") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("5001") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("51001") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("13010") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("4044") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("3203") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("20101") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("3101") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("3099") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("4601") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("29001") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("无 page") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("不重复拉 26001") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("不重复拉 26002") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("不重复拉 12020") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("不重复拉 13010") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("不重复拉 4044") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("不重复拉 3203") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("不重复拉 20101") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("不重复拉 3101") >= 0 &&
+      WIRE_WEEKEND_GIFT_SIDE_EFFECT.indexOf("不重复拉 3099") >= 0 &&
+      WIRE_WEEKEND_GIFT_READONLY_NOTE.indexOf("start_time") >= 0 &&
+      WIRE_WEEKEND_GIFT_READONLY_NOTE.indexOf("end_time") >= 0 &&
+      WIRE_WEEKEND_GIFT_READONLY_NOTE.indexOf("reward_status") >= 0 &&
+      WIRE_WEEKEND_GIFT_READONLY_NOTE.indexOf("idx") >= 0 &&
+      WIRE_WEEKEND_GIFT_READONLY_NOTE.indexOf("status") >= 0 &&
+      WIRE_WEEKEND_GIFT_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_WEEKEND_GIFT_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_WEEKEND_GIFT_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_WEEKEND_GIFT_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_WEEKEND_GIFT_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_WEEKEND_GIFT_FIELD_NOTE.indexOf("start_time") >= 0 &&
+      WIRE_WEEKEND_GIFT_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_WEEKEND_GIFT_FIELD_NOTE.indexOf("只展示实际出现的字段") >= 0,
+    "weekend gift page names the present fields and refuses the banned cmds"
+  );
+  const weekendEmpty = decodeWireWeekendGift(new Uint8Array(0));
+  assert(
+    weekendEmpty !== null &&
+      weekendEmpty.startTime === null &&
+      weekendEmpty.endTime === null &&
+      weekendEmpty.rewardStatus === null &&
+      formatWireWeekendGiftLine(weekendEmpty) === WIRE_WEEKEND_GIFT_EMPTY,
+    "empty 61001 body is synced and does not invent zero"
+  );
+  assert(decodeWireWeekendGift(null) === null, "null 61001 body is not a snapshot");
+  assert(decodeWireWeekendGift(new Uint8Array([0x80])) === null, "bad 61001 ignored");
+  const weekendStartZero = decodeWireWeekendGift(fieldVarint(1, 0));
+  assert(
+    weekendStartZero !== null &&
+      weekendStartZero.startTime === 0 &&
+      weekendStartZero.endTime === null &&
+      weekendStartZero.rewardStatus === null &&
+      formatWireWeekendGiftLine(weekendStartZero) === "start_time=0",
+    "present 61001 start_time zero stays zero and omits absent end_time"
+  );
+  const weekendEndOnly = decodeWireWeekendGift(fieldVarint(2, 5));
+  assert(
+    weekendEndOnly !== null &&
+      weekendEndOnly.startTime === null &&
+      weekendEndOnly.endTime === 5 &&
+      formatWireWeekendGiftLine(weekendEndOnly) === "end_time=5",
+    "61001 omits a missing start_time instead of writing 0"
+  );
+  const weekendStatusZero = decodeWireWeekendGift(fieldBytes(3, Uint8Array.from([0x10, 0x00])));
+  assert(
+    weekendStatusZero !== null &&
+      weekendStatusZero.rewardStatus !== null &&
+      weekendStatusZero.rewardStatus.length === 1 &&
+      weekendStatusZero.rewardStatus[0].idx === null &&
+      weekendStatusZero.rewardStatus[0].status === 0 &&
+      formatWireWeekendGiftLine(weekendStatusZero) === "reward_status=status=0",
+    "present 61001 status zero stays zero and omits a missing idx"
+  );
+  const weekendNeg = decodeWireWeekendGift(fieldBytes(3, fieldNeg1(2)));
+  assert(
+    weekendNeg !== null &&
+      weekendNeg.rewardStatus !== null &&
+      weekendNeg.rewardStatus[0].idx === null &&
+      weekendNeg.rewardStatus[0].status === -1 &&
+      formatWireWeekendGiftLine(weekendNeg) === "reward_status=status=-1",
+    "61001 status -1 stays -1"
+  );
+  const weekendRow = decodeWireWeekendGift(fieldBytes(3, Uint8Array.from([0x08, 0x01, 0x10, 0x00])));
+  assert(
+    weekendRow !== null &&
+      weekendRow.rewardStatus !== null &&
+      weekendRow.rewardStatus[0].idx === 1 &&
+      weekendRow.rewardStatus[0].status === 0 &&
+      formatWireWeekendGiftLine(weekendRow) === "reward_status=idx=1,status=0",
+    "61001 reward row keeps present idx and status"
+  );
+  const weekendEmptyRow = decodeWireWeekendGift(fieldBytes(3, new Uint8Array(0)));
+  assert(
+    weekendEmptyRow !== null &&
+      weekendEmptyRow.rewardStatus !== null &&
+      weekendEmptyRow.rewardStatus.length === 1 &&
+      weekendEmptyRow.rewardStatus[0].idx === null &&
+      weekendEmptyRow.rewardStatus[0].status === null &&
+      formatWireWeekendGiftLine(weekendEmptyRow) === "reward_status=空",
+    "61001 empty reward row stays 空"
+  );
+  assert(decodeWireWeekendGift(fieldBytes(3, new Uint8Array([0x80]))) === null, "61001 reward blob that will not decode is ignored");
+  const weekendMark = decodeWireWeekendGift(fieldVarint(3, 8));
+  assert(
+    weekendMark !== null &&
+      weekendMark.rewardStatus === null &&
+      formatWireWeekendGiftLine(weekendMark) === "字段3=8",
+    "61001 field 3 varint is a mark and not a row"
+  );
+  const weekendOuter = decodeWireWeekendGift(fieldVarint(9, 1));
+  assert(
+    weekendOuter !== null &&
+      weekendOuter.startTime === null &&
+      weekendOuter.endTime === null &&
+      weekendOuter.rewardStatus === null &&
+      formatWireWeekendGiftLine(weekendOuter) === "字段9=1",
+    "non-empty 61001 without known fields stays synced and does not invent zero"
+  );
+  const weekendSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.weekendGift, fieldVarint(1, 0)), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    weekendSticky.frames.length === 2 &&
+      weekendSticky.frames[0].cmdId === 61001 &&
+      weekendSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireWeekendGift(weekendSticky.frames[0].body)?.startTime === 0,
+    "sticky 61001 frame stops at its length prefix"
+  );
+  assert(
+    wireWeekendGiftNote(weekendStartZero || { startTime: null, endTime: null, rewardStatus: null, marks: [] }).indexOf(WIRE_WEEKEND_GIFT_SIDE_EFFECT) >= 0 &&
+      wireWeekendGiftNote(weekendStartZero || { startTime: null, endTime: null, rewardStatus: null, marks: [] }).indexOf("不写金币") >= 0 &&
+      wireWeekendGiftNote(weekendStartZero || { startTime: null, endTime: null, rewardStatus: null, marks: [] }).indexOf("不写钻石") >= 0,
+    "61001 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
+    bytesToHex(encodeFrame(61001)).indexOf("49ee0000") >= 0 &&
+      bytesToHex(encodeFrame(61001)).indexOf("91650000") < 0 &&
+      bytesToHex(encodeFrame(61001)).indexOf("92650000") < 0 &&
+      bytesToHex(encodeFrame(61001)).indexOf("ea2e0000") < 0,
+    "61001 empty frame carries 49 ee 00 00 and not the 26001, 26002 or 12010 cmd byte"
+  );
+  assert(
     bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("f52e0000") < 0 &&
@@ -11395,7 +11664,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 46, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 and does not send another 5001");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 47, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 and does not send another 5001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -11912,6 +12181,90 @@ async function checkWs(): Promise<void> {
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 45] as ArrayBuffer)) !== "0400000049710000",
         "pullIdle 26001 frame is not the 29001 cmd"
       );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) === "0400000049ee0000",
+        "pullIdle sends empty c2s 61001 after 26001"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "0400000091650000",
+        "pullIdle 61001 frame is not merged into 26001"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "0400000092650000",
+        "pullIdle 61001 frame is not the 26002 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "04000000f42e0000",
+        "pullIdle 61001 frame is not the 12020 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "04000000ea2e0000",
+        "pullIdle 61001 frame is not the boot 12010 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "04000000d2320000",
+        "pullIdle 61001 frame is not the 13010 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "04000000cc0f0000",
+        "pullIdle 61001 frame is not the 4044 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "04000000830c0000",
+        "pullIdle 61001 frame is not the 3203 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "04000000854e0000",
+        "pullIdle 61001 frame is not the 20101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "040000001d0c0000",
+        "pullIdle 61001 frame is not the 3101 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "040000001b0c0000",
+        "pullIdle 61001 frame is not the 3099 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "0400000089130000",
+        "pullIdle 61001 frame is not the 5001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "0400000039c70000",
+        "pullIdle 61001 frame is not the 51001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "040000004aee0000",
+        "pullIdle 61001 frame is not the 61002 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "0400000031f20000",
+        "pullIdle 61001 frame is not the 62001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "0400000019f60000",
+        "pullIdle 61001 frame is not the 63001 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "04000000f52e0000",
+        "pullIdle 61001 frame is not the 12021 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "04000000f62e0000",
+        "pullIdle 61001 frame is not the 12022 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "040000002b4e0000",
+        "pullIdle 61001 frame is not the 20011 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "04000000f9110000",
+        "pullIdle 61001 frame is not the 4601 cmd"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 46] as ArrayBuffer)) !== "0400000049710000",
+        "pullIdle 61001 frame is not the 29001 cmd"
+      );
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -11937,12 +12290,15 @@ async function checkWs(): Promise<void> {
           "04000000d3320000": true,
           "04000000f52e0000": true,
           "04000000f62e0000": true,
-          "0400000049ee0000": true,
+          "040000004aee0000": true,
+          "0400000031f20000": true,
+          "0400000019f60000": true,
           "040000002b4e0000": true,
           "04000000f9110000": true,
           "0400000049710000": true,
         };
-        for (let i = 0; i < 46; i++) {
+        let weekendFrames = 0;
+        for (let i = 0; i < 47; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -11955,6 +12311,7 @@ async function checkWs(): Promise<void> {
           if (hex === "04000000f42e0000") dailyFrames += 1;
           if (hex === "0400000092650000") welfareFrames += 1;
           if (hex === "0400000091650000") mouthFrames += 1;
+          if (hex === "0400000049ee0000") weekendFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
           if (bannedHex[hex]) bannedFrames += 1;
         }
@@ -11970,9 +12327,10 @@ async function checkWs(): Promise<void> {
             dailyFrames === 1 &&
             welfareFrames === 1 &&
             mouthFrames === 1 &&
+            weekendFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once and 26001 once, keeps 12010 once and 51001 once, and does not repeat 5001 or encode 3202 3204 3205 3206 3220 3200 4043 13011 12021 12022 61001 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once and 61001 once, keeps 12010 once and 51001 once, and does not repeat 5001 or 26001 or 26002 or encode 3202 3204 3205 3206 3220 3200 4043 13011 12021 12022 61002 62001 63001 20011 4601 29001"
         );
       }
       assert(
@@ -12060,6 +12418,8 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000092650000") &&
           sawLog(lines, "发送 c2s 26001") &&
           sawLog(lines, "0400000091650000") &&
+          sawLog(lines, "发送 c2s 61001") &&
+          sawLog(lines, "0400000049ee0000") &&
           sawLog(lines, "发送 c2s 4043") === false &&
           sawLog(lines, "04000000cb0f0000") === false &&
           sawLog(lines, "发送 c2s 13011") === false &&
@@ -12085,8 +12445,12 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000f52e0000") === false &&
           sawLog(lines, "发送 c2s 12022") === false &&
           sawLog(lines, "04000000f62e0000") === false &&
-          sawLog(lines, "发送 c2s 61001") === false &&
-          sawLog(lines, "0400000049ee0000") === false &&
+          sawLog(lines, "发送 c2s 61002") === false &&
+          sawLog(lines, "040000004aee0000") === false &&
+          sawLog(lines, "发送 c2s 62001") === false &&
+          sawLog(lines, "0400000031f20000") === false &&
+          sawLog(lines, "发送 c2s 63001") === false &&
+          sawLog(lines, "0400000019f60000") === false &&
           sawLog(lines, "发送 c2s 18002") === false &&
           sawLog(lines, "发送 c2s 22001") === false &&
           sawLog(lines, "发送 c2s 21011") === false &&
@@ -12248,24 +12612,31 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_MOUTH_WELFARE_LIST_CMD);
       const mouthSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(mouthSent as ArrayBuffer)) === "0400000091650000", "wire.26001 frame");
-      const sentBeforeMouthOther = roleSockets[0].sent.length;
+      roleNet.send(WIRE_WEEKEND_GIFT_CMD);
+      const weekendSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(weekendSent as ArrayBuffer)) === "0400000049ee0000", "wire.61001 frame");
+      const sentBeforeWeekendOther = roleSockets[0].sent.length;
+      roleNet.send("wire.61002");
+      roleNet.send("wire.62001");
+      roleNet.send("wire.63001");
       roleNet.send("wire.12021");
       roleNet.send("wire.12022");
-      roleNet.send("wire.61001");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeMouthOther, "12021 12022 61001 20011 4601 29001 and goal claim stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeWeekendOther, "61002 62001 63001 12021 12022 20011 4601 29001 and goal claim stay off the wire");
       assert(
-        sawLog(lines, "未发送 wire.12021") &&
+        sawLog(lines, "未发送 wire.61002") &&
+          sawLog(lines, "未发送 wire.62001") &&
+          sawLog(lines, "未发送 wire.63001") &&
+          sawLog(lines, "未发送 wire.12021") &&
           sawLog(lines, "未发送 wire.12022") &&
-          sawLog(lines, "未发送 wire.61001") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001") &&
           sawLog(lines, "未发送 goal7.claim"),
-        "mouth welfare banned cmds and goal claim are not encoded"
+        "weekend gift banned cmds and goal claim are not encoded"
       );
       roleNet.send(WIRE_PVP_CMD);
       const pvpSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
@@ -16310,6 +16681,60 @@ async function checkWs(): Promise<void> {
           sawWire("26001 解不开"),
         "bad 26001 keeps the previous mouth welfare list and the 26002 list"
       );
+      roleSockets[0].push(encodeFrame(WireCmd.weekendGift));
+      assert(
+        WireSession.hasWeekendGift() &&
+          WireSession.weekendGift !== null &&
+          WireSession.weekendGift.startTime === null &&
+          WireSession.weekendGift.endTime === null &&
+          WireSession.weekendGift.rewardStatus === null &&
+          formatWireWeekendGiftLine(WireSession.weekendGift) === WIRE_WEEKEND_GIFT_EMPTY &&
+          wireWeekendGiftNote(WireSession.weekendGift).indexOf(WIRE_WEEKEND_GIFT_SIDE_EFFECT) >= 0 &&
+          wireWeekendGiftNote(WireSession.weekendGift).indexOf("不写金币") >= 0 &&
+          WireSession.mouthWelfareList !== null &&
+          formatWireMouthWelfareListLine(WireSession.mouthWelfareList) === "list=giftPackId=7,num=0;giftPackId=3" &&
+          WireSession.dailyWelfareList !== null &&
+          formatWireDailyWelfareListLine(WireSession.dailyWelfareList) === "list=giftPackId=7,num=0;giftPackId=3" &&
+          Session.gold === goldBeforeBadPrayer &&
+          Session.diamond === diamondBeforeBadPrayer,
+        "empty 61001 clears to 已同步空表 and does not write gold or diamond or replace 26001 or 26002"
+      );
+      roleSockets[0].push(
+        encodeFrame(
+          WireCmd.weekendGift,
+          concatBytes(concatBytes(fieldVarint(1, 100), fieldVarint(2, 200)), fieldBytes(3, Uint8Array.from([0x08, 0x01, 0x10, 0x00])))
+        )
+      );
+      assert(
+        WireSession.weekendGift !== null &&
+          WireSession.weekendGift.startTime === 100 &&
+          WireSession.weekendGift.endTime === 200 &&
+          WireSession.weekendGift.rewardStatus !== null &&
+          WireSession.weekendGift.rewardStatus[0].idx === 1 &&
+          WireSession.weekendGift.rewardStatus[0].status === 0 &&
+          formatWireWeekendGiftLine(WireSession.weekendGift) === "start_time=100 / end_time=200 / reward_status=idx=1,status=0" &&
+          WireSession.mouthWelfareList !== null &&
+          formatWireMouthWelfareListLine(WireSession.mouthWelfareList) === "list=giftPackId=7,num=0;giftPackId=3",
+        "61001 sample keeps present fields and leaves the 26001 list"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.weekendGift, new Uint8Array([0x80])));
+      assert(
+        WireSession.weekendGift !== null &&
+          formatWireWeekendGiftLine(WireSession.weekendGift) === "start_time=100 / end_time=200 / reward_status=idx=1,status=0" &&
+          WireSession.mouthWelfareList !== null &&
+          formatWireMouthWelfareListLine(WireSession.mouthWelfareList) === "list=giftPackId=7,num=0;giftPackId=3" &&
+          sawWire("61001 解不开"),
+        "bad 61001 keeps the previous weekend gift and the 26001 list"
+      );
+      roleSockets[0].push(encodeFrame(61002, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(62001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(63001, fieldVarint(1, 9)));
+      assert(
+        WireSession.weekendGift !== null &&
+          formatWireWeekendGiftLine(WireSession.weekendGift) === "start_time=100 / end_time=200 / reward_status=idx=1,status=0" &&
+          formatWireMouthWelfareListLine(WireSession.mouthWelfareList || { list: null, marks: [] }) === "list=giftPackId=7,num=0;giftPackId=3",
+        "61002 62001 and 63001 do not replace the 61001 snapshot"
+      );
       roleSockets[0].push(encodeFrame(13011, fieldVarint(1, 8)));
       roleSockets[0].push(encodeFrame(12020, fieldVarint(1, 8)));
       roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 8)));
@@ -16325,8 +16750,10 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(12010, fieldVarint(1, 8)));
       assert(
         WireSession.mouthWelfareList !== null &&
-          formatWireMouthWelfareListLine(WireSession.mouthWelfareList) === "list=giftPackId=7,num=0;giftPackId=3",
-        "13011 12020 20011 5001 51001 4601 29001 4044 3203 20101 3101 3099 and 12010 do not replace the 26001 list"
+          formatWireMouthWelfareListLine(WireSession.mouthWelfareList) === "list=giftPackId=7,num=0;giftPackId=3" &&
+          WireSession.weekendGift !== null &&
+          formatWireWeekendGiftLine(WireSession.weekendGift) === "start_time=100 / end_time=200 / reward_status=idx=1,status=0",
+        "13011 12020 20011 5001 51001 4601 29001 4044 3203 20101 3101 3099 and 12010 do not replace the 26001 list or the 61001 snapshot"
       );
       roleSockets[0].push(encodeFrame(26001, fieldVarint(1, 8)));
       roleSockets[0].push(encodeFrame(12021, fieldVarint(1, 8)));
@@ -16364,9 +16791,14 @@ async function checkWs(): Promise<void> {
           WireSession.hasMouthWelfareList() &&
           WireSession.mouthWelfareList !== null &&
           formatWireMouthWelfareListLine(WireSession.mouthWelfareList) === "字段1=8" &&
+          WireSession.hasWeekendGift() &&
+          WireSession.weekendGift !== null &&
+          formatWireWeekendGiftLine(WireSession.weekendGift) === "start_time=8" &&
+          WireSession.weekendGift.endTime === null &&
+          WireSession.weekendGift.rewardStatus === null &&
           Session.gold === goldBeforeBadPrayer &&
           Session.diamond === diamondBeforeBadPrayer,
-        "26001 field 1 varint is a mark, and 12021 12022 61001 12020 13011 20011 5001 51001 4601 29001 4044 3203 20101 3101 3099 and 12010 do not replace the 26002 list"
+        "61001 field 1 varint is start_time and does not replace the 26001 list or the 26002 list"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
