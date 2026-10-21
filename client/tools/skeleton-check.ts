@@ -3102,7 +3102,8 @@ async function checkWs(): Promise<void> {
     assert(sawLog(lines, "分发 s2c 50000 失败"), "bad handler logged");
     floodNet.close();
 
-    // net-20261020：两份新号 s2c 2001（角色 1000002）和先登录的那份（字段 15=100）。字段 9 都是创角名。
+    // net-20261020 conn d6108a92（新号）和 c3bfce22（先登录，字段 15=100）。
+    // Role.proto：字段 1 宝石、字段 2 金币、字段 5 奖杯 1000、字段 6 等级、字段 9 昵称。
     const roleNew = hexToBytes(
       "08001000200028e80730013800408cfcd2c3014a0fe8a781e4b9a0e58692e999a9e5aeb6508bb0dbd6065800608bb0dbd606680070008001afe4d7d606980100a00100a80100b00100b80100c80101d00100d80100e00100e80101f00100f80100800203"
     );
@@ -3112,7 +3113,28 @@ async function checkWs(): Promise<void> {
     const parsedNew = decodeWireRole(roleNew);
     const parsedOld = decodeWireRole(roleOld);
     assert(parsedNew !== null && parsedNew.name === "见习冒险家", "s2c 2001 field 9 is the created name");
-    assert(parsedOld !== null && parsedOld.name === "见习冒险家", "older 2001 still only yields the name");
+    assert(
+      parsedNew !== null && parsedNew.level === 1 && parsedNew.gold === 0 && parsedNew.diamond === 0,
+      "s2c 2001 fields 6, 2, 1 are level gold gem"
+    );
+    assert(
+      parsedOld !== null &&
+        parsedOld.name === "见习冒险家" &&
+        parsedOld.level === 1 &&
+        parsedOld.gold === 0 &&
+        parsedOld.diamond === 0,
+      "older 2001 uses the same wallet fields"
+    );
+    const cupOnly = decodeWireRole(concatBytes(fieldVarint(5, 1000), fieldVarint(15, 100)));
+    assert(
+      cupOnly !== null && cupOnly.gold === null && cupOnly.diamond === null && cupOnly.level === null && cupOnly.name === null,
+      "field 5 cup and field 15 are not the wallet"
+    );
+    const partial = decodeWireRole(concatBytes(fieldVarint(6, 4), fieldVarint(1, 9)));
+    assert(
+      partial !== null && partial.level === 4 && partial.diamond === 9 && partial.gold === null && partial.name === null,
+      "missing field 2 stays off gold"
+    );
     assert(decodeWireRole(new Uint8Array(0)) === null, "empty 2001 ignored");
     assert(decodeWireRole(roleNew.subarray(0, 8)) === null, "truncated 2001 ignored");
     assert(decodeWireRole(new Uint8Array([0xff, 0xff, 0xff])) === null, "bad 2001 ignored");
@@ -3136,9 +3158,28 @@ async function checkWs(): Promise<void> {
       assert(formatHubIdentity() === "见习冒险家 Lv4 · 真服", "known wire hub");
       Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
       assert(formatNameLine() === "角色 1000002" && formatGoldLine() === "金币 未同步", "new wire login clears the wallet");
-      Session.applyWireSync({ name: parsedOld ? parsedOld.name : null });
-      assert(Session.wireSync.name && !Session.wireSync.gold && !Session.wireSync.level, "packet only marks the name");
-      assert(formatGoldLine() === "金币 未同步" && formatDiamondLine() === "钻石 未同步", "field 5 and 15 stay off the wallet");
+      Session.applyWireSync({
+        name: parsedOld ? parsedOld.name : null,
+        level: parsedOld ? parsedOld.level : null,
+        gold: parsedOld ? parsedOld.gold : null,
+        diamond: parsedOld ? parsedOld.diamond : null,
+      });
+      assert(
+        Session.wireSync.name && Session.wireSync.level && Session.wireSync.gold && Session.wireSync.diamond,
+        "packet marks name level gold and diamonds"
+      );
+      assert(Session.role?.level === 1 && Session.gold === 0 && Session.diamond === 0, "zeros come from fields 6, 2, 1");
+      assert(formatNameLine() === "见习冒险家 Lv1", "synced level 1 is shown");
+      assert(formatGoldLine() === "金币 0" && formatDiamondLine() === "钻石 0", "field 5 cup 1000 stays off gold");
+      assert(formatSubLine() === "真服 · 角色 1000002", "open day stays off the sub line");
+      Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
+      Session.applyWireSync({
+        name: cupOnly ? cupOnly.name : null,
+        level: cupOnly ? cupOnly.level : null,
+        gold: cupOnly ? cupOnly.gold : null,
+        diamond: cupOnly ? cupOnly.diamond : null,
+      });
+      assert(!Session.wireSync.gold && !Session.wireSync.diamond && formatGoldLine() === "金币 未同步", "cup packet leaves the wallet");
       Session.applyEnter({ roleId: 9, name: "甲", level: 2, gold: 3, diamond: 4 });
       assert(Session.applyWireSync({ name: "见习冒险家", gold: 1 }) === false, "mock ignores wire sync");
       assert(formatNameLine() === "甲 Lv2" && formatGoldLine() === "金币 3", "mock wallet unchanged");
@@ -3169,7 +3210,9 @@ async function checkWs(): Promise<void> {
       Session.applyWireRole({ account: "111", serverId: 1, roleId: 1000002 });
       WireSession.flush();
       assert(Session.role?.name === "见习冒险家" && Session.wireSync.name, "flush writes field 9");
-      assert(!Session.wireSync.gold && formatGoldLine() === "金币 未同步", "flushed profile has no wallet");
+      assert(Session.wireSync.level && Session.role?.level === 1 && formatNameLine() === "见习冒险家 Lv1", "flush writes field 6");
+      assert(Session.wireSync.gold && Session.gold === 0 && formatGoldLine() === "金币 0", "flush writes field 2 zero");
+      assert(Session.wireSync.diamond && Session.diamond === 0 && formatDiamondLine() === "钻石 0", "flush writes field 1 zero");
       let paints = 0;
       const offPaint = WireSession.onSync(() => {
         paints += 1;
@@ -3188,7 +3231,11 @@ async function checkWs(): Promise<void> {
       assert(bytesToHex(new Uint8Array(sent as ArrayBuffer)) === "04000000d1070000", "pull sends empty c2s 2001");
       assert(sawLog(lines, "发送 c2s 2001"), "pull is logged");
       roleSockets[0].push(encodeFrame(WireCmd.roleProfile, new Uint8Array([0x80])));
-      assert(Session.role?.name === "见习冒险家" && sawWire("解不开"), "bad 2001 keeps the name");
+      assert(Session.role?.name === "见习冒险家" && Session.gold === 0 && sawWire("解不开"), "bad 2001 keeps the bar");
+      roleSockets[0].push(encodeFrame(WireCmd.roleProfile, concatBytes(fieldVarint(5, 1000), fieldVarint(15, 100))));
+      assert(Session.gold === 0 && Session.diamond === 0 && sawWire("没有可写入"), "cup frame does not replace gold");
+      roleSockets[0].push(encodeFrame(WireCmd.roleProfile, fieldVarint(2, 40)));
+      assert(Session.gold === 40 && Session.diamond === 0 && Session.role?.level === 1, "later field 2 updates gold only");
       if (roleNet) roleNet.close();
       WireSession.close();
     } finally {
