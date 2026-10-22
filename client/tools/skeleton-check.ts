@@ -57,6 +57,7 @@ import {
   battleHpPath,
   battleLevelLabelPath,
   battlePrefabRequiredPaths,
+  battleSlotPage,
   battleSlotPath,
   battleVfxPath,
   hpFillLayout,
@@ -65,10 +66,15 @@ import {
   vfxLocal,
 } from "../assets/scripts/ui/battlePrefabLayout";
 import {
+  BATTLE_BEAT_MS,
   BATTLE_BUFF_SLOT_COUNT,
   BATTLE_CRIT_BUBBLE,
+  BATTLE_LAST_BEAT_MS,
+  BATTLE_MIN_BEAT_MS,
+  battleBeatWait,
   battleSkillTitle,
   beatShowsCrit,
+  nextBattleSpeed,
   overheadLevelText,
   planBattlePresentation,
   readHeroBuffIds,
@@ -77,6 +83,14 @@ import {
   visibleBuffCount,
   visibleFloats,
 } from "../assets/scripts/ui/battlePresentation";
+import {
+  EFFECT_RUNS,
+  HIT_RUNS,
+  SKILL_RUNS,
+  effectFramePaths,
+  hitFramePaths,
+  skillFramePaths,
+} from "../assets/scripts/ui/battleFrames";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
 import {
   applyBagUse,
@@ -533,6 +547,7 @@ import {
   formatWireFightLine,
   planWireSpineReplay,
   resolveWireBattleWin,
+  wireSpineHasClip,
   WIRE_BATTLE_EMPTY,
   WIRE_BATTLE_MATCH_CMD,
   WIRE_BATTLE_MATCH_FRAME,
@@ -15149,6 +15164,51 @@ async function checkWs(): Promise<void> {
       roundPlan.stems.indexOf("bisha") < 0,
     "rounds drive an attack cue, keep the hit hp, and mount batch2 skill and yanwu instead of hero hit or bisha"
   );
+  assert(wireSpineHasClip("10405006", "hit") && wireSpineHasClip("10105008", "hit") && !wireSpineHasClip("10101", "hit"), "only battlepre packs expose a hit clip");
+  const hitPlan = planWireSpineReplay(
+    {
+      battleId: 1,
+      battleType: 1,
+      atkId: 7,
+      defId: 8,
+      winId: null,
+      rounds: [
+        {
+          index: 1,
+          actions: [
+            {
+              atkPos: 1,
+              skillId: null,
+              camp: 1,
+              hits: [{ defPos: 2, hurt: 4, hp: 9, marks: [] }],
+              marks: [],
+            },
+          ],
+          marks: [],
+        },
+      ],
+      atkHeroes: [{ pos: 1, heroId: 10105008, hp: 10, maxHp: 10, marks: [] }],
+      defHeroes: [{ pos: 2, heroId: 10405006, hp: 9, maxHp: 12, marks: [] }],
+      marks: [],
+    },
+    null,
+    1
+  );
+  let heroHit = false;
+  let allyAttack = false;
+  const hitBeat = hitPlan.beats[hitPlan.beats.length - 1];
+  for (let hc = 0; hc < hitBeat.cues.length; hc++) {
+    if (hitBeat.cues[hc].clip === "hit" && hitBeat.cues[hc].slot === 1) heroHit = true;
+    if (hitBeat.cues[hc].clip === "attack" && hitBeat.cues[hc].slot === 0) allyAttack = true;
+  }
+  assert(
+    hitPlan.slots[0].stem === "10105008" &&
+      hitPlan.slots[1].stem === "10405006" &&
+      allyAttack &&
+      heroHit &&
+      hitPlan.beats[0].cues[1].clip === "stand",
+    "a defender with a hit clip plays hit while the opening beat stays standing"
+  );
   const roundPresent = planBattlePresentation(roundReport.report as NonNullable<typeof roundReport.report>, roundPlan);
   assert(
     roundPresent.beats.length === roundPlan.beats.length &&
@@ -25809,12 +25869,48 @@ function checkCityHub(): void {
       wireBattlePageSrc.indexOf("WireBattlePage 仍不挂") >= 0 &&
       wireBattlePageSrc.indexOf("不发新 c2s") >= 0 &&
       wireBattlePageSrc.indexOf("回放结束不拆 BattlePage") >= 0 &&
+      wireBattlePageSrc.indexOf("paintBattleScene") >= 0 &&
+      wireBattlePageSrc.indexOf("battleSlotPage") >= 0 &&
+      wireBattlePageSrc.indexOf("battleBeatWait") >= 0 &&
+      wireBattlePageSrc.indexOf("左敌右我") >= 0 &&
+      wireBattlePageSrc.indexOf("mountFrameReel") >= 0 &&
+      wireBattlePageSrc.indexOf("hero-beattack") >= 0 &&
+      wireBattlePageSrc.indexOf("skill-effect") >= 0 &&
       wireBattlePageSrc.indexOf("3103 不走") >= 0 &&
       wireBattlePageSrc.indexOf(".pvr") < 0 &&
       wireBattlePageSrc.indexOf("encodeFrame") < 0,
     "wire battle mounts BattlePage on the existing replay and keeps the code page"
   );
   assert(BATTLE_PREFAB_PATH === "prefabs/ui/battle/BattlePage", "battle prefab path");
+  const enemyFront = battleSlotPage("enemy", 0);
+  const allyFront = battleSlotPage("ally", 0);
+  const enemyBack = battleSlotPage("enemy", 3);
+  const allyBack = battleSlotPage("ally", 3);
+  assert(
+    !!enemyFront &&
+      !!allyFront &&
+      !!enemyBack &&
+      !!allyBack &&
+      enemyFront.x < 0 &&
+      allyFront.x > 0 &&
+      enemyBack.x < enemyFront.x &&
+      allyBack.x > allyFront.x &&
+      enemyFront.y === allyFront.y &&
+      battleSlotPage("enemy", 6) === null,
+    "battle slots face each other, enemy on the left and ally on the right"
+  );
+  assert(
+    battleBeatWait(1, false) === BATTLE_BEAT_MS &&
+      battleBeatWait(1, true) === BATTLE_LAST_BEAT_MS &&
+      battleBeatWait(2, false) === 350 &&
+      battleBeatWait(3, true) >= BATTLE_MIN_BEAT_MS &&
+      battleBeatWait(3, true) < BATTLE_LAST_BEAT_MS &&
+      battleBeatWait(9, false) === BATTLE_BEAT_MS &&
+      nextBattleSpeed(1) === 2 &&
+      nextBattleSpeed(2) === 3 &&
+      nextBattleSpeed(3) === 1,
+    "accelerate shortens beats and skip stays a separate control"
+  );
   assert(battleSlotPath("enemy", 0) === "LayerField/EnemySlots/Slot_E0", "enemy front slot");
   assert(battleSlotPath("ally", 5) === "LayerField/AllySlots/Slot_A5", "ally back slot");
   assert(battleSlotPath("ally", 6) === null && battleHpPath("enemy", 3) === null, "back row has slots and no hp bar");
@@ -25834,6 +25930,47 @@ function checkCityHub(): void {
   for (let bi = 0; bi < requiredBattlePaths.length; bi++) {
     assert(battlePrefabPaths.indexOf(requiredBattlePaths[bi]) >= 0, "BattlePage has " + requiredBattlePaths[bi]);
   }
+  assert(requiredBattlePaths.indexOf("LayerHud/TopBar/BtnSpeed") < 0, "missing BtnSpeed does not drop the whole page");
+  assert(battlePrefabPaths.indexOf("LayerHud/TopBar/BtnSpeed") >= 0, "BattlePage mounts BtnSpeed");
+  const battlePrefabText = readFileSync(battlePrefabFile, "utf8");
+  assert(battlePrefabText.indexOf("b117e1f3-0253-4616-95db-bed6a5007adb@f9941") >= 0, "BattlePage Bg is battle-scene_spr-bg-1");
+  const speedMeta = JSON.parse(readFileSync(join(process.cwd(), "client", "assets", "resources", "ui", "battle", "battle-scene_btn-speed-1.png.meta"), "utf8"));
+  const progBgMeta = JSON.parse(readFileSync(join(process.cwd(), "client", "assets", "resources", "ui", "battle", "battle-scene_prog-bg-1.png.meta"), "utf8"));
+  const progFillMeta = JSON.parse(readFileSync(join(process.cwd(), "client", "assets", "resources", "ui", "battle", "battle-scene_prog-1.png.meta"), "utf8"));
+  const battleCloseMeta = JSON.parse(readFileSync(join(process.cwd(), "client", "assets", "resources", "ui", "battle", "battle-scene_btn-close-1.png.meta"), "utf8"));
+  assert(battlePrefabText.indexOf(speedMeta.subMetas.f9941.uuid) >= 0, "BtnSpeed uses battle-scene_btn-speed-1");
+  assert(battlePrefabText.indexOf(progBgMeta.subMetas.f9941.uuid) >= 0 && battlePrefabText.indexOf(progFillMeta.subMetas.f9941.uuid) >= 0, "hp bars use battle-scene prog bg and fill");
+  assert(battlePrefabText.indexOf(battleCloseMeta.subMetas.f9941.uuid) < 0, "battle close stays off BtnClose");
+  assert(HIT_RUNS.length === 5 && EFFECT_RUNS.length === 7 && SKILL_RUNS.length === 49, "battle frame tables match the resource subset");
+  const frameRoot = join(process.cwd(), "client", "assets", "resources");
+  const assertFrames = (label: string, paths: string[]) => {
+    assert(paths.length > 0, label + " has frames");
+    for (let fi = 0; fi < paths.length; fi++) {
+      assert(existsSync(join(frameRoot, paths[fi] + ".png")), label + " " + paths[fi]);
+    }
+  };
+  assert(hitFramePaths(null)[0] === "battle/hero-beattack/hero-beattack_1-00", "hit frames skip the tiny set 0");
+  assert(hitFramePaths(2).length === 3, "hit set 3 is three frames");
+  assertFrames("hit", hitFramePaths(0));
+  assertFrames("hit-4", hitFramePaths(4));
+  let effectTotal = 0;
+  for (let ei = 0; ei < EFFECT_RUNS.length; ei++) {
+    const effectPaths = effectFramePaths(ei);
+    effectTotal += effectPaths.length;
+    assertFrames(EFFECT_RUNS[ei][0], effectPaths);
+  }
+  assert(effectTotal === 104, "skill-effect frame count");
+  let skillTotal = 0;
+  let plateStem = -1;
+  for (let si = 0; si < SKILL_RUNS.length; si++) {
+    if (SKILL_RUNS[si][0] === "skill-101050201-3") plateStem = si;
+    const skillPaths = skillFramePaths(si);
+    skillTotal += skillPaths.length;
+    assertFrames(SKILL_RUNS[si][0], skillPaths);
+  }
+  assert(skillTotal === 533, "skill subset numbered frames, plate excluded");
+  assert(skillFramePaths(0)[0].indexOf("hero-skill_effect-1-0") >= 0, "hero-skill uses the effect-1 names");
+  assert(plateStem >= 0 && skillFramePaths(plateStem).length === 11 && skillFramePaths(plateStem)[10].indexOf("skill-101050201-3_10") >= 0, "skill-101050201-3 plays the numbered frames");
   assert(battleLayoutSrc.indexOf("不发协议") >= 0, "battle layout helper does not own a protocol");
   const battleDoc = readFileSync(join(process.cwd(), "docs", "battle-prefab-layout.md"), "utf8");
   assert(

@@ -1,12 +1,13 @@
 /**
  * 绑定 BattlePage.prefab。节点名对齐 docs/battle-prefab-layout.md。
- * 路径相对 assets：prefabs/ui/battle/BattlePage。不走 resources.load。
+ * 路径相对 assets：prefabs/ui/battle/BattlePage。Prefab 本身不走 resources.load。
+ * 战斗场景底另从 resources 换：ui/battle/battle-scene_spr-bg-*。没有就留 Prefab 上的战场图。
  * 不挂脚本组件，不改 Prefab。USE_BATTLE_PREFAB 为 false，或加载 / 绑节点失败时，调用方仍走代码 UI。
  * 飘字写 LayerFloat/FloatDmg_0..3 和 FloatCrit，技能名写 SkillNameBanner，前排头顶写 HeadAnchor。
  * 这些节点必须已经在 Prefab 上。缺一个就整页退回代码 UI，不另建同名节点。
  * 不发协议。WireBattlePage 没有站位和特效挂点，这一刀不挂它。
  */
-import { Node, UITransform } from "cc";
+import { Color, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import {
   BATTLE_PREFAB_PATH,
   battleHpPath,
@@ -31,6 +32,99 @@ export { BATTLE_PREFAB_PATH };
  * 改成 false 再预览，就回到 WireMainlinePage 里代码搭的战斗页。不要改 Boot。
  */
 export const USE_BATTLE_PREFAB = true;
+
+/**
+ * Resource 入库后的战斗场景底。运行时优先换上，不等 Prefab 再生。
+ * 仓里还没有这些图时，Prefab 底保持已有的战场图，不退回主线关卡图。
+ */
+export const BATTLE_SCENE_BG_PATHS = [
+  "ui/battle/battle-scene_spr-bg-1",
+  "ui/battle/battle-scene_spr-bg-2",
+  "ui/battle/battle-scene_spr-bg",
+];
+
+/** 代码战斗页没有 Prefab 底时用的沙地。已在 resources。 */
+export const BATTLE_SCENE_BG_FALLBACK = "ui/maps/map-bg-crusade-group-boss";
+
+/** 只换已有 Bg。战斗场景图还没进 resources 就保持 Prefab 上的那张。 */
+export function paintBattleScene(root: Node): void {
+  const bg = root.name === "Bg" ? root : root.getChildByName("Bg");
+  if (!bg) return;
+  void loadFirstFrame(BATTLE_SCENE_BG_PATHS).then((frame) => {
+    if (!frame || !bg.isValid) return;
+    applyFrame(bg, frame);
+  });
+}
+
+/** 代码页同步铺一张底，再尝试战斗场景图，没有就用沙地。后加的子节点盖在上面。 */
+export function mountBattleBackdrop(parent: Node): Node {
+  const bg = new Node("Bg");
+  bg.layer = parent.layer;
+  const ui = bg.addComponent(UITransform);
+  ui.setContentSize(720, 1280);
+  bg.addComponent(Sprite);
+  bg.setPosition(0, 0, 0);
+  bg.parent = parent;
+  bg.setSiblingIndex(0);
+  const paths = BATTLE_SCENE_BG_PATHS.concat([BATTLE_SCENE_BG_FALLBACK]);
+  void loadFirstFrame(paths).then((frame) => {
+    if (!frame || !bg.isValid) return;
+    applyFrame(bg, frame);
+  });
+  return bg;
+}
+
+function applyFrame(bg: Node, frame: SpriteFrame): void {
+  const sprite = bg.getComponent(Sprite) || bg.addComponent(Sprite);
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  sprite.type = Sprite.Type.SIMPLE;
+  sprite.spriteFrame = frame;
+  sprite.color = Color.WHITE;
+}
+
+function loadFirstFrame(paths: string[]): Promise<SpriteFrame | null> {
+  const step = (index: number): Promise<SpriteFrame | null> => {
+    if (index >= paths.length) return Promise.resolve(null);
+    return loadFrame(paths[index]).then((frame) => {
+      if (frame) return frame;
+      return step(index + 1);
+    });
+  };
+  return step(0);
+}
+
+/** 顶栏加速钮。1 / 2 / 3 对 battle-scene_btn-speed-1 / 2 / 3。 */
+export const BATTLE_SPEED_ICON = [
+  "ui/battle/battle-scene_btn-speed-1",
+  "ui/battle/battle-scene_btn-speed-2",
+  "ui/battle/battle-scene_btn-speed-3",
+];
+
+export function paintSpeedIcon(node: Node, speed: number): void {
+  const index = speed === 2 ? 1 : speed === 3 ? 2 : 0;
+  void loadFrame(BATTLE_SPEED_ICON[index]).then((frame) => {
+    if (!frame || !node.isValid) return;
+    const sprite = node.getComponent(Sprite);
+    if (!sprite) return;
+    sprite.spriteFrame = frame;
+  });
+}
+
+function loadFrame(path: string): Promise<SpriteFrame | null> {
+  return new Promise((resolve) => {
+    try {
+      resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
+        if (err || !asset) {
+          resolve(null);
+          return;
+        }
+        resolve(asset);
+      });
+    } catch (err) {
+      resolve(null);
+    }
+  });
+}
 
 export interface BattlePrefabShell {
   root: Node;

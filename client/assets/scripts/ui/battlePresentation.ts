@@ -23,6 +23,33 @@ export const BATTLE_CRIT_BUBBLE = "暴击";
 export const BATTLE_FLOAT_SLOT_COUNT = 4;
 export const BATTLE_BUFF_SLOT_COUNT = 3;
 
+/** 1 倍一拍。最后一拍短一点，但回放结束不拆页，所以这不是关页。 */
+export const BATTLE_BEAT_MS = 700;
+export const BATTLE_LAST_BEAT_MS = 260;
+/** 3 倍也不收成 0。收成 0 会在同一帧跳完，看起来像闪一下。 */
+export const BATTLE_MIN_BEAT_MS = 80;
+
+/**
+ * 加速只缩短每一拍的等待。1、2、3 倍。其它值当 1 倍。
+ * 跳过另走，不经过这里。
+ */
+export function battleBeatWait(speed: number, last: boolean): number {
+  const base = last ? BATTLE_LAST_BEAT_MS : BATTLE_BEAT_MS;
+  let steps = 1;
+  if (speed === 2) steps = 2;
+  else if (speed === 3) steps = 3;
+  const wait = Math.floor(base / steps);
+  if (wait < BATTLE_MIN_BEAT_MS) return BATTLE_MIN_BEAT_MS;
+  return wait;
+}
+
+/** ×1 → ×2 → ×3 → ×1。不跳过拍子，也不拆页。 */
+export function nextBattleSpeed(speed: number): number {
+  if (speed === 1) return 2;
+  if (speed === 2) return 3;
+  return 1;
+}
+
 export interface BattleFloatCue {
   /** plan.slots 下标。对不上人时是 null。数字仍写在 FloatDmg 槽上，不按站位挪节点。 */
   anchor: number | null;

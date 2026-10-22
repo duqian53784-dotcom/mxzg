@@ -11,24 +11,24 @@
 - **开关**：`client/assets/scripts/ui/BattlePage.ts` 的 `USE_BATTLE_PREFAB`，默认 `true`，和登录、主城壳一样。改成 `false` 再预览，真服进战回到 `WireMainlinePage` 里原来的代码 UI。代码 UI 不删。不改 `Boot.ts`，不改 `USE_CITY_CHROME_PREFAB`，不改 CityChrome / 通用 Prefab 的 `__type__`。
 - **怎么打开**：预览加 `?transport=ws` 进真服主城，打开「更多」里的主线。页内仍用已经接好的按钮发 **3001**（挑战）、**3030**（切磋）或 **3102**（请求战报）。有 report 才进战斗表现，这时挂 BattlePage。**3006** 挂机战报本来就走同一套回放，所以也会看到这张壳。不新开 c2s。3103、3101、3099 仍不进这页。Mock 关卡页（`MainlinePage.ts`）仍是代码色块，不挂这张壳。
 - **吃哪些已有数据**：`planWireSpineReplay` 的 slots / beats，外加同一份 report 上已经解开的命中和英雄。站位进 `Slot_E0`–`E2`、`Slot_A0`–`A2`（后排 `E3`–`E5`、`A3`–`A5` 留着壳上的占位）。血量写 `EnemyHp_*` / `AllyHp_*` 的 `Label`，两边都有数时才改 `Fill` 宽度；缺一边不写成 0，空着的三格血条保持 Prefab 里的 `120/120`、`100/100`。回合行写 `TopBar/RoundLabel`，同一行再写 `Log`。技能特效挂 `LayerVfx/VfxSkill`，受击挂 `LayerVfx/VfxHit`，无锚点时就停在文档里的 (0, 180) / (0, 120)。`VfxScreen` 保持空挂点，现有拍没有全屏角色。技能条 `Label` 在有技能拍时写成 batch2 的 stem；填充保持 Prefab 占位，因为 3001 / 3030 / 3102 不带技能槽能量。战剑、战旗没有对应槽，挂在 `LayerField` 上，坐标仍是原来的代码回放。飘字写 `LayerFloat/FloatDamageRoot/FloatDmg_0`–`FloatDmg_3`，暴击写 `LayerFloat/FloatCrit`，技能名写 `SkillNameBanner/SkillNameLabel`，前排头顶写 `HeadAnchor/LevelLabel` 和 `HeadAnchor/BuffRow`。`hurt` 缺失不画，不写成 0。`crit`、`level`、`buffs` 只有报告上已经带了才显示；没有就藏起，不写成 0，也不把 `marks` 里的号猜成暴击、等级或 buff。不另建同名代码节点。
-- **按钮**：`BtnSkip` 把本地回放快进到最后一拍，页留着。`BtnRetreat` 才拆战斗壳，换成结算（再挑战 / 返回），不发 3002 / 3005 / 3020 / 3100 / 3098。`BtnClose` 关掉主线页，不发新帧。回放自己走完也不拆：`play` 以前在 `playback` 之后立刻 `showDone` → `clearBody`，最后一拍只等 260ms，没有行动的战报就会闪一下关掉。现在停在壳上，等关闭或撤退。没有恭喜获得层，不拿 3002 当自动关。
+- **按钮**：`BtnSkip` 把本地回放快进到最后一拍，页留着。`BtnSpeed` 在顶栏左侧，只在 ×1、×2、×3 之间换，缩短每一拍的等待，不跳过，也不拆页。`BtnRetreat` 才拆战斗壳，换成结算（再挑战 / 返回），不发 3002 / 3005 / 3020 / 3100 / 3098。`BtnClose` 关掉主线页，不发新帧。回放自己走完也不拆：`play` 以前在 `playback` 之后立刻 `showDone` → `clearBody`，最后一拍只等 260ms，没有行动的战报就会闪一下关掉。现在停在壳上，等关闭或撤退。没有恭喜获得层，不拿 3002 当自动关。
 - **WireBattlePage**：没有站位和特效挂点。探针按钮仍在原来的真服主线页上，所以这张占位不挂。
 - **状态**：不改协议脚本，不删代码 UI。加载失败时 Toast「战斗 Prefab 未加载，改用代码 UI」，同一页继续播。
 - 设计基准 **720×1280**，坐标相对父节点中心。`LayerField`、`LayerVfx`、`LayerHud`、`LayerFloat`、`EnemySlots`、`AllySlots`、`HpBars`、`SkillBars` 都是铺满页面的 (0, 0) 容器，所以它们的直接子节点就是页面坐标。`TopBar` 例外，它自己在页面上，子节点是它的本地坐标。`SkillNameBanner`、`FloatDamageRoot`、`HeadAnchor`、`BuffRow` 也不是铺满容器，子节点用它们自己的本地坐标。
 - 不挂脚本组件。Prefab 里的 `__type__` 只有 `cc.*`。现有通用壳的脚本 id 仍是 23 位 packer（保留头 5）。这一刀没有新的类 id，生成器会拒绝非 `cc.*` 组件，也会拒绝 22 位脚本 id，避免退回 `compressUuid(uuid, true)`。
-- 不嵌 Spine。`VfxSkill` / `VfxHit` / `VfxScreen` 只有 `cc.UITransform`。Spine 仍在 `client/assets/resources/spine/`。hero-beattack、skill-effect、skill 子集的帧在 `client/assets/resources/battle/`（见 `docs/battle-asset-migration.md`）。这三个挂点仍是空节点，不引用那些帧。
+- 不嵌 Spine。`VfxSkill` / `VfxHit` / `VfxScreen` 只有 `cc.UITransform`。Spine 仍在 `client/assets/resources/spine/`。hero-beattack、skill-effect、skill 子集的帧在 `client/assets/resources/battle/`（见 `docs/battle-asset-migration.md`）。Prefab 上这三个挂点仍是空节点，不写 sprite uuid。回放把 `hero-beattack` 帧挂到 `VfxHit`，把 `skill` 和 `skill-effect` 帧挂到 `VfxSkill`。
 - 素材只引用 `client/assets/resources/` 的 spriteFrame `@f9941`。`prefabs/ui/battle/` 下没有 PNG。
 - 再生：`python3 client/tools/gen_battle_prefab.py`。从现有 `.meta` 读 uuid，再跑一次会覆写同一份 Prefab，并保留已有 `.meta` uuid。
 
 ## 用了哪些图
 
-`client/assets/resources/ui/battle/` 有 10 张 `battle-scene` 帧。页面 `Bg` 用其中的 `battle-scene_spr-bg-1`。同目录的关闭钮、加速钮、进度条帧留在 resources 里，这张壳不挂它们。
+`client/assets/resources/ui/battle/` 有 10 张 `battle-scene` 帧。页面 `Bg` 用其中的 `battle-scene_spr-bg-1`。加速钮和进度条也挂上。关闭钮仍用通用图，不用 `battle-scene_btn-close-1`。`battle-scene_prog-frame-1` 中间是实心的，不叠在填充上。
 
 | 用途 | 资源 | 模式 |
 |------|------|------|
 | 页面 `Bg` | `ui/battle/battle-scene_spr-bg-1.png` | 简单，白色，拉到 720×1280。spriteFrame `b117e1f3-0253-4616-95db-bed6a5007adb@f9941`。原图 112×64，裁切 111×63 |
 | 站位色块 | `ui/common/win-bg_block-bg-5.png` | 简单。敌 `(96, 40, 44, 168)`，我 `(28, 58, 96, 168)` |
-| 血条 / 技能条 | `ui/common/win-bg_num-bg.png` | 简单。底 `(16, 20, 28)`，敌填充 `(220, 96, 96)`，我填充 `(88, 196, 120)`，技能框 `(16, 28, 48, 230)`，技能填充 `(255, 214, 120)` |
+| 血条 / 技能条 | `ui/battle/battle-scene_prog-bg-1.png` 底，`battle-scene_prog-1.png` 填充 | 简单，不染色。不用 `battle-scene_prog-frame-1` |
 | 战报底 | `ui/common/win-bg_msg-bg.png` | 简单，`(10, 18, 32, 230)` |
 | `BannerBg` | 同上 `win-bg_msg-bg.png` | 简单，`(28, 16, 48, 210)` |
 | `FloatCrit` 底、`Buff_*` | 同上站位 `win-bg_block-bg-5.png` | 简单。暴击底 `(196, 78, 24, 230)`。buff 绿 `(88, 214, 120, 230)`、紫 `(176, 104, 255, 230)`、金 `(255, 196, 72, 230)` |
@@ -37,7 +37,7 @@
 | `BtnClose` | `ui/common/button_btn-close-1.png` | 简单，裁切 **53×56**，不染色。没有按下图，缩放过渡，没有 Label |
 | 字 | `font/FZCSJW-GB1-0.ttf` | 与其他页相同 |
 
-没有 `BtnSpeed`。`battle-scene_btn-speed-*`、`battle-scene_btn-close-1`、`battle-scene_prog-*` 已在 `ui/battle/`。TopBar 仍是 `RoundLabel` 和通用 `BtnClose`（53×56），血条和技能条仍是染色的 `win-bg_num-bg`。`LayerFloat`、`SkillNameBanner`、`HeadAnchor` 的坐标和子节点保持原样。
+`BtnSpeed` 在 `TopBar` 里，本地 x=-308，图是 `battle-scene_btn-speed-1`（73×78）。点一下在 speed-1 / speed-2 / speed-3 之间换，等待收成 1 倍、2 倍、3 倍（`battleBeatWait`，最短 80ms）。不跳过拍子，也不拆页。`battle-scene_btn-speed-10`、`battle-scene_btn-speed-11` 不用。`跳过` 仍是 `BtnSkip`。`BtnClose` 仍是通用 `button_btn-close-1`（53×56），在 (308, 0)。Prefab 上没有 `BtnSpeed` 时，代码仍在顶栏左侧放一枚 `×1`。血条和技能条用 `battle-scene_prog-bg-1` 和 `battle-scene_prog-1`，不染色。`LayerFloat`、`SkillNameBanner`、`HeadAnchor` 的坐标和子节点保持原样。
 
 按钮是 `cc.Sprite` + `cc.Button`（缩放，`zoomScale` 1.05，`clickEvents` 为空）。文案在子节点 `Label`。`BtnClose` 没有 `Label`。
 
@@ -45,7 +45,7 @@
 
 根 `BattlePage`。绘制顺序：`Bg`、`LayerField`、`LayerVfx`、`SkillNameBanner`、`LayerHud`、`LayerFloat`。HUD 盖在战场和技能名上面，飘字层再盖在 HUD 上面。飘字和技能名都在场中，不压顶栏和底栏。
 
-前排三个站位对齐当前代码战斗的 `slotXY`：敌方 y=300、我方 y=20，x 为 -200 / 0 / 200（三人横排）。后排是多出来的 3 个挂点，给以后六人阵用。`VfxSkill` / `VfxHit` 的默认点对齐 `anchorXY` 在没有锚点时的回退：技能 (0, 180)，受击 (0, 120)。代码里的跳过钮在 y=-280，那一档会压住这张壳的下半场，所以 `BtnSkip` / `BtnRetreat` 放在底栏。接线时由客户端决定要不要挪。
+站位是左敌右我，和 `battleSlotPage` 同一套坐标。前排靠中线，后排靠外侧，三行自上而下（y = 140 / -36 / -212）。敌方 x 为 -158（前）和 -300（后），我方为 158 和 300。空着的格子进战后关掉，沙地上只留报告里的人；报告没有英雄时仍补一格站场。`VfxSkill` / `VfxHit` 的默认点仍是技能 (0, 180)、受击 (0, 120)，本地坐标从这里减。`BtnSkip` / `BtnRetreat` 放在底栏。
 
 血条预览数字跟 Mock 战报的敌 120、我 100 一致，只是编辑器里能看见的占位。
 
@@ -56,17 +56,17 @@
 | `Bg` | (0, 0) | 720×1280 | `battle-scene_spr-bg-1` |
 | `LayerField` | (0, 0) | 720×1280 | 容器 |
 | `EnemySlots` | (0, 0) | 720×1280 | 容器 |
-| `Slot_E0` `Slot_E1` `Slot_E2` | (-200 / 0 / 200, 300) | 108×120 | 敌前排。子节点 `Placeholder`、`Label`（`E0`…）、`HeadAnchor` |
-| `Slot_E3` `Slot_E4` `Slot_E5` | (-200 / 0 / 200, 448) | 108×120 | 敌后排 |
+| `Slot_E0` `Slot_E1` `Slot_E2` | (-158, 140 / -36 / -212) | 108×120 | 敌前排，靠中线。子节点 `Placeholder`、`Label`（`E0`…）、`HeadAnchor` |
+| `Slot_E3` `Slot_E4` `Slot_E5` | (-300, 140 / -36 / -212) | 108×120 | 敌后排，靠左外 |
 | `AllySlots` | (0, 0) | 720×1280 | 容器 |
-| `Slot_A0` `Slot_A1` `Slot_A2` | (-200 / 0 / 200, 20) | 108×120 | 我前排。`Label` 为 `A0`…，另有 `HeadAnchor` |
-| `Slot_A3` `Slot_A4` `Slot_A5` | (-200 / 0 / 200, -180) | 108×120 | 我后排 |
+| `Slot_A0` `Slot_A1` `Slot_A2` | (158, 140 / -36 / -212) | 108×120 | 我前排，靠中线。`Label` 为 `A0`…，另有 `HeadAnchor` |
+| `Slot_A3` `Slot_A4` `Slot_A5` | (300, 140 / -36 / -212) | 108×120 | 我后排，靠右外 |
 
 `Placeholder` 和 `Label` 都在槽的 (0, 0)。`Label` 96×36，字号 22，白字描边。前排 `Slot_E0`–`E2`、`Slot_A0`–`A2` 在这两个子节点后面再挂 `HeadAnchor`。后排没有。
 
 ### 特效挂点
 
-都在 `LayerVfx` 下，空节点，没有子节点，也没有 Sprite。
+都在 `LayerVfx` 下。Prefab 里是空节点，没有子节点，也没有 Sprite。回放开始后，`VfxHit` 下挂 `hero-beattack` 帧，`VfxSkill` 下挂 `skill` 帧和一张更小的 `skill-effect` 帧。没加载到就继续用 batch2 的 spine 特效。
 
 | 节点 | 位置 (x, y) | 尺寸 |
 |------|-------------|------|
@@ -78,9 +78,9 @@
 
 ### 场内表现挂点
 
-进战回放写这些节点，不改坐标，也不另建同名代码节点。缺字段就藏起，清掉编辑器占位（`-12345`、`圣光打击`、`Lv.1`、三色 buff），不写成 0。站位没有重排：敌前排仍在 y=300，我前排仍在 y=20。
+进战回放写这些节点，不另建同名代码节点。缺字段就藏起，清掉编辑器占位（`-12345`、`圣光打击`、`Lv.1`、三色 buff），不写成 0。飘字在有受击者时挪到那个人头顶，没有锚点就留在预览位置。站位是左敌右我，见上表。
 
-`SkillNameBanner` 是根的直接子节点，水平居中，底边离敌前排槽底（y=240）8px。它和空的 `VfxSkill` 在竖直方向交一点；那个锚点没有图。`LayerFloat` 的四条伤害可以互相叠，不和槽、血条、技能名、暴击标抢 8px 空隙。`FloatCrit` 在飘字左侧。
+`SkillNameBanner` 是根的直接子节点，水平居中，放在两侧站位上方（y=300）。`LayerFloat` 的四条伤害预览也在这上面，可以互相叠，不和槽、血条、技能名、暴击标抢 8px 空隙。`FloatCrit` 在飘字左侧。进战后飘字会跟到受击者头顶。
 
 ```
 BattlePage
@@ -102,18 +102,18 @@ Slot_E0–E2 / Slot_A0–A2
 
 | 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
 |------|-------------|------|----------|
-| `SkillNameBanner` | (0, 214) | 248×36 | 容器 |
+| `SkillNameBanner` | (0, 300) | 248×36 | 容器 |
 | `SkillNameBanner/BannerBg` | (0, 0) | 248×36 | 无字。`win-bg_msg-bg` 紫灰染色 |
 | `SkillNameBanner/SkillNameLabel` | (0, 0) | 224×30 | `圣光打击`，字号 20，浅金描边 |
 | `LayerFloat` | (0, 0) | 720×1280 | 容器，只有 `cc.UITransform` |
-| `LayerFloat/FloatDamageRoot` | (0, 140) | 260×110 | 容器，只有 `cc.UITransform` |
+| `LayerFloat/FloatDamageRoot` | (0, 450) | 260×110 | 容器，只有 `cc.UITransform` |
 | `FloatDmg_0` | (0, 28) | 220×36 | `-12345`，字号 34，橙，框不够时缩小字号 |
 | `FloatDmg_1` | (16, -8) | 220×40 | `-439057`，字号 32，青 |
 | `FloatDmg_2` | (-12, -32) | 180×32 | `-40604`，字号 26，青 |
 | `FloatDmg_3` | (6, 0) | 190×34 | `-41418`，字号 26，青 |
-| `LayerFloat/FloatCrit` | (-176, 170) | 84×36 | `暴击`，字号 20。节点自己带染色底和 Label |
+| `LayerFloat/FloatCrit` | (-220, 470) | 84×36 | `暴击`，字号 20。节点自己带染色底和 Label |
 
-`FloatDmg_*` 的坐标相对 `FloatDamageRoot`。`FloatCrit` 的父节点铺满页面，所以那一行是页面坐标。四条飘字的页面 y 分别是 168、132、108、140。
+`FloatDmg_*` 的坐标相对 `FloatDamageRoot`。`FloatCrit` 的父节点铺满页面，所以那一行是页面坐标。四条飘字的预览页面 y 分别是 478、442、418、450。有受击者时，这四个节点会挪到那个人头顶。
 
 前排头顶。`HeadAnchor` 是槽的本地坐标，六个前排槽各一份，后排不挂。槽高 120，本地顶在 y=60，挂点中心 y=48、高 22，还在槽盒子里，贴着上沿。
 
@@ -130,10 +130,11 @@ Slot_E0–E2 / Slot_A0–A2
 |------|-------------|------|----------|
 | `TopBar` | (0, 592) | 720×64 | 容器 |
 | `TopBar/RoundLabel` | (0, 0) | 400×40 | `第1回合`，字号 28 |
+| `TopBar/BtnSpeed` | (-308, 0) | 73×78 | 无文案。`battle-scene_btn-speed-1`，按下图是 speed-2。运行时换成 speed-1 / 2 / 3 |
 | `TopBar/BtnClose` | (308, 0) | 53×56 | 无文案 |
 | `HpBars` | (0, 0) | 720×1280 | 容器 |
-| `EnemyHp_0`…`EnemyHp_2` | (-200 / 0 / 200, 532) | 160×24 | `120/120` |
-| `AllyHp_0`…`AllyHp_2` | (-200 / 0 / 200, -290) | 160×24 | `100/100` |
+| `EnemyHp_0`…`EnemyHp_2` | (-158, 220 / 44 / -132) | 160×24 | `120/120`。在对应敌前排头顶 |
+| `AllyHp_0`…`AllyHp_2` | (158, 220 / 44 / -132) | 160×24 | `100/100`。在对应我前排头顶 |
 | `SkillBars` | (0, 0) | 720×1280 | 容器 |
 | `SkillBar_0`…`SkillBar_2` | (-220 / 0 / 220, -360) | 180×36 | `Label` 为空字符串 |
 | `LogBg` | (0, -456) | 660×64 | — |

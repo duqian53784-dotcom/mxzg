@@ -64,9 +64,18 @@ export function paintBattleSkillName(mount: BattlePresentMount, name: string | n
   mount.skillBanner.active = true;
 }
 
-/** 按顺序写入 FloatDmg_0..3。没用到的藏起。有暴击才打开 FloatCrit。不挪坐标。 */
-export function paintBattleFloats(mount: BattlePresentMount, floats: BattleFloatCue[]): void {
+/**
+ * 按顺序写入 FloatDmg_0..3。没用到的藏起。有暴击才打开 FloatCrit。
+ * pages 和 floats 对齐，是受击者的页面坐标。有坐标就挪到那个人头顶，不另建节点。
+ * 没有坐标时留在 Prefab 的预览位置。
+ */
+export function paintBattleFloats(
+  mount: BattlePresentMount,
+  floats: BattleFloatCue[],
+  pages?: ({ x: number; y: number } | null)[]
+): void {
   const shown = visibleFloats(floats);
+  let critPage: { x: number; y: number } | null = null;
   for (let i = 0; i < mount.floats.length; i++) {
     const node = mount.floats[i];
     if (!node || !node.isValid) continue;
@@ -83,6 +92,11 @@ export function paintBattleFloats(mount: BattlePresentMount, floats: BattleFloat
     }
     setText(node, text);
     node.active = true;
+    const page = pages && i < pages.length ? pages[i] : null;
+    if (page) {
+      placeFloat(node, page.x, page.y + 78 - i * 28);
+      if (shown[i].crit && !critPage) critPage = page;
+    }
   }
   if (!mount.crit.isValid) return;
   if (!beatShowsCrit(floats)) {
@@ -91,6 +105,14 @@ export function paintBattleFloats(mount: BattlePresentMount, floats: BattleFloat
   }
   setText(mount.crit, BATTLE_CRIT_BUBBLE);
   mount.crit.active = true;
+  if (critPage) placeFloat(mount.crit, critPage.x - 72, critPage.y + 96);
+}
+
+function placeFloat(node: Node, pageX: number, pageY: number): void {
+  const parent = node.parent;
+  const ox = parent ? parent.position.x : 0;
+  const oy = parent ? parent.position.y : 0;
+  node.setPosition(pageX - ox, pageY - oy, 0);
 }
 
 /**

@@ -43,16 +43,17 @@ SLICED = 1
 TRANSITION_SCALE = 3
 MIN_GAP = 8
 
-# WireMainlinePage.showBattle slotXY: enemies y=300, allies y=20,
-# three-wide rowX at -200 / 0 / 200. Back rows are extra mounts (index 3..5).
-# anchorXY fallbacks: skill (0, 180), hit (0, 120). Read, not imported.
-COLS = (-200, 0, 200)
+# battleSlotPage: left enemy / right ally, three rows top to bottom.
+# Front index 0..2 sits toward center. Back index 3..5 is the outer file.
+# anchorXY fallbacks stay skill (0, 180), hit (0, 120). Read, not imported.
+ROW_Y = (140, -36, -212)
+ENEMY_FRONT_X = -158
+ENEMY_BACK_X = -300
+ALLY_FRONT_X = 158
+ALLY_BACK_X = 300
 SLOT_W = 108
 SLOT_H = 120
-ENEMY_FRONT_Y = 300
-ENEMY_BACK_Y = 448
-ALLY_FRONT_Y = 20
-ALLY_BACK_Y = -180
+HP_LIFT = 80
 VFX_SKILL = (0, 180, 48, 48)
 VFX_HIT = (0, 120, 48, 48)
 
@@ -63,8 +64,6 @@ HP_W = 160
 HP_H = 24
 HP_FILL_W = 112
 HP_FILL_H = 14
-ENEMY_HP_Y = 532
-ALLY_HP_Y = -290
 SKILL_W = 180
 SKILL_H = 36
 SKILL_FILL_W = 72
@@ -75,13 +74,12 @@ LOG_Y = -456
 BTN_Y = -568
 
 # Presentation mounts. Page origin is the root center.
-# Skill name sits just under the enemy front rank (bottom y=240) and may
-# share the empty VfxSkill anchor (0, 180). Floats stack in the open band
-# between the two front ranks and may overlap that anchor too.
-BANNER_Y = 214
+# The two teams stand on the sand. The skill name and the preview floats
+# sit in the open band above them, clear of the top bar.
+BANNER_Y = 300
 BANNER_W = 248
 BANNER_H = 36
-FLOAT_ROOT = (0, 140, 260, 110)
+FLOAT_ROOT = (0, 450, 260, 110)
 # Local to FloatDamageRoot. Page y = 140 + local y.
 FLOATS = (
     (0, 28, 220, 36, "-12345", 34),
@@ -89,7 +87,7 @@ FLOATS = (
     (-12, -32, 180, 32, "-40604", 26),
     (6, 0, 190, 34, "-41418", 26),
 )
-CRIT = (-176, 170, 84, 36)
+CRIT = (-220, 470, 84, 36)
 HEAD_Y = 48
 HEAD_W = 104
 HEAD_H = 22
@@ -103,21 +101,24 @@ BUFF_X = (-16, 0, 16)
 BUFF_SIZE = 12
 
 # Photo bg, in the order the battle shell should try.
+# Real battle ground first. crusade is the in-repo battlefield until
+# Resource commits ui/battle/battle-scene_spr-bg-1. Mission map is last.
 BG_CANDIDATES = (
     "ui/battle/battle-scene_spr-bg-1.png",
-    "ui/mainline/map-bg-mission-1.jpg",
+    "ui/battle/battle-scene_spr-bg-1.jpg",
+    "ui/maps/map-bg-crusade-group-boss.png",
     "ui/mainline/map-bg-super-stage.jpg",
-    "ui/idle/map-bg-dungeon-1.jpg",
+    "ui/mainline/map-bg-mission-1.jpg",
 )
 TINT_BG = "ui/common/win-bg_win-bg-12.png"
-# These battle-scene HUD frames can sit under ui/battle for Creator.
-# The shell does not adopt them: wiring close/speed/prog would add BtnSpeed
-# and resize BtnClose. LayerFloat, SkillNameBanner, HeadAnchor, and the
-# other mounts stay on the common close button and tinted num-bg bars.
+# Close stays the common button so BtnClose does not resize.
+# Speed x1/x2/x3 and the prog bar do mount when those frames are on disk.
 BATTLE_CLOSE_REL = "ui/battle/battle-scene_btn-close-1.png"
 COMMON_CLOSE_REL = "ui/common/button_btn-close-1.png"
 SPEED_REL = "ui/battle/battle-scene_btn-speed-1.png"
 SPEED_PRESSED_REL = "ui/battle/battle-scene_btn-speed-2.png"
+PROG_BG_REL = "ui/battle/battle-scene_prog-bg-1.png"
+PROG_FILL_REL = "ui/battle/battle-scene_prog-1.png"
 
 WIRE_TITLE = "战斗（真服接线占位）"
 WIRE_STATUS = "未同步 · 等切 Prefab"
@@ -224,10 +225,10 @@ def battle_prog_rels():
 
 
 def choose_art():
-    """Pick the photo Bg that is actually in resources/.
+    """Pick Bg, speed, and prog frames that are actually in resources/.
 
-    ui/battle close, speed, and prog frames stay on disk. This shell keeps
-    the common close button, no BtnSpeed, and tinted num-bg bars.
+    BtnClose stays on the common button. BtnSpeed and the hp/skill bars
+    use ui/battle when those files are present.
     """
     bg_rel = first_existing(BG_CANDIDATES)
     placeholder = False
@@ -237,9 +238,15 @@ def choose_art():
     close_rel = COMMON_CLOSE_REL
     if not os.path.isfile(os.path.join(RES, close_rel + ".meta")):
         raise SystemExit("no close button sprite in resources")
-    speed_rel = None
-    speed_pressed = None
+    speed_rel = SPEED_REL if os.path.isfile(os.path.join(RES, SPEED_REL + ".meta")) else None
+    speed_pressed = speed_rel
+    if speed_rel and os.path.isfile(os.path.join(RES, SPEED_PRESSED_REL + ".meta")):
+        speed_pressed = SPEED_PRESSED_REL
     prog = []
+    if os.path.isfile(os.path.join(RES, PROG_BG_REL + ".meta")) and os.path.isfile(
+        os.path.join(RES, PROG_FILL_REL + ".meta")
+    ):
+        prog = [PROG_BG_REL, PROG_FILL_REL]
     art = {
         "bg": load_sprite(bg_rel),
         "bg_placeholder": placeholder,
@@ -734,14 +741,14 @@ def build_battle_page():
     field = b.make_node("LayerField", root, 0, 0, PAGE_W, PAGE_H)
     enemies = b.make_node("EnemySlots", field, 0, 0, PAGE_W, PAGE_H)
     allies = b.make_node("AllySlots", field, 0, 0, PAGE_W, PAGE_H)
-    for i, x in enumerate(COLS):
-        make_slot(b, enemies, "Slot_E%d" % i, x, ENEMY_FRONT_Y, ENEMY_PLACE, head=True)
-    for i, x in enumerate(COLS):
-        make_slot(b, enemies, "Slot_E%d" % (i + 3), x, ENEMY_BACK_Y, ENEMY_PLACE)
-    for i, x in enumerate(COLS):
-        make_slot(b, allies, "Slot_A%d" % i, x, ALLY_FRONT_Y, ALLY_PLACE, head=True)
-    for i, x in enumerate(COLS):
-        make_slot(b, allies, "Slot_A%d" % (i + 3), x, ALLY_BACK_Y, ALLY_PLACE)
+    for i, y in enumerate(ROW_Y):
+        make_slot(b, enemies, "Slot_E%d" % i, ENEMY_FRONT_X, y, ENEMY_PLACE, head=True)
+    for i, y in enumerate(ROW_Y):
+        make_slot(b, enemies, "Slot_E%d" % (i + 3), ENEMY_BACK_X, y, ENEMY_PLACE)
+    for i, y in enumerate(ROW_Y):
+        make_slot(b, allies, "Slot_A%d" % i, ALLY_FRONT_X, y, ALLY_PLACE, head=True)
+    for i, y in enumerate(ROW_Y):
+        make_slot(b, allies, "Slot_A%d" % (i + 3), ALLY_BACK_X, y, ALLY_PLACE)
 
     vfx = b.make_node("LayerVfx", root, 0, 0, PAGE_W, PAGE_H)
     b.make_node("VfxSkill", vfx, VFX_SKILL[0], VFX_SKILL[1], VFX_SKILL[2], VFX_SKILL[3])
@@ -781,10 +788,10 @@ def build_battle_page():
     )
 
     bars = b.make_node("HpBars", hud, 0, 0, PAGE_W, PAGE_H)
-    for i, x in enumerate(COLS):
-        make_hp(b, bars, "EnemyHp_%d" % i, x, ENEMY_HP_Y, ENEMY_BAR, "120/120")
-    for i, x in enumerate(COLS):
-        make_hp(b, bars, "AllyHp_%d" % i, x, ALLY_HP_Y, ALLY_BAR, "100/100")
+    for i, y in enumerate(ROW_Y):
+        make_hp(b, bars, "EnemyHp_%d" % i, ENEMY_FRONT_X, y + HP_LIFT, ENEMY_BAR, "120/120")
+    for i, y in enumerate(ROW_Y):
+        make_hp(b, bars, "AllyHp_%d" % i, ALLY_FRONT_X, y + HP_LIFT, ALLY_BAR, "100/100")
 
     skills = b.make_node("SkillBars", hud, 0, 0, PAGE_W, PAGE_H)
     for i, x in enumerate(SKILL_X):
@@ -903,8 +910,8 @@ def expect_presentation(builder, gap_paths, head_paths):
     if builder.child_names(crit):
         raise SystemExit("FloatCrit text stays on the node")
 
-    # Empty VFX anchors sit on the skill line. The banner and the stacked
-    # floats may share that point; they still stay off the slots and HUD.
+    # Skill name and preview floats sit above the two files. VFX anchors
+    # stay at the old page origins so local offsets do not move.
     field = [path for path in gap_paths if "/LayerVfx/" not in path]
     assert_cross(builder, [banner, crit], field)
     assert_cross(builder, float_paths, field + [banner, crit])
@@ -934,15 +941,15 @@ def check_battle(b):
     ally_names = ["Slot_A%d" % i for i in range(6)]
     gap_paths = []
     head_paths = []
-    for i, x in enumerate(COLS):
+    for i, y in enumerate(ROW_Y):
         front = "BattlePage/LayerField/EnemySlots/Slot_E%d" % i
         back = "BattlePage/LayerField/EnemySlots/Slot_E%d" % (i + 3)
         a_front = "BattlePage/LayerField/AllySlots/Slot_A%d" % i
         a_back = "BattlePage/LayerField/AllySlots/Slot_A%d" % (i + 3)
-        b.expect(front, x, ENEMY_FRONT_Y, SLOT_W, SLOT_H, "E%d" % i)
-        b.expect(back, x, ENEMY_BACK_Y, SLOT_W, SLOT_H, "E%d" % (i + 3))
-        b.expect(a_front, x, ALLY_FRONT_Y, SLOT_W, SLOT_H, "A%d" % i)
-        b.expect(a_back, x, ALLY_BACK_Y, SLOT_W, SLOT_H, "A%d" % (i + 3))
+        b.expect(front, ENEMY_FRONT_X, y, SLOT_W, SLOT_H, "E%d" % i)
+        b.expect(back, ENEMY_BACK_X, y, SLOT_W, SLOT_H, "E%d" % (i + 3))
+        b.expect(a_front, ALLY_FRONT_X, y, SLOT_W, SLOT_H, "A%d" % i)
+        b.expect(a_back, ALLY_BACK_X, y, SLOT_W, SLOT_H, "A%d" % (i + 3))
         b.expect_sprite(front + "/Placeholder", ART["block"], SIMPLE, ENEMY_PLACE)
         b.expect_sprite(back + "/Placeholder", ART["block"], SIMPLE, ENEMY_PLACE)
         b.expect_sprite(a_front + "/Placeholder", ART["block"], SIMPLE, ALLY_PLACE)
@@ -992,11 +999,11 @@ def check_battle(b):
         raise SystemExit("top bar children drifted")
 
     hp_names = ["EnemyHp_%d" % i for i in range(3)] + ["AllyHp_%d" % i for i in range(3)]
-    for i, x in enumerate(COLS):
+    for i, y in enumerate(ROW_Y):
         enemy = "BattlePage/LayerHud/HpBars/EnemyHp_%d" % i
         ally = "BattlePage/LayerHud/HpBars/AllyHp_%d" % i
-        b.expect(enemy, x, ENEMY_HP_Y, HP_W, HP_H, "120/120")
-        b.expect(ally, x, ALLY_HP_Y, HP_W, HP_H, "100/100")
+        b.expect(enemy, ENEMY_FRONT_X, y + HP_LIFT, HP_W, HP_H, "120/120")
+        b.expect(ally, ALLY_FRONT_X, y + HP_LIFT, HP_W, HP_H, "100/100")
         fill_x = (HP_FILL_W - HP_W) // 2
         b.expect(enemy + "/Fill", fill_x, 0, HP_FILL_W, HP_FILL_H)
         b.expect(ally + "/Fill", fill_x, 0, HP_FILL_W, HP_FILL_H)
@@ -1242,7 +1249,7 @@ def reject_extras():
 
 
 def assert_current_repo_choice():
-    """Lock the art this tree can actually see. Fail if the battle bg is skipped."""
+    """Lock the art this tree can actually see."""
     battle_bg = os.path.isfile(os.path.join(RES, BG_CANDIDATES[0] + ".meta"))
     if battle_bg:
         if ART["bg"]["rel"] != "ui/battle/battle-scene_spr-bg-1.png":
@@ -1256,21 +1263,24 @@ def assert_current_repo_choice():
         raise SystemExit("bg uuid")
     if ART["close"]["rel"] != COMMON_CLOSE_REL:
         raise SystemExit("expected common close button")
-    if ART["speed"] is not None or not ART["bar_tinted"]:
-        raise SystemExit("speed or prog frames must stay off the shell")
-    if ART["bar_track"]["rel"] != "ui/common/win-bg_num-bg.png":
-        raise SystemExit("hp placeholder should be win-bg_num-bg")
-    # On-disk battle HUD frames stay out of the shell even after they land.
     if os.path.isfile(os.path.join(RES, BATTLE_CLOSE_REL + ".meta")):
         if ART["close"]["uuid"] == load_sprite(BATTLE_CLOSE_REL)["uuid"]:
             raise SystemExit("battle close button must stay off BtnClose")
-    if os.path.isfile(os.path.join(RES, SPEED_REL + ".meta")) or os.path.isfile(
-        os.path.join(RES, SPEED_PRESSED_REL + ".meta")
-    ):
-        if ART["speed"] is not None:
-            raise SystemExit("BtnSpeed must stay off the shell")
-    if battle_prog_rels() and not ART["bar_tinted"]:
-        raise SystemExit("prog frames must stay off the bars")
+    speed_on_disk = os.path.isfile(os.path.join(RES, SPEED_REL + ".meta"))
+    prog_on_disk = os.path.isfile(os.path.join(RES, PROG_BG_REL + ".meta")) and os.path.isfile(
+        os.path.join(RES, PROG_FILL_REL + ".meta")
+    )
+    if speed_on_disk:
+        if ART["speed"] is None or ART["speed"]["rel"] != SPEED_REL:
+            raise SystemExit("BtnSpeed should use battle-scene_btn-speed-1")
+    elif ART["speed"] is not None:
+        raise SystemExit("BtnSpeed without speed art")
+    if prog_on_disk:
+        if ART["bar_tinted"] or ART["bar_track"]["rel"] != PROG_BG_REL or ART["bar_fill"]["rel"] != PROG_FILL_REL:
+            raise SystemExit("hp bars should use battle-scene prog bg and fill")
+    else:
+        if not ART["bar_tinted"] or ART["bar_track"]["rel"] != "ui/common/win-bg_num-bg.png":
+            raise SystemExit("hp placeholder should be win-bg_num-bg")
 
 
 def main():

@@ -1,6 +1,7 @@
 /**
  * BattlePage 节点路径和血条填充。
  * 坐标对齐 docs/battle-prefab-layout.md。不加载 Prefab，不发协议。
+ * 站位是左敌右我：前排靠中线，后排靠外侧，三行自上而下。
  * 血条 Fill 锚点在中心，满血 112×14、本地 x=-24，左缘固定在 -80。
  * VfxSkill / VfxHit 的页面原点是 (0, 180) / (0, 120)。子节点本地坐标从这里减。
  */
@@ -13,6 +14,27 @@ export const HP_FILL_FULL_X = -24;
 
 export type BattleSlotSide = "ally" | "enemy";
 export type BattleVfxRole = "skill" | "hit" | "screen";
+
+/** 三行，自上而下。前排 index 0–2，后排 3–5 用同一行。 */
+export const BATTLE_ROW_Y = [140, -36, -212];
+export const BATTLE_ENEMY_FRONT_X = -158;
+export const BATTLE_ENEMY_BACK_X = -300;
+export const BATTLE_ALLY_FRONT_X = 158;
+export const BATTLE_ALLY_BACK_X = 300;
+
+/**
+ * 页面坐标。敌方在左、面向右；我方在右、面向左。
+ * index 不是人数居中，和 Prefab 的 Slot_E* / Slot_A* 同一格。
+ */
+export function battleSlotPage(side: BattleSlotSide, index: number): { x: number; y: number } | null {
+  if (!slotIndex(index, 5)) return null;
+  const row = index % 3;
+  const back = index >= 3;
+  const x = side === "enemy"
+    ? (back ? BATTLE_ENEMY_BACK_X : BATTLE_ENEMY_FRONT_X)
+    : (back ? BATTLE_ALLY_BACK_X : BATTLE_ALLY_FRONT_X);
+  return { x, y: BATTLE_ROW_Y[row] };
+}
 
 export function battleSlotPath(side: BattleSlotSide, index: number): string | null {
   if (!slotIndex(index, 5)) return null;
