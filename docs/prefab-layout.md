@@ -131,18 +131,21 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 
 `Sub` 是规格里的静态占位。代码胜利时 `reasonText("clear")` 写出的是 `顺利通关`，接线后由逻辑改字。
 
-### WireMainlinePage（真服只读）
+### WireMainlinePage（真服只读，页内挑战）
 
-根 `WireMainlinePage`。没有 `Panel*`。对齐 `WireMainlineController.build()`。
+根 `WireMainlinePage`。没有 `Panel*`。对齐 `WireMainlineController.showInfo()`。代码 UI，不接 Prefab Boot。
 
 | 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
 |------|-------------|------|----------|
 | `Bg` | (0, 0) | 720×1280 | — |
-| `Title` | (0, 220) | 680×56 | `主线（真服只读）` |
-| `Now` | (0, 120) | 640×44 | `当前 idx 未同步` |
-| `Max` | (0, 60) | 640×44 | `最高 idx 未同步` |
-| `Note` | (0, -20) | 640×38 | `本轮不发进关协议，不挑战` |
-| `BtnBack` | (0, -140) | 240×48 | `返回` |
+| `Title` | (0, 360) | 680×56 | `主线（真服只读）` |
+| `Now` | (0, 270) | 640×44 | `当前 idx 未同步` |
+| `Max` | (0, 220) | 640×44 | `最高 idx 未同步` |
+| `Fight` | (0, 160) | 640×40 | `进战 idx 未同步` |
+| `Status` | (0, 100) | 640×40 | `点挑战发 3001` |
+| `Note` | (0, -20) | 640×180 | 与 `WIRE_MAINLINE_READONLY_NOTE` 相同（页内挑战发 3001） |
+| `BtnChallenge` | (0, -180) | 240×52 | `挑战` |
+| `BtnBack` | (0, -260) | 240×48 | `返回` |
 
 `Title` / `Note` 与 `WIRE_MAINLINE_READONLY_TITLE` / `WIRE_MAINLINE_READONLY_NOTE` 相同。`Now` / `Max` 是 `formatWireChapterIdx` 在 idx 还没同步时的句子（`当前 idx` / `最高 idx` + `未同步`）。
 

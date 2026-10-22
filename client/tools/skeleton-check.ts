@@ -487,6 +487,19 @@ import {
   WIRE_MAINLINE_READONLY_TITLE,
 } from "../assets/scripts/net/protocol/wireChapter";
 import {
+  decodeWireBattleMatch,
+  formatWireBattleMatch,
+  formatWireFightLine,
+  planWireReportReplay,
+  WIRE_BATTLE_EMPTY,
+  WIRE_BATTLE_MATCH_CMD,
+  WIRE_BATTLE_MATCH_FRAME,
+  WIRE_BATTLE_MATCH_NOTE,
+  WIRE_BATTLE_MATCH_SIDE_EFFECT,
+  WIRE_BATTLE_UNSYNCED_TOAST,
+  wireMainlineFightStage,
+} from "../assets/scripts/net/protocol/wireBattle";
+import {
   decodeWireIdle,
   decodeWireIdleClaim,
   formatWireIdle,
@@ -2328,6 +2341,10 @@ function checkMainline(): void {
 
   const win = planBattle({ stageId: 1, level: 1, roleName: "MockHero" });
   assert(win.win && win.reason === "clear" && win.rounds.length === 4, "stage 1 script");
+  const forcedLose = planBattle({ stageId: 1, level: 1, roleName: "MockHero", forced: "lose" });
+  assert(!forcedLose.win && forcedLose.rounds.length === 4, "forced lose still draws color rounds at stage 1");
+  const forcedWin = planBattle({ stageId: 80, level: 70, roleName: "MockHero", forced: "win" });
+  assert(forcedWin.win && forcedWin.reason === "clear", "forced win ignores the level gap");
   assert(win.rounds[0].allies[0].name === "MockHero" && win.rounds[0].line.indexOf("突进") >= 0, "ally name");
   const last = win.rounds[win.rounds.length - 1];
   let enemiesDead = true;
@@ -14517,7 +14534,76 @@ async function checkWs(): Promise<void> {
   assert(formatWireMainline(0, null) === "主线 · 当前 0", "now_idx 0 is a real zero");
   assert(formatWireMainline(4, 9) === "主线 · 当前 4 / 最高 9", "both idx on the label");
   assert(WIRE_MAINLINE_READONLY_TITLE === "主线（真服只读）", "readonly chapter title");
-  assert(WIRE_MAINLINE_READONLY_NOTE === "本轮不发进关协议，不挑战", "readonly chapter note");
+  assert(WIRE_MAINLINE_READONLY_NOTE === WIRE_BATTLE_MATCH_NOTE, "mainline note is the 3001 challenge note");
+  assert(
+    WIRE_MAINLINE_READONLY_NOTE.indexOf("3001") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3002") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3005") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3008") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3011") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3013") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3100") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3097") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3098") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("18002") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("18001") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("1201") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("1202") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("色块") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("不接 spine") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("不进 pullIdle") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("不改 Boot") >= 0 &&
+      WIRE_BATTLE_UNSYNCED_TOAST === "真服未同步" &&
+      WIRE_BATTLE_MATCH_SIDE_EFFECT.indexOf("3007") >= 0 &&
+      WIRE_BATTLE_MATCH_SIDE_EFFECT.indexOf("不发 3002") >= 0,
+    "3001 note names the frame, the color replay, and the banned cmds"
+  );
+  assert(WireCmd.battleMatch === 3001 && CmdId.stageEnter === 1201 && CmdId.stageResult === 1202, "online 3001 stays off the mock stage ids");
+  assert(bytesToHex(encodeFrame(WireCmd.battleMatch)) === WIRE_BATTLE_MATCH_FRAME, "empty c2s 3001");
+  assert(WIRE_BATTLE_MATCH_FRAME === "04000000b90b0000", "3001 frame constant");
+  assert(bytesToHex(encodeFrame(3001)) === "04000000b90b0000", "3001 little-endian b9 0b");
+  assert(bytesToHex(encodeFrame(WireCmd.battleMatch)) !== "04000000bf0b0000", "3001 is not the 3007 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.chapterData)) !== WIRE_BATTLE_MATCH_FRAME, "3007 is not the 3001 frame");
+  assert(bytesToHex(encodeFrame(WireCmd.pvpData)) !== WIRE_BATTLE_MATCH_FRAME, "18001 is not the 3001 frame");
+  const battlePacket = encodeWireMessage({ cmd: WIRE_BATTLE_MATCH_CMD });
+  assert(
+    battlePacket !== null && battlePacket.cmdId === 3001 && bytesToHex(battlePacket.bytes) === "04000000b90b0000" && battlePacket.note === "空体",
+    "wire.3001 encodes the empty challenge frame"
+  );
+  const bannedBattle = ["wire.3002", "wire.3008", "wire.3011", "wire.3013", "wire.3100", "wire.3097", "wire.3098", "wire.18002", "wire.4601", "wire.29001", "wire.1201", "wire.1202"];
+  for (let bi = 0; bi < bannedBattle.length; bi++) {
+    assert(encodeWireMessage({ cmd: bannedBattle[bi] }) === null, bannedBattle[bi] + " stays off the 3001 encoder");
+  }
+  assert(decodeWireBattleMatch(null) === null, "missing 3001 body stays unsynced");
+  assert(decodeWireBattleMatch(Uint8Array.from([0x80])) === null, "bad 3001 varint does not become a report");
+  const emptyBattle = decodeWireBattleMatch(new Uint8Array(0));
+  assert(emptyBattle !== null && emptyBattle.empty && emptyBattle.report === null && formatWireBattleMatch(emptyBattle) === WIRE_BATTLE_EMPTY, "empty 3001 body is 已同步空表");
+  const winReport = decodeWireBattleMatch(fieldBytes(1, fieldVarint(2, 1)));
+  assert(winReport !== null && winReport.report !== null && winReport.report.win === true && winReport.empty === false, "3001 report field 2 = 1 is a win");
+  const loseReport = decodeWireBattleMatch(fieldBytes(1, fieldVarint(2, 0)));
+  assert(loseReport !== null && loseReport.report !== null && loseReport.report.win === false, "3001 report field 2 = 0 stays a loss and is not dropped");
+  const unmarked = decodeWireBattleMatch(fieldBytes(1, fieldVarint(3, 9)));
+  assert(
+    unmarked !== null && unmarked.report !== null && unmarked.report.win === null && formatWireBattleMatch(unmarked).indexOf("胜负未带") >= 0 && formatWireBattleMatch(unmarked).indexOf("字段3=9") >= 0,
+    "3001 without field 2 does not invent a win"
+  );
+  const noReport = decodeWireBattleMatch(fieldVarint(3, 1));
+  assert(noReport !== null && noReport.report === null && noReport.empty === false && formatWireBattleMatch(noReport).indexOf("没有 report") >= 0, "3001 without report does not invent one");
+  assert(wireMainlineFightStage(null, 0) === 1 && formatWireFightLine(null, 0) === "进战 idx 1", "max_idx 0 fights chapterId+1");
+  assert(wireMainlineFightStage(null, null) === null && formatWireFightLine(null, null) === "进战 idx 未同步", "missing idx is not fight stage 0");
+  assert(wireMainlineFightStage(4, null) === 4, "only now_idx is used when max_idx is absent");
+  const replayWin = planWireReportReplay(1, true, "真服");
+  assert(replayWin.win && replayWin.rounds.length === 4 && replayWin.rounds[0].allies[0].name === "真服", "win report uses the color-block clear script");
+  const replayLose = planWireReportReplay(1, false, "真服");
+  assert(!replayLose.win && replayLose.rounds.length === 4 && replayLose.stageId === 1, "loss report still plays color blocks at stage 1");
+  const replayUnknown = planWireReportReplay(3, null, "真服");
+  assert(!replayUnknown.win && replayUnknown.rounds.length === 1 && replayUnknown.rounds[0].line.indexOf("突进") >= 0, "missing win plays only the first color round");
+  assert(planWireReportReplay(1, true, "真服").rounds[0].allies.length === 3, "color replay keeps the three ally blocks");
   assert(formatWireChapterIdx("now", null) === "当前 idx 未同步", "missing now_idx on the page");
   assert(formatWireChapterIdx("max", null) === "最高 idx 未同步", "missing max_idx on the page");
   assert(formatWireChapterIdx("max", 0) === "最高 idx 0", "max_idx 0 stays on the page");
@@ -15620,6 +15706,52 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.3010");
       assert(roleSockets[0].sent.length === sentBeforeOther, "3002 and 3010 stay off the wire");
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
+      assert(WireSession.hasChapter() && WireSession.battleMatch === null, "3001 is not pulled with the city");
+      const sentBeforeChallenge = roleSockets[0].sent.length;
+      const goldBeforeChallenge = Session.gold;
+      const stageBeforeChallenge = Session.stageId;
+      assert(WireSession.challengeMainline(), "challenge sends when 3007 idx is present");
+      assert(roleSockets[0].sent.length === sentBeforeChallenge + 1, "3001 is one frame and does not resend the idle chain");
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeChallenge] as ArrayBuffer)) === "04000000b90b0000",
+        "challenge frame is empty c2s 3001"
+      );
+      const serialBefore = WireSession.battleSerial;
+      const sentBeforeWin = roleSockets[0].sent.length;
+      roleSockets[0].push(encodeFrame(WireCmd.battleMatch, fieldBytes(1, fieldVarint(2, 1))));
+      assert(WireSession.battleSerial === serialBefore + 1 && WireSession.battleMatch !== null && WireSession.battleMatch.report !== null && WireSession.battleMatch.report.win === true, "win report is stored");
+      assert(roleSockets[0].sent.length === sentBeforeWin + 1, "win refreshes 3007 once");
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeWin] as ArrayBuffer)) === "04000000bf0b0000",
+        "win refresh is empty c2s 3007"
+      );
+      assert(Session.gold === goldBeforeChallenge && Session.stageId === stageBeforeChallenge, "3001 does not write gold or the mock stage");
+      const sentBeforeLose = roleSockets[0].sent.length;
+      roleSockets[0].push(encodeFrame(WireCmd.battleMatch, fieldBytes(1, fieldVarint(2, 0))));
+      assert(WireSession.battleMatch !== null && WireSession.battleMatch.report !== null && WireSession.battleMatch.report.win === false, "loss report stays a loss");
+      assert(roleSockets[0].sent.length === sentBeforeLose, "loss does not pull 3007 or 3002");
+      const sentBeforeEmptyBattle = roleSockets[0].sent.length;
+      roleSockets[0].push(encodeFrame(WireCmd.battleMatch));
+      assert(WireSession.battleMatch !== null && WireSession.battleMatch.empty && WireSession.battleMatch.report === null, "empty 3001 is a synced empty table");
+      assert(roleSockets[0].sent.length === sentBeforeEmptyBattle, "empty 3001 does not fall back to 1201");
+      roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
+      assert(WireSession.battleMatch !== null && WireSession.battleMatch.empty, "mock 1201 does not replace the 3001 report");
+      const sentBeforeBannedBattle = roleSockets[0].sent.length;
+      roleNet.send("wire.3002");
+      roleNet.send("wire.3008");
+      roleNet.send("wire.3011");
+      roleNet.send("wire.3013");
+      roleNet.send("wire.3100");
+      roleNet.send("wire.3097");
+      roleNet.send("wire.3098");
+      roleNet.send("wire.18002");
+      roleNet.send("wire.4601");
+      roleNet.send("wire.29001");
+      roleNet.send("wire.1201");
+      roleNet.send("wire.1202");
+      assert(roleSockets[0].sent.length === sentBeforeBannedBattle, "battle reward and mock stage cmds stay off the wire");
+      assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
+      lines.length = 0;
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
       assert(roleSockets[0].sent.length === sentBeforeMailPull + 64, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once then 75901 once then 76001 once then 76101 once then 76301 once then 76081 once then 76520 once then 76251 once and does not resend 76520 or 76081 or 76301 or 76101 or 76001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
@@ -15627,6 +15759,13 @@ async function checkWs(): Promise<void> {
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
       );
+      let battleFramesInIdle = 0;
+      for (let idleI = 0; idleI < 64; idleI++) {
+        if (bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + idleI] as ArrayBuffer)) === "04000000b90b0000") {
+          battleFramesInIdle += 1;
+        }
+      }
+      assert(battleFramesInIdle === 0, "pullIdle does not send empty c2s 3001");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 1] as ArrayBuffer)) === "04000000983a0000",
         "pullIdle sends empty c2s 15000 after 3004"
@@ -23206,6 +23345,9 @@ function checkCityHub(): void {
     assert(moreTitles.indexOf(mustMore[i]) >= 0, "more hub has " + mustMore[i]);
     assert(actTitles.indexOf(mustMore[i]) < 0, "more hub title not also in activity: " + mustMore[i]);
   }
+  let mainlineEntries = 0;
+  for (let i = 0; i < more.length; i++) if (more[i].id === "mainline") mainlineEntries += 1;
+  assert(mainlineEntries === 1 && actTitles.indexOf("挑战") < 0, "challenge stays inside the existing mainline page");
   const ids: { [id: string]: string } = {};
   const all = activity.concat(more);
   for (let i = 0; i < all.length; i++) {

@@ -16,14 +16,16 @@
  * 字段 4 extra_reward_id 三例都没有。这一轮不读。
  *
  * 主城按钮按解开的 idx 写，不改成 Mock 的「第 N 关」，也不写 Session.stageId：
- * - 两个都没有：主线 · 未同步。点按钮仍 Toast，不打开页。
+ * - 两个都没有：主线 · 未同步。点按钮 Toast「真服未同步」，不打开页。
  * - 只有 now_idx：主线 · 当前 N
  * - 只有 max_idx：主线 · 最高 M
  * - 两个都有：主线 · 当前 N / 最高 M
  * 数字前面有空格。日志三例是「主线 · 最高 0」。
  * 至少有一个 idx（含 max_idx=0）时，点按钮打开代码页「主线（真服只读）」。
- * 缺的 idx 在页上写「未同步」。不打开 Mock 关卡页，不发 3002 / 3010，不挑战、不结算。
+ * 缺的 idx 在页上写「未同步」。不打开 Mock 关卡页。
+ * 页内「挑战」才发空 c2s 3001。不发 3002，不把 Mock 1201/1202 当战报。
  */
+import { WIRE_BATTLE_MATCH_NOTE } from "./wireBattle";
 import { decodeProtoFields, ProtoField } from "./wireLogin";
 
 /** 和 WsTransport 入站分发、encodeWireMessage 用同一个字符串。数字号是 WireCmd.chapterData。 */
@@ -64,8 +66,8 @@ export function wireChapterHasIdx(progress: WireChapterProgress): boolean {
 /** 真服只读页标题。不是 Mock 关卡列表。 */
 export const WIRE_MAINLINE_READONLY_TITLE = "主线（真服只读）";
 
-/** 真服只读页说明。这一页不发进关，也不放挑战。 */
-export const WIRE_MAINLINE_READONLY_NOTE = "本轮不发进关协议，不挑战";
+/** 真服主线页说明。挑战在页内发 3001，说明与 wireBattle 同一句。 */
+export const WIRE_MAINLINE_READONLY_NOTE = WIRE_BATTLE_MATCH_NOTE;
 
 /**
  * 只读页上的一行。kind=now 是字段 2，kind=max 是字段 3。
