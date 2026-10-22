@@ -44,7 +44,7 @@ export const WIRE_TOWER_REWARD_SIDE_EFFECT =
 export const WIRE_TOWER_REWARD_FIELD_NOTE =
   "list。已领爬塔首通 idx。字段 1，repeated int32。不保证顺序。没有的数不写成 0。出现的值如实展示。对不上的号按字段号写";
 
-/** 本刀硬禁。5001 / 51001 是链上已有帧，不在这张「未编码」表里，由进城链断言不重复发。 */
+/** 本刀硬禁。5001 / 51001 是链上已有帧，不在这张「未编码」表里，由进城链断言不重复发。3010 已由关卡奖励列表自己编码，不在这张表里；3203 不发 3010。 */
 export const WIRE_TOWER_REWARD_BANNED_CMDS = [
   "wire.3202",
   "wire.3204",
@@ -54,7 +54,6 @@ export const WIRE_TOWER_REWARD_BANNED_CMDS = [
   "wire.3200",
   "wire.20011",
   "wire.3012",
-  "wire.3010",
   "wire.19001",
   "wire.4601",
   "wire.29001",

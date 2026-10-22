@@ -168,6 +168,7 @@ import { WIRE_SPRING_OUTING_CMD } from "./wireSpringOuting";
 import { WIRE_CHRISTMAS_MISSION_CMD } from "./wireChristmasMission";
 import { WIRE_MAGIC_TOWER_LEVEL_RANK_CMD } from "./wireMagicTowerLevelRank";
 import { WIRE_BATTLE_MATCH_CMD } from "./wireBattle";
+import { WIRE_CHAPTER_REWARD_CMD } from "./wireChapterReward";
 import { WIRE_SPRING_OUTING_GRID_CMD } from "./wireSpringOutingGrid";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
@@ -404,6 +405,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.battleMatch,
       bytes: encodeFrame(WireCmd.battleMatch),
+      note: "空体",
+    };
+  }
+  if (cmd === WIRE_CHAPTER_REWARD_CMD) {
+    return {
+      cmdId: WireCmd.chapterRewardList,
+      bytes: encodeFrame(WireCmd.chapterRewardList),
       note: "空体",
     };
   }

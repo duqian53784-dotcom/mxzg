@@ -1,6 +1,7 @@
 /**
  * 真服主线页。展示 s2c 3007 的 now_idx / max_idx。
- * 「挑战」在本页，发空 c2s 3001。主线入口已在「更多」，不往主屏再放矩形。
+ * 「挑战」在本页，发空 c2s 3001。已领首通在本页只读展示，打开时拉空 c2s 3010。
+ * 主线入口已在「更多」，不往主屏再放矩形。
  * 收到 report 用 planBattle 色块回放。不接 spine。不发 18001，不把 Mock 1201/1202 当战报。
  */
 import { Color, Node, UITransform } from "cc";
@@ -21,6 +22,10 @@ import {
   WIRE_MAINLINE_READONLY_NOTE,
   WIRE_MAINLINE_READONLY_TITLE,
 } from "../net/protocol/wireChapter";
+import {
+  formatWireChapterReward,
+  WIRE_CHAPTER_REWARD_UNSYNCED_TOAST,
+} from "../net/protocol/wireChapterReward";
 import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
 
 const PAGE_BG = new Color(8, 16, 32, 255);
@@ -78,6 +83,7 @@ class WireMainlineController implements WireMainlinePage {
   private nowLabel: Node | null = null;
   private maxLabel: Node | null = null;
   private fightLabel: Node | null = null;
+  private rewardLabel: Node | null = null;
   private statusLabel: Node | null = null;
   private resultLabel: Node | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -98,7 +104,9 @@ class WireMainlineController implements WireMainlinePage {
     this.body.parent = this.node;
     this.seenSerial = WireSession.battleSerial;
     this.showInfo();
-    GameLog.shared.info("Mainline", "wire open " + this.nowText() + " / " + this.maxText());
+    if (!WireSession.hasChapterReward()) this.host.showToast(WIRE_CHAPTER_REWARD_UNSYNCED_TOAST);
+    WireSession.pullChapterRewardList();
+    GameLog.shared.info("Mainline", "wire open " + this.nowText() + " / " + this.maxText() + " / " + this.rewardText());
     this.offSync = WireSession.onSync(() => this.onSync());
   }
 
@@ -137,17 +145,19 @@ class WireMainlineController implements WireMainlinePage {
     place(createLabel(WIRE_MAINLINE_READONLY_TITLE, 40, { color: TITLE }), this.body, 0, 360);
     this.nowLabel = place(createLabel(this.nowText(), 28, { color: TITLE, width: 640 }), this.body, 0, 270);
     this.maxLabel = place(createLabel(this.maxText(), 28, { color: TITLE, width: 640 }), this.body, 0, 220);
-    this.fightLabel = place(createLabel(this.fightText(), 24, { color: TITLE, width: 640 }), this.body, 0, 160);
-    this.statusLabel = place(createLabel(this.statusText(), 22, { color: MUTED, width: 640 }), this.body, 0, 100);
-    place(createLabel(WIRE_MAINLINE_READONLY_NOTE, 18, { color: MUTED, width: 640, height: 180 }), this.body, 0, -20);
-    place(createButton("挑战", () => this.challenge(), 240, 52, OPEN_FILL), this.body, 0, -180);
-    place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -260);
+    this.fightLabel = place(createLabel(this.fightText(), 24, { color: TITLE, width: 640 }), this.body, 0, 170);
+    this.rewardLabel = place(createLabel(this.rewardText(), 22, { color: TITLE, width: 640, height: 72 }), this.body, 0, 100);
+    this.statusLabel = place(createLabel(this.statusText(), 22, { color: MUTED, width: 640 }), this.body, 0, 40);
+    place(createLabel(WIRE_MAINLINE_READONLY_NOTE, 18, { color: MUTED, width: 640, height: 140 }), this.body, 0, -70);
+    place(createButton("挑战", () => this.challenge(), 240, 52, OPEN_FILL), this.body, 0, -200);
+    place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -280);
   }
 
   private renderInfo(): void {
     this.write(this.nowLabel, this.nowText());
     this.write(this.maxLabel, this.maxText());
     this.write(this.fightLabel, this.fightText());
+    this.write(this.rewardLabel, this.rewardText());
     if (!this.waiting) this.write(this.statusLabel, this.statusText());
   }
 
@@ -270,6 +280,10 @@ class WireMainlineController implements WireMainlinePage {
     return formatWireFightLine(WireSession.nowIdx, WireSession.maxIdx);
   }
 
+  private rewardText(): string {
+    return formatWireChapterReward(WireSession.chapterReward);
+  }
+
   private statusText(): string {
     const snap = WireSession.battleMatch;
     if (!snap) return "点挑战发 3001";
@@ -342,6 +356,7 @@ class WireMainlineController implements WireMainlinePage {
     this.nowLabel = null;
     this.maxLabel = null;
     this.fightLabel = null;
+    this.rewardLabel = null;
     this.statusLabel = null;
     this.resultLabel = null;
     const kids = this.body.children.slice();

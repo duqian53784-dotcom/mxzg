@@ -500,6 +500,18 @@ import {
   wireMainlineFightStage,
 } from "../assets/scripts/net/protocol/wireBattle";
 import {
+  decodeWireChapterReward,
+  formatWireChapterReward,
+  formatWireChapterRewardLine,
+  WIRE_CHAPTER_REWARD_BANNED_CMDS,
+  WIRE_CHAPTER_REWARD_CMD,
+  WIRE_CHAPTER_REWARD_EMPTY,
+  WIRE_CHAPTER_REWARD_FRAME,
+  WIRE_CHAPTER_REWARD_NOTE,
+  WIRE_CHAPTER_REWARD_SIDE_EFFECT,
+  WIRE_CHAPTER_REWARD_UNSYNCED_TOAST,
+} from "../assets/scripts/net/protocol/wireChapterReward";
+import {
   decodeWireIdle,
   decodeWireIdleClaim,
   formatWireIdle,
@@ -14608,6 +14620,95 @@ async function checkWs(): Promise<void> {
   assert(formatWireChapterIdx("max", null) === "最高 idx 未同步", "missing max_idx on the page");
   assert(formatWireChapterIdx("max", 0) === "最高 idx 0", "max_idx 0 stays on the page");
   assert(formatWireChapterIdx("now", 4) === "当前 idx 4", "now_idx on the page");
+  assert(WireCmd.chapterRewardList === 3010 && WireCmd.chapterRewardList !== WireCmd.battleMatch && WireCmd.chapterRewardList !== WireCmd.chapterData, "online 3010 stays off 3001 and 3007");
+  assert(bytesToHex(encodeFrame(WireCmd.chapterRewardList)) === WIRE_CHAPTER_REWARD_FRAME, "empty c2s 3010");
+  assert(WIRE_CHAPTER_REWARD_FRAME === "04000000c20b0000", "3010 frame constant");
+  assert(bytesToHex(encodeFrame(3010)) === "04000000c20b0000", "3010 little-endian c2 0b");
+  assert(bytesToHex(encodeFrame(3010)) !== "04000000b90b0000", "3010 is not the 3001 frame");
+  assert(bytesToHex(encodeFrame(3010)) !== "04000000bf0b0000", "3010 is not the 3007 frame");
+  assert(bytesToHex(encodeFrame(3010)) !== "04000000bc0b0000", "3010 is not the 3004 frame");
+  assert(bytesToHex(encodeFrame(3010)) !== "04000000bd0b0000", "3010 is not the 3005 frame");
+  assert(bytesToHex(encodeFrame(3002)) !== WIRE_CHAPTER_REWARD_FRAME, "3002 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(3008)) !== WIRE_CHAPTER_REWARD_FRAME, "3008 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(3011)) !== WIRE_CHAPTER_REWARD_FRAME, "3011 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(3012)) !== WIRE_CHAPTER_REWARD_FRAME, "3012 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(3013)) !== WIRE_CHAPTER_REWARD_FRAME, "3013 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(3203)) !== WIRE_CHAPTER_REWARD_FRAME, "3203 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(18001)) !== WIRE_CHAPTER_REWARD_FRAME, "18001 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(3099)) !== WIRE_CHAPTER_REWARD_FRAME, "3099 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(3101)) !== WIRE_CHAPTER_REWARD_FRAME, "3101 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== WIRE_CHAPTER_REWARD_FRAME, "4601 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== WIRE_CHAPTER_REWARD_FRAME, "29001 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(1201)) !== WIRE_CHAPTER_REWARD_FRAME, "mock 1201 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(1202)) !== WIRE_CHAPTER_REWARD_FRAME, "mock 1202 is not the 3010 frame");
+  assert(bytesToHex(encodeFrame(76271)) !== WIRE_CHAPTER_REWARD_FRAME, "76271 is not the 3010 frame");
+  const rewardPacket = encodeWireMessage({ cmd: WIRE_CHAPTER_REWARD_CMD });
+  assert(
+    rewardPacket !== null && rewardPacket.cmdId === 3010 && bytesToHex(rewardPacket.bytes) === "04000000c20b0000" && rewardPacket.note === "空体",
+    "wire.3010 encodes the empty reward-list frame"
+  );
+  for (let ri = 0; ri < WIRE_CHAPTER_REWARD_BANNED_CMDS.length; ri++) {
+    assert(encodeWireMessage({ cmd: WIRE_CHAPTER_REWARD_BANNED_CMDS[ri] }) === null, WIRE_CHAPTER_REWARD_BANNED_CMDS[ri] + " stays off the 3010 encoder");
+  }
+  assert(encodeWireMessage({ cmd: "wire.3001" }) !== null, "3001 stays encoded by its own module and is not reissued as 3010");
+  assert(encodeWireMessage({ cmd: "wire.3007" }) !== null, "3007 stays encoded by its own module and is not reissued as 3010");
+  assert(encodeWireMessage({ cmd: "wire.3004" }) !== null, "3004 stays encoded by its own module and is not reissued as 3010");
+  assert(encodeWireMessage({ cmd: "wire.3203" }) !== null, "3203 stays encoded by its own module and is not reissued as 3010");
+  assert(decodeWireChapterReward(null) === null, "missing 3010 body stays unsynced");
+  assert(decodeWireChapterReward(new Uint8Array([0x80])) === null, "bad 3010 varint does not become a list");
+  const emptyReward = decodeWireChapterReward(new Uint8Array(0));
+  assert(
+    emptyReward !== null && emptyReward.empty && emptyReward.list.length === 0 && formatWireChapterReward(emptyReward) === "已领首通 " + WIRE_CHAPTER_REWARD_EMPTY,
+    "empty 3010 body is 已同步空表 and does not invent zero"
+  );
+  assert(formatWireChapterReward(null) === "已领首通 " + WIRE_CHAPTER_REWARD_UNSYNCED_TOAST, "unsynced 3010 toast text");
+  const rewardZero = decodeWireChapterReward(fieldVarint(1, 0));
+  assert(
+    rewardZero !== null && !rewardZero.empty && rewardZero.list.length === 1 && rewardZero.list[0] === 0 && formatWireChapterRewardLine(0) === "idx=0",
+    "present 3010 zero stays zero"
+  );
+  const rewardList = decodeWireChapterReward(concatBytes(fieldVarint(1, 3), fieldVarint(1, 1)));
+  assert(
+    rewardList !== null && rewardList.list.length === 2 && rewardList.list[0] === 3 && rewardList.list[1] === 1 && formatWireChapterReward(rewardList).indexOf("idx=3、idx=1") >= 0,
+    "3010 keeps claimed idx in arrival order"
+  );
+  const rewardPacked = decodeWireChapterReward(fieldBytes(1, new Uint8Array([2, 0])));
+  assert(rewardPacked !== null && rewardPacked.list.length === 2 && rewardPacked.list[0] === 2 && rewardPacked.list[1] === 0, "3010 packed list keeps 2 and 0");
+  const rewardAbsent = decodeWireChapterReward(fieldVarint(3, 9));
+  assert(
+    rewardAbsent !== null && !rewardAbsent.empty && rewardAbsent.list.length === 0 && formatWireChapterReward(rewardAbsent).indexOf("未带") >= 0 && formatWireChapterReward(rewardAbsent).indexOf("idx=0") < 0 && formatWireChapterReward(rewardAbsent).indexOf("字段3=9") >= 0,
+    "3010 without list does not invent idx 0"
+  );
+  const rewardNeg = decodeWireChapterReward(fieldNeg1(1));
+  assert(rewardNeg !== null && rewardNeg.list.length === 1 && rewardNeg.list[0] === -1 && formatWireChapterReward(rewardNeg).indexOf("idx=-1") >= 0, "3010 keeps -1");
+  assert(decodeWireChapterReward(fieldBytes(1, new Uint8Array([0x80]))) === null, "3010 packed bytes that will not decode are ignored");
+  assert(
+    WIRE_CHAPTER_REWARD_NOTE.indexOf("04000000c20b0000") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("3007") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("3001") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("不进 pullIdle") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("3002") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("3005") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("3008") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("3011") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("3013") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("3012") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("76271") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("4601") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("29001") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("1201") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("1202") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("不改 Boot") >= 0 &&
+      WIRE_CHAPTER_REWARD_NOTE.indexOf("已同步空表") >= 0 &&
+      WIRE_CHAPTER_REWARD_SIDE_EFFECT.indexOf("chapterRewardId") >= 0 &&
+      WIRE_CHAPTER_REWARD_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_CHAPTER_REWARD_SIDE_EFFECT.indexOf("轻日刷") >= 0 &&
+      WIRE_CHAPTER_REWARD_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_CHAPTER_REWARD_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_CHAPTER_REWARD_SIDE_EFFECT.indexOf("无养成写") >= 0 &&
+      WIRE_CHAPTER_REWARD_SIDE_EFFECT.indexOf("不重发 3001") >= 0,
+    "3010 note names the frame, the battle-chain slot, and the banned cmds"
+  );
   const loginBody = encodeObservedLoginBody(960011, 1792466798);
   assert(
     bytesToHex(loginBody) === "2a0a31373932343636373938108bcc3a080718023a0d6d787a672d7765622d3130303132086c6f63616c646576",
@@ -15703,9 +15804,10 @@ async function checkWs(): Promise<void> {
       );
       const sentBeforeOther = roleSockets[0].sent.length;
       roleNet.send("wire.3002");
-      roleNet.send("wire.3010");
-      assert(roleSockets[0].sent.length === sentBeforeOther, "3002 and 3010 stay off the wire");
-      assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
+      roleNet.send("wire.3008");
+      roleNet.send("wire.3012");
+      assert(roleSockets[0].sent.length === sentBeforeOther, "3002, 3008 and 3012 stay off the city pull");
+      assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3012"), "claim and alternate reward cmds are not encoded");
       assert(WireSession.hasChapter() && WireSession.battleMatch === null, "3001 is not pulled with the city");
       const sentBeforeChallenge = roleSockets[0].sent.length;
       const goldBeforeChallenge = Session.gold;
@@ -15734,6 +15836,36 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(WireCmd.battleMatch));
       assert(WireSession.battleMatch !== null && WireSession.battleMatch.empty && WireSession.battleMatch.report === null, "empty 3001 is a synced empty table");
       assert(roleSockets[0].sent.length === sentBeforeEmptyBattle, "empty 3001 does not fall back to 1201");
+      const sentBeforeRewardPull = roleSockets[0].sent.length;
+      const goldBeforeReward = Session.gold;
+      assert(WireSession.pullChapterRewardList(), "3010 pulls when 3007 idx is present");
+      assert(roleSockets[0].sent.length === sentBeforeRewardPull + 1, "3010 is one frame and does not resend 3001 or the idle chain");
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeRewardPull] as ArrayBuffer)) === "04000000c20b0000",
+        "reward list frame is empty c2s 3010 after the merged 3001 slot"
+      );
+      assert(Session.gold === goldBeforeReward, "3010 does not write gold");
+      roleSockets[0].push(encodeFrame(WireCmd.chapterRewardList));
+      assert(
+        WireSession.hasChapterReward() && WireSession.chapterReward !== null && WireSession.chapterReward.empty && formatWireChapterReward(WireSession.chapterReward).indexOf("已同步空表") >= 0,
+        "empty 3010 is a synced empty table"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.chapterRewardList, concatBytes(fieldVarint(1, 4), fieldVarint(1, 0))));
+      assert(
+        WireSession.chapterReward !== null && WireSession.chapterReward.list.length === 2 && WireSession.chapterReward.list[1] === 0 && Session.gold === goldBeforeReward,
+        "3010 list keeps a present zero and does not write gold"
+      );
+      roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
+      assert(WireSession.chapterReward !== null && WireSession.chapterReward.list[0] === 4, "mock 1201 does not replace the 3010 list");
+      const sentBeforeNoChapter = roleSockets[0].sent.length;
+      const savedNow = WireSession.nowIdx;
+      const savedMax = WireSession.maxIdx;
+      WireSession.nowIdx = null;
+      WireSession.maxIdx = null;
+      assert(!WireSession.pullChapterRewardList(), "3010 does not send without 3007 idx");
+      WireSession.nowIdx = savedNow;
+      WireSession.maxIdx = savedMax;
+      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010 on the wire");
       roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
       assert(WireSession.battleMatch !== null && WireSession.battleMatch.empty, "mock 1201 does not replace the 3001 report");
       const sentBeforeBannedBattle = roleSockets[0].sent.length;
@@ -15750,7 +15882,7 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.1201");
       roleNet.send("wire.1202");
       assert(roleSockets[0].sent.length === sentBeforeBannedBattle, "battle reward and mock stage cmds stay off the wire");
-      assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
+      assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3012"), "claim cmds stay unencoded");
       lines.length = 0;
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
@@ -15766,6 +15898,13 @@ async function checkWs(): Promise<void> {
         }
       }
       assert(battleFramesInIdle === 0, "pullIdle does not send empty c2s 3001");
+      let rewardFramesInIdle = 0;
+      for (let idleR = 0; idleR < 64; idleR++) {
+        if (bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + idleR] as ArrayBuffer)) === "04000000c20b0000") {
+          rewardFramesInIdle += 1;
+        }
+      }
+      assert(rewardFramesInIdle === 0, "pullIdle does not send empty c2s 3010");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 1] as ArrayBuffer)) === "04000000983a0000",
         "pullIdle sends empty c2s 15000 after 3004"
