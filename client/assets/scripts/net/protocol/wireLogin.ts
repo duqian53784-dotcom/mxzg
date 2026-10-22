@@ -165,6 +165,7 @@ import { WIRE_HEI_WU_MISSION_CMD } from "./wireHeiWuMission";
 import { WIRE_CHRISTMAS_GIFT_CMD } from "./wireChristmasGift";
 import { WIRE_SPRING_OUTING_CMD } from "./wireSpringOuting";
 import { WIRE_CHRISTMAS_MISSION_CMD } from "./wireChristmasMission";
+import { WIRE_MAGIC_TOWER_LEVEL_RANK_CMD } from "./wireMagicTowerLevelRank";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
 const LOGIN_FIELD1 = 7;
@@ -305,14 +306,15 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.76001 → 空的 c2s 76001（黑五活动 GReqBlackFiveMissionGetDataInfo / GResBlackFiveMissionGetDataInfo，HEI_WU_MISSION / promo081）。无 page，无 FIELD。整帧 04000000e1280100。不编 76002、76003、76004、76005、76021、76022、75001、76501、73002、71001、74121、74122、4601、29001、20011。76002 是领任务奖，76003 是进度推，76004 是领任务箱，76005 是购礼包推，76021、76022 不夹发，都不编码。76101 约惠圣诞另帧编码空体，勿与本帧合并。75901 已合，勿合并，不重复拉。不并入 75901。
  * wire.76101 → 空的 c2s 76101（约惠圣诞礼包 GReqChristmasGiftInfo / GResChristmasGiftInfo，CHRISTMAS_GIFT / promo086）。无 page，无 FIELD。整帧 0400000045290100。不编 76102、76082、76083、76084、76121、76122、76141、76142、76143、76161、76162、76163、75001、76501、73002、71001、74121、74122、4601、29001、20011。76102 是礼包购买推送，76082–76084、76121–76122、76141–76143、76161–76163 是旁支，76301 出游寻春另帧编码空体，勿与本帧合并。76001 已合，勿合并，不重复拉。不并入 76001。
  * wire.76301 → 空的 c2s 76301（出游寻春 GReqSpringOutingMissionGetDataInfo / GResSpringOutingMissionGetDataInfo，CHU_YOU_XUN_CHUN / promo096）。无 page，无 FIELD。整帧 040000000d2a0100。不编 76302、76303、76304、76305、76306、76307、76308、75001、76501、73002、71001、74121、74122、4601、29001、20011。76302 是领任务奖，76303 是更新任务进度推送，76304 是领宝箱/皮肤数量奖，76305–76308 勿夹，76081 圣诞连线另帧编码空体，勿与本帧合并。76101 已合，勿合并，不重复拉。不并入 76101。
- * wire.76081 → 空的 c2s 76081（圣诞连线 GReqChristmasMissionGetDataInfo / GResChristmasMissionGetDataInfo，CHRISTMAS_MISSION / promo085）。无 page，无 FIELD。整帧 0400000031290100。不编 76082、76083、76084、76121、76122、76141、76142、76143、76161、76162、76163、76520、75001、76501、73002、71001、74121、74122、4601、29001、20011。76082 是领任务奖，76083 是进度推送，76084 是领任务箱，76121、76122、76141、76143、76161、76163 是旁支，76520 备选暂不做，都不编码。76301 已合，勿合并，不重复拉。不并入 76301。
+ * wire.76081 → 空的 c2s 76081（圣诞连线 GReqChristmasMissionGetDataInfo / GResChristmasMissionGetDataInfo，CHRISTMAS_MISSION / promo085）。无 page，无 FIELD。整帧 0400000031290100。不编 76082、76083、76084、76121、76122、76141、76142、76143、76161、76162、76163、75001、76501、73002、71001、74121、74122、4601、29001、20011。76082 是领任务奖，76083 是进度推送，76084 是领任务箱，76121、76122、76141、76143、76161、76163 是旁支，都不编码。76520 关卡榜另帧编码空体，勿与本帧合并。76301 已合，勿合并，不重复拉。不并入 76301。
+ * wire.76520 → 空的 c2s 76520（关卡榜 GReqMagicTowerLevelRank / GResMagicTowerLevelRank）。无 page，无 FIELD。整帧 04000000e82a0100。不编 76501、76502、76503、76504、76505、76506、76543、76544、76251、75001、73002、71001、74121、74122、4601、29001、20011。76501–76506、76543、76544 禁发，76251 备选本轮不做，都不编码。76081 已合，勿合并，不重复拉。不并入 76081。不重复拉 76542。
  * 别的 cmd 返回 null，调用方不得把占位包写到线上。占位表里的 2001 仍是 Mock 的 tower.view。
  * 占位 idle.query / idle.claim 仍是 1301 / 1302，和这两帧不是一回事。
  * 占位 bag.list / bag.use 仍是 1601 / 1602。3002 / 3010 不编码。
  * 5002 不编码。5004–5009、5010、5011–5013 不编码。
  * 占位 mail.list / mail.read / mail.claim / mail.claimAll / mail.delete 仍是 1701–1705。领取和删除不编码。
  * 占位 hero.list / hero.upgrade 仍是 1401 / 1402。升级不编码。18001 不是英雄。
- * 占位 login7.view / login7.claim / login7.advance 仍是 2201–2203。领取不编码。wire.12020 编码空体，勿与 13010 或启动链 12010 合并。wire.12021、wire.12022、wire.61002、wire.62002、wire.62003、wire.62004、wire.62005、wire.63002、wire.63003、wire.69002、wire.71001、wire.74002、wire.74003、wire.73002、wire.74121、wire.74122、wire.74123、wire.74124、wire.74125、wire.74126、wire.74127、wire.74128、wire.74129、wire.74131、wire.74142、wire.74147、wire.74148、wire.74149、wire.76501、wire.76543、wire.76544、wire.76502、wire.76503、wire.76504、wire.76505、wire.76506、wire.76541、wire.75001、wire.75102 不编码。wire.75122、wire.75132、wire.75102 不编码。wire.75801 编码空体，勿与 75131 合并。wire.75901 编码空体，勿与 75801 合并。wire.76001 编码空体，勿与 75901 合并。wire.76101 编码空体，勿与 76001 合并。不编 wire.75902、wire.75903、wire.75904、wire.75931、wire.75932、wire.75941、wire.75942、wire.75943、wire.75944、wire.76002、wire.76003、wire.76004、wire.76005、wire.76021、wire.76022、wire.76102、wire.76082、wire.76083、wire.76084、wire.76121、wire.76122、wire.76141、wire.76142、wire.76143、wire.76161、wire.76162、wire.76163、wire.76520。wire.76301 编码空体，勿与 76101 合并。wire.76081 编码空体，勿与 76301 合并。不编 wire.76302、wire.76303、wire.76304、wire.76305、wire.76306、wire.76307、wire.76308。wire.75131 编码空体，勿与 75121 合并。wire.75121 编码空体，勿与 75101 合并。wire.75101 编码空体，勿与 76542 合并。wire.76542 编码空体，勿与 74120 合并。wire.74120 编码空体，勿与 74001 合并。wire.74001 编码空体，勿与 69001 合并。wire.69001 编码空体，勿与 63001 合并。wire.63001 编码空体，勿与 62001 合并。wire.62001 编码空体，勿与 61001 合并。wire.61001 编码空体，勿与 26001 合并。wire.26001 编码空体，勿与 26002 合并。wire.26002 编码空体，勿与 12020 或启动链 12010 合并。
+ * 占位 login7.view / login7.claim / login7.advance 仍是 2201–2203。领取不编码。wire.12020 编码空体，勿与 13010 或启动链 12010 合并。wire.12021、wire.12022、wire.61002、wire.62002、wire.62003、wire.62004、wire.62005、wire.63002、wire.63003、wire.69002、wire.71001、wire.74002、wire.74003、wire.73002、wire.74121、wire.74122、wire.74123、wire.74124、wire.74125、wire.74126、wire.74127、wire.74128、wire.74129、wire.74131、wire.74142、wire.74147、wire.74148、wire.74149、wire.76501、wire.76543、wire.76544、wire.76502、wire.76503、wire.76504、wire.76505、wire.76506、wire.76541、wire.75001、wire.75102 不编码。wire.75122、wire.75132、wire.75102 不编码。wire.75801 编码空体，勿与 75131 合并。wire.75901 编码空体，勿与 75801 合并。wire.76001 编码空体，勿与 75901 合并。wire.76101 编码空体，勿与 76001 合并。不编 wire.75902、wire.75903、wire.75904、wire.75931、wire.75932、wire.75941、wire.75942、wire.75943、wire.75944、wire.76002、wire.76003、wire.76004、wire.76005、wire.76021、wire.76022、wire.76102、wire.76082、wire.76083、wire.76084、wire.76121、wire.76122、wire.76141、wire.76142、wire.76143、wire.76161、wire.76162、wire.76163、wire.76251。wire.76301 编码空体，勿与 76101 合并。wire.76081 编码空体，勿与 76301 合并。wire.76520 编码空体，勿与 76081 合并。不编 wire.76302、wire.76303、wire.76304、wire.76305、wire.76306、wire.76307、wire.76308。wire.75131 编码空体，勿与 75121 合并。wire.75121 编码空体，勿与 75101 合并。wire.75101 编码空体，勿与 76542 合并。wire.76542 编码空体，勿与 74120 合并。wire.74120 编码空体，勿与 74001 合并。wire.74001 编码空体，勿与 69001 合并。wire.69001 编码空体，勿与 63001 合并。wire.63001 编码空体，勿与 62001 合并。wire.62001 编码空体，勿与 61001 合并。wire.61001 编码空体，勿与 26001 合并。wire.26001 编码空体，勿与 26002 合并。wire.26002 编码空体，勿与 12020 或启动链 12010 合并。
  * wire.22001、wire.22002 不编码。22002 是 s2c 推送。
  * 占位 goal7.view / goal7.claim 仍是 2301 / 2302。领取不编码。
  * wire.21011、wire.21012、wire.21013 不编码。21013 是 s2c。wire.21000、wire.21001 不编码。
@@ -833,6 +835,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.christmasMission,
       bytes: encodeFrame(WireCmd.christmasMission),
+      note: "空体",
+    };
+  }
+  if (cmd === WIRE_MAGIC_TOWER_LEVEL_RANK_CMD) {
+    return {
+      cmdId: WireCmd.magicTowerLevelRank,
+      bytes: encodeFrame(WireCmd.magicTowerLevelRank),
       note: "空体",
     };
   }
