@@ -490,13 +490,20 @@ import {
   decodeWireBattleMatch,
   formatWireBattleMatch,
   formatWireFightLine,
-  planWireReportReplay,
+  planWireSpineReplay,
+  resolveWireBattleWin,
   WIRE_BATTLE_EMPTY,
   WIRE_BATTLE_MATCH_CMD,
   WIRE_BATTLE_MATCH_FRAME,
   WIRE_BATTLE_MATCH_NOTE,
   WIRE_BATTLE_MATCH_SIDE_EFFECT,
   WIRE_BATTLE_UNSYNCED_TOAST,
+  WIRE_SPINE_ALLY_STEMS,
+  WIRE_SPINE_BOSS,
+  WIRE_SPINE_ENEMY_STEMS,
+  WIRE_SPINE_FLAG,
+  WIRE_SPINE_LOAD_FAIL,
+  WIRE_SPINE_SWORD,
   wireMainlineFightStage,
 } from "../assets/scripts/net/protocol/wireBattle";
 import {
@@ -14578,8 +14585,14 @@ async function checkWs(): Promise<void> {
       WIRE_MAINLINE_READONLY_NOTE.indexOf("29001") >= 0 &&
       WIRE_MAINLINE_READONLY_NOTE.indexOf("1201") >= 0 &&
       WIRE_MAINLINE_READONLY_NOTE.indexOf("1202") >= 0 &&
-      WIRE_MAINLINE_READONLY_NOTE.indexOf("色块") >= 0 &&
-      WIRE_MAINLINE_READONLY_NOTE.indexOf("不接 spine") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("spine") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("battle_type") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("win_id") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("rounds") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3102") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3006") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("不接 spine") < 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("色块") < 0 &&
       WIRE_MAINLINE_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
       WIRE_MAINLINE_READONLY_NOTE.indexOf("不写金币") >= 0 &&
       WIRE_MAINLINE_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
@@ -14588,7 +14601,7 @@ async function checkWs(): Promise<void> {
       WIRE_BATTLE_UNSYNCED_TOAST === "真服未同步" &&
       WIRE_BATTLE_MATCH_SIDE_EFFECT.indexOf("3007") >= 0 &&
       WIRE_BATTLE_MATCH_SIDE_EFFECT.indexOf("不发 3002") >= 0,
-    "3001 note names the frame, the color replay, and the banned cmds"
+    "3001 note names the frame, the spine replay, and the banned cmds"
   );
   assert(WireCmd.battleMatch === 3001 && CmdId.stageEnter === 1201 && CmdId.stageResult === 1202, "online 3001 stays off the mock stage ids");
   assert(bytesToHex(encodeFrame(WireCmd.battleMatch)) === WIRE_BATTLE_MATCH_FRAME, "empty c2s 3001");
@@ -14602,7 +14615,7 @@ async function checkWs(): Promise<void> {
     battlePacket !== null && battlePacket.cmdId === 3001 && bytesToHex(battlePacket.bytes) === "04000000b90b0000" && battlePacket.note === "空体",
     "wire.3001 encodes the empty challenge frame"
   );
-  const bannedBattle = ["wire.3002", "wire.3008", "wire.3011", "wire.3013", "wire.3100", "wire.3097", "wire.3098", "wire.18002", "wire.4601", "wire.29001", "wire.1201", "wire.1202"];
+  const bannedBattle = ["wire.3002", "wire.3006", "wire.3008", "wire.3011", "wire.3013", "wire.3100", "wire.3102", "wire.3097", "wire.3098", "wire.18002", "wire.4601", "wire.29001", "wire.1201", "wire.1202"];
   for (let bi = 0; bi < bannedBattle.length; bi++) {
     assert(encodeWireMessage({ cmd: bannedBattle[bi] }) === null, bannedBattle[bi] + " stays off the 3001 encoder");
   }
@@ -14610,27 +14623,206 @@ async function checkWs(): Promise<void> {
   assert(decodeWireBattleMatch(Uint8Array.from([0x80])) === null, "bad 3001 varint does not become a report");
   const emptyBattle = decodeWireBattleMatch(new Uint8Array(0));
   assert(emptyBattle !== null && emptyBattle.empty && emptyBattle.report === null && formatWireBattleMatch(emptyBattle) === WIRE_BATTLE_EMPTY, "empty 3001 body is 已同步空表");
-  const winReport = decodeWireBattleMatch(fieldBytes(1, fieldVarint(2, 1)));
-  assert(winReport !== null && winReport.report !== null && winReport.report.win === true && winReport.empty === false, "3001 report field 2 = 1 is a win");
-  const loseReport = decodeWireBattleMatch(fieldBytes(1, fieldVarint(2, 0)));
-  assert(loseReport !== null && loseReport.report !== null && loseReport.report.win === false, "3001 report field 2 = 0 stays a loss and is not dropped");
-  const unmarked = decodeWireBattleMatch(fieldBytes(1, fieldVarint(3, 9)));
+  const typeOnly = decodeWireBattleMatch(fieldBytes(1, fieldVarint(2, 1)));
   assert(
-    unmarked !== null && unmarked.report !== null && unmarked.report.win === null && formatWireBattleMatch(unmarked).indexOf("胜负未带") >= 0 && formatWireBattleMatch(unmarked).indexOf("字段3=9") >= 0,
-    "3001 without field 2 does not invent a win"
+    typeOnly !== null &&
+      typeOnly.report !== null &&
+      typeOnly.empty === false &&
+      typeOnly.report.battleType === 1 &&
+      typeOnly.report.winId === null &&
+      typeOnly.report.atkId === null &&
+      resolveWireBattleWin(typeOnly.report, 1000002) === null &&
+      formatWireBattleMatch(typeOnly).indexOf("report 胜负未带 /") >= 0 &&
+      formatWireBattleMatch(typeOnly).indexOf("battle_type 1") >= 0,
+    "3001 report field 2 = 1 is battle_type and is not a win"
+  );
+  const typeZero = decodeWireBattleMatch(fieldBytes(1, fieldVarint(2, 0)));
+  assert(
+    typeZero !== null &&
+      typeZero.report !== null &&
+      typeZero.report.battleType === 0 &&
+      typeZero.report.winId === null &&
+      resolveWireBattleWin(typeZero.report, null) === null &&
+      formatWireBattleMatch(typeZero).indexOf("battle_type 0") >= 0 &&
+      formatWireBattleMatch(typeZero).indexOf("report 负 /") < 0,
+    "3001 report field 2 = 0 stays battle_type 0 and is not a loss"
+  );
+  const winByAtk = decodeWireBattleMatch(fieldBytes(1, concatBytes(fieldVarint(3, 42), fieldVarint(5, 42))));
+  assert(
+    winByAtk !== null &&
+      winByAtk.report !== null &&
+      winByAtk.report.battleType === null &&
+      winByAtk.report.atkId === 42 &&
+      winByAtk.report.winId === 42 &&
+      resolveWireBattleWin(winByAtk.report, null) === true &&
+      formatWireBattleMatch(winByAtk).indexOf("report 胜 /") >= 0,
+    "win_id matching atk_id is a win without using field 2"
+  );
+  const winByRole = decodeWireBattleMatch(fieldBytes(1, concatBytes(fieldVarint(3, 7), fieldVarint(5, 1000002))));
+  assert(
+    winByRole !== null &&
+      winByRole.report !== null &&
+      resolveWireBattleWin(winByRole.report, null) === false &&
+      resolveWireBattleWin(winByRole.report, 1000002) === true,
+    "win_id matching the role id is a win even when atk_id differs"
+  );
+  const winIdZero = decodeWireBattleMatch(fieldBytes(1, concatBytes(fieldVarint(3, 5), fieldVarint(5, 0))));
+  assert(
+    winIdZero !== null &&
+      winIdZero.report !== null &&
+      winIdZero.report.winId === 0 &&
+      winIdZero.report.atkId === 5 &&
+      resolveWireBattleWin(winIdZero.report, null) === false &&
+      resolveWireBattleWin(winIdZero.report, 0) === true,
+    "present win_id 0 is not a missing field"
+  );
+  const unmarked = decodeWireBattleMatch(fieldBytes(1, fieldVarint(20, 9)));
+  assert(
+    unmarked !== null &&
+      unmarked.report !== null &&
+      unmarked.report.battleType === null &&
+      unmarked.report.winId === null &&
+      resolveWireBattleWin(unmarked.report, 9) === null &&
+      formatWireBattleMatch(unmarked).indexOf("胜负未带") >= 0 &&
+      formatWireBattleMatch(unmarked).indexOf("字段20=9") >= 0 &&
+      formatWireBattleMatch(unmarked).indexOf("battle_type 未带") >= 0,
+    "3001 without win_id does not invent a win or a zero battle_type"
+  );
+  const hpZeroHero = decodeWireBattleMatch(fieldBytes(1, fieldBytes(7, fieldVarint(3, 0))));
+  assert(
+    hpZeroHero !== null &&
+      hpZeroHero.report !== null &&
+      hpZeroHero.report.atkHeroes.length === 1 &&
+      hpZeroHero.report.atkHeroes[0].hp === 0 &&
+      hpZeroHero.report.atkHeroes[0].pos === null &&
+      hpZeroHero.report.atkHeroes[0].heroId === null &&
+      hpZeroHero.report.atkHeroes[0].maxHp === null,
+    "present hero hp 0 stays 0 and missing hero fields stay null"
+  );
+  const ally = concatBytes(fieldVarint(1, 1), concatBytes(fieldVarint(2, 10105008), concatBytes(fieldVarint(3, 80), fieldVarint(4, 100))));
+  const enemy = concatBytes(fieldVarint(1, 2), fieldVarint(2, 10101));
+  const hit = concatBytes(fieldVarint(1, 2), concatBytes(fieldVarint(2, 15), fieldVarint(3, 0)));
+  const action = concatBytes(fieldVarint(1, 1), concatBytes(concatBytes(fieldVarint(2, 9), fieldVarint(4, 1)), fieldBytes(3, hit)));
+  const round = concatBytes(fieldVarint(1, 1), fieldBytes(2, action));
+  const roundBody = concatBytes(
+    concatBytes(fieldVarint(2, 1), concatBytes(fieldVarint(3, 42), fieldVarint(5, 42))),
+    concatBytes(fieldBytes(6, round), concatBytes(fieldBytes(7, ally), fieldBytes(8, enemy)))
+  );
+  const roundReport = decodeWireBattleMatch(fieldBytes(1, roundBody));
+  assert(
+    roundReport !== null &&
+      roundReport.report !== null &&
+      roundReport.report.rounds.length === 1 &&
+      roundReport.report.rounds[0].index === 1 &&
+      roundReport.report.rounds[0].actions.length === 1 &&
+      roundReport.report.rounds[0].actions[0].atkPos === 1 &&
+      roundReport.report.rounds[0].actions[0].skillId === 9 &&
+      roundReport.report.rounds[0].actions[0].camp === 1 &&
+      roundReport.report.rounds[0].actions[0].hits.length === 1 &&
+      roundReport.report.rounds[0].actions[0].hits[0].defPos === 2 &&
+      roundReport.report.rounds[0].actions[0].hits[0].hurt === 15 &&
+      roundReport.report.rounds[0].actions[0].hits[0].hp === 0 &&
+      roundReport.report.atkHeroes[0].heroId === 10105008 &&
+      roundReport.report.atkHeroes[0].hp === 80 &&
+      roundReport.report.defHeroes[0].heroId === 10101 &&
+      roundReport.report.defHeroes[0].hp === null,
+    "3001 rounds keep action, hit, and hero numbers, including a present zero hp"
+  );
+  const badRound = decodeWireBattleMatch(fieldBytes(1, concatBytes(fieldVarint(2, 1), fieldBytes(6, Uint8Array.from([0x80])))));
+  assert(
+    badRound !== null &&
+      badRound.report !== null &&
+      badRound.report.battleType === 1 &&
+      badRound.report.rounds.length === 0 &&
+      formatWireBattleMatch(badRound).indexOf("字段6=包1") >= 0,
+    "a bad round blob stays a mark and does not drop the report"
   );
   const noReport = decodeWireBattleMatch(fieldVarint(3, 1));
   assert(noReport !== null && noReport.report === null && noReport.empty === false && formatWireBattleMatch(noReport).indexOf("没有 report") >= 0, "3001 without report does not invent one");
   assert(wireMainlineFightStage(null, 0) === 1 && formatWireFightLine(null, 0) === "进战 idx 1", "max_idx 0 fights chapterId+1");
   assert(wireMainlineFightStage(null, null) === null && formatWireFightLine(null, null) === "进战 idx 未同步", "missing idx is not fight stage 0");
   assert(wireMainlineFightStage(4, null) === 4, "only now_idx is used when max_idx is absent");
-  const replayWin = planWireReportReplay(1, true, "真服");
-  assert(replayWin.win && replayWin.rounds.length === 4 && replayWin.rounds[0].allies[0].name === "真服", "win report uses the color-block clear script");
-  const replayLose = planWireReportReplay(1, false, "真服");
-  assert(!replayLose.win && replayLose.rounds.length === 4 && replayLose.stageId === 1, "loss report still plays color blocks at stage 1");
-  const replayUnknown = planWireReportReplay(3, null, "真服");
-  assert(!replayUnknown.win && replayUnknown.rounds.length === 1 && replayUnknown.rounds[0].line.indexOf("突进") >= 0, "missing win plays only the first color round");
-  assert(planWireReportReplay(1, true, "真服").rounds[0].allies.length === 3, "color replay keeps the three ally blocks");
+  const typePlan = planWireSpineReplay(typeOnly.report as NonNullable<typeof typeOnly.report>, 1000002, 3);
+  assert(
+    typePlan.win === null &&
+      typePlan.beats.length === 1 &&
+      typePlan.beats[0].line.indexOf("站场") >= 0 &&
+      typePlan.beats[0].line.indexOf("突进") < 0 &&
+      typePlan.stems.indexOf(WIRE_SPINE_ALLY_STEMS[0]) >= 0 &&
+      typePlan.stems.indexOf(WIRE_SPINE_ENEMY_STEMS[0]) >= 0 &&
+      typePlan.stems.indexOf(WIRE_SPINE_FLAG) >= 0 &&
+      typePlan.stems.indexOf(WIRE_SPINE_SWORD) >= 0 &&
+      typePlan.stems.indexOf("bisha") < 0 &&
+      typePlan.stems.indexOf(WIRE_SPINE_BOSS) < 0,
+    "battle_type alone stands on the default spines and does not play the mock script"
+  );
+  const winPlan = planWireSpineReplay(winByAtk.report as NonNullable<typeof winByAtk.report>, null, 4);
+  let winAttack = false;
+  let winDie = false;
+  for (let wi = 0; wi < winPlan.beats.length; wi++) {
+    for (let wc = 0; wc < winPlan.beats[wi].cues.length; wc++) {
+      if (winPlan.beats[wi].cues[wc].clip === "attack") winAttack = true;
+      if (winPlan.beats[wi].cues[wc].clip === "die") winDie = true;
+    }
+  }
+  assert(
+    winPlan.win === true &&
+      winPlan.stageId === 4 &&
+      winPlan.beats.length >= 2 &&
+      winPlan.beats[0].line.indexOf("站场") >= 0 &&
+      winAttack &&
+      winDie &&
+      winPlan.stems.indexOf(WIRE_SPINE_BOSS) >= 0 &&
+      winPlan.stems.indexOf("bisha") < 0,
+    "a win without defenders plays an ally attack and crusade_boss_die"
+  );
+  const roundPlan = planWireSpineReplay(roundReport.report as NonNullable<typeof roundReport.report>, null, 1);
+  const attackBeat = roundPlan.beats[roundPlan.beats.length - 1];
+  let roundHit = false;
+  for (let rc = 0; rc < attackBeat.cues.length; rc++) {
+    if (attackBeat.cues[rc].clip === "hit") roundHit = true;
+  }
+  assert(
+    roundPlan.slots[0].stem === "10105008" &&
+      roundPlan.slots[1].stem === "10101" &&
+      attackBeat.line.indexOf("回合 1") >= 0 &&
+      attackBeat.line.indexOf("攻击") >= 0 &&
+      attackBeat.line.indexOf("技能 9 未播") >= 0 &&
+      attackBeat.line.indexOf("伤害 15") >= 0 &&
+      attackBeat.hp[1] === 0 &&
+      !roundHit &&
+      roundPlan.stems.indexOf("bisha") < 0,
+    "rounds drive an attack cue, keep the hit hp, and do not play hit or bisha"
+  );
+  const noActor = concatBytes(fieldVarint(2, 3), fieldBytes(2, fieldVarint(2, 4)));
+  const noActorReport = decodeWireBattleMatch(fieldBytes(1, fieldBytes(6, noActor)));
+  assert(noActorReport !== null && noActorReport.report !== null && noActorReport.report.rounds[0].index === null, "missing round index stays null");
+  assert(noActorReport.report.rounds[0].actions[0].atkPos === null && noActorReport.report.rounds[0].actions[0].skillId === 4, "missing atk_pos stays null");
+  const noActorPlan = planWireSpineReplay(noActorReport.report, null, 1);
+  assert(
+    noActorPlan.beats[noActorPlan.beats.length - 1].line.indexOf("回合未带") >= 0 &&
+      noActorPlan.beats[noActorPlan.beats.length - 1].line.indexOf("行动者未带") >= 0 &&
+      noActorPlan.beats[noActorPlan.beats.length - 1].line.indexOf("位置 0") < 0,
+    "a missing actor is not written as position 0"
+  );
+  const bothPos = concatBytes(fieldBytes(7, fieldVarint(1, 1)), fieldBytes(8, fieldVarint(1, 1)));
+  const bothAction = fieldBytes(6, fieldBytes(2, fieldVarint(1, 1)));
+  const bothReport = decodeWireBattleMatch(fieldBytes(1, concatBytes(bothPos, bothAction)));
+  assert(bothReport !== null && bothReport.report !== null, "shared pos report decodes");
+  const bothPlan = planWireSpineReplay(bothReport.report as NonNullable<typeof bothReport.report>, null, 1);
+  let bothAttack = false;
+  for (let bc = 0; bc < bothPlan.beats[bothPlan.beats.length - 1].cues.length; bc++) {
+    if (bothPlan.beats[bothPlan.beats.length - 1].cues[bc].clip === "attack") bothAttack = true;
+  }
+  assert(
+    bothPlan.beats[bothPlan.beats.length - 1].line.indexOf("阵营未带") >= 0 && !bothAttack,
+    "the same pos on both sides does not invent an attacker"
+  );
+  assert(WIRE_SPINE_LOAD_FAIL === "spine 未加载", "spine load failure has a visible toast");
+  const pools = WIRE_SPINE_ALLY_STEMS.concat(WIRE_SPINE_ENEMY_STEMS);
+  for (let pi = 0; pi < pools.length; pi++) {
+    assert(typePlan.stems.indexOf("bisha") < 0 && pools[pi] !== "bisha", "action pools stay off bisha");
+  }
   assert(formatWireChapterIdx("now", null) === "当前 idx 未同步", "missing now_idx on the page");
   assert(formatWireChapterIdx("max", null) === "最高 idx 未同步", "missing max_idx on the page");
   assert(formatWireChapterIdx("max", 0) === "最高 idx 0", "max_idx 0 stays on the page");
@@ -15951,9 +16143,30 @@ async function checkWs(): Promise<void> {
         "challenge frame is empty c2s 3001"
       );
       const serialBefore = WireSession.battleSerial;
-      const sentBeforeWin = roleSockets[0].sent.length;
+      const sentBeforeType = roleSockets[0].sent.length;
       roleSockets[0].push(encodeFrame(WireCmd.battleMatch, fieldBytes(1, fieldVarint(2, 1))));
-      assert(WireSession.battleSerial === serialBefore + 1 && WireSession.battleMatch !== null && WireSession.battleMatch.report !== null && WireSession.battleMatch.report.win === true, "win report is stored");
+      assert(
+        WireSession.battleSerial === serialBefore + 1 &&
+          WireSession.battleMatch !== null &&
+          WireSession.battleMatch.report !== null &&
+          WireSession.battleMatch.report.battleType === 1 &&
+          WireSession.battleMatch.report.winId === null &&
+          resolveWireBattleWin(WireSession.battleMatch.report, Session.role ? Session.role.roleId : null) === null,
+        "field 2 is battle_type and does not invent a win"
+      );
+      assert(roleSockets[0].sent.length === sentBeforeType, "battle_type alone does not pull 3007");
+      const sentBeforeWin = roleSockets[0].sent.length;
+      roleSockets[0].push(
+        encodeFrame(WireCmd.battleMatch, fieldBytes(1, concatBytes(fieldVarint(2, 1), concatBytes(fieldVarint(3, 42), fieldVarint(5, 42)))))
+      );
+      assert(
+        WireSession.battleMatch !== null &&
+          WireSession.battleMatch.report !== null &&
+          WireSession.battleMatch.report.atkId === 42 &&
+          WireSession.battleMatch.report.winId === 42 &&
+          resolveWireBattleWin(WireSession.battleMatch.report, null) === true,
+        "win_id matching atk_id is stored as a win"
+      );
       assert(roleSockets[0].sent.length === sentBeforeWin + 1, "win refreshes 3007 once");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeWin] as ArrayBuffer)) === "04000000bf0b0000",
@@ -15961,8 +16174,16 @@ async function checkWs(): Promise<void> {
       );
       assert(Session.gold === goldBeforeChallenge && Session.stageId === stageBeforeChallenge, "3001 does not write gold or the mock stage");
       const sentBeforeLose = roleSockets[0].sent.length;
-      roleSockets[0].push(encodeFrame(WireCmd.battleMatch, fieldBytes(1, fieldVarint(2, 0))));
-      assert(WireSession.battleMatch !== null && WireSession.battleMatch.report !== null && WireSession.battleMatch.report.win === false, "loss report stays a loss");
+      roleSockets[0].push(
+        encodeFrame(WireCmd.battleMatch, fieldBytes(1, concatBytes(fieldVarint(2, 0), concatBytes(fieldVarint(3, 42), fieldVarint(5, 7)))))
+      );
+      assert(
+        WireSession.battleMatch !== null &&
+          WireSession.battleMatch.report !== null &&
+          WireSession.battleMatch.report.battleType === 0 &&
+          resolveWireBattleWin(WireSession.battleMatch.report, Session.role ? Session.role.roleId : null) === false,
+        "battle_type 0 with a different win_id stays a loss"
+      );
       assert(roleSockets[0].sent.length === sentBeforeLose, "loss does not pull 3007 or 3002");
       const sentBeforeEmptyBattle = roleSockets[0].sent.length;
       roleSockets[0].push(encodeFrame(WireCmd.battleMatch));

@@ -3,20 +3,24 @@
  * 「挑战」在本页，发空 c2s 3001。已领首通在本页只读展示，打开时拉空 c2s 3010。
  * 快速战斗次数在本页只读展示，3010 之后再拉空 c2s 3012。不发 3013。
  * 主线入口已在「更多」，不往主屏再放矩形。
- * 收到 report 用 planBattle 色块回放。不接 spine。不发 18001，不把 Mock 1201/1202 当战报。
+ * 收到 report 在本页播 spine 站场和回合动作。不发 18001，不把 Mock 1201/1202 当战报。
+ * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。
  */
-import { Color, Node, UITransform } from "cc";
+import { Color, Node } from "cc";
 import { ErrorCode, errorText } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import { WireSession } from "../net/WireSession";
-import { BattlePlan, BattleRound, BattleUnit } from "../module/mainline/battle";
 import {
   formatWireBattleMatch,
   formatWireFightLine,
-  planWireReportReplay,
+  planWireSpineReplay,
+  resolveWireBattleWin,
   WIRE_BATTLE_UNSYNCED_TOAST,
+  WIRE_SPINE_LOAD_FAIL,
   wireMainlineFightStage,
   WireBattleMatch,
+  WireSpineReplay,
+  WireSpineSlot,
 } from "../net/protocol/wireBattle";
 import {
   formatWireChapterIdx,
@@ -31,7 +35,8 @@ import {
   formatWireQuickBattle,
   WIRE_QUICK_BATTLE_UNSYNCED_TOAST,
 } from "../net/protocol/wireQuickBattle";
-import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
+import { mountBattleSpine, SpineActor } from "./battleSpine";
+import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 const PAGE_BG = new Color(8, 16, 32, 255);
 const TITLE = new Color(255, 228, 170, 255);
@@ -40,35 +45,24 @@ const OPEN_FILL = new Color(46, 110, 190, 255);
 const BACK_FILL = new Color(36, 72, 120, 255);
 const WIN = new Color(255, 214, 120, 255);
 const LOSE = new Color(230, 120, 110, 255);
-const ALLY_BG = new Color(28, 58, 96, 255);
-const ENEMY_BG = new Color(96, 40, 44, 255);
-const DEAD_BG = new Color(48, 52, 62, 255);
 const ALLY_BAR = new Color(88, 196, 120, 255);
-const ENEMY_BAR = new Color(220, 96, 96, 255);
 const LOG_COLOR = new Color(214, 224, 236, 255);
-const CARD_W = 180;
-const CARD_H = 108;
-const BAR_W = 150;
-const ENEMY_Y = 270;
-const ALLY_Y = 70;
-const ROUND_MS = 480;
+const ENEMY_Y = 300;
+const ALLY_Y = 20;
+const BEAT_MS = 700;
 
 export interface WireMainlineHost {
   alive(): boolean;
   close(): void;
   showToast(text: string): void;
   roleName(): string;
+  roleId(): number | null;
   connected(): boolean;
 }
 
 export interface WireMainlinePage {
   node: Node;
   dispose(): void;
-}
-
-interface UnitCard {
-  node: Node;
-  setHp(hp: number, maxHp: number): void;
 }
 
 type Phase = "info" | "battle" | "done";
@@ -95,11 +89,13 @@ class WireMainlineController implements WireMainlinePage {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private sleepResolve: ((cont: boolean) => void) | null = null;
   private skipped = false;
-  private cards: { allies: UnitCard[]; enemies: UnitCard[] } | null = null;
+  private spineWarned = false;
+  private actors: SpineActor[] = [];
+  private nameLabels: Node[] = [];
+  private hpLabels: Node[] = [];
+  private hpNow: (number | null)[] = [];
   private roundLabel: Node | null = null;
   private logLabel: Node | null = null;
-  private allyRow: Node | null = null;
-  private enemyRow: Node | null = null;
   private logLines: string[] = [];
   private lastSnap: WireBattleMatch | null = null;
 
@@ -199,53 +195,81 @@ class WireMainlineController implements WireMainlinePage {
       this.showInfo();
       return;
     }
-    const plan = planWireReportReplay(stage, snap.report.win, this.host.roleName());
-    GameLog.shared.info("Mainline", "wire report replay idx " + plan.stageId + " " + formatWireBattleMatch(snap));
+    const plan = planWireSpineReplay(snap.report, this.host.roleId(), stage);
+    GameLog.shared.info("Mainline", "wire spine idx " + plan.stageId + " " + plan.stems.join(",") + " " + formatWireBattleMatch(snap, this.host.roleId()));
     this.showBattle(plan);
     const played = await this.playback(plan);
     if (!played || this.disposed || !this.host.alive()) return;
     this.showDone(snap);
   }
 
-  private showBattle(plan: BattlePlan): void {
+  private showBattle(plan: WireSpineReplay): void {
     this.phase = "battle";
     this.skipped = false;
+    this.spineWarned = false;
     this.logLines = [];
     this.clearBody();
-    place(createLabel("进战 idx " + plan.stageId, 40, { color: TITLE }), this.body, 0, 470);
-    this.roundLabel = place(createLabel("准备战斗", 22, { color: MUTED, width: 640 }), this.body, 0, 410);
-    place(createLabel("敌方", 18, { color: LOSE }), this.body, 0, 355);
-    this.enemyRow = place(uiNode("enemies"), this.body, 0, ENEMY_Y);
-    place(createLabel("我方", 18, { color: ALLY_BAR }), this.body, 0, 165);
-    this.allyRow = place(uiNode("allies"), this.body, 0, ALLY_Y);
-    place(createRect("log-bg", 660, 110, new Color(10, 18, 32, 230)), this.body, 0, -80);
+    place(createLabel("进战 idx " + plan.stageId, 40, { color: TITLE }), this.body, 0, 500);
+    this.roundLabel = place(createLabel("站场", 22, { color: MUTED, width: 640 }), this.body, 0, 450);
+    place(createLabel("敌方", 18, { color: LOSE }), this.body, 0, 400);
+    place(createLabel("我方", 18, { color: ALLY_BAR }), this.body, 0, 120);
+    this.mountSlots(plan);
+    place(createRect("log-bg", 660, 110, new Color(10, 18, 32, 230)), this.body, 0, -150);
     this.logLabel = place(
       createLabel("", 18, { color: LOG_COLOR, width: 620, height: 96, align: "left" }),
       this.body,
       0,
-      -80
+      -150
     );
-    const first = plan.rounds[0];
-    this.cards = {
-      enemies: this.buildCards(this.enemyRow, first.enemies, ENEMY_BG, ENEMY_BAR),
-      allies: this.buildCards(this.allyRow, first.allies, ALLY_BG, ALLY_BAR),
-    };
-    place(createButton("跳过", () => this.skip(), 240, 52), this.body, 0, -230);
+    place(createButton("跳过", () => this.skip(), 240, 52), this.body, 0, -280);
   }
 
-  private async playback(plan: BattlePlan): Promise<boolean> {
-    for (let i = 0; i < plan.rounds.length; i++) {
+  private mountSlots(plan: WireSpineReplay): void {
+    this.actors = [];
+    this.nameLabels = [];
+    this.hpLabels = [];
+    this.hpNow = [];
+    const totals = countSides(plan.slots);
+    const seen = { ally: 0, enemy: 0, sword: 0, flag: 0 };
+    for (let i = 0; i < plan.slots.length; i++) {
+      const slot = plan.slots[i];
+      const index = seen[slot.side];
+      seen[slot.side] += 1;
+      const xy = slotXY(slot.side, index, totals[slot.side]);
+      const root = place(uiNode("slot-" + slot.stem), this.body, xy.x, xy.y);
+      const name = place(createLabel(slot.label, 14, { color: MUTED, width: 180, height: 36 }), root, 0, -78);
+      const hp = place(createLabel(hpText(slot, slot.hp), 14, { color: TITLE, width: 180 }), root, 0, -108);
+      this.nameLabels.push(name);
+      this.hpLabels.push(hp);
+      this.hpNow.push(slot.hp);
+      const slotIndex = i;
+      this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex)));
+    }
+  }
+
+  private failSlot(index: number): void {
+    if (this.disposed) return;
+    const slotLabel = this.nameLabels[index];
+    if (slotLabel && slotLabel.isValid) setText(slotLabel, WIRE_SPINE_LOAD_FAIL);
+    if (this.spineWarned) return;
+    this.spineWarned = true;
+    GameLog.shared.info("Mainline", WIRE_SPINE_LOAD_FAIL);
+    this.host.showToast(WIRE_SPINE_LOAD_FAIL);
+  }
+
+  private async playback(plan: WireSpineReplay): Promise<boolean> {
+    for (let i = 0; i < plan.beats.length; i++) {
       if (this.disposed) return false;
       if (this.skipped) {
-        this.renderRound(plan.rounds[plan.rounds.length - 1]);
+        this.renderBeat(plan, plan.beats[plan.beats.length - 1]);
         return true;
       }
-      this.renderRound(plan.rounds[i]);
-      const last = i === plan.rounds.length - 1;
-      const cont = await this.sleep(last ? 260 : ROUND_MS);
+      this.renderBeat(plan, plan.beats[i]);
+      const last = i === plan.beats.length - 1;
+      const cont = await this.sleep(last ? 260 : BEAT_MS);
       if (!cont || this.disposed) return false;
       if (this.skipped) {
-        this.renderRound(plan.rounds[plan.rounds.length - 1]);
+        this.renderBeat(plan, plan.beats[plan.beats.length - 1]);
         return true;
       }
     }
@@ -256,12 +280,12 @@ class WireMainlineController implements WireMainlinePage {
     this.phase = "done";
     this.lastSnap = snap;
     this.clearBody();
-    const win = snap.report ? snap.report.win : null;
+    const win = snap.report ? resolveWireBattleWin(snap.report, this.host.roleId()) : null;
     const headline = win === true ? "胜利" : win === false ? "失败" : "胜负未带";
     const color = win === true ? WIN : win === false ? LOSE : MUTED;
     place(createLabel(headline, 56, { color }), this.body, 0, 360);
     this.resultLabel = place(createLabel(this.resultText(), 22, { color: MUTED, width: 640, height: 160 }), this.body, 0, 180);
-    place(createLabel("色块回放，不接 spine", 18, { color: MUTED, width: 640 }), this.body, 0, 40);
+    place(createLabel("spine 站场 / 回合动作，技能受击后续再接", 18, { color: MUTED, width: 640 }), this.body, 0, 40);
     place(createButton("再挑战", () => this.challenge(), 240, 52, OPEN_FILL), this.body, 0, -80);
     place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -170);
   }
@@ -274,7 +298,7 @@ class WireMainlineController implements WireMainlinePage {
 
   private resultText(): string {
     const snap = this.lastSnap;
-    const report = snap && snap.report ? formatWireBattleMatch(snap) : "没有 report";
+    const report = snap && snap.report ? formatWireBattleMatch(snap, this.host.roleId()) : "没有 report";
     return report + "\n" + this.nowText() + "\n" + this.maxText() + "\n" + this.quickText();
   }
 
@@ -301,41 +325,26 @@ class WireMainlineController implements WireMainlinePage {
   private statusText(): string {
     const snap = WireSession.battleMatch;
     if (!snap) return "点挑战发 3001";
-    return formatWireBattleMatch(snap);
+    return formatWireBattleMatch(snap, this.host.roleId());
   }
 
-  private renderRound(round: BattleRound): void {
-    const cards = this.cards;
-    if (!cards) return;
-    this.applySide(cards.allies, round.allies);
-    this.applySide(cards.enemies, round.enemies);
-    if (this.roundLabel && this.roundLabel.isValid) setText(this.roundLabel, round.line);
-    this.logLines.push(round.line);
+  private renderBeat(plan: WireSpineReplay, beat: WireSpineReplay["beats"][number]): void {
+    for (let i = 0; i < beat.cues.length; i++) {
+      const cue = beat.cues[i];
+      const actor = this.actors[cue.slot];
+      if (actor) actor.play(cue.clip);
+    }
+    for (let i = 0; i < beat.hp.length; i++) {
+      if (beat.hp[i] !== null) this.hpNow[i] = beat.hp[i];
+    }
+    for (let i = 0; i < plan.slots.length; i++) {
+      const label = this.hpLabels[i];
+      if (label && label.isValid) setText(label, hpText(plan.slots[i], this.hpNow[i]));
+    }
+    if (this.roundLabel && this.roundLabel.isValid) setText(this.roundLabel, beat.line);
+    this.logLines.push(beat.line);
     if (this.logLines.length > 4) this.logLines.shift();
     if (this.logLabel && this.logLabel.isValid) setText(this.logLabel, this.logLines.join("\n"));
-    if (this.enemyRow && this.enemyRow.isValid) {
-      this.enemyRow.setPosition(0, round.actor === "enemy" ? ENEMY_Y - 18 : ENEMY_Y, 0);
-    }
-    if (this.allyRow && this.allyRow.isValid) {
-      this.allyRow.setPosition(0, round.actor === "ally" ? ALLY_Y + 18 : ALLY_Y, 0);
-    }
-  }
-
-  private applySide(cards: UnitCard[], units: BattleUnit[]): void {
-    const n = cards.length < units.length ? cards.length : units.length;
-    for (let i = 0; i < n; i++) cards[i].setHp(units[i].hp, units[i].maxHp);
-  }
-
-  private buildCards(row: Node, units: BattleUnit[], bg: Color, bar: Color): UnitCard[] {
-    const cards: UnitCard[] = [];
-    const xs = [-220, 0, 220];
-    const n = units.length < xs.length ? units.length : xs.length;
-    for (let i = 0; i < n; i++) {
-      const card = createUnitCard(units[i], bg, bar);
-      place(card.node, row, xs[i], 0);
-      cards.push(card);
-    }
-    return cards;
   }
 
   private sleep(ms: number): Promise<boolean> {
@@ -362,11 +371,12 @@ class WireMainlineController implements WireMainlinePage {
   }
 
   private clearBody(): void {
-    this.cards = null;
+    this.actors = [];
+    this.nameLabels = [];
+    this.hpLabels = [];
+    this.hpNow = [];
     this.roundLabel = null;
     this.logLabel = null;
-    this.allyRow = null;
-    this.enemyRow = null;
     this.nowLabel = null;
     this.maxLabel = null;
     this.fightLabel = null;
@@ -386,42 +396,31 @@ class WireMainlineController implements WireMainlinePage {
   }
 }
 
-function createUnitCard(unit: BattleUnit, bgColor: Color, barColor: Color): UnitCard {
-  const node = uiNode("Unit");
-  const ui = node.addComponent(UITransform);
-  ui.setContentSize(CARD_W, CARD_H);
-  const bg = createRect("bg", CARD_W, CARD_H, bgColor);
-  bg.parent = node;
-  const name = createLabel(unit.name, 18, { width: CARD_W - 12 });
-  place(name, node, 0, 28);
-  const hp = createLabel(unit.hp + "/" + unit.maxHp, 16, { color: MUTED, width: CARD_W - 12 });
-  place(hp, node, 0, 2);
-  const bar = uiNode("bar");
-  bar.addComponent(UITransform).setContentSize(BAR_W, 10);
-  place(bar, node, 0, -32);
-  const barBg = createRect("bar-bg", BAR_W, 10, new Color(16, 20, 28, 255));
-  barBg.parent = bar;
-  const fill = createRect("bar-fill", BAR_W, 10, barColor);
-  fill.parent = bar;
-  const card: UnitCard = {
-    node,
-    setHp(value: number, maxHp: number): void {
-      const safeMax = maxHp > 0 ? maxHp : 1;
-      let clamped = value;
-      if (clamped < 0) clamped = 0;
-      if (clamped > safeMax) clamped = safeMax;
-      setText(hp, clamped + "/" + safeMax);
-      const w = (clamped / safeMax) * BAR_W;
-      fill.active = w > 0.5;
-      if (w > 0.5) {
-        const fillUi = fill.getComponent(UITransform);
-        if (fillUi) fillUi.setContentSize(w, 10);
-        fill.setPosition(-BAR_W / 2 + w / 2, 0, 0);
-        paintRect(fill, barColor);
-      }
-      paintRect(bg, clamped <= 0 ? DEAD_BG : bgColor);
-    },
-  };
-  card.setHp(unit.hp, unit.maxHp);
-  return card;
+function countSides(slots: WireSpineSlot[]): { ally: number; enemy: number; sword: number; flag: number } {
+  const totals = { ally: 0, enemy: 0, sword: 0, flag: 0 };
+  for (let i = 0; i < slots.length; i++) totals[slots[i].side] += 1;
+  return totals;
+}
+
+function slotXY(side: WireSpineSlot["side"], index: number, total: number): { x: number; y: number } {
+  if (side === "enemy") return { x: rowX(index, total), y: ENEMY_Y };
+  if (side === "ally") return { x: rowX(index, total), y: ALLY_Y };
+  if (side === "sword") return { x: 260, y: -30 };
+  return { x: 0, y: 180 };
+}
+
+function rowX(index: number, total: number): number {
+  if (total <= 1) return 0;
+  if (total === 2) return index === 0 ? -160 : 160;
+  if (index === 0) return -200;
+  if (index === 1) return 0;
+  return 200;
+}
+
+function hpText(slot: WireSpineSlot, hp: number | null): string {
+  if (slot.side === "sword" || slot.side === "flag") return slot.stem;
+  if (hp === null && slot.maxHp === null) return "hp 未带";
+  if (hp === null) return "max " + slot.maxHp;
+  if (slot.maxHp === null) return String(hp);
+  return hp + "/" + slot.maxHp;
 }

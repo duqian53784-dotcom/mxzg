@@ -153,6 +153,16 @@ declare module "cc" {
     load(path: string, type: unknown, cb: (err: Error | null, asset: any) => void): void;
   };
 
+  export namespace sp {
+    export class SkeletonData {}
+    export class Skeleton extends Component {
+      skeletonData: SkeletonData | null;
+      premultipliedAlpha: boolean;
+      setAnimation(track: number, name: string, loop: boolean): void;
+      findAnimation(name: string): { name: string } | null;
+    }
+  }
+
   export class Prefab {}
 
   export class Sprite {

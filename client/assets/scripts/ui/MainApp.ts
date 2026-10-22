@@ -3912,6 +3912,11 @@ export class MainApp extends Component {
       close: () => this.back(),
       showToast: (text) => this.shell?.showToast(text, 2200),
       roleName: () => Session.role?.name || "勇者",
+      roleId: () => {
+        const role = Session.role;
+        if (!role || typeof role.roleId !== "number" || !isFinite(role.roleId)) return null;
+        return role.roleId;
+      },
       connected: () => this.cityNet().state === "connected",
     });
     this.mainline = page;
