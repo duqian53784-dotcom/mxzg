@@ -594,8 +594,8 @@ import { wireBody } from "./protocol/wireLogin";
  * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。字段 1 res_reward_time 和字段 4 extra_reward_id 只在主线页探针展示，不写进按钮。
  * 不写 Session.stageId，主城按钮用 mainlineLabel()。
  * 至少有一个 idx 时点按钮打开只读代码页；两个都没有仍 Toast。
- * 不打开 Mock 关卡页，不发 3002。3010 是主线页只读已领首通，挂在已合 3001 之后，不进 pullIdle，不重发 3001。3012 是主线页只读快速战斗次数，挂在 3010 之后，不进 pullIdle，不重发 3010、3001。硬禁 3013。3006 是主线页挂机战报，挂在 3012 之后，点按钮才发，不进 pullIdle，不发 3005，胜了不回拉 3007。3102 是主线页请求战报，挂在 3006 之后，点按钮才发，不进 pullIdle，不从 3001 或 3006 自动接。纯读 getReport，无领奖，无扣费。3001/3006 的 battle_id 常回 BATTLE_REPORT_TIMEOUT。3103 是主线页预计算战斗力，挂在 3102 之后，点按钮才发，不进 pullIdle，不从 3102 自动接。只计算，不开战，不落库。空 hero_ids 回 fighting=0 仍是成功。不播 spine。3030 是主线页切磋，点按钮才发，不进 pullIdle。开战 STUDY 并落库。无领奖，无扣钻，不推进 chapterId。不从本帧自动发 3102。3007 空壳探针在主线页点「关卡数据」再发同一空帧，挂在已合 3001 / 3010 / 3012 之后、进战之前。只读 RoleMission。不落库，无扣费，不推进 chapterId。不进 pullIdle。
- * s2c 3004 按 Battle.proto：字段 1 reward_time、字段 2 max_reward_time。缺的不写成 0。
+ * 不打开 Mock 关卡页，不发 3002。3010 是主线页只读已领首通，挂在已合 3001 之后，不进 pullIdle，不重发 3001。3012 是主线页只读快速战斗次数，挂在 3010 之后，不进 pullIdle，不重发 3010、3001。硬禁 3013。3006 是主线页挂机战报，挂在 3012 之后，点按钮才发，不进 pullIdle，不发 3005，胜了不回拉 3007。3102 是主线页请求战报，挂在 3006 之后，点按钮才发，不进 pullIdle，不从 3001 或 3006 自动接。纯读 getReport，无领奖，无扣费。3001/3006 的 battle_id 常回 BATTLE_REPORT_TIMEOUT。3103 是主线页预计算战斗力，挂在 3102 之后，点按钮才发，不进 pullIdle，不从 3102 自动接。只计算，不开战，不落库。空 hero_ids 回 fighting=0 仍是成功。不播 spine。3030 是主线页切磋，点按钮才发，不进 pullIdle。开战 STUDY 并落库。无领奖，无扣钻，不推进 chapterId。不从本帧自动发 3102。3007 空壳探针在主线页点「关卡数据」再发同一空帧，挂在已合 3001 / 3010 / 3012 之后、进战之前。只读 RoleMission。不落库，无扣费，不推进 chapterId。不进 pullIdle。3004 空壳探针在主线页点「挂机奖励」再发同一空帧，挂在已合 3006 之后。只读 GResChapterItemList 的 reward_time、max_reward_time。不领取，不落库，无扣费，不推进 chapterId。不从 3006 自动接。不进 pullIdle。
+ * s2c 3004 按 Battle.proto：字段 1 reward_time、字段 2 max_reward_time。缺的不写成 0。主线页「挂机奖励」展示这两项。
  * 不写 Session.gold。挂机页用 rewardTime / maxRewardTime。没有这两项时主城挂机只 Toast。
  * s2c 3005 只改 reward_time。没有奖励清单，不改金币和钻石。
  * s2c 5001 按 GResBackPackList 替换本地背包。空包体是已同步的空背包。
@@ -744,6 +744,10 @@ export class WireSession {
   static studySerial = 0;
   /** s2c 3004 字段 1。0 是服上的 0。没出现过是 null。 */
   static rewardTime: number | null = null;
+  /** 最近一帧解开的 s2c 3004，给主线页「挂机奖励」。null 表示还没收到。不写金币。 */
+  static idleProbe: WireIdleSnapshot | null = null;
+  /** 每记下一次挂机奖励探针加一。主线页用来认领回包。3004 本身不落库，不领取。 */
+  static idleProbeSerial = 0;
   /** s2c 3004 字段 2。0 是服上的 0。没出现过是 null。 */
   static maxRewardTime: number | null = null;
   /** 每处理一帧 s2c 3005 加一。挂机页用来认领回包。 */
@@ -1489,6 +1493,8 @@ export class WireSession {
     this.studySerial = 0;
     this.rewardTime = null;
     this.maxRewardTime = null;
+    this.idleProbe = null;
+    this.idleProbeSerial = 0;
     this.claimNote = "";
     this.claimSerial = 0;
     this.bagItems = null;
@@ -1652,6 +1658,8 @@ export class WireSession {
       this.studySerial = 0;
       this.rewardTime = null;
       this.maxRewardTime = null;
+      this.idleProbe = null;
+      this.idleProbeSerial = 0;
       this.claimNote = "";
       this.claimSerial = 0;
       this.bagItems = null;
@@ -1815,6 +1823,8 @@ export class WireSession {
     this.studySerial = 0;
     this.rewardTime = null;
     this.maxRewardTime = null;
+    this.idleProbe = null;
+    this.idleProbeSerial = 0;
     this.claimNote = "";
     this.claimSerial = 0;
     this.bagItems = null;
@@ -2098,7 +2108,7 @@ export class WireSession {
    * 不跟 3012 同一发，不重发 3012，也不重发 3007、3004、3001、3010、3099、3101、18001、3203。
    * 不进 pullIdle，不接活动链末，不夹活动号。
    * 没连上或还没有 3007 idx 时返回 false。
-   * 不发 3002、3005、3008、3011。硬禁 3013。3102 另帧，不从这里自动发。
+   * 不发 3002、3005、3008、3011。硬禁 3013。3102 另帧，不从这里自动发。3004 空壳另帧，不从这里自动发。
    * 硬禁 4601、29001。不把 Mock 1201/1202 当真服。
    * 服只算 HANG_UP。不写 receiveReward，不推进 chapterId，不落库。胜了不回拉 3007。
    */
@@ -2198,6 +2208,22 @@ export class WireSession {
   /** 收到过 s2c 3030（含空包体）才算同步。解不开的包不算。3001、3006、3102、3103、3007 单独到不算。 */
   static hasStudy(): boolean {
     return this.study !== null;
+  }
+
+  /**
+   * 主线页「挂机奖励」。再发一帧空的 c2s 3004，整帧 04000000bc0b0000。
+   * GReqChapterItemList 没有字段。挂在已合 3006 之后，和挂机战报并排。
+   * 不进 pullIdle，不重发 3006、3007、3001、3010、3012、3102、3103、3030。不从 3006 自动接。
+   * 没连上或还没有 3007 idx 时返回 false。
+   * 只读。不领取，不落库，无扣费，不推进 chapterId。不写金币，不写 Session.stageId。
+   * 不发 3005、3002、3008、3011。硬禁 3013、4601、29001。
+   */
+  static pullIdleProbe(): boolean {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return false;
+    if (!this.hasChapter()) return false;
+    net.send(WIRE_IDLE_CMD);
+    return true;
   }
 
   /**
@@ -3246,6 +3272,11 @@ export class WireSession {
     }
     if (!wireIdleHasTime(snapshot)) {
       GameLog.shared.info("Wire", "s2c 3004 没有 reward_time/max_reward_time，挂机不改");
+      if (Session.source === "wire" && Session.role) {
+        this.idleProbe = copyIdleProbe(snapshot);
+        this.idleProbeSerial += 1;
+        this.emit();
+      }
       return;
     }
     this.rememberIdle(snapshot);
@@ -5460,6 +5491,8 @@ export class WireSession {
     if (snapshot.rewardTime !== null) this.rewardTime = snapshot.rewardTime;
     if (snapshot.maxRewardTime !== null) this.maxRewardTime = snapshot.maxRewardTime;
     this.pendingIdle = null;
+    this.idleProbe = copyIdleProbe(snapshot);
+    this.idleProbeSerial += 1;
     GameLog.shared.info("Wire", wireIdleNote(snapshot));
     this.emit();
   }
@@ -7023,6 +7056,13 @@ function copyPvpOpponent(row: WirePvpOpponent): WirePvpOpponent {
     playerId: row.playerId,
     name: row.name,
     marks: row.marks.map((mark) => ({ field: mark.field, text: mark.text })),
+  };
+}
+
+function copyIdleProbe(snapshot: WireIdleSnapshot): WireIdleSnapshot {
+  return {
+    rewardTime: snapshot.rewardTime,
+    maxRewardTime: snapshot.maxRewardTime,
   };
 }
 

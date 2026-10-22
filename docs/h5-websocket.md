@@ -162,7 +162,15 @@ c2s **3006** 是 `GReqChapterReport`，不是空帧。3006 = 0x0BBE，小端 `be
 
 s2c 是 `GResChapterReport`：字段 1 `report` 是 `BattleReport`，字段 2 `chapterIdx`，字段 3 `firstPos`。`report` 的 rounds 和 3001 同一套，走 `decodeWireBattleReport`，有 report 时走 `planWireSpineReplay` / `mountBattleSpine`，技能和受击也挂同一套 batch2 命名特效。不另写 spine。空包体是已同步空表。没有 report 时 Toast「真服未同步」，不回落 Mock。
 
-战斗链是 …→3012→3006。挂在已合 3012 之后，不重发 3012，不重发 3001。不进 `pullIdle`，不夹活动号。服侧只 invoke battle(HANG_UP) 计算：不写 receiveReward，不推进 chapterId，不落库。无领奖，无扣费。胜了不回拉 3007。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。3102 另帧，不从本帧自动发。不把 1201/1202 当战报。不写金币，不写钻石。不改 Boot、USE_*、CityChrome、CityMap、SafeArea。
+战斗链是 …→3012→3006。挂在已合 3012 之后，不重发 3012，不重发 3001。不进 `pullIdle`，不夹活动号。服侧只 invoke battle(HANG_UP) 计算：不写 receiveReward，不推进 chapterId，不落库。无领奖，无扣费。胜了不回拉 3007。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。3102 另帧，不从本帧自动发。3004 空壳另帧挂在其后，不从本帧自动发。不把 1201/1202 当战报。不写金币，不写钻石。不改 Boot、USE_*、CityChrome、CityMap、SafeArea。
+
+## 挂机奖励列表 3004（主线页点「挂机奖励」再发空壳，不进活动链）
+
+登录链里的空 c2s **3004** 仍在，整帧 `04 00 00 00 bc 0b 00 00`（`04000000bc0b0000`）。3004 = 0x0BBC，小端 `bc 0b 00 00`。`GReqChapterItemList` 没有字段。主线页在已合的 **3006** 挂机战报之后，可以再发同一空壳。按钮和「挂机战报」并排。不从 3006 的回包自动接。不进 `pullIdle` 的加发，不重发 3006、3007、3001、3010、3012、3102、3103、3030。
+
+s2c 仍是 `GResChapterItemList`。页上写出这一包实际带上的两列：`reward_time`、`max_reward_time`。没有的列写「未带」，不写成 0。出现的 0 仍写 0。不改金币，不改钻石，不写 `Session.stageId`，不推进 chapterId。
+
+服侧只读挂机奖励列表。不领取，不落库，无扣费，不推进。不发 3005。不发 3002、3008、3011。硬禁 3013、4601、29001。不把 1201/1202 当真服。不改 Boot、USE_*、CityChrome、CityMap、SafeArea。
 
 ## 请求战报 3102（主线页点按钮才发，不进活动链）
 
@@ -194,7 +202,7 @@ s2c 是 `GResStudy`：字段 1 `report` 是 `BattleReport`，字段 2 `type`。`
 
 ## 挂机对过的字段（Battle.proto，日志里没有单独的 s2c 样本）
 
-字段号以 Battle.proto 的 `GResChapterItemList`（cmd **3004**）和 `GResChapterItemReward`（cmd **3005**）为准。net-20261020 三例都在空 c2s 3007 之后发过空的 c2s 3004，但回包没有单独摘成样本，所以不把某一串十六进制写成「日志里就是这样」。c2s 两帧都是空体：3004 整帧 `04 00 00 00 bc 0b 00 00`，3005 整帧 `04 00 00 00 bd 0b 00 00`。本客户端进主城后，空 c2s 2001、空 c2s 3007 之后马上发 3004。3005 只在挂机页点领取时发。
+字段号以 Battle.proto 的 `GResChapterItemList`（cmd **3004**）和 `GResChapterItemReward`（cmd **3005**）为准。net-20261020 三例都在空 c2s 3007 之后发过空的 c2s 3004，但回包没有单独摘成样本，所以不把某一串十六进制写成「日志里就是这样」。c2s 两帧都是空体：3004 整帧 `04 00 00 00 bc 0b 00 00`，3005 整帧 `04 00 00 00 bd 0b 00 00`。本客户端进主城后，空 c2s 2001、空 c2s 3007 之后马上发 3004。主线页「挂机奖励」在已合 3006 之后再发同一空壳，不从 3006 自动接，不进 `pullIdle` 的加发。3005 只在挂机页点领取时发，这一轮不新接 3005。
 
 | 包 | 字段 | 含义 | 界面 |
 |----|------|------|------|

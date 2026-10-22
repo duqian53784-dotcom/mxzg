@@ -21,7 +21,7 @@
  * s2c 1002 字段1 = 新角色 id。
  *
  * 进主城后另外几帧也在这里编：空的 c2s 2001（wire.2001）、空的 c2s 5001（wire.5001）、
- * 空的 c2s 3007（wire.3007，GReqChapterData 无字段，整帧 04000000bf0b0000）。登录链发一次。主线页「关卡数据」再发同一空帧，不进 pullIdle。空的 c2s 3004（wire.3004）、空的 c2s 15000（wire.15000）、
+ * 空的 c2s 3007（wire.3007，GReqChapterData 无字段，整帧 04000000bf0b0000）。登录链发一次。主线页「关卡数据」再发同一空帧，不进 pullIdle。空的 c2s 3004（wire.3004，GReqChapterItemList 无字段，整帧 04000000bc0b0000）。登录链发一次。主线页「挂机奖励」再发同一空帧，挂在已合 3006 之后，不进 pullIdle，不从 3006 自动接。空的 c2s 15000（wire.15000）、
  * 空的 c2s 3001（wire.3001，GReqBattleMatch）只在主线页点挑战时编，不进 pullIdle，不接在活动链末。
  * c2s 3006（wire.3006，GReqChapterReport）只在主线页点挂机战报时编，包体是 chapterIdx 和 firstPos，不是空帧。不进 pullIdle。
  * c2s 3102（wire.3102，GReqBattleReport）只在主线页点请求战报时编，包体是 battle_id 和 type 两个 string，不是空壳 040000001e0c0000。不进 pullIdle。不从 3001 或 3006 自动接。
