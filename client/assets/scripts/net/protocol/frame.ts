@@ -962,8 +962,8 @@ export const WireCmd = {
   /**
    * c2s。主线页「GM 上 MAIN」才发。不进 pullIdle。空 cmd 不编。不是 3101。
    * 3100 = 0x0C1C，小端 1c 0c 00 00。GReqLineUpSave。
-   * 字段 1 lineData（PSLineUpData）：1 type，2 formation_id，3 goddess_type，4 hero_list。
-   * hero_list 的字段 1 是 4030 的实例，字段 2 是 position。阵法 1 的站位只有 2/3/5/6/7/8/9。
+   * 字段 1 lineData（PSLineUpData）：1 type，2 time（不写），3 goddess_type，4 hero_list，5 formation_id。
+   * hero_list 的字段 1 是 4030 的实例，字段 2 hp 不写，字段 3 是 position。阵法 1 的站位只有 2/3/5/6/7/8/9。
    * 成功是空的 s2c 3100。有包体不算成功。
    */
   lineUpSave: 3100,
