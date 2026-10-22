@@ -16,19 +16,17 @@
 - **状态**：不改协议脚本，不删代码 UI。加载失败时 Toast「战斗 Prefab 未加载，改用代码 UI」，同一页继续播。
 - 设计基准 **720×1280**，坐标相对父节点中心。`LayerField`、`LayerVfx`、`LayerHud`、`LayerFloat`、`EnemySlots`、`AllySlots`、`HpBars`、`SkillBars` 都是铺满页面的 (0, 0) 容器，所以它们的直接子节点就是页面坐标。`TopBar` 例外，它自己在页面上，子节点是它的本地坐标。`SkillNameBanner`、`FloatDamageRoot`、`HeadAnchor`、`BuffRow` 也不是铺满容器，子节点用它们自己的本地坐标。
 - 不挂脚本组件。Prefab 里的 `__type__` 只有 `cc.*`。现有通用壳的脚本 id 仍是 23 位 packer（保留头 5）。这一刀没有新的类 id，生成器会拒绝非 `cc.*` 组件，也会拒绝 22 位脚本 id，避免退回 `compressUuid(uuid, true)`。
-- 不嵌 Spine。`VfxSkill` / `VfxHit` / `VfxScreen` 只有 `cc.UITransform`。Spine 仍在 `client/assets/resources/spine/`。不迁 PVR 的 skill / skill-effect / hero-beattack。
+- 不嵌 Spine。`VfxSkill` / `VfxHit` / `VfxScreen` 只有 `cc.UITransform`。Spine 仍在 `client/assets/resources/spine/`。hero-beattack、skill-effect、skill 子集的帧在 `client/assets/resources/battle/`（见 `docs/battle-asset-migration.md`）。这三个挂点仍是空节点，不引用那些帧。
 - 素材只引用 `client/assets/resources/` 的 spriteFrame `@f9941`。`prefabs/ui/battle/` 下没有 PNG。
 - 再生：`python3 client/tools/gen_battle_prefab.py`。从现有 `.meta` 读 uuid，再跑一次会覆写同一份 Prefab，并保留已有 `.meta` uuid。
 
 ## 用了哪些图
 
-`client/assets/resources/ui/battle/` 在 main 上不存在，所以没有 `battle-scene_spr-bg-1`、`battle-scene_prog-*`、`battle-scene_btn-speed-*`、`battle-scene_btn-close-1`。
-
-按存在性选底，命中的是主线关卡真底，不是色块：
+`client/assets/resources/ui/battle/` 有 10 张 `battle-scene` 帧。页面 `Bg` 用其中的 `battle-scene_spr-bg-1`。同目录的关闭钮、加速钮、进度条帧留在 resources 里，这张壳不挂它们。
 
 | 用途 | 资源 | 模式 |
 |------|------|------|
-| 页面 `Bg` | `ui/mainline/map-bg-mission-1.jpg` | 简单，白色，拉到 720×1280。spriteFrame `2de46307-6f48-4be7-ae7f-d6f629aef140@f9941`。原图 648×1152 |
+| 页面 `Bg` | `ui/battle/battle-scene_spr-bg-1.png` | 简单，白色，拉到 720×1280。spriteFrame `b117e1f3-0253-4616-95db-bed6a5007adb@f9941`。原图 112×64，裁切 111×63 |
 | 站位色块 | `ui/common/win-bg_block-bg-5.png` | 简单。敌 `(96, 40, 44, 168)`，我 `(28, 58, 96, 168)` |
 | 血条 / 技能条 | `ui/common/win-bg_num-bg.png` | 简单。底 `(16, 20, 28)`，敌填充 `(220, 96, 96)`，我填充 `(88, 196, 120)`，技能框 `(16, 28, 48, 230)`，技能填充 `(255, 214, 120)` |
 | 战报底 | `ui/common/win-bg_msg-bg.png` | 简单，`(10, 18, 32, 230)` |
@@ -39,7 +37,7 @@
 | `BtnClose` | `ui/common/button_btn-close-1.png` | 简单，裁切 **53×56**，不染色。没有按下图，缩放过渡，没有 Label |
 | 字 | `font/FZCSJW-GB1-0.ttf` | 与其他页相同 |
 
-没有 `BtnSpeed`：加速图不在仓里，不拿别的钮冒充。`map-bg-super-stage` 和 `map-bg-dungeon-1` 都在，但主线 `map-bg-mission-1` 更靠前，所以没用它们。这不是「待换真底」的色块；等 `ui/battle/battle-scene_spr-bg-1` 入库后，再生脚本会改选那张战斗场景底。
+没有 `BtnSpeed`。`battle-scene_btn-speed-*`、`battle-scene_btn-close-1`、`battle-scene_prog-*` 已在 `ui/battle/`。TopBar 仍是 `RoundLabel` 和通用 `BtnClose`（53×56），血条和技能条仍是染色的 `win-bg_num-bg`。`LayerFloat`、`SkillNameBanner`、`HeadAnchor` 的坐标和子节点保持原样。
 
 按钮是 `cc.Sprite` + `cc.Button`（缩放，`zoomScale` 1.05，`clickEvents` 为空）。文案在子节点 `Label`。`BtnClose` 没有 `Label`。
 
@@ -55,7 +53,7 @@
 
 | 节点 | 位置 (x, y) | 尺寸 | 说明 |
 |------|-------------|------|------|
-| `Bg` | (0, 0) | 720×1280 | 主线 `map-bg-mission-1` |
+| `Bg` | (0, 0) | 720×1280 | `battle-scene_spr-bg-1` |
 | `LayerField` | (0, 0) | 720×1280 | 容器 |
 | `EnemySlots` | (0, 0) | 720×1280 | 容器 |
 | `Slot_E0` `Slot_E1` `Slot_E2` | (-200 / 0 / 200, 300) | 108×120 | 敌前排。子节点 `Placeholder`、`Label`（`E0`…）、`HeadAnchor` |
@@ -158,7 +156,7 @@ Slot_E0–E2 / Slot_A0–A2
 
 | 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
 |------|-------------|------|----------|
-| `Bg` | (0, 0) | 720×1280 | 与 BattlePage 同一张主线底 |
+| `Bg` | (0, 0) | 720×1280 | 与 BattlePage 同一张 `battle-scene_spr-bg-1` |
 | `Title` | (0, 260) | 680×52 | `战斗（真服接线占位）`，字号 36 |
 | `Status` | (0, 170) | 640×38 | `未同步 · 等切 Prefab`，字号 22 |
 | `FieldHint` | (0, 40) | 640×112 | 站位与特效挂点见 BattlePage，并带一句 `LayerFloat`、`SkillNameBanner`、`HeadAnchor`。顶对齐，可换行，字号 20 |

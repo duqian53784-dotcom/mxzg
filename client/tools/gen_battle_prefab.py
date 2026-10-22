@@ -110,10 +110,12 @@ BG_CANDIDATES = (
     "ui/idle/map-bg-dungeon-1.jpg",
 )
 TINT_BG = "ui/common/win-bg_win-bg-12.png"
-CLOSE_CANDIDATES = (
-    "ui/battle/battle-scene_btn-close-1.png",
-    "ui/common/button_btn-close-1.png",
-)
+# These battle-scene HUD frames can sit under ui/battle for Creator.
+# The shell does not adopt them: wiring close/speed/prog would add BtnSpeed
+# and resize BtnClose. LayerFloat, SkillNameBanner, HeadAnchor, and the
+# other mounts stay on the common close button and tinted num-bg bars.
+BATTLE_CLOSE_REL = "ui/battle/battle-scene_btn-close-1.png"
+COMMON_CLOSE_REL = "ui/common/button_btn-close-1.png"
 SPEED_REL = "ui/battle/battle-scene_btn-speed-1.png"
 SPEED_PRESSED_REL = "ui/battle/battle-scene_btn-speed-2.png"
 
@@ -222,20 +224,22 @@ def battle_prog_rels():
 
 
 def choose_art():
-    """Pick Bg / HUD frames that are actually in resources/."""
+    """Pick the photo Bg that is actually in resources/.
+
+    ui/battle close, speed, and prog frames stay on disk. This shell keeps
+    the common close button, no BtnSpeed, and tinted num-bg bars.
+    """
     bg_rel = first_existing(BG_CANDIDATES)
     placeholder = False
     if bg_rel is None:
         bg_rel = TINT_BG
         placeholder = True
-    close_rel = first_existing(CLOSE_CANDIDATES)
-    if close_rel is None:
+    close_rel = COMMON_CLOSE_REL
+    if not os.path.isfile(os.path.join(RES, close_rel + ".meta")):
         raise SystemExit("no close button sprite in resources")
-    speed_rel = SPEED_REL if os.path.isfile(os.path.join(RES, SPEED_REL + ".meta")) else None
-    speed_pressed = speed_rel
-    if speed_rel and os.path.isfile(os.path.join(RES, SPEED_PRESSED_REL + ".meta")):
-        speed_pressed = SPEED_PRESSED_REL
-    prog = battle_prog_rels()
+    speed_rel = None
+    speed_pressed = None
+    prog = []
     art = {
         "bg": load_sprite(bg_rel),
         "bg_placeholder": placeholder,
@@ -1238,24 +1242,35 @@ def reject_extras():
 
 
 def assert_current_repo_choice():
-    """Lock the art this tree can actually see. Fail if battle frames appear unpicked."""
-    battle_dir = os.path.join(RES, "ui", "battle")
-    if os.path.isdir(battle_dir):
+    """Lock the art this tree can actually see. Fail if the battle bg is skipped."""
+    battle_bg = os.path.isfile(os.path.join(RES, BG_CANDIDATES[0] + ".meta"))
+    if battle_bg:
         if ART["bg"]["rel"] != "ui/battle/battle-scene_spr-bg-1.png":
             raise SystemExit("ui/battle exists but Bg did not use battle-scene_spr-bg-1")
-        return
-    if ART["bg_placeholder"]:
-        raise SystemExit("mission / dungeon bg missing; tint fallback needs a doc update")
-    if ART["bg"]["rel"] != "ui/mainline/map-bg-mission-1.jpg":
-        raise SystemExit("expected map-bg-mission-1, got " + ART["bg"]["rel"])
+    else:
+        if ART["bg_placeholder"]:
+            raise SystemExit("mission / dungeon bg missing; tint fallback needs a doc update")
+        if ART["bg"]["rel"] != "ui/mainline/map-bg-mission-1.jpg":
+            raise SystemExit("expected map-bg-mission-1, got " + ART["bg"]["rel"])
     if not ART["bg"]["uuid"].endswith("@f9941"):
         raise SystemExit("bg uuid")
-    if ART["close"]["rel"] != "ui/common/button_btn-close-1.png":
+    if ART["close"]["rel"] != COMMON_CLOSE_REL:
         raise SystemExit("expected common close button")
     if ART["speed"] is not None or not ART["bar_tinted"]:
-        raise SystemExit("speed or prog frames appeared without ui/battle")
+        raise SystemExit("speed or prog frames must stay off the shell")
     if ART["bar_track"]["rel"] != "ui/common/win-bg_num-bg.png":
         raise SystemExit("hp placeholder should be win-bg_num-bg")
+    # On-disk battle HUD frames stay out of the shell even after they land.
+    if os.path.isfile(os.path.join(RES, BATTLE_CLOSE_REL + ".meta")):
+        if ART["close"]["uuid"] == load_sprite(BATTLE_CLOSE_REL)["uuid"]:
+            raise SystemExit("battle close button must stay off BtnClose")
+    if os.path.isfile(os.path.join(RES, SPEED_REL + ".meta")) or os.path.isfile(
+        os.path.join(RES, SPEED_PRESSED_REL + ".meta")
+    ):
+        if ART["speed"] is not None:
+            raise SystemExit("BtnSpeed must stay off the shell")
+    if battle_prog_rels() and not ART["bar_tinted"]:
+        raise SystemExit("prog frames must stay off the bars")
 
 
 def main():
