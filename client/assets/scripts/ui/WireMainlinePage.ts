@@ -9,7 +9,7 @@
  * 可带 hero_ids、type、line_up_type。hero_ids 可从已同步的 3101 字段 2 填入。
  * 不从 3102 自动接。fighting=0 是成功，不 Toast。不播 spine。
  * 主线入口已在「更多」，不往主屏再放矩形。
- * 收到 report 在本页播 spine 站场和回合动作，3001、3006 和 3102 都走 planWireSpineReplay。3103 不走。
+ * 收到 report 在本页播 spine 站场、回合攻击，以及 batch2 技能/受击特效。3001、3006 和 3102 都走 planWireSpineReplay。3103 不走。
  * 不发 18001，不把 Mock 1201/1202 当战报。
  * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。3103 的 fighting=0 不 Toast。
  */
@@ -25,6 +25,7 @@ import {
   WIRE_BATTLE_UNSYNCED_TOAST,
   WIRE_SPINE_LOAD_FAIL,
   wireMainlineFightStage,
+  wireSpineVfxClip,
   WireBattleMatch,
   WireSpineReplay,
   WireSpineSlot,
@@ -141,6 +142,7 @@ class WireMainlineController implements WireMainlinePage {
   private skipped = false;
   private spineWarned = false;
   private actors: SpineActor[] = [];
+  private vfxNodes: { stem: string; node: Node; actor: SpineActor }[] = [];
   private nameLabels: Node[] = [];
   private hpLabels: Node[] = [];
   private hpNow: (number | null)[] = [];
@@ -509,6 +511,30 @@ class WireMainlineController implements WireMainlinePage {
       const slotIndex = i;
       this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex)));
     }
+    this.mountVfx(plan);
+  }
+
+  private mountVfx(plan: WireSpineReplay): void {
+    this.vfxNodes = [];
+    const stems: string[] = [];
+    for (let b = 0; b < plan.beats.length; b++) {
+      const vfx = plan.beats[b].vfx;
+      for (let v = 0; v < vfx.length; v++) {
+        const stem = vfx[v].stem;
+        let seen = false;
+        for (let s = 0; s < stems.length; s++) {
+          if (stems[s] === stem) seen = true;
+        }
+        if (!seen) stems.push(stem);
+      }
+    }
+    for (let i = 0; i < stems.length; i++) {
+      const stem = stems[i];
+      const holder = place(uiNode("vfx-" + stem), this.body, 0, 160);
+      holder.active = false;
+      const actor = mountBattleSpine(holder, stem, () => this.failVfx(), { effect: true });
+      this.vfxNodes.push({ stem, node: holder, actor });
+    }
   }
 
   private failSlot(index: number): void {
@@ -516,6 +542,13 @@ class WireMainlineController implements WireMainlinePage {
     const slotLabel = this.nameLabels[index];
     if (slotLabel && slotLabel.isValid) setText(slotLabel, WIRE_SPINE_LOAD_FAIL);
     if (this.spineWarned) return;
+    this.spineWarned = true;
+    GameLog.shared.info("Mainline", WIRE_SPINE_LOAD_FAIL);
+    this.host.showToast(WIRE_SPINE_LOAD_FAIL);
+  }
+
+  private failVfx(): void {
+    if (this.disposed || this.spineWarned) return;
     this.spineWarned = true;
     GameLog.shared.info("Mainline", WIRE_SPINE_LOAD_FAIL);
     this.host.showToast(WIRE_SPINE_LOAD_FAIL);
@@ -549,7 +582,7 @@ class WireMainlineController implements WireMainlinePage {
     const color = win === true ? WIN : win === false ? LOSE : MUTED;
     place(createLabel(headline, 56, { color }), this.body, 0, 360);
     this.resultLabel = place(createLabel(this.resultText(), 22, { color: MUTED, width: 640, height: 160 }), this.body, 0, 180);
-    place(createLabel("spine 站场 / 回合动作，技能受击后续再接", 18, { color: MUTED, width: 640 }), this.body, 0, 40);
+    place(createLabel("spine 站场 / 回合攻击，技能和受击挂 batch2 命名特效", 18, { color: MUTED, width: 640 }), this.body, 0, 40);
     const again = this.replayKind === "3001" ? "再挑战" : "再看战报";
     place(
       createButton(again, () => this.again(), 240, 52, OPEN_FILL),
@@ -634,6 +667,19 @@ class WireMainlineController implements WireMainlinePage {
       const actor = this.actors[cue.slot];
       if (actor) actor.play(cue.clip);
     }
+    for (let i = 0; i < this.vfxNodes.length; i++) this.vfxNodes[i].node.active = false;
+    for (let i = 0; i < beat.vfx.length; i++) {
+      const cue = beat.vfx[i];
+      let row: { stem: string; node: Node; actor: SpineActor } | null = null;
+      for (let n = 0; n < this.vfxNodes.length; n++) {
+        if (this.vfxNodes[n].stem === cue.stem) row = this.vfxNodes[n];
+      }
+      if (!row) continue;
+      const xy = anchorXY(plan.slots, cue.anchor, cue.role);
+      row.node.setPosition(xy.x, xy.y, 0);
+      row.node.active = true;
+      row.actor.burst(wireSpineVfxClip(cue.stem));
+    }
     for (let i = 0; i < beat.hp.length; i++) {
       if (beat.hp[i] !== null) this.hpNow[i] = beat.hp[i];
     }
@@ -672,6 +718,7 @@ class WireMainlineController implements WireMainlinePage {
 
   private clearBody(): void {
     this.actors = [];
+    this.vfxNodes = [];
     this.nameLabels = [];
     this.hpLabels = [];
     this.hpNow = [];
@@ -711,6 +758,21 @@ function countSides(slots: WireSpineSlot[]): { ally: number; enemy: number; swor
   const totals = { ally: 0, enemy: 0, sword: 0, flag: 0 };
   for (let i = 0; i < slots.length; i++) totals[slots[i].side] += 1;
   return totals;
+}
+
+function anchorXY(slots: WireSpineSlot[], anchor: number | null, role: "skill" | "hit"): { x: number; y: number } {
+  const lift = role === "skill" ? 40 : 0;
+  if (anchor === null || anchor < 0 || anchor >= slots.length) {
+    return { x: 0, y: role === "skill" ? 180 : 120 };
+  }
+  const slot = slots[anchor];
+  const totals = countSides(slots);
+  let index = 0;
+  for (let i = 0; i < anchor; i++) {
+    if (slots[i].side === slot.side) index += 1;
+  }
+  const xy = slotXY(slot.side, index, totals[slot.side]);
+  return { x: xy.x, y: xy.y + lift };
 }
 
 function slotXY(side: WireSpineSlot["side"], index: number, total: number): { x: number; y: number } {

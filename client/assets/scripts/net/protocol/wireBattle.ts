@@ -25,7 +25,9 @@
  * 命中 1 def_pos、2 hurt、3 hp；英雄 1 pos、2 hero_id、3 hp、4 max_hp。
  * camp 只有 1（我方）和 2（敌方）参与对位。其它值（含出现的 0）不当阵营。
  * 没有的数保持 null，不写成 0。有 report 才在主线页播 resources/spine 首批套的站场和回合动作。
- * 不播 bisha，不播受击。技能受击留到后面的刀。
+ * 回合 skill_id 对 batch2 技能套取模，挂一个命名特效；hits 挂 yanwu。没有技能号、没有 hits，或表是空的，就不挂，站场和攻击照旧。
+ * 不播 bisha，不播英雄 hit。不是旧技能表，不接 hd/skill、skill-effect、beattack 的 PVR。
+ * batch2 仍是 Spine 3.7.94。Creator 3.8.8 用 spine-3.8，曲线、约束、裁剪可能播不出。播不出就跳过该特效。
  */
 const MAX_BODY = 65536;
 
@@ -64,8 +66,37 @@ export const WIRE_SPINE_FLAG = "zhandoujijian";
 export const WIRE_SPINE_SWORD = "battle-sword";
 export const WIRE_SPINE_BOSS = "crusade_boss_die";
 
+/**
+ * #145 batch2 技能套，顺序就是取模表。不含 yanwu（受击尘单独挂）。
+ * 不是旧技能配置。skill_id 对这张表取模，只为了真服回放能看出不同技能号。
+ */
+export const WIRE_SPINE_SKILL_STEMS = [
+  "zadan",
+  "zadan_tx",
+  "heidong",
+  "guangzhu",
+  "jiban",
+  "Dragon-1",
+  "Dragon-2",
+  "Dragon-3",
+  "Dragon-4",
+  "act",
+  "chaihong",
+  "ZDKS",
+  "hytx",
+  "lizi",
+  "dx",
+  "lijijihuo",
+  "zhihuanfazhen",
+  "prophet-tree-effect-1",
+  "prophet-tree-effect-2",
+];
+
+/** 烟尘。有 hits 才挂。不播英雄 hit，不播 bisha。 */
+export const WIRE_SPINE_HIT_STEM = "yanwu";
+
 export const WIRE_BATTLE_MATCH_NOTE =
-  "挑战发空 c2s 3001（GReqBattleMatch，整帧 04000000b90b0000）。须已有 3007 的 idx。3101 已有则不重发。字段 2 是 battle_type，不是胜负。胜负看 win_id，对照 atk_id 或角色 id。rounds 驱动 spine 站场和回合动作，技能受击后续再接。3102 请求战报另帧，不从 3001 自动发。3103 预计算战斗力另帧，挂在 3102 之后，不从 3102 自动发，不播 spine。3006 挂机战报另帧，不从 3001 发。不发 3002、3005、3008、3011、3013、3100、3097、3098、18002、18001。不重发 3004、3099、3203。硬禁 4601、29001。不把 Mock 1201/1202 当战报。缺字段不写成 0。空包体是已同步空表。未同步 Toast「真服未同步」。不回落 Mock。不写金币，不写钻石。不夹活动号。不进 pullIdle。不改 Boot";
+  "挑战发空 c2s 3001（GReqBattleMatch，整帧 04000000b90b0000）。须已有 3007 的 idx。3101 已有则不重发。字段 2 是 battle_type，不是胜负。胜负看 win_id，对照 atk_id 或角色 id。rounds 驱动 spine 站场和回合动作，技能和受击挂 batch2 命名特效。3102 请求战报另帧，不从 3001 自动发。3103 预计算战斗力另帧，挂在 3102 之后，不从 3102 自动发，不播 spine。3006 挂机战报另帧，不从 3001 发。不发 3002、3005、3008、3011、3013、3100、3097、3098、18002、18001。不重发 3004、3099、3203。硬禁 4601、29001。不把 Mock 1201/1202 当战报。缺字段不写成 0。空包体是已同步空表。未同步 Toast「真服未同步」。不回落 Mock。不写金币，不写钻石。不夹活动号。不进 pullIdle。不改 Boot";
 
 export const WIRE_BATTLE_MATCH_SIDE_EFFECT =
   "服侧胜则写 receiveReward、chapterId、missionRankTime 和战斗日志。已有未领通关奖可能另推 3002 first_reward，本端不发 3002。Handler 内未见扣体力。win_id 对上 atk_id 或角色 id 才再拉已有的空 c2s 3007。battle_type 单独不回拉。不进活动链";
@@ -143,11 +174,20 @@ export interface WireSpineCue {
   clip: WireSpineClip;
 }
 
+/** 一拍上的命名特效。anchor 是 slots 下标；对不上人时是 null，画在两排中间。 */
+export interface WireSpineVfxCue {
+  stem: string;
+  anchor: number | null;
+  role: "skill" | "hit";
+}
+
 export interface WireSpineBeat {
   line: string;
   cues: WireSpineCue[];
   /** 与 slots 对齐。null 表示这一拍不改这条血。缺血不写成 0。 */
   hp: (number | null)[];
+  /** 这一拍要挂的 batch2 特效。空数组表示不挂，站场和攻击照旧。 */
+  vfx: WireSpineVfxCue[];
 }
 
 export interface WireSpineReplay {
@@ -257,9 +297,51 @@ export function wireSpineHasClip(stem: string, clip: WireSpineClip): boolean {
 }
 
 /**
+ * skill_id 对技能套取模。null、非数、或表是空的，返回 null，调用方不挂特效。
+ * table 只给自检换一张空表；缺省用 WIRE_SPINE_SKILL_STEMS。出现的 0 仍映射到第 0 套。
+ */
+export function wireSpineSkillStem(skillId: number | null, table?: readonly string[]): string | null {
+  if (typeof skillId !== "number" || !isFinite(skillId)) return null;
+  const list = table || WIRE_SPINE_SKILL_STEMS;
+  if (list.length === 0) return null;
+  const index = Math.floor(Math.abs(skillId)) % list.length;
+  const stem = list[index];
+  if (!stem) return null;
+  return stem;
+}
+
+/** 有命中才返回受击套。hitCount 为 0，或套名是空的，返回 null。stem 只给自检换成空名。 */
+export function wireSpineHitStem(hitCount: number, stem?: string | null): string | null {
+  if (typeof hitCount !== "number" || !isFinite(hitCount) || hitCount <= 0) return null;
+  const name = stem === undefined ? WIRE_SPINE_HIT_STEM : stem;
+  if (!name) return null;
+  return name;
+}
+
+/** batch2 套上真正有的动作名。没单列的用 stand。不把英雄 hit 当特效动作。 */
+const VFX_CLIP: { [stem: string]: string } = {
+  yanwu: "act1",
+  heidong: "act1",
+  chaihong: "act1",
+  act: "attack",
+  "Dragon-1": "attack",
+  "Dragon-2": "attack",
+  "Dragon-3": "attack",
+  "Dragon-4": "attack",
+  lijijihuo: "idle",
+  zhihuanfazhen: "idle",
+};
+
+export function wireSpineVfxClip(stem: string): string {
+  const named = VFX_CLIP[stem];
+  if (named) return named;
+  return "stand";
+}
+
+/**
  * 有 report 才编这份回放。不走 planBattle，不造四回合色块。
  * 没有 rounds 时先站场；胜负已经能判时再补一拍攻击。胜且没有守方英雄时敌方用 crusade_boss_die。
- * 有行动就按行动播 attack 或 stand。技能号只写进行，不播 bisha，不播 hit。
+ * 有行动就按行动播 attack 或 stand。技能号和 hits 另挂 batch2 特效，不播 bisha，不播英雄 hit。
  */
 export function planWireSpineReplay(report: WireBattleReport, roleId: number | null, stageId: number): WireSpineReplay {
   const win = resolveWireBattleWin(report, roleId);
@@ -267,6 +349,10 @@ export function planWireSpineReplay(report: WireBattleReport, roleId: number | n
   const beats = buildBeats(report, slots, win);
   const stems: string[] = [];
   for (let i = 0; i < slots.length; i++) pushUnique(stems, slots[i].stem);
+  for (let b = 0; b < beats.length; b++) {
+    const vfx = beats[b].vfx;
+    for (let v = 0; v < vfx.length; v++) pushUnique(stems, vfx[v].stem);
+  }
   return { stageId, win, slots, beats, stems };
 }
 
@@ -363,7 +449,7 @@ function buildBeats(report: WireBattleReport, slots: WireSpineSlot[], win: boole
 }
 
 function standBeat(slots: WireSpineSlot[], line: string): WireSpineBeat {
-  return { line, cues: baseCues(slots), hp: emptyHp(slots) };
+  return { line, cues: baseCues(slots), hp: emptyHp(slots), vfx: [] };
 }
 
 function outcomeBeat(slots: WireSpineSlot[], side: "ally" | "enemy", win: boolean | null): WireSpineBeat {
@@ -377,7 +463,7 @@ function outcomeBeat(slots: WireSpineSlot[], side: "ally" | "enemy", win: boolea
   const hp = emptyHp(slots);
   if (win === true) applyBossDie(slots, cues, hp, true);
   const line = (win === true ? "胜" : "负") + " · " + verb;
-  return { line, cues, hp };
+  return { line, cues, hp, vfx: [] };
 }
 
 function actionBeat(
@@ -389,6 +475,7 @@ function actionBeat(
 ): WireSpineBeat {
   const cues = baseCues(slots);
   const hp = emptyHp(slots);
+  const vfx = actionVfx(slots, action);
   let line = roundPrefix(round);
   if (action.atkPos === null) {
     line += " · 行动者未带";
@@ -402,7 +489,10 @@ function actionBeat(
       line += " · 位置 " + action.atkPos + (attack ? " 攻击" : " 站立");
     }
   }
-  if (action.skillId !== null) line += " · 技能 " + action.skillId + " 未播";
+  if (action.skillId !== null) {
+    const skillStem = wireSpineSkillStem(action.skillId);
+    line += skillStem ? " · 技能 " + action.skillId + " " + skillStem : " · 技能 " + action.skillId + " 未播";
+  }
   for (let i = 0; i < action.hits.length; i++) {
     const hit = action.hits[i];
     if (hit.hurt !== null) line += " · 伤害 " + hit.hurt;
@@ -414,8 +504,39 @@ function actionBeat(
     }
     hp[target] = hit.hp;
   }
+  for (let v = 0; v < vfx.length; v++) {
+    if (vfx[v].role === "hit") line += " · 受击 " + vfx[v].stem;
+  }
   applyBossDie(slots, cues, hp, win === true && last);
-  return { line, cues, hp };
+  return { line, cues, hp, vfx };
+}
+
+function actionVfx(slots: WireSpineSlot[], action: WireBattleAction): WireSpineVfxCue[] {
+  const vfx: WireSpineVfxCue[] = [];
+  const skillStem = wireSpineSkillStem(action.skillId);
+  if (skillStem) {
+    let anchor: number | null = null;
+    if (action.atkPos !== null) {
+      const found = matchSlot(slots, action.atkPos, action.camp);
+      if (typeof found === "number") anchor = found;
+    }
+    vfx.push({ stem: skillStem, anchor, role: "skill" });
+  }
+  const hitStem = wireSpineHitStem(action.hits.length);
+  if (hitStem) {
+    let anchor: number | null = null;
+    for (let i = 0; i < action.hits.length; i++) {
+      const hit = action.hits[i];
+      if (hit.defPos === null) continue;
+      const target = matchSlot(slots, hit.defPos, null);
+      if (typeof target === "number") {
+        anchor = target;
+        break;
+      }
+    }
+    vfx.push({ stem: hitStem, anchor, role: "hit" });
+  }
+  return vfx;
 }
 
 function applyBossDie(slots: WireSpineSlot[], cues: WireSpineCue[], hp: (number | null)[], finish: boolean): void {
