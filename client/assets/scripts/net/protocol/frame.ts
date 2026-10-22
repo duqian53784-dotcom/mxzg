@@ -67,6 +67,16 @@ export const WireCmd = {
    */
   battleReport: 3102,
   /**
+   * c2s GReqPreComputeStrength。空壳可以发。整帧 `04 00 00 00 1f 0c 00 00`。
+   * 3103 = 0x0C1F，小端 1f 0c 00 00。
+   * 字段 1 hero_ids（repeated int64），字段 2 type（string），字段 3 line_up_type（int32）。
+   * 主线页点「空壳探针」或「预计算」才发，挂在已合 3102 之后。不从 3102 自动接。
+   * 不进 pullIdle。s2c 是 GResPreComputeStrength。只计算，不开战，不落库，无领奖，无扣费。
+   * 空 hero_ids 回 fighting=0，这是成功。不播 spine。
+   * 不是请求战报 3102，也不是占位 stage.enter（1201）。
+   */
+  preComputeStrength: 3103,
+  /**
    * c2s 空体。Battle.proto 的 GReqChapterItemList。进主城、空 c2s 3007 之后发。
    * s2c 回 reward_time / max_reward_time。不是占位 idle.query（1301）。
    */
