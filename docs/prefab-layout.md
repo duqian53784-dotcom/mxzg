@@ -25,7 +25,7 @@
 
 - Login：`Mask`、`Bg`、`Card/{CardBg,Title,Subtitle,AccountLabel,AccountField,PasswordLabel,PasswordField,ServerLabel,ServerRow/Btn_1|Btn_2|Btn_3,Picked,Status,Detail,BtnEnter,BtnCreate,BtnMock}`
 - CreateRole：`Mask,Bg,Card/{CardBg,Title,Hint,Meta,NameLabel,NameField,Status,BtnConfirm,BtnBack}`
-- CityChrome：`Top/{Name,Sub,Gold,Diamond}`、`Bottom/Tab_city|Tab_hero|Tab_summon|Tab_smith|Tab_plays`（子节点 `Label`、`Lock`）
+- CityChrome：`TopBar/{LblName,LblSub,CurrencyGold/Value,CurrencyGem/Value}`、`BottomBar/TabCity|TabHero|TabSummon|TabForge|TabPlay`（子节点 `Label`、`Lock`）。完整节点、贴图和与日文主城的差别见 [`city-chrome-nodes.md`](city-chrome-nodes.md)
 
 适配只绑这些节点。Login 对外仍是 `setStatus` / `setDetail` / `setBusy` / `account` / `password` / `serverId`。CreateRole 仍是 `setStatus` / `setBusy` / `name`。CityChrome 仍是 `setIdentity` / `setCurrencies` / `setTabs`，底栏点击走原来的 `onTab`。
 
