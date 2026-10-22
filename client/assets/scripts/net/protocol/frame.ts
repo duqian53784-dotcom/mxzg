@@ -57,6 +57,16 @@ export const WireCmd = {
    */
   chapterReport: 3006,
   /**
+   * c2s GReqBattleReport。不是空体。字段 1 battle_id（string），字段 2 type（string）。
+   * 探针 battle_id=1、type=1 的整帧是 `0a 00 00 00 1e 0c 00 00 0a 01 31 12 01 31`。
+   * 3102 = 0x0C1E，小端 1e 0c 00 00。空壳 `04 00 00 00 1e 0c 00 00` 不够。
+   * 主线页点「请求战报」才发，挂在已合 3006 之后。不从 3001 或 3006 自动接。
+   * 不进 pullIdle。s2c 是 GResBattleReport。纯读 getReport，无领奖，无扣费。
+   * 3001 / 3006 的战报不落库，拿它们的 battle_id 常回 BATTLE_REPORT_TIMEOUT。
+   * 不是占位 stage.enter（1201），也不是挂机战报 3006。
+   */
+  battleReport: 3102,
+  /**
    * c2s 空体。Battle.proto 的 GReqChapterItemList。进主城、空 c2s 3007 之后发。
    * s2c 回 reward_time / max_reward_time。不是占位 idle.query（1301）。
    */

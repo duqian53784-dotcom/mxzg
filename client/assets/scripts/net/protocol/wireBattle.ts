@@ -12,7 +12,7 @@
  * Handler 内未见扣体力。win_id 对上 atk_id 或当前角色 id 之后，再拉一次已有的空 c2s 3007。
  * battle_type 单独不回拉。不是登录链加发。
  *
- * 不发领奖写 3002、3005、3008、3011、3013。不接 3102。3006 挂机战报另帧，不从 3001 发。
+ * 不发领奖写 3002、3005、3008、3011、3013。3102 请求战报另帧，不从 3001 自动发。3006 挂机战报另帧，不从 3001 发。
  * 不发 3100、3097、3098、18002、18001。
  * 不重发已挂的 3007（登录链）、3004、3099、3101、3203。
  * 硬禁 4601、29001。
@@ -65,7 +65,7 @@ export const WIRE_SPINE_SWORD = "battle-sword";
 export const WIRE_SPINE_BOSS = "crusade_boss_die";
 
 export const WIRE_BATTLE_MATCH_NOTE =
-  "挑战发空 c2s 3001（GReqBattleMatch，整帧 04000000b90b0000）。须已有 3007 的 idx。3101 已有则不重发。字段 2 是 battle_type，不是胜负。胜负看 win_id，对照 atk_id 或角色 id。rounds 驱动 spine 站场和回合动作，技能受击后续再接。不接 3102。3006 挂机战报另帧，不从 3001 发。不发 3002、3005、3008、3011、3013、3100、3097、3098、18002、18001。不重发 3004、3099、3203。硬禁 4601、29001。不把 Mock 1201/1202 当战报。缺字段不写成 0。空包体是已同步空表。未同步 Toast「真服未同步」。不回落 Mock。不写金币，不写钻石。不夹活动号。不进 pullIdle。不改 Boot";
+  "挑战发空 c2s 3001（GReqBattleMatch，整帧 04000000b90b0000）。须已有 3007 的 idx。3101 已有则不重发。字段 2 是 battle_type，不是胜负。胜负看 win_id，对照 atk_id 或角色 id。rounds 驱动 spine 站场和回合动作，技能受击后续再接。3102 请求战报另帧，不从 3001 自动发。3006 挂机战报另帧，不从 3001 发。不发 3002、3005、3008、3011、3013、3100、3097、3098、18002、18001。不重发 3004、3099、3203。硬禁 4601、29001。不把 Mock 1201/1202 当战报。缺字段不写成 0。空包体是已同步空表。未同步 Toast「真服未同步」。不回落 Mock。不写金币，不写钻石。不夹活动号。不进 pullIdle。不改 Boot";
 
 export const WIRE_BATTLE_MATCH_SIDE_EFFECT =
   "服侧胜则写 receiveReward、chapterId、missionRankTime 和战斗日志。已有未领通关奖可能另推 3002 first_reward，本端不发 3002。Handler 内未见扣体力。win_id 对上 atk_id 或角色 id 才再拉已有的空 c2s 3007。battle_type 单独不回拉。不进活动链";
@@ -490,7 +490,7 @@ function pushUnique(list: string[], stem: string): void {
   list.push(stem);
 }
 
-/** BattleReport。3001 的 report 和 3006 的 report 都走这一段，不另写一套 rounds。 */
+/** BattleReport。3001、3006 和 3102 的 report 都走这一段，不另写一套 rounds。 */
 export function decodeWireBattleReport(body: Uint8Array): WireBattleReport | null {
   const report = emptyReport();
   if (body.length === 0) return report;

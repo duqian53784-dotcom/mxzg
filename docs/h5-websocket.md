@@ -144,7 +144,7 @@ s2c 1002 字段 1 是新角色 id。日志里创角成功后会再发一次 1001
 
 服侧 `BattleHandler.challenge` 读 `RoleMission.chapterId` 打 chapterId+1。3007 的 max_idx 就是这个 chapterId。胜则写 receiveReward / chapterId / missionRankTime。本端不发 3002；服可能另推 first_reward。Handler 内未见扣体力。
 
-插入点是独立主线进战：已合的 3007 之后，可选已有的 3101，然后才是页内 3001。不接在 76251 活动链末，不夹活动号。`pullIdle` 不发 3001。不接 3102。3006 是挂机战报，主线页另发，不从 3001 发。胜（`win_id` 对上 `atk_id` 或角色 id）后再拉一次已有的空 c2s 3007 刷新 idx，不是登录链加发。`battle_type` 单独不回拉。
+插入点是独立主线进战：已合的 3007 之后，可选已有的 3101，然后才是页内 3001。不接在 76251 活动链末，不夹活动号。`pullIdle` 不发 3001。3102 是请求战报，主线页另发，不从 3001 自动接。3006 是挂机战报，主线页另发，不从 3001 发。胜（`win_id` 对上 `atk_id` 或角色 id）后再拉一次已有的空 c2s 3007 刷新 idx，不是登录链加发。`battle_type` 单独不回拉。
 
 入口在「更多」里已有的主线页内。主屏不新增矩形。两个 idx 都没有时 Toast「真服未同步」，不回落 Mock，不把 1201/1202 当战报。不发 3002、3005、3008、3011、3013、3100、3097、3098、18002、18001。硬禁 4601、29001。不改 Boot、USE_*、CityMap、SafeArea。
 
@@ -154,7 +154,15 @@ c2s **3006** 是 `GReqChapterReport`，不是空帧。3006 = 0x0BBE，小端 `be
 
 s2c 是 `GResChapterReport`：字段 1 `report` 是 `BattleReport`，字段 2 `chapterIdx`，字段 3 `firstPos`。`report` 的 rounds 和 3001 同一套，走 `decodeWireBattleReport`，有 report 时走 `planWireSpineReplay` / `mountBattleSpine`。不另写 spine。空包体是已同步空表。没有 report 时 Toast「真服未同步」，不回落 Mock。
 
-战斗链是 …→3012→3006。挂在已合 3012 之后，不重发 3012，不重发 3001。不进 `pullIdle`，不夹活动号。服侧只 invoke battle(HANG_UP) 计算：不写 receiveReward，不推进 chapterId，不落库。无领奖，无扣费。胜了不回拉 3007。不发 3002、3005、3008、3011。硬禁 3013、3102、4601、29001。不把 1201/1202 当战报。不写金币，不写钻石。不改 Boot、USE_*、CityChrome、CityMap、SafeArea。
+战斗链是 …→3012→3006。挂在已合 3012 之后，不重发 3012，不重发 3001。不进 `pullIdle`，不夹活动号。服侧只 invoke battle(HANG_UP) 计算：不写 receiveReward，不推进 chapterId，不落库。无领奖，无扣费。胜了不回拉 3007。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。3102 另帧，不从本帧自动发。不把 1201/1202 当战报。不写金币，不写钻石。不改 Boot、USE_*、CityChrome、CityMap、SafeArea。
+
+## 请求战报 3102（主线页点按钮才发，不进活动链）
+
+c2s **3102** 是 `GReqBattleReport`，不是空壳。3102 = 0x0C1E，小端 `1e 0c 00 00`。字段 1 `battle_id`（string），字段 2 `type`（string）。空壳 `04 00 00 00 1e 0c 00 00`（`040000001e0c0000`）不够。探针 battle_id=1、type=1 的整帧是 `0a 00 00 00 1e 0c 00 00 0a 01 31 12 01 31`（`0a0000001e0c00000a0131120131`）。页上两个输入默认 1、1，空白发出前收成 1。
+
+s2c 是 `GResBattleReport`：字段 1 `report` 是 `BattleReport`，字段 2 `type`（string）。`report` 的 rounds 和 3001 / 3006 同一套，走 `decodeWireBattleReport`，有 report 时走 `planWireSpineReplay` / `mountBattleSpine`。不另写 spine。空包体是已同步空表。没有 report 时 Toast「真服未同步」，不回落 Mock。
+
+战斗链是 …→3006→3102。挂在已合 3006 之后，点「请求战报」才发。不重发 3006，不重发 3001。不从 3001 或 3006 的回包自动接。3001 / 3006 的战报不落库，拿它们的 battle_id 去调 3102 常回 `BATTLE_REPORT_TIMEOUT`。这一帧只给已落库的战报（切磋 / 竞技）或已知有效的 battle_id。不进 `pullIdle`，不夹活动号。服侧纯读 `getReport`：无领奖，无扣费。胜了不回拉 3007。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。不发 3100、3097、3098。不把 1201/1202 当战报。不写金币，不写钻石。不改 Boot、USE_*、CityChrome、CityMap、SafeArea。
 
 再往后那一长串里，11005 以及倩本机登录后的 28000、50000 等仍只记 `wire.<cmdId>`。51001 是进主城只读请求，s2c 按 GResWorldLevel 读 level，不写钱包。世界等级不做 20101。20101 是进行中活动空体，另帧挂在 3101 之后。3203 是爬塔首通已领空体，另帧挂在 20101 之后，整帧 `04000000830c0000`。4044 是英雄等级重生次数空体，另帧挂在 3203 之后，整帧 `04000000cc0f0000`。13010 是签到列表空体，另帧挂在 4044 之后，整帧 `04000000d2320000`。不是启动链 12010。12020 是每日任务列表空体，另帧挂在 13010 之后，整帧 `04000000f42e0000`。不是启动链 12010。不发 12021、12022。26002 每日福利列表另只读接在其后，勿合并。26001 每月福利列表另只读接在 26002 之后，勿合并。不把 Mock 钱包填进去。这一轮在 3007 之后多发的是空 c2s 3004。挂机页点领取才多发空 c2s 3005。
 
