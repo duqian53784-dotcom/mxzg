@@ -5,10 +5,13 @@
  * 「挂机战报」在本页，发 c2s 3006（chapterIdx、firstPos，不是空帧）。不发 3005。
  * 「请求战报」在本页，发 c2s 3102（battle_id、type，不是空壳）。不从 3001 或 3006 自动接。
  * 3001 / 3006 的战报不落库，拿它们的 battle_id 常回 BATTLE_REPORT_TIMEOUT。
+ * 「空壳探针 / 预计算」在本页，发 c2s 3103。空壳是 040000001f0c0000。
+ * 可带 hero_ids、type、line_up_type。hero_ids 可从已同步的 3101 字段 2 填入。
+ * 不从 3102 自动接。fighting=0 是成功，不 Toast。不播 spine。
  * 主线入口已在「更多」，不往主屏再放矩形。
- * 收到 report 在本页播 spine 站场和回合动作，3001、3006 和 3102 都走 planWireSpineReplay。
+ * 收到 report 在本页播 spine 站场和回合动作，3001、3006 和 3102 都走 planWireSpineReplay。3103 不走。
  * 不发 18001，不把 Mock 1201/1202 当战报。
- * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。
+ * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。3103 的 fighting=0 不 Toast。
  */
 import { Color, Node } from "cc";
 import { ErrorCode, errorText } from "../core/errors";
@@ -49,6 +52,15 @@ import {
   WIRE_BATTLE_REPORT_TIMEOUT_NOTE,
   WIRE_BATTLE_REPORT_UNSYNCED_TOAST,
 } from "../net/protocol/wireBattleReport";
+import {
+  formatWirePreCompute,
+  heroIdsFromLineUp,
+  parseHeroIdList,
+  parseLineUpType,
+  parsePreComputeType,
+  preComputeTypeEcho,
+  WIRE_PRECOMPUTE_UNSYNCED_TOAST,
+} from "../net/protocol/wirePreComputeStrength";
 import { mountBattleSpine, SpineActor } from "./battleSpine";
 import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
@@ -80,7 +92,7 @@ export interface WireMainlinePage {
 }
 
 type Phase = "info" | "battle" | "done";
-type WaitKind = "3001" | "3006" | "3102";
+type WaitKind = "3001" | "3006" | "3102" | "3103";
 
 export function buildWireMainlinePage(host: WireMainlineHost): WireMainlinePage {
   return new WireMainlineController(host);
@@ -97,10 +109,16 @@ class WireMainlineController implements WireMainlinePage {
   private seenSerial = 0;
   private seenReportSerial = 0;
   private seenBattleReportSerial = 0;
+  private seenPreComputeSerial = 0;
   private chapterIdx = 1;
   private firstPos = 1;
   private battleId = "1";
   private reportType = "1";
+  private heroIdsText = "";
+  private strengthType = "";
+  private lineUpTypeText = "";
+  private lastSentType: string | null = null;
+  private strengthSent = false;
   private offSync: (() => void) | null = null;
   private nowLabel: Node | null = null;
   private maxLabel: Node | null = null;
@@ -110,8 +128,12 @@ class WireMainlineController implements WireMainlinePage {
   private hangLabel: Node | null = null;
   private reportLabel: Node | null = null;
   private fetchLabel: Node | null = null;
+  private strengthLabel: Node | null = null;
   private battleIdField: TextField | null = null;
   private reportTypeField: TextField | null = null;
+  private heroIdsField: TextField | null = null;
+  private strengthTypeField: TextField | null = null;
+  private lineUpTypeField: TextField | null = null;
   private statusLabel: Node | null = null;
   private resultLabel: Node | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -195,6 +217,29 @@ class WireMainlineController implements WireMainlinePage {
       void this.play({ empty: false, report: report.report, marks: report.marks }, stage);
       return;
     }
+    if (this.waitKind === "3103") {
+      if (WireSession.preComputeSerial === this.seenPreComputeSerial) return;
+      this.seenPreComputeSerial = WireSession.preComputeSerial;
+      this.waiting = false;
+      this.waitKind = null;
+      const snap = WireSession.preCompute;
+      if (!snap) {
+        this.host.showToast(WIRE_PRECOMPUTE_UNSYNCED_TOAST);
+        this.phase = "info";
+        this.showInfo();
+        return;
+      }
+      this.strengthSent = true;
+      const echo = preComputeTypeEcho(this.lastSentType, snap.type);
+      GameLog.shared.info(
+        "Mainline",
+        "wire precompute result " + formatWirePreCompute(snap) + " / echo=" + echo
+      );
+      this.phase = "info";
+      this.renderInfo();
+      return;
+    }
+    if (this.waitKind !== "3102") return;
     if (WireSession.battleReportSerial === this.seenBattleReportSerial) return;
     this.seenBattleReportSerial = WireSession.battleReportSerial;
     this.waiting = false;
@@ -221,23 +266,33 @@ class WireMainlineController implements WireMainlinePage {
     this.rewardLabel = place(createLabel(this.rewardText(), 22, { color: TITLE, width: 640, height: 56 }), this.body, 0, 130);
     this.quickLabel = place(createLabel(this.quickText(), 22, { color: TITLE, width: 640, height: 56 }), this.body, 0, 70);
     this.statusLabel = place(createLabel(this.statusText(), 22, { color: MUTED, width: 640 }), this.body, 0, 20);
-    place(createLabel(WIRE_MAINLINE_READONLY_NOTE, 16, { color: MUTED, width: 640, height: 96 }), this.body, 0, -40);
-    this.hangLabel = place(createLabel(this.hangText(), 20, { color: TITLE, width: 640 }), this.body, 0, -120);
-    this.reportLabel = place(createLabel(this.reportText(), 18, { color: MUTED, width: 640, height: 40 }), this.body, 0, -158);
-    place(createButton("关-", () => this.bump("idx", -1), 88, 36, BACK_FILL), this.body, -240, -200);
-    place(createButton("关+", () => this.bump("idx", 1), 88, 36, BACK_FILL), this.body, -120, -200);
-    place(createButton("位-", () => this.bump("pos", -1), 88, 36, BACK_FILL), this.body, 40, -200);
-    place(createButton("位+", () => this.bump("pos", 1), 88, 36, BACK_FILL), this.body, 160, -200);
-    place(createButton("挂机战报", () => this.hangupReport(), 240, 44, OPEN_FILL), this.body, 0, -248);
-    place(createLabel(WIRE_BATTLE_REPORT_TIMEOUT_NOTE, 14, { color: MUTED, width: 640, height: 56 }), this.body, 0, -310);
-    this.battleIdField = createField("battle_id", 280, 40, { text: this.battleId, maxLength: 64 });
-    place(this.battleIdField.node, this.body, -150, -360);
-    this.reportTypeField = createField("type", 180, 40, { text: this.reportType, maxLength: 32 });
-    place(this.reportTypeField.node, this.body, 180, -360);
-    this.fetchLabel = place(createLabel(this.fetchText(), 16, { color: MUTED, width: 640 }), this.body, 0, -400);
-    place(createButton("请求战报", () => this.fetchBattleReport(), 240, 44, OPEN_FILL), this.body, 0, -448);
-    place(createButton("挑战", () => this.challenge(), 240, 44, OPEN_FILL), this.body, 0, -508);
-    place(createButton("返回", () => this.host.close(), 240, 40, BACK_FILL), this.body, 0, -568);
+    place(createLabel(WIRE_MAINLINE_READONLY_NOTE, 16, { color: MUTED, width: 640, height: 72 }), this.body, 0, -24);
+    this.hangLabel = place(createLabel(this.hangText(), 20, { color: TITLE, width: 640 }), this.body, 0, -96);
+    this.reportLabel = place(createLabel(this.reportText(), 18, { color: MUTED, width: 640, height: 36 }), this.body, 0, -128);
+    place(createButton("关-", () => this.bump("idx", -1), 88, 36, BACK_FILL), this.body, -240, -168);
+    place(createButton("关+", () => this.bump("idx", 1), 88, 36, BACK_FILL), this.body, -120, -168);
+    place(createButton("位-", () => this.bump("pos", -1), 88, 36, BACK_FILL), this.body, 40, -168);
+    place(createButton("位+", () => this.bump("pos", 1), 88, 36, BACK_FILL), this.body, 160, -168);
+    place(createButton("挂机战报", () => this.hangupReport(), 220, 40, OPEN_FILL), this.body, 0, -212);
+    place(createLabel(WIRE_BATTLE_REPORT_TIMEOUT_NOTE, 14, { color: MUTED, width: 640, height: 40 }), this.body, 0, -256);
+    this.battleIdField = createField("battle_id", 280, 36, { text: this.battleId, maxLength: 64 });
+    place(this.battleIdField.node, this.body, -150, -300);
+    this.reportTypeField = createField("type", 180, 36, { text: this.reportType, maxLength: 32 });
+    place(this.reportTypeField.node, this.body, 180, -300);
+    this.fetchLabel = place(createLabel(this.fetchText(), 16, { color: MUTED, width: 640 }), this.body, 0, -338);
+    place(createButton("请求战报", () => this.fetchBattleReport(), 200, 36, OPEN_FILL), this.body, 0, -376);
+    this.strengthLabel = place(createLabel(this.strengthText(), 16, { color: TITLE, width: 640, height: 32 }), this.body, 0, -416);
+    this.heroIdsField = createField("hero_ids", 250, 36, { text: this.heroIdsText, maxLength: 180 });
+    place(this.heroIdsField.node, this.body, -190, -456);
+    this.strengthTypeField = createField("type", 130, 36, { text: this.strengthType, maxLength: 32 });
+    place(this.strengthTypeField.node, this.body, 70, -456);
+    this.lineUpTypeField = createField("line_up", 110, 36, { text: this.lineUpTypeText, maxLength: 12 });
+    place(this.lineUpTypeField.node, this.body, 250, -456);
+    place(createButton("空壳探针", () => this.probeStrength(), 150, 36, OPEN_FILL), this.body, -220, -500);
+    place(createButton("预计算", () => this.precomputeStrength(), 140, 36, OPEN_FILL), this.body, 0, -500);
+    place(createButton("用3101", () => this.fillFromLineUp(), 140, 36, BACK_FILL), this.body, 210, -500);
+    place(createButton("挑战", () => this.challenge(), 200, 36, OPEN_FILL), this.body, 0, -548);
+    place(createButton("返回", () => this.host.close(), 200, 36, BACK_FILL), this.body, 0, -592);
   }
 
   private renderInfo(): void {
@@ -249,6 +304,7 @@ class WireMainlineController implements WireMainlinePage {
     this.write(this.hangLabel, this.hangText());
     this.write(this.reportLabel, this.reportText());
     this.write(this.fetchLabel, this.fetchText());
+    this.write(this.strengthLabel, this.strengthText());
     if (!this.waiting) this.write(this.statusLabel, this.statusText());
   }
 
@@ -324,6 +380,68 @@ class WireMainlineController implements WireMainlinePage {
     this.waiting = true;
     this.write(this.statusLabel, "已发 3102，等待战报");
     GameLog.shared.info("Mainline", "wire battle report 3102 battle_id=" + query.battleId + " type=" + query.type);
+  }
+
+  private probeStrength(): void {
+    this.sendStrength(true);
+  }
+
+  private precomputeStrength(): void {
+    this.sendStrength(false);
+  }
+
+  private fillFromLineUp(): void {
+    if (this.disposed || this.phase === "battle" || this.waiting) return;
+    const ids = heroIdsFromLineUp(WireSession.lineUp);
+    if (ids.length === 0) {
+      GameLog.shared.info("Mainline", "3101 没有可填的 hero_id");
+      return;
+    }
+    this.heroIdsText = ids.join(",");
+    if (this.heroIdsField) this.heroIdsField.setValue(this.heroIdsText);
+    this.write(this.strengthLabel, this.strengthText());
+    GameLog.shared.info("Mainline", "wire precompute fill 3101 hero_ids=" + this.heroIdsText);
+  }
+
+  private sendStrength(shell: boolean): void {
+    if (this.disposed || this.phase === "battle" || this.waiting) return;
+    if (!this.host.connected()) {
+      this.host.showToast(errorText(ErrorCode.NET_NOT_CONNECTED));
+      return;
+    }
+    if (!WireSession.hasChapter()) {
+      this.host.showToast(WIRE_PRECOMPUTE_UNSYNCED_TOAST);
+      return;
+    }
+    const heroText = this.heroIdsField ? this.heroIdsField.getValue() : this.heroIdsText;
+    const typeText = this.strengthTypeField ? this.strengthTypeField.getValue() : this.strengthType;
+    const lineText = this.lineUpTypeField ? this.lineUpTypeField.getValue() : this.lineUpTypeText;
+    this.heroIdsText = heroText;
+    this.strengthType = typeText;
+    this.lineUpTypeText = lineText;
+    const heroIds = shell ? [] : parseHeroIdList(heroText);
+    const type = shell ? null : parsePreComputeType(typeText);
+    const lineUpType = shell ? null : parseLineUpType(lineText);
+    this.lastSentType = type;
+    this.seenPreComputeSerial = WireSession.preComputeSerial;
+    const sent = shell
+      ? WireSession.pullPreComputeStrength({ shell: true })
+      : WireSession.pullPreComputeStrength({ shell: false, heroIds, type, lineUpType });
+    if (!sent) {
+      this.host.showToast(WIRE_PRECOMPUTE_UNSYNCED_TOAST);
+      return;
+    }
+    this.waitKind = "3103";
+    this.waiting = true;
+    this.write(this.statusLabel, shell ? "已发 3103 空壳，等待战斗力" : "已发 3103，等待战斗力");
+    const echoHint = type === null ? "type 无" : "type=" + type;
+    const lineHint = lineUpType === null ? "line_up_type 无" : "line_up_type=" + lineUpType;
+    GameLog.shared.info(
+      "Mainline",
+      shell
+        ? "wire precompute 3103 empty"
+        : "wire precompute 3103 hero_ids=" + heroIds.join(",") + " " + echoHint + " " + lineHint
+    );
   }
 
   private bump(which: "idx" | "pos", delta: number): void {
@@ -464,6 +582,16 @@ class WireMainlineController implements WireMainlinePage {
 
   private fetchText(): string {
     return formatWireBattleReport(WireSession.battleReport) + " / battle_id " + this.battleId + " / type " + this.reportType;
+  }
+
+  private strengthText(): string {
+    const snap = WireSession.preCompute;
+    const base = formatWirePreCompute(snap);
+    if (!this.strengthSent || !snap) return base;
+    const echo = preComputeTypeEcho(this.lastSentType, snap.type);
+    if (echo === "match") return base + " / type 回声一致";
+    if (echo === "mismatch") return base + " / type 回声不符";
+    return base;
   }
 
   private hangText(): string {

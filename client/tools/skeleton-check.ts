@@ -558,6 +558,24 @@ import {
   WIRE_BATTLE_REPORT_UNSYNCED_TOAST,
 } from "../assets/scripts/net/protocol/wireBattleReport";
 import {
+  decodeWirePreComputeStrength,
+  encodeWirePreComputeBody,
+  formatWirePreCompute,
+  heroIdsFromLineUp,
+  parseHeroIdList,
+  parseLineUpType,
+  parsePreComputeType,
+  preComputeTypeEcho,
+  readWirePreComputeQuery,
+  WIRE_PRECOMPUTE_BANNED_CMDS,
+  WIRE_PRECOMPUTE_CMD,
+  WIRE_PRECOMPUTE_EMPTY,
+  WIRE_PRECOMPUTE_FRAME,
+  WIRE_PRECOMPUTE_NOTE,
+  WIRE_PRECOMPUTE_SIDE_EFFECT,
+  WIRE_PRECOMPUTE_UNSYNCED_TOAST,
+} from "../assets/scripts/net/protocol/wirePreComputeStrength";
+import {
   decodeWireIdle,
   decodeWireIdleClaim,
   formatWireIdle,
@@ -8923,7 +8941,6 @@ async function checkWs(): Promise<void> {
     "wire.3098",
     "wire.3100",
     "wire.3030",
-    "wire.3103",
     "wire.20011",
     "wire.4601",
     "wire.29001",
@@ -9110,7 +9127,6 @@ async function checkWs(): Promise<void> {
     "wire.3098",
     "wire.3097",
     "wire.3030",
-    "wire.3103",
     "wire.20011",
     "wire.4601",
     "wire.29001",
@@ -14616,6 +14632,8 @@ async function checkWs(): Promise<void> {
       WIRE_MAINLINE_READONLY_NOTE.indexOf("win_id") >= 0 &&
       WIRE_MAINLINE_READONLY_NOTE.indexOf("rounds") >= 0 &&
       WIRE_MAINLINE_READONLY_NOTE.indexOf("3102") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("3103") >= 0 &&
+      WIRE_MAINLINE_READONLY_NOTE.indexOf("不播 spine") >= 0 &&
       WIRE_MAINLINE_READONLY_NOTE.indexOf("3006") >= 0 &&
       WIRE_MAINLINE_READONLY_NOTE.indexOf("不接 spine") < 0 &&
       WIRE_MAINLINE_READONLY_NOTE.indexOf("色块") < 0 &&
@@ -15388,8 +15406,178 @@ async function checkWs(): Promise<void> {
       WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("硬禁 3013") >= 0 &&
       WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("3100") >= 0 &&
       WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("3097") >= 0 &&
-      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("3098") >= 0,
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("3098") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("3103") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3103") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("不播 spine") >= 0,
     "3102 note names the frame, the spine reuse, the timeout caveat, and the banned cmds"
+  );
+  assert(
+    WireCmd.preComputeStrength === 3103 &&
+      WireCmd.preComputeStrength !== WireCmd.battleReport &&
+      WireCmd.preComputeStrength !== WireCmd.lineUp &&
+      WireCmd.preComputeStrength !== WireCmd.battleMatch &&
+      WireCmd.preComputeStrength !== WireCmd.chapterReport,
+    "online 3103 stays off 3102, 3101, 3001 and 3006"
+  );
+  assert(bytesToHex(encodeFrame(3103)) === WIRE_PRECOMPUTE_FRAME, "empty 3103 shell is 1f 0c");
+  assert(WIRE_PRECOMPUTE_FRAME === "040000001f0c0000", "3103 empty shell constant");
+  assert(bytesToHex(encodeFrame(3103)) !== "040000001e0c0000", "3103 is not the 3102 shell");
+  assert(bytesToHex(encodeFrame(3102)) !== WIRE_PRECOMPUTE_FRAME, "3102 is not the 3103 shell");
+  assert(bytesToHex(encodeFrame(3101)) !== WIRE_PRECOMPUTE_FRAME, "3101 is not the 3103 shell");
+  assert(bytesToHex(encodeFrame(3100)) !== WIRE_PRECOMPUTE_FRAME, "3100 is not the 3103 shell");
+  assert(bytesToHex(encodeFrame(3097)) !== WIRE_PRECOMPUTE_FRAME, "3097 is not the 3103 shell");
+  assert(bytesToHex(encodeFrame(3098)) !== WIRE_PRECOMPUTE_FRAME, "3098 is not the 3103 shell");
+  assert(bytesToHex(encodeFrame(3030)) !== WIRE_PRECOMPUTE_FRAME, "3030 is not the 3103 shell");
+  assert(bytesToHex(encodeFrame(3013)) !== WIRE_PRECOMPUTE_FRAME, "3013 is not the 3103 shell");
+  assert(bytesToHex(encodeFrame(3002)) !== WIRE_PRECOMPUTE_FRAME, "3002 is not the 3103 shell");
+  assert(bytesToHex(encodeFrame(3005)) !== WIRE_PRECOMPUTE_FRAME, "3005 is not the 3103 shell");
+  assert(bytesToHex(encodeFrame(3008)) !== WIRE_PRECOMPUTE_FRAME, "3008 is not the 3103 shell");
+  assert(bytesToHex(encodeFrame(3011)) !== WIRE_PRECOMPUTE_FRAME, "3011 is not the 3103 shell");
+  const strengthProbe = encodeWireMessage({ cmd: WIRE_PRECOMPUTE_CMD });
+  assert(
+    strengthProbe !== null &&
+      strengthProbe.cmdId === 3103 &&
+      bytesToHex(strengthProbe.bytes) === WIRE_PRECOMPUTE_FRAME &&
+      strengthProbe.note === "空壳",
+    "wire.3103 with no body encodes the empty shell"
+  );
+  const strengthNamed = readWirePreComputeQuery({ shell: false, heroIds: [7, 8], type: "pvp", lineUpType: 1 });
+  assert(
+    !strengthNamed.shell &&
+      strengthNamed.heroIds.join(",") === "7,8" &&
+      strengthNamed.type === "pvp" &&
+      strengthNamed.lineUpType === 1 &&
+      bytesToHex(encodeWirePreComputeBody(strengthNamed)) === "0807080812037076701801" &&
+      bytesToHex(encodeFrame(3103, encodeWirePreComputeBody(strengthNamed))) === "0f0000001f0c00000807080812037076701801",
+    "3103 keeps hero_ids 7,8 type pvp and line_up_type 1"
+  );
+  const strengthPacket = encodeWireMessage({ cmd: WIRE_PRECOMPUTE_CMD, data: { shell: false, heroIds: [7, 8], type: "pvp", lineUpType: 1 } });
+  assert(
+    strengthPacket !== null &&
+      bytesToHex(strengthPacket.bytes) === "0f0000001f0c00000807080812037076701801" &&
+      strengthPacket.note === "hero_ids=7,8 type=pvp line_up_type=1",
+    "wire.3103 encodes the caller hero_ids type and line_up_type"
+  );
+  assert(
+    bytesToHex(encodeFrame(3103, encodeWirePreComputeBody(readWirePreComputeQuery({ shell: false, heroIds: [], type: "", lineUpType: "" })))) === WIRE_PRECOMPUTE_FRAME,
+    "blank 3103 controls still encode the empty shell"
+  );
+  assert(parsePreComputeType("  ") === null && parsePreComputeType(1) === null && parseLineUpType("  ") === null, "3103 does not invent type or line_up_type");
+  assert(parseLineUpType("0") === 0 && parseLineUpType("-1") === -1 && parseHeroIdList("7, 0, 8，9") .join(",") === "7,8,9", "3103 keeps a real 0 and drops a zero hero id");
+  assert(
+    bytesToHex(encodeFrame(3103, encodeWirePreComputeBody(readWirePreComputeQuery({ shell: false, heroIds: [], type: null, lineUpType: 0 })))) === "060000001f0c00001800",
+    "line_up_type 0 is encoded and is not omitted"
+  );
+  assert(
+    bytesToHex(encodeWirePreComputeBody(readWirePreComputeQuery({ shell: false, heroIds: [], type: null, lineUpType: -1 }))) === "18ffffffffffffffffff01",
+    "line_up_type -1 is the sign-extended varint"
+  );
+  const lineupHeroes = heroIdsFromLineUp({
+    rows: [
+      { marks: [{ field: 1, text: "0" }, { field: 2, text: "7" }, { field: 3, text: "-1" }] },
+      { marks: [{ field: 2, text: "8,0,9" }] },
+      { marks: [{ field: 2, text: "字段1=11,字段2=1" }] },
+      { marks: [{ field: 4, text: "99" }] },
+    ],
+  });
+  assert(lineupHeroes.join(",") === "7,8,9,11", "3101 field 2 supplies hero_ids and skips 0, -1, and other fields");
+  assert(heroIdsFromLineUp(null).length === 0 && heroIdsFromLineUp({ rows: [] }).length === 0, "missing 3101 does not invent hero_ids");
+  for (let psi = 0; psi < WIRE_PRECOMPUTE_BANNED_CMDS.length; psi++) {
+    assert(encodeWireMessage({ cmd: WIRE_PRECOMPUTE_BANNED_CMDS[psi] }) === null, WIRE_PRECOMPUTE_BANNED_CMDS[psi] + " stays off the 3103 encoder");
+  }
+  assert(encodeWireMessage({ cmd: "wire.3005" }) !== null, "3005 stays encoded by its own module and is not reissued as 3103");
+  assert(encodeWireMessage({ cmd: "wire.3102" }) !== null, "3102 stays encoded by its own module and is not reissued as 3103");
+  assert(encodeWireMessage({ cmd: "wire.3101" }) !== null, "3101 stays encoded by its own module and is not reissued as 3103");
+  assert(decodeWirePreComputeStrength(null) === null, "missing 3103 body stays unsynced");
+  assert(decodeWirePreComputeStrength(new Uint8Array([0x80])) === null, "bad 3103 varint does not become a strength");
+  const emptyStrength = decodeWirePreComputeStrength(new Uint8Array(0));
+  assert(
+    emptyStrength !== null &&
+      emptyStrength.empty &&
+      emptyStrength.fighting === null &&
+      emptyStrength.type === null &&
+      formatWirePreCompute(emptyStrength) === "预计算 " + WIRE_PRECOMPUTE_EMPTY &&
+      formatWirePreCompute(emptyStrength).indexOf("未同步") < 0 &&
+      formatWirePreCompute(emptyStrength).indexOf("fighting=0") < 0,
+    "empty 3103 body is 已同步 and does not invent fighting 0"
+  );
+  const zeroStrength = decodeWirePreComputeStrength(fieldVarint(1, 0));
+  assert(
+    zeroStrength !== null &&
+      !zeroStrength.empty &&
+      zeroStrength.fighting === 0 &&
+      zeroStrength.type === null &&
+      formatWirePreCompute(zeroStrength) === "预计算 fighting=0" &&
+      formatWirePreCompute(zeroStrength).indexOf("未同步") < 0 &&
+      preComputeTypeEcho(null, zeroStrength.type) === "omit",
+    "fighting=0 on an empty hero_ids probe is a real zero and is not unsynced"
+  );
+  const echoedStrength = decodeWirePreComputeStrength(concatBytes(fieldVarint(1, 1280), fieldBytes(2, Uint8Array.from([0x70, 0x76, 0x70]))));
+  assert(
+    echoedStrength !== null &&
+      echoedStrength.fighting === 1280 &&
+      echoedStrength.type === "pvp" &&
+      preComputeTypeEcho("pvp", echoedStrength.type) === "match" &&
+      preComputeTypeEcho("arena", echoedStrength.type) === "mismatch" &&
+      formatWirePreCompute(echoedStrength).indexOf("fighting=1280") >= 0 &&
+      formatWirePreCompute(echoedStrength).indexOf("type=pvp") >= 0,
+    "3103 type echo matches the request string and fighting stays positive"
+  );
+  const strengthAbsent = decodeWirePreComputeStrength(fieldVarint(7, 9));
+  assert(
+    strengthAbsent !== null &&
+      strengthAbsent.fighting === null &&
+      strengthAbsent.type === null &&
+      formatWirePreCompute(strengthAbsent).indexOf("fighting 未带") >= 0 &&
+      formatWirePreCompute(strengthAbsent).indexOf("fighting=0") < 0 &&
+      formatWirePreCompute(strengthAbsent).indexOf("字段7=9") >= 0,
+    "3103 without fighting does not invent 0"
+  );
+  const strengthEmptyType = decodeWirePreComputeStrength(fieldBytes(2, new Uint8Array(0)));
+  assert(
+    strengthEmptyType !== null && strengthEmptyType.type === "" && formatWirePreCompute(strengthEmptyType).indexOf("type 空") >= 0,
+    "3103 keeps a present empty type string"
+  );
+  assert(formatWirePreCompute(null) === "预计算 " + WIRE_PRECOMPUTE_UNSYNCED_TOAST, "unsynced 3103 toast text");
+  assert(
+    WIRE_PRECOMPUTE_NOTE.indexOf("040000001f0c0000") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3102") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("hero_ids") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("line_up_type") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("fighting=0") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("不播 spine") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("不进 pullIdle") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3002") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3005") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3008") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3011") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3013") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3100") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3097") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3098") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3030") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("4601") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("29001") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("1201") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("1202") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("不改 Boot") >= 0 &&
+      WIRE_PRECOMPUTE_NOTE.indexOf("3101") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("只计算") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("不开战") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("不落库") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("不回拉 3007") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("不从 3102、3001 或 3006 自动接") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("不重发 3102") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("不播 spine") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("3100") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("3097") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("3098") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("3030") >= 0 &&
+      WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("硬禁 3013") >= 0,
+    "3103 note names the empty shell, the echo, and the banned cmds"
   );
   const loginBody = encodeObservedLoginBody(960011, 1792466798);
   assert(
@@ -16577,9 +16765,10 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.pullQuickBattleCount(), "3012 does not send without 3007 idx");
       assert(!WireSession.pullChapterReport(1, 1), "3006 does not send without 3007 idx");
       assert(!WireSession.pullBattleReport("1", "1"), "3102 does not send without 3007 idx");
+      assert(!WireSession.pullPreComputeStrength(), "3103 does not send without 3007 idx");
       WireSession.nowIdx = savedNow;
       WireSession.maxIdx = savedMax;
-      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006 or 3102 on the wire");
+      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102 or 3103 on the wire");
       const sentBeforeQuick = roleSockets[0].sent.length;
       const goldBeforeQuick = Session.gold;
       const quickSentBefore = roleSockets[0].sent.length;
@@ -16718,6 +16907,74 @@ async function checkWs(): Promise<void> {
         "3006, 3005, 3013 and mock 1201 do not replace the 3102 report"
       );
       assert(roleSockets[0].sent.length === sentBeforeFetch + 1, "a later 3006 frame on the socket does not make the client send 3102");
+      const sentBeforeStrength = roleSockets[0].sent.length;
+      const goldBeforeStrength = Session.gold;
+      const nowBeforeStrength = WireSession.nowIdx;
+      const maxBeforeStrength = WireSession.maxIdx;
+      const reportBeforeStrength = WireSession.battleReport;
+      assert(WireSession.pullPreComputeStrength(), "3103 empty shell pulls when 3007 idx is present");
+      assert(roleSockets[0].sent.length === sentBeforeStrength + 1, "3103 is one frame and does not resend 3102, 3001 or the idle chain");
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeStrength] as ArrayBuffer)) === "040000001f0c0000",
+        "precompute frame is the empty c2s 3103 shell after the merged 3102 slot"
+      );
+      assert(Session.gold === goldBeforeStrength && Session.diamond === 0, "3103 does not write gold or diamond");
+      roleSockets[0].push(encodeFrame(WireCmd.preComputeStrength, fieldVarint(1, 0)));
+      assert(
+        WireSession.hasPreCompute() &&
+          WireSession.preCompute !== null &&
+          WireSession.preCompute.fighting === 0 &&
+          WireSession.preCompute.type === null &&
+          formatWirePreCompute(WireSession.preCompute).indexOf("fighting=0") >= 0 &&
+          formatWirePreCompute(WireSession.preCompute).indexOf("未同步") < 0 &&
+          WireSession.nowIdx === nowBeforeStrength &&
+          WireSession.maxIdx === maxBeforeStrength &&
+          WireSession.battleReport === reportBeforeStrength &&
+          Session.gold === goldBeforeStrength &&
+          roleSockets[0].sent.length === sentBeforeStrength + 1,
+        "empty 3103 shell returning fighting=0 is success and does not toast as unsynced, pull 3007, or replace 3102"
+      );
+      WireSession.lineUp = {
+        rows: [
+          { marks: [{ field: 2, text: "7" }, { field: 1, text: "0" }] },
+          { marks: [{ field: 2, text: "8,0" }] },
+        ],
+        assistanceUnlock: null,
+        marks: [],
+      };
+      const fromLineUp = heroIdsFromLineUp(WireSession.lineUp);
+      assert(fromLineUp.join(",") === "7,8", "session 3101 queue is the hero_id source");
+      assert(
+        WireSession.pullPreComputeStrength({ shell: false, heroIds: fromLineUp, type: "pvp", lineUpType: 1 }),
+        "3103 sends the 3101 hero ids"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[roleSockets[0].sent.length - 1] as ArrayBuffer)) === "0f0000001f0c00000807080812037076701801",
+        "3103 valuable path encodes hero_ids from 3101, type pvp, and line_up_type 1"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.preComputeStrength, concatBytes(fieldVarint(1, 1280), fieldBytes(2, Uint8Array.from([0x70, 0x76, 0x70])))));
+      assert(
+        WireSession.preCompute !== null &&
+          WireSession.preCompute.fighting === 1280 &&
+          WireSession.preCompute.fighting > 0 &&
+          WireSession.preCompute.type === "pvp" &&
+          preComputeTypeEcho("pvp", WireSession.preCompute.type) === "match" &&
+          WireSession.nowIdx === nowBeforeStrength &&
+          Session.gold === goldBeforeStrength &&
+          roleSockets[0].sent.length === sentBeforeStrength + 2,
+        "3103 with hero_ids returns fighting>0 and the type echo matches"
+      );
+      roleSockets[0].push(encodeFrame(3102, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3100, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3097, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3098, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3030, fieldVarint(1, 6)));
+      roleSockets[0].push(encodeFrame(3013, fieldVarint(1, 9)));
+      assert(
+        WireSession.preCompute !== null && WireSession.preCompute.fighting === 1280 && WireSession.preCompute.type === "pvp",
+        "3102 3100 3097 3098 3030 and 3013 do not replace the 3103 fighting"
+      );
+      assert(roleSockets[0].sent.length === sentBeforeStrength + 2, "a 3102 frame on the socket does not make the client send another 3103");
       roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
       assert(WireSession.battleMatch !== null && WireSession.battleMatch.empty, "mock 1201 does not replace the 3001 report");
       const sentBeforeBannedBattle = roleSockets[0].sent.length;
@@ -19874,29 +20131,31 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.3097");
       roleNet.send("wire.3098");
       roleNet.send("wire.3100");
-      roleNet.send("wire.3103");
       roleNet.send("wire.3030");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeFormationOther,
-        "3097 3098 3100 3103 3030 20011 4601 and 29001 stay off the formation wire"
+        "3097 3098 3100 3030 20011 4601 and 29001 stay off the formation wire"
       );
       assert(
         sawLog(lines, "未发送 wire.3097") &&
           sawLog(lines, "未发送 wire.3098") &&
           sawLog(lines, "未发送 wire.3100") &&
-          sawLog(lines, "未发送 wire.3103") &&
           sawLog(lines, "未发送 wire.3030") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001"),
-        "formation writes 3097 3098 3100 3103 3030 20011 4601 and 29001 are not encoded"
+        "formation writes 3097 3098 3100 3030 20011 4601 and 29001 are not encoded"
       );
       assert(
         bytesToHex(new Uint8Array(formationSent as ArrayBuffer)).indexOf("1e0c0000") < 0,
         "3099 pull does not merge 3102"
+      );
+      assert(
+        bytesToHex(new Uint8Array(formationSent as ArrayBuffer)).indexOf("1f0c0000") < 0,
+        "3099 pull does not merge 3103"
       );
       roleNet.send(WIRE_FETTER_CONTRACT_CMD);
       assert(
@@ -19925,28 +20184,30 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.3098");
       roleNet.send("wire.3097");
       roleNet.send("wire.3030");
-      roleNet.send("wire.3103");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeLineUpOther,
-        "3100 3098 3097 3030 3103 20011 4601 and 29001 stay off the lineup wire"
+        "3100 3098 3097 3030 20011 4601 and 29001 stay off the lineup wire"
       );
       assert(
         sawLog(lines, "未发送 wire.3100") &&
           sawLog(lines, "未发送 wire.3098") &&
           sawLog(lines, "未发送 wire.3097") &&
           sawLog(lines, "未发送 wire.3030") &&
-          sawLog(lines, "未发送 wire.3103") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001"),
-        "lineup writes 3100 3098 3097 3030 3103 20011 4601 and 29001 are not encoded"
+        "lineup writes 3100 3098 3097 3030 20011 4601 and 29001 are not encoded"
       );
       assert(
         bytesToHex(new Uint8Array(lineUpSent as ArrayBuffer)).indexOf("1e0c0000") < 0,
         "3101 pull does not merge 3102"
+      );
+      assert(
+        bytesToHex(new Uint8Array(lineUpSent as ArrayBuffer)).indexOf("1f0c0000") < 0,
+        "3101 pull does not merge 3103"
       );
       const sentAfterFormationAlone = roleSockets[0].sent.length;
       roleNet.send(WIRE_LINEUP_CMD);

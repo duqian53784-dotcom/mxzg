@@ -43,6 +43,14 @@ import {
   WireBattleReportSnapshot,
 } from "./protocol/wireBattleReport";
 import {
+  decodeWirePreComputeStrength,
+  formatWirePreCompute,
+  readWirePreComputeQuery,
+  WIRE_PRECOMPUTE_CMD,
+  WirePreComputeQuery,
+  WirePreComputeSnapshot,
+} from "./protocol/wirePreComputeStrength";
+import {
   decodeWireIdle,
   decodeWireIdleClaim,
   WIRE_IDLE_CLAIM_CMD,
@@ -570,7 +578,7 @@ import { wireBody } from "./protocol/wireLogin";
 /**
  * ?transport=ws 登录进主城后，这条 NetClient 要活过 Boot 切场景。
  * 心跳 1004 继续发。
- * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3001、wire.3010、wire.3012、wire.3006、wire.3102、wire.3004、wire.3005、wire.15000、wire.4001、wire.17000、wire.12010、wire.18001、wire.22000、wire.22002、wire.21010、wire.21013、wire.27001、wire.4004、wire.13044、wire.4101、wire.4013、wire.74100、wire.51001、wire.20001、wire.20012、wire.70001、wire.73001、wire.74300、wire.68001、wire.75501、wire.59001、wire.59010、wire.55001、wire.34001、wire.32001 、wire.4402、wire.4401、wire.4201、wire.74104、wire.28100、wire.28200、wire.75601、wire.75606、wire.75615、wire.28107 、wire.3099、wire.3101、wire.20101 、wire.3203 、wire.4044 、wire.13010 、wire.12020 、wire.26002 和 wire.26001。
+ * 连上就听 wire.2001、wire.5001、wire.5002、wire.3007、wire.3001、wire.3010、wire.3012、wire.3006、wire.3102、wire.3103、wire.3004、wire.3005、wire.15000、wire.4001、wire.17000、wire.12010、wire.18001、wire.22000、wire.22002、wire.21010、wire.21013、wire.27001、wire.4004、wire.13044、wire.4101、wire.4013、wire.74100、wire.51001、wire.20001、wire.20012、wire.70001、wire.73001、wire.74300、wire.68001、wire.75501、wire.59001、wire.59010、wire.55001、wire.34001、wire.32001 、wire.4402、wire.4401、wire.4201、wire.74104、wire.28100、wire.28200、wire.75601、wire.75606、wire.75615、wire.28107 、wire.3099、wire.3101、wire.20101 、wire.3203 、wire.4044 、wire.13010 、wire.12020 、wire.26002 和 wire.26001。
  * 登录成功后先发空的 c2s 2001（日志里的拉角色资料）。pullRoleProfile 紧接着发空的 c2s 5001。
  * Boot 不改，随后仍是空的 c2s 3007，再发空的 c2s 3004。pullIdle 在 3004 之后再发空的 c2s 15000，然后 c2s 4001 page=1，再发空的 c2s 17000，再发空的 c2s 12010，再发空的 c2s 18001，再发空的 c2s 22000，再发空的 c2s 21010，再发空的 c2s 27001，再发空的 c2s 4004，再发空的 c2s 13044，再发空的 c2s 4101，再发空的 c2s 4013，再发空的 c2s 74100，再发空的 c2s 51001，再发空的 c2s 20001，再发空的 c2s 20012，再发空的 c2s 70001，再发空的 c2s 73001，再发空的 c2s 74300，再发空的 c2s 68001，再发空的 c2s 75501，再发空的 c2s 59001，再发空的 c2s 59010，再发空的 c2s 55001，再发空的 c2s 34001，再发空的 c2s 32001，再发空的 c2s 4402，再发空的 c2s 4401，再发空的 c2s 4201，再发空的 c2s 74104，再发空的 c2s 28100，再发空的 c2s 28200，再发空的 c2s 75601，再发空的 c2s 75606，再发空的 c2s 75615，再发空的 c2s 28107，再发空的 c2s 3099，再发空的 c2s 3101，再发空的 c2s 20101，再发空的 c2s 3203，再发空的 c2s 4044，再发空的 c2s 13010，再发空的 c2s 12020，再发空的 c2s 26002，再发空的 c2s 26001。
  * 相对顺序是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001 → 20001 → 20012 → 70001 → 73001 → 74300 → 68001 → 75501 → 59001 → 59010 → 55001 → 34001 → 32001 → 4402 → 4401 → 4201 → 74104 → 28100 → 28200 → 75601 → 75606 → 75615 → 28107 → 3099 → 3101 → 20101 → 3203 → 4044 → 13010 → 12020 → 26002 → 26001 → 61001 → 62001 → 63001 → 69001 → 74001 → 74120 → 76542 → 75101 → 75121 → 75131 → 75801 → 75901 → 76001 → 76101 → 76301 → 76081 → 76520 → 76251。不等 s2c 2001。51001 在 74100 之后发一次，20001 接在 51001 之后，20012 接在 20001 之后，70001 接在 20012 之后，73001 接在 70001 之后，74300 接在 73001 之后，68001 接在 74300 之后，75501 接在 68001 之后，59001 接在 75501 之后，59010 接在 59001 之后，55001 接在 59010 之后，34001 接在 55001 之后，32001 接在 34001 之后，4402 接在 32001 之后，4401 接在 4402 之后，4201 接在 4401 之后，74104 接在 4201 之后，28100 接在 74104 之后，28200 接在 28100 之后，75601 接在 28200 之后，75606 接在 75601 之后，75615 接在 75606 之后，28107 接在 75615 之后，3099 接在 28107 之后，3101 接在 3099 之后，20101 接在 3101 之后，3203 接在 20101 之后，4044 接在 3203 之后，13010 接在 4044 之后，12020 接在 13010 之后，26002 接在 12020 之后，26001 接在 26002 之后。不夹在 2001 和 3007 中间。11005、58017 仍不发。不做 3007 的加发。
@@ -579,7 +587,7 @@ import { wireBody } from "./protocol/wireLogin";
  * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。
  * 不写 Session.stageId，主城按钮用 mainlineLabel()。
  * 至少有一个 idx 时点按钮打开只读代码页；两个都没有仍 Toast。
- * 不打开 Mock 关卡页，不发 3002。3010 是主线页只读已领首通，挂在已合 3001 之后，不进 pullIdle，不重发 3001。3012 是主线页只读快速战斗次数，挂在 3010 之后，不进 pullIdle，不重发 3010、3001。硬禁 3013。3006 是主线页挂机战报，挂在 3012 之后，点按钮才发，不进 pullIdle，不发 3005，胜了不回拉 3007。3102 是主线页请求战报，挂在 3006 之后，点按钮才发，不进 pullIdle，不从 3001 或 3006 自动接。纯读 getReport，无领奖，无扣费。3001/3006 的 battle_id 常回 BATTLE_REPORT_TIMEOUT。
+ * 不打开 Mock 关卡页，不发 3002。3010 是主线页只读已领首通，挂在已合 3001 之后，不进 pullIdle，不重发 3001。3012 是主线页只读快速战斗次数，挂在 3010 之后，不进 pullIdle，不重发 3010、3001。硬禁 3013。3006 是主线页挂机战报，挂在 3012 之后，点按钮才发，不进 pullIdle，不发 3005，胜了不回拉 3007。3102 是主线页请求战报，挂在 3006 之后，点按钮才发，不进 pullIdle，不从 3001 或 3006 自动接。纯读 getReport，无领奖，无扣费。3001/3006 的 battle_id 常回 BATTLE_REPORT_TIMEOUT。3103 是主线页预计算战斗力，挂在 3102 之后，点按钮才发，不进 pullIdle，不从 3102 自动接。只计算，不开战，不落库。空 hero_ids 回 fighting=0 仍是成功。不播 spine。
  * s2c 3004 按 Battle.proto：字段 1 reward_time、字段 2 max_reward_time。缺的不写成 0。
  * 不写 Session.gold。挂机页用 rewardTime / maxRewardTime。没有这两项时主城挂机只 Toast。
  * s2c 3005 只改 reward_time。没有奖励清单，不改金币和钻石。
@@ -715,6 +723,10 @@ export class WireSession {
   static battleReport: WireBattleReportSnapshot | null = null;
   /** 每处理一帧能解开的 s2c 3102 加一。主线页用来认领回包。胜了不回拉 3007。不从 3001 或 3006 自动接。 */
   static battleReportSerial = 0;
+  /** 最近一帧能解开的 s2c 3103。null 表示还没收到。空包体是已同步。fighting=0 是服上的 0。 */
+  static preCompute: WirePreComputeSnapshot | null = null;
+  /** 每处理一帧能解开的 s2c 3103 加一。主线页用来认领回包。不播 spine。不从 3102 自动接。 */
+  static preComputeSerial = 0;
   /** s2c 3004 字段 1。0 是服上的 0。没出现过是 null。 */
   static rewardTime: number | null = null;
   /** s2c 3004 字段 2。0 是服上的 0。没出现过是 null。 */
@@ -1055,6 +1067,7 @@ export class WireSession {
   private static offQuickBattle: (() => void) | null = null;
   private static offChapterReport: (() => void) | null = null;
   private static offBattleReport: (() => void) | null = null;
+  private static offPreCompute: (() => void) | null = null;
   private static offIdle: (() => void) | null = null;
   private static offIdleClaim: (() => void) | null = null;
   private static offBag: (() => void) | null = null;
@@ -1275,6 +1288,7 @@ export class WireSession {
       this.offQuickBattle &&
       this.offChapterReport &&
       this.offBattleReport &&
+      this.offPreCompute &&
       this.offIdle &&
       this.offIdleClaim &&
       this.offBag &&
@@ -1356,6 +1370,7 @@ export class WireSession {
     this.offQuickBattle = net.subscribe(WIRE_QUICK_BATTLE_CMD, (msg) => this.onQuickBattle(msg.data));
     this.offChapterReport = net.subscribe(WIRE_CHAPTER_REPORT_CMD, (msg) => this.onChapterReport(msg.data));
     this.offBattleReport = net.subscribe(WIRE_BATTLE_REPORT_CMD, (msg) => this.onBattleReport(msg.data));
+    this.offPreCompute = net.subscribe(WIRE_PRECOMPUTE_CMD, (msg) => this.onPreCompute(msg.data));
     this.offIdle = net.subscribe(WIRE_IDLE_CMD, (msg) => this.onIdle(msg.data));
     this.offIdleClaim = net.subscribe(WIRE_IDLE_CLAIM_CMD, (msg) => this.onIdleClaim(msg.data));
     this.offBag = net.subscribe(WIRE_BAG_CMD, (msg) => this.onBag(msg.data));
@@ -1448,6 +1463,8 @@ export class WireSession {
     this.chapterReportSerial = 0;
     this.battleReport = null;
     this.battleReportSerial = 0;
+    this.preCompute = null;
+    this.preComputeSerial = 0;
     this.rewardTime = null;
     this.maxRewardTime = null;
     this.claimNote = "";
@@ -1605,6 +1622,8 @@ export class WireSession {
       this.chapterReportSerial = 0;
       this.battleReport = null;
       this.battleReportSerial = 0;
+      this.preCompute = null;
+      this.preComputeSerial = 0;
       this.rewardTime = null;
       this.maxRewardTime = null;
       this.claimNote = "";
@@ -1762,6 +1781,8 @@ export class WireSession {
     this.chapterReportSerial = 0;
     this.battleReport = null;
     this.battleReportSerial = 0;
+    this.preCompute = null;
+    this.preComputeSerial = 0;
     this.rewardTime = null;
     this.maxRewardTime = null;
     this.claimNote = "";
@@ -2056,7 +2077,7 @@ export class WireSession {
    * 没连上或还没有 3007 idx 时返回 false。
    * 不发 3002、3005、3008、3011。硬禁 3013。
    * 硬禁 4601、29001。不把 Mock 1201/1202 当真服。
-   * 纯读 getReport。无领奖，无扣费。胜了不回拉 3007。
+   * 纯读 getReport。无领奖，无扣费。胜了不回拉 3007。3103 另帧，不从这里自动发。
    */
   static pullBattleReport(battleId?: string, type?: string): boolean {
     const net = this.net || this.watched;
@@ -2067,9 +2088,37 @@ export class WireSession {
     return true;
   }
 
-  /** 收到过 s2c 3102（含空包体）才算同步。解不开的包不算。3001、3006、3007 单独到不算。 */
+  /** 收到过 s2c 3102（含空包体）才算同步。解不开的包不算。3001、3006、3007、3103 单独到不算。 */
   static hasBattleReport(): boolean {
     return this.battleReport !== null;
+  }
+
+  /**
+   * 主线页「预计算战斗力」。c2s 3103，GReqPreComputeStrength。
+   * 不传或 shell 为 true 时发空壳 040000001f0c0000。
+   * 否则带 hero_ids、type、line_up_type。空白的 type 和 line_up_type 不编。
+   * 战斗链续在已合 3102 之后：…→3006→3102→3103。
+   * 不跟 3102 同一发，不重发 3102，也不重发 3007、3004、3001、3006、3010、3012、3099、3101、18001、3203。
+   * 不从 3102、3001 或 3006 的回包自动接。
+   * 不进 pullIdle，不接活动链末，不夹活动号。不跟 3100、3097、3098、3030 混发。
+   * 没连上或还没有 3007 idx 时返回 false。
+   * 不发 3002、3005、3008、3011。硬禁 3013。
+   * 硬禁 4601、29001。不把 Mock 1201/1202 当真服。
+   * 只计算。不开战，不落库，无领奖，无扣费。不回拉 3007。不播 spine。
+   * 空 hero_ids 回 fighting=0 仍是成功。
+   */
+  static pullPreComputeStrength(query?: Partial<WirePreComputeQuery> | null): boolean {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return false;
+    if (!this.hasChapter()) return false;
+    const parsed = readWirePreComputeQuery(query === undefined || query === null ? undefined : query);
+    net.send(WIRE_PRECOMPUTE_CMD, parsed);
+    return true;
+  }
+
+  /** 收到过 s2c 3103（含空包体、含 fighting=0）才算同步。解不开的包不算。3102、3001、3006、3007 单独到不算。 */
+  static hasPreCompute(): boolean {
+    return this.preCompute !== null;
   }
 
   /**
@@ -3060,6 +3109,24 @@ export class WireSession {
     this.battleReport = snap;
     this.battleReportSerial += 1;
     GameLog.shared.info("Wire", "s2c 3102 " + formatWireBattleReport(snap));
+    this.emit();
+  }
+
+  private static onPreCompute(data: unknown): void {
+    let snap: WirePreComputeSnapshot | null = null;
+    try {
+      snap = decodeWirePreComputeStrength(wireBody(data));
+    } catch (err) {
+      GameLog.shared.error("Wire", "s2c 3103 解不开 " + (err instanceof Error ? err.message : "未知错误"));
+      return;
+    }
+    if (!snap) {
+      GameLog.shared.info("Wire", "s2c 3103 解不开，预计算不改");
+      return;
+    }
+    this.preCompute = snap;
+    this.preComputeSerial += 1;
+    GameLog.shared.info("Wire", "s2c 3103 " + formatWirePreCompute(snap));
     this.emit();
   }
 
@@ -5335,6 +5402,10 @@ export class WireSession {
     if (this.offBattleReport) {
       this.offBattleReport();
       this.offBattleReport = null;
+    }
+    if (this.offPreCompute) {
+      this.offPreCompute();
+      this.offPreCompute = null;
     }
     if (this.offIdle) {
       this.offIdle();
