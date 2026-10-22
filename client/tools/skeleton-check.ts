@@ -1115,9 +1115,16 @@ import {
   decodeWireLineUp,
   formatWireLineUpHead,
   formatWireLineUpLine,
+  formatWireLineUpProbe,
   WIRE_LINEUP_CMD,
   WIRE_LINEUP_EMPTY,
   WIRE_LINEUP_FIELD_NOTE,
+  WIRE_LINEUP_FRAME,
+  WIRE_LINEUP_PROBE_ABSENT,
+  WIRE_LINEUP_PROBE_BANNED_CMDS,
+  WIRE_LINEUP_PROBE_NOTE,
+  WIRE_LINEUP_PROBE_SIDE_EFFECT,
+  WIRE_LINEUP_PROBE_UNSYNCED_TOAST,
   WIRE_LINEUP_READONLY_NOTE,
   WIRE_LINEUP_READONLY_TITLE,
   WIRE_LINEUP_ROW_EMPTY,
@@ -9246,6 +9253,92 @@ async function checkWs(): Promise<void> {
         WIRE_LINEUP_EMPTY,
     "empty 3101 body is synced and does not invent assistance_unlock"
   );
+  const emptyLineUpProbe = decodeWireLineUp(new Uint8Array(0));
+  assert(
+    emptyLineUpProbe !== null &&
+      formatWireLineUpProbe(emptyLineUpProbe).indexOf("list 空") >= 0 &&
+      formatWireLineUpProbe(emptyLineUpProbe).indexOf("assistance_unlock " + WIRE_LINEUP_PROBE_ABSENT) >= 0 &&
+      formatWireLineUpProbe(emptyLineUpProbe).indexOf("assistance_unlock=0") < 0,
+    "3101 probe shows an empty list and does not invent assistance_unlock"
+  );
+  assert(formatWireLineUpProbe(null) === "获取阵容 " + WIRE_LINEUP_PROBE_UNSYNCED_TOAST, "unsynced 3101 probe toast text");
+  assert(WIRE_LINEUP_FRAME === "040000001d0c0000" && bytesToHex(encodeFrame(WireCmd.lineUp)) === WIRE_LINEUP_FRAME, "3101 empty shell constant is 1d 0c");
+  assert(bytesToHex(encodeFrame(3100)) === "040000001c0c0000" && bytesToHex(encodeFrame(3100)) !== WIRE_LINEUP_FRAME, "3100 is not the 3101 empty shell");
+  assert(bytesToHex(encodeFrame(3020)) !== WIRE_LINEUP_FRAME && bytesToHex(encodeFrame(3102)) !== WIRE_LINEUP_FRAME, "3020 and 3102 are not the 3101 shell");
+  assert(bytesToHex(encodeFrame(3103)) !== WIRE_LINEUP_FRAME && bytesToHex(encodeFrame(3030)) !== WIRE_LINEUP_FRAME, "3103 and 3030 are not the 3101 shell");
+  assert(
+    WIRE_LINEUP_PROBE_NOTE.indexOf("040000001d0c0000") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("1d 0c 00 00") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("list") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("assistance_unlock") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3007") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3102") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3103") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3030") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("不进 pullIdle") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("不从 3001") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("不落库") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("无扣费") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("不改阵容") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3100") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3020") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3002") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3005") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3008") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3011") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("3013") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("4601") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("29001") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("1201") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("1202") >= 0 &&
+      WIRE_LINEUP_PROBE_NOTE.indexOf("不改 Boot") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("只读获取阵容") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("list") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("assistance_unlock") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("不落库") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("不改阵容") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("040000001d0c0000") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("不进 pullIdle") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("3100") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("3020") >= 0 &&
+      WIRE_LINEUP_PROBE_SIDE_EFFECT.indexOf("不写 Session.stageId") >= 0,
+    "3101 probe note names the empty shell, list, assistance_unlock, and the banned cmds"
+  );
+  for (let lineUpBan = 0; lineUpBan < WIRE_LINEUP_PROBE_BANNED_CMDS.length; lineUpBan++) {
+    assert(encodeWireMessage({ cmd: WIRE_LINEUP_PROBE_BANNED_CMDS[lineUpBan] }) === null, WIRE_LINEUP_PROBE_BANNED_CMDS[lineUpBan] + " stays off the 3101 probe");
+  }
+  const lineUpShell = encodeWireMessage({ cmd: "wire.3101" });
+  assert(
+    lineUpShell !== null && lineUpShell.cmdId === 3101 && bytesToHex(lineUpShell.bytes) === WIRE_LINEUP_FRAME && lineUpShell.note === "空体",
+    "3101 probe reuses the empty login frame"
+  );
+  const lineUpProbeRow = decodeWireLineUp(concatBytes(fieldBytes(1, fieldVarint(2, 7)), fieldVarint(2, 1)));
+  assert(
+    lineUpProbeRow !== null &&
+      formatWireLineUpProbe(lineUpProbeRow).indexOf("list 1") >= 0 &&
+      formatWireLineUpProbe(lineUpProbeRow).indexOf("assistance_unlock=1") >= 0 &&
+      formatWireLineUpProbe(lineUpProbeRow).indexOf("字段2=7") >= 0 &&
+      heroIdsFromLineUp(lineUpProbeRow).join(",") === "7",
+    "3101 probe shows list and assistance_unlock and can feed hero_ids"
+  );
+  const lineUpProbeZero = decodeWireLineUp(fieldVarint(2, 0));
+  assert(
+    lineUpProbeZero !== null &&
+      formatWireLineUpProbe(lineUpProbeZero).indexOf("list 空") >= 0 &&
+      formatWireLineUpProbe(lineUpProbeZero).indexOf("assistance_unlock=0") >= 0,
+    "3101 probe keeps a present assistance_unlock 0"
+  );
+  const lineupPageSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
+  assert(
+    lineupPageSrc.indexOf("获取阵容") >= 0 &&
+      lineupPageSrc.indexOf("pullLineUpProbe") >= 0 &&
+      lineupPageSrc.indexOf("formatWireLineUpProbe") >= 0 &&
+      lineupPageSrc.indexOf("不发 3100") >= 0 &&
+      lineupPageSrc.indexOf("不接 3020") >= 0 &&
+      lineupPageSrc.indexOf("3101 不走") >= 0,
+    "mainline page probes empty 3101 beside the battle buttons and does not play it as a report"
+  );
   assert(decodeWireLineUp(null) === null, "null 3101 body is not a snapshot");
   assert(decodeWireLineUp(new Uint8Array([0x80])) === null, "bad 3101 ignored");
   assert(decodeWireLineUp(lineUpBadRow) === null, "3101 list blob that fails is not an empty list");
@@ -17229,9 +17322,10 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.pullStudy(0, 2, 1), "3030 does not send without 3007 idx");
       assert(!WireSession.pullChapterProbe(), "3007 probe does not send without an idx");
       assert(!WireSession.pullIdleProbe(), "3004 probe does not send without an idx");
+      assert(!WireSession.pullLineUpProbe(), "3101 probe does not send without an idx");
       WireSession.nowIdx = savedNow;
       WireSession.maxIdx = savedMax;
-      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102, 3103, 3030, another 3007 or 3004 on the wire");
+      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102, 3103, 3030, another 3007, 3004 or 3101 on the wire");
       const sentBeforeQuick = roleSockets[0].sent.length;
       const goldBeforeQuick = Session.gold;
       const quickSentBefore = roleSockets[0].sent.length;
@@ -17482,6 +17576,62 @@ async function checkWs(): Promise<void> {
         "3102 3100 3097 3098 3030 and 3013 do not replace the 3103 fighting"
       );
       assert(roleSockets[0].sent.length === sentBeforeStrength + 2, "a 3102 frame on the socket does not make the client send another 3103");
+      const sentBeforeLineUpProbe = roleSockets[0].sent.length;
+      const goldBeforeLineUpProbe = Session.gold;
+      const stageBeforeLineUpProbe = Session.stageId;
+      const nowBeforeLineUpProbe = WireSession.nowIdx;
+      const maxBeforeLineUpProbe = WireSession.maxIdx;
+      const serialBeforeLineUpProbe = WireSession.lineUpSerial;
+      const preComputeBeforeLineUp = WireSession.preCompute;
+      assert(WireSession.pullLineUpProbe(), "3101 probe pulls beside the battle chain when idx is present");
+      assert(roleSockets[0].sent.length === sentBeforeLineUpProbe + 1, "3101 probe is one frame and does not resend 3102, 3103, 3030 or 3001");
+      const lineUpProbeSent = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeLineUpProbe] as ArrayBuffer));
+      assert(
+        lineUpProbeSent === "040000001d0c0000" &&
+          lineUpProbeSent !== "040000001c0c0000" &&
+          lineUpProbeSent !== "040000001e0c0000" &&
+          lineUpProbeSent !== "040000001f0c0000" &&
+          lineUpProbeSent !== "04000000d60b0000",
+        "3101 probe is the empty shell 1d 0c and is not 3100, 3102, 3103 or 3030"
+      );
+      assert(
+        Session.gold === goldBeforeLineUpProbe && Session.diamond === 0 && Session.stageId === stageBeforeLineUpProbe,
+        "sending 3101 does not write gold, diamond or stage"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.lineUp, concatBytes(fieldBytes(1, fieldVarint(2, 7)), fieldVarint(2, 1))));
+      assert(
+        WireSession.lineUp !== null &&
+          WireSession.lineUp.rows.length === 1 &&
+          WireSession.lineUp.assistanceUnlock === true &&
+          formatWireLineUpProbe(WireSession.lineUp).indexOf("list 1") >= 0 &&
+          formatWireLineUpProbe(WireSession.lineUp).indexOf("assistance_unlock=1") >= 0 &&
+          heroIdsFromLineUp(WireSession.lineUp).join(",") === "7" &&
+          WireSession.lineUpSerial === serialBeforeLineUpProbe + 1 &&
+          WireSession.nowIdx === nowBeforeLineUpProbe &&
+          WireSession.maxIdx === maxBeforeLineUpProbe &&
+          WireSession.preCompute === preComputeBeforeLineUp &&
+          Session.gold === goldBeforeLineUpProbe &&
+          Session.stageId === stageBeforeLineUpProbe &&
+          roleSockets[0].sent.length === sentBeforeLineUpProbe + 1,
+        "3101 probe shows list and assistance_unlock, feeds hero_ids, and does not persist or advance"
+      );
+      roleSockets[0].push(encodeFrame(3100, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3020, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3002, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3005));
+      roleSockets[0].push(encodeFrame(3008, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3011, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3013, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 1)));
+      assert(
+        WireSession.lineUp !== null &&
+          WireSession.lineUp.rows.length === 1 &&
+          WireSession.lineUp.assistanceUnlock === true &&
+          WireSession.lineUpSerial === serialBeforeLineUpProbe + 1 &&
+          roleSockets[0].sent.length === sentBeforeLineUpProbe + 1,
+        "3100, 3020, 3002, 3005, 3008, 3011, 3013, 4601 and 29001 do not replace the 3101 probe or send another frame"
+      );
       const sentBeforeStudy = roleSockets[0].sent.length;
       const goldBeforeStudy = Session.gold;
       const diamondBeforeStudy = Session.diamond;

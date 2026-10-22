@@ -7,6 +7,9 @@
  * 3099 已合。本刀不重复拉 3099。与 3099 分开发，勿合并成一个请求。
  *
  * 由 WireSession.pullIdle 在空 c2s 3099 之后发出，只发一次。Boot.ts 不改。
+ * 主线页「获取阵容」再发同一空帧，挂在已合 3007 之后、进战之前，和 3102、3103、3030 探针并排。
+ * 不从 3001、3102、3103、3030 自动接。不进 pullIdle 的加发。不发 3100。不接 3020。
+ * 这一帧只展示 list 与 assistance_unlock。客户端不改行，不落库，无扣费。
  * 不夹在 2001 和 3007 中间。
  * 不发 3100 保存队列、3098 解锁阵法、3097 解锁第二契约、3030 切磋、3102 请求战报、3103 预计算战斗力。
  * 3099 勿再发。不做备选 5001。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。
@@ -38,6 +41,33 @@ export const WIRE_LINEUP_SIDE_EFFECT =
   "轻修复（getHeroLineUps→fillLineUp：formationId==0 则置 1 并轻修站位后 update；本路径不走 add）。只读，无扣费、无领奖、不写养成。空 c2s 一次，无 page，挂在 3099 之后。只发 cmd=3101，空帧 040000001d0c0000。不发 3100 保存队列、3098 解锁阵法、3097 解锁第二契约、3030 切磋、3102 请求战报、3103 预计算战斗力。3099 勿再发。不做备选 5001。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 3099 分开发，勿合并。本刀不重复拉 3099。20101 进行中活动另只读接在其后，勿合并";
 export const WIRE_LINEUP_FIELD_NOTE =
   "list 为 repeated PSLineUpData，行上按字段号写。没有的数不写成 0。assistance_unlock 为 optional bool，没有时保持缺省。出现的 0 仍写 0，出现的 1 仍写 1。出现的值如实展示。对不上的号按字段号写";
+
+/** GReqLineUp 没有字段。3101 = 0x0C1D，小端 1d 0c 00 00。整帧 040000001d0c0000。 */
+export const WIRE_LINEUP_FRAME = "040000001d0c0000";
+
+export const WIRE_LINEUP_PROBE_UNSYNCED = "真服未同步";
+export const WIRE_LINEUP_PROBE_UNSYNCED_TOAST = "真服未同步";
+export const WIRE_LINEUP_PROBE_ABSENT = "未带";
+
+export const WIRE_LINEUP_PROBE_NOTE =
+  "主线页「获取阵容」发空 c2s 3101（GReqLineUp 无字段，整帧 040000001d0c0000，小端 1d 0c 00 00）。挂在已合 3007 之后、进战之前，和 3102、3103、3030 探针并排，给阵容 UI 填 list。登录链里的空 3101 仍在。本按钮不进 pullIdle，不重发 3007、3001、3006、3004、3102、3103、3030。不从 3001、3102、3103、3030 自动接。s2c GResLineUp 展示 list、assistance_unlock。缺字段不写成 0。出现的 0 仍写 0。出现的 1 仍写 1。只读。不落库，无扣费，不改阵容。不发 3100。不接 3020。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。不把 Mock 1201/1202 当真服。不写金币，不写钻石。不写 Session.stageId。不回落 Mock。不改 Boot。不从本探针自动发 3001";
+
+export const WIRE_LINEUP_PROBE_SIDE_EFFECT =
+  "只读获取阵容。展示 list 与 assistance_unlock。不落库，无扣费，不改阵容。空壳 040000001d0c0000，主线页点「获取阵容」才再发，挂在已合 3007 之后、进战之前，和 3102、3103、3030 探针并排。不从 3001、3102、3103、3030 自动接。不进 pullIdle。不发 3100。不接 3020。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。不重发 3007、3001、3006、3004、3102、3103、3030。不写金币，不写钻石。不写 Session.stageId";
+
+/** 本刀不编码这些号。3101 自己的空帧已由登录链编码。3100 是保存队列，不能编成 3101。3020 不接。3013 硬禁。 */
+export const WIRE_LINEUP_PROBE_BANNED_CMDS = [
+  "wire.3100",
+  "wire.3020",
+  "wire.3002",
+  "wire.3008",
+  "wire.3011",
+  "wire.3013",
+  "wire.4601",
+  "wire.29001",
+  "wire.1201",
+  "wire.1202",
+] as const;
 
 export interface WireLineUpMark {
   field: number;
@@ -103,6 +133,30 @@ export function formatWireLineUpHead(snap: WireLineUpSnapshot): string {
   const list = snap.rows.length === 0 ? WIRE_LINEUP_EMPTY : snap.rows.length + " 条";
   const unlock = snap.assistanceUnlock === null ? "" : " / assistance_unlock=" + (snap.assistanceUnlock ? "1" : "0");
   return joinMarks(list + unlock, snap.marks);
+}
+
+/**
+ * 主线页「获取阵容」。null 是还没同步。
+ * 写出 list 条数和 assistance_unlock。没有 bool 时写「未带」，不写成 0。
+ * 有行时带上前几行，给旁边的阵容 UI 看。
+ */
+export function formatWireLineUpProbe(snap: WireLineUpSnapshot | null): string {
+  if (!snap) return "获取阵容 " + WIRE_LINEUP_PROBE_UNSYNCED;
+  const list = snap.rows.length === 0 ? "list 空" : "list " + snap.rows.length;
+  const unlock =
+    snap.assistanceUnlock === null
+      ? "assistance_unlock " + WIRE_LINEUP_PROBE_ABSENT
+      : "assistance_unlock=" + (snap.assistanceUnlock ? "1" : "0");
+  let text = "获取阵容 " + list + " / " + unlock;
+  if (snap.rows.length > 0) {
+    const parts: string[] = [];
+    const n = Math.min(snap.rows.length, 3);
+    for (let i = 0; i < n; i++) parts.push(formatWireLineUpLine(snap.rows[i]));
+    if (snap.rows.length > n) parts.push("其余 " + (snap.rows.length - n) + " 条");
+    text += " / " + parts.join("；");
+  }
+  if (snap.marks.length > 0) text += " / " + marksText(snap.marks);
+  return text;
 }
 
 /** 一行一个 PSLineUpData。没有字段时写「（缺省）」。出现的 0 仍写 0。出现的 -1 仍写 -1。 */
