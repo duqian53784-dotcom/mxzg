@@ -27,7 +27,9 @@ export const WireCmd = {
   roleProfile: 2001,
   /**
    * c2s 空体。Battle.proto 的 GReqChapterData。旧桥日志里进游戏同步会发这一帧，
-   * s2c 回 now_idx / max_idx。占位表里没有 3007。不是 stage.enter。
+   * s2c 回 now_idx / max_idx，以及 res_reward_time、extra_reward_id。
+   * 主线页「关卡数据」再发同一空帧，整帧 04000000bf0b0000。不落库。
+   * 占位表里没有 3007。不是 stage.enter。
    */
   chapterData: 3007,
   /**
