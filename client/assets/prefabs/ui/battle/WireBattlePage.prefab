@@ -687,7 +687,7 @@
       "b": 225,
       "a": 255
     },
-    "_string": "站位与特效挂点见 BattlePage：Slot_E0 到 Slot_E5、Slot_A0 到 Slot_A5、VfxSkill、VfxHit、VfxScreen。",
+    "_string": "站位与特效挂点见 BattlePage：Slot_E0 到 Slot_E5、Slot_A0 到 Slot_A5、VfxSkill、VfxHit、VfxScreen。另见 LayerFloat、SkillNameBanner、HeadAnchor。",
     "_horizontalAlign": 1,
     "_verticalAlign": 0,
     "_actualFontSize": 20,

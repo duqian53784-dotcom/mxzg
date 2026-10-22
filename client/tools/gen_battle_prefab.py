@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Generate Creator 3.8.8 battle presentation prefabs (not wired).
+"""Generate Creator 3.8.8 battle presentation prefabs.
 
 Writes:
   client/assets/prefabs/ui/battle/BattlePage.prefab
   client/assets/prefabs/ui/battle/WireBattlePage.prefab
 and their .meta files, plus ui/battle.meta if it is missing.
 
-BattlePage is a mainline battle shell: slot mounts, empty VFX anchors,
-placeholder HP / skill bars, and a fullscreen photo Bg.
+BattlePage is the mainline battle shell: slot mounts, empty VFX anchors,
+placeholder HP / skill bars, a fullscreen photo Bg, and presentation
+mounts (LayerFloat, SkillNameBanner, front-row HeadAnchor).
 WireBattlePage is the thinner swap target. They do not share a root.
 
 SpriteFrame uuids are read from client/assets/resources/**/*.meta (@f9941).
@@ -73,6 +74,34 @@ SKILL_X = (-220, 0, 220)
 LOG_Y = -456
 BTN_Y = -568
 
+# Presentation mounts. Page origin is the root center.
+# Skill name sits just under the enemy front rank (bottom y=240) and may
+# share the empty VfxSkill anchor (0, 180). Floats stack in the open band
+# between the two front ranks and may overlap that anchor too.
+BANNER_Y = 214
+BANNER_W = 248
+BANNER_H = 36
+FLOAT_ROOT = (0, 140, 260, 110)
+# Local to FloatDamageRoot. Page y = 140 + local y.
+FLOATS = (
+    (0, 28, 220, 36, "-12345", 34),
+    (16, -8, 220, 40, "-439057", 32),
+    (-12, -32, 180, 32, "-40604", 26),
+    (6, 0, 190, 34, "-41418", 26),
+)
+CRIT = (-176, 170, 84, 36)
+HEAD_Y = 48
+HEAD_W = 104
+HEAD_H = 22
+LEVEL_X = -30
+LEVEL_W = 40
+LEVEL_H = 18
+BUFF_ROW_X = 22
+BUFF_ROW_W = 48
+BUFF_ROW_H = 14
+BUFF_X = (-16, 0, 16)
+BUFF_SIZE = 12
+
 # Photo bg, in the order the battle shell should try.
 BG_CANDIDATES = (
     "ui/battle/battle-scene_spr-bg-1.png",
@@ -90,7 +119,10 @@ SPEED_PRESSED_REL = "ui/battle/battle-scene_btn-speed-2.png"
 
 WIRE_TITLE = "战斗（真服接线占位）"
 WIRE_STATUS = "未同步 · 等切 Prefab"
-WIRE_HINT = "站位与特效挂点见 BattlePage：Slot_E0 到 Slot_E5、Slot_A0 到 Slot_A5、VfxSkill、VfxHit、VfxScreen。"
+WIRE_HINT = (
+    "站位与特效挂点见 BattlePage：Slot_E0 到 Slot_E5、Slot_A0 到 Slot_A5、VfxSkill、VfxHit、VfxScreen。"
+    "另见 LayerFloat、SkillNameBanner、HeadAnchor。"
+)
 
 
 def fid(seed):
@@ -250,6 +282,20 @@ ALLY_BAR = color(88, 196, 120, 255)
 SKILL_FRAME = color(16, 28, 48, 230)
 SKILL_FILL = color(255, 214, 120, 255)
 LOG_BG = color(10, 18, 32, 230)
+BANNER_TINT = color(28, 16, 48, 210)
+SKILL_NAME_COLOR = color(255, 244, 214, 255)
+DMG_ORANGE = color(255, 96, 40, 235)
+DMG_CYAN = color(56, 220, 255, 235)
+DMG_TEAL = color(72, 196, 214, 230)
+CRIT_BG = color(196, 78, 24, 230)
+CRIT_COLOR = color(255, 244, 220, 255)
+LEVEL_COLOR = color(255, 236, 170, 255)
+BUFF_TINTS = (
+    color(88, 214, 120, 230),
+    color(176, 104, 255, 230),
+    color(255, 196, 72, 230),
+)
+FLOAT_COLORS = (DMG_ORANGE, DMG_CYAN, DMG_CYAN, DMG_TEAL)
 
 
 class Builder(object):
@@ -437,12 +483,12 @@ class Builder(object):
 
     def make_label_node(
         self, name, parent_id, x, y, w, h, text, font_size, col,
-        h_align=1, v_align=1, wrap=False, outline=False,
+        h_align=1, v_align=1, wrap=False, outline=False, overflow=1,
     ):
         nid = self.make_node(name, parent_id, x, y, w, h)
         self.add_label(
             nid, text, font_size, col,
-            h_align=h_align, v_align=v_align, wrap=wrap, outline=outline,
+            h_align=h_align, v_align=v_align, wrap=wrap, outline=outline, overflow=overflow,
         )
         return nid
 
@@ -561,6 +607,11 @@ class Builder(object):
         if lab["_fontSize"] != font_size or lab["_font"]["__uuid__"] != FONT or lab["_isSystemFontUsed"]:
             raise SystemExit("%s font" % path)
 
+    def expect_label_color(self, path, col):
+        got = self.label_comp(path)["_color"]
+        if (got["r"], got["g"], got["b"], got["a"]) != (col["r"], col["g"], col["b"], col["a"]):
+            raise SystemExit("%s label color %s" % (path, got))
+
     def expect_empty(self, path):
         types = self.component_types(path)
         if types != ["cc.UITransform"]:
@@ -606,7 +657,31 @@ def assert_gaps(builder, paths):
             raise SystemExit("gap < %s between %s and %s" % (MIN_GAP, rects[i][0], rects[j][0]))
 
 
-def make_slot(builder, parent, name, x, y, tint):
+def assert_cross(builder, left, right):
+    for a in left:
+        for b in right:
+            if a == b:
+                continue
+            if separated(page_rect(builder, a), page_rect(builder, b), MIN_GAP):
+                continue
+            raise SystemExit("gap < %s between %s and %s" % (MIN_GAP, a, b))
+
+
+def make_head(builder, slot):
+    """Level + three buff chips above the slot center. Front row only."""
+    head = builder.make_node("HeadAnchor", slot, 0, HEAD_Y, HEAD_W, HEAD_H)
+    builder.make_label_node(
+        "LevelLabel", head, LEVEL_X, 0, LEVEL_W, LEVEL_H, "Lv.1", 12, LEVEL_COLOR, outline=True,
+    )
+    row = builder.make_node("BuffRow", head, BUFF_ROW_X, 0, BUFF_ROW_W, BUFF_ROW_H)
+    for i, tint in enumerate(BUFF_TINTS):
+        builder.make_sprite_node(
+            "Buff_%d" % i, row, BUFF_X[i], 0, BUFF_SIZE, BUFF_SIZE, ART["block"], SIMPLE, col=tint,
+        )
+    return head
+
+
+def make_slot(builder, parent, name, x, y, tint, head=False):
     slot = builder.make_node(name, parent, x, y, SLOT_W, SLOT_H)
     builder.make_sprite_node(
         "Placeholder", slot, 0, 0, SLOT_W, SLOT_H, ART["block"], SIMPLE, col=tint,
@@ -614,6 +689,8 @@ def make_slot(builder, parent, name, x, y, tint):
     builder.make_label_node(
         "Label", slot, 0, 0, SLOT_W - 12, 36, name.split("_", 1)[1], 22, NAME_COLOR, outline=True,
     )
+    if head:
+        make_head(builder, slot)
     return slot
 
 
@@ -654,11 +731,11 @@ def build_battle_page():
     enemies = b.make_node("EnemySlots", field, 0, 0, PAGE_W, PAGE_H)
     allies = b.make_node("AllySlots", field, 0, 0, PAGE_W, PAGE_H)
     for i, x in enumerate(COLS):
-        make_slot(b, enemies, "Slot_E%d" % i, x, ENEMY_FRONT_Y, ENEMY_PLACE)
+        make_slot(b, enemies, "Slot_E%d" % i, x, ENEMY_FRONT_Y, ENEMY_PLACE, head=True)
     for i, x in enumerate(COLS):
         make_slot(b, enemies, "Slot_E%d" % (i + 3), x, ENEMY_BACK_Y, ENEMY_PLACE)
     for i, x in enumerate(COLS):
-        make_slot(b, allies, "Slot_A%d" % i, x, ALLY_FRONT_Y, ALLY_PLACE)
+        make_slot(b, allies, "Slot_A%d" % i, x, ALLY_FRONT_Y, ALLY_PLACE, head=True)
     for i, x in enumerate(COLS):
         make_slot(b, allies, "Slot_A%d" % (i + 3), x, ALLY_BACK_Y, ALLY_PLACE)
 
@@ -666,6 +743,15 @@ def build_battle_page():
     b.make_node("VfxSkill", vfx, VFX_SKILL[0], VFX_SKILL[1], VFX_SKILL[2], VFX_SKILL[3])
     b.make_node("VfxHit", vfx, VFX_HIT[0], VFX_HIT[1], VFX_HIT[2], VFX_HIT[3])
     b.make_node("VfxScreen", vfx, 0, 0, PAGE_W, PAGE_H)
+
+    banner = b.make_node("SkillNameBanner", root, 0, BANNER_Y, BANNER_W, BANNER_H)
+    b.make_sprite_node(
+        "BannerBg", banner, 0, 0, BANNER_W, BANNER_H, ART["msg"], SIMPLE, col=BANNER_TINT,
+    )
+    b.make_label_node(
+        "SkillNameLabel", banner, 0, 0, BANNER_W - 24, BANNER_H - 6,
+        "圣光打击", 20, SKILL_NAME_COLOR, outline=True,
+    )
 
     hud = b.make_node("LayerHud", root, 0, 0, PAGE_W, PAGE_H)
     top = b.make_node("TopBar", hud, 0, TOP_Y, PAGE_W, TOP_H)
@@ -712,6 +798,20 @@ def build_battle_page():
         "BtnRetreat", hud, 140, BTN_Y, 200, 52, "撤退", 24,
         ART["btn_orange"], ART["btn_orange_p"],
     )
+
+    floats = b.make_node("LayerFloat", root, 0, 0, PAGE_W, PAGE_H)
+    damage = b.make_node(
+        "FloatDamageRoot", floats, FLOAT_ROOT[0], FLOAT_ROOT[1], FLOAT_ROOT[2], FLOAT_ROOT[3],
+    )
+    for i, spec in enumerate(FLOATS):
+        x, y, w, h, text, font_size = spec
+        b.make_label_node(
+            "FloatDmg_%d" % i, damage, x, y, w, h, text, font_size, FLOAT_COLORS[i],
+            outline=True, overflow=2,
+        )
+    crit = b.make_node("FloatCrit", floats, CRIT[0], CRIT[1], CRIT[2], CRIT[3])
+    b.add_sprite(crit, ART["block"], SIMPLE, col=CRIT_BG)
+    b.add_label(crit, "暴击", 20, CRIT_COLOR, outline=True)
     check_battle(b)
     return b
 
@@ -736,6 +836,83 @@ def build_wire():
     return b
 
 
+def expect_head(builder, slot):
+    head = slot + "/HeadAnchor"
+    if builder.child_names(slot) != ["Placeholder", "Label", "HeadAnchor"]:
+        raise SystemExit("front slot children drifted: %s" % builder.child_names(slot))
+    builder.expect(head, 0, HEAD_Y, HEAD_W, HEAD_H)
+    builder.expect(head + "/LevelLabel", LEVEL_X, 0, LEVEL_W, LEVEL_H, "Lv.1")
+    builder.expect_font(head + "/LevelLabel", 12)
+    builder.expect_label_color(head + "/LevelLabel", LEVEL_COLOR)
+    row = head + "/BuffRow"
+    builder.expect(row, BUFF_ROW_X, 0, BUFF_ROW_W, BUFF_ROW_H)
+    if builder.child_names(head) != ["LevelLabel", "BuffRow"]:
+        raise SystemExit("head children drifted")
+    if builder.child_names(row) != ["Buff_0", "Buff_1", "Buff_2"]:
+        raise SystemExit("buff row drifted")
+    for i, tint in enumerate(BUFF_TINTS):
+        path = "%s/Buff_%d" % (row, i)
+        builder.expect(path, BUFF_X[i], 0, BUFF_SIZE, BUFF_SIZE)
+        builder.expect_sprite(path, ART["block"], SIMPLE, tint)
+
+
+def expect_presentation(builder, gap_paths, head_paths):
+    banner = "BattlePage/SkillNameBanner"
+    builder.expect(banner, 0, BANNER_Y, BANNER_W, BANNER_H)
+    builder.expect(banner + "/BannerBg", 0, 0, BANNER_W, BANNER_H)
+    builder.expect_sprite(banner + "/BannerBg", ART["msg"], SIMPLE, BANNER_TINT)
+    label = banner + "/SkillNameLabel"
+    builder.expect(label, 0, 0, BANNER_W - 24, BANNER_H - 6, "圣光打击")
+    builder.expect_font(label, 20)
+    builder.expect_label_color(label, SKILL_NAME_COLOR)
+    if builder.child_names(banner) != ["BannerBg", "SkillNameLabel"]:
+        raise SystemExit("skill banner children drifted")
+
+    layer = "BattlePage/LayerFloat"
+    builder.expect(layer, 0, 0, PAGE_W, PAGE_H)
+    if builder.component_types(layer) != ["cc.UITransform"]:
+        raise SystemExit("LayerFloat should stay an empty layer")
+    root = layer + "/FloatDamageRoot"
+    builder.expect(root, FLOAT_ROOT[0], FLOAT_ROOT[1], FLOAT_ROOT[2], FLOAT_ROOT[3])
+    if builder.component_types(root) != ["cc.UITransform"]:
+        raise SystemExit("FloatDamageRoot should stay an empty mount")
+    float_paths = []
+    for i, spec in enumerate(FLOATS):
+        x, y, w, h, text, font_size = spec
+        path = "%s/FloatDmg_%d" % (root, i)
+        float_paths.append(path)
+        builder.expect(path, x, y, w, h, text)
+        builder.expect_font(path, font_size)
+        builder.expect_label_color(path, FLOAT_COLORS[i])
+        lab = builder.label_comp(path)
+        if lab["_overflow"] != 2:
+            raise SystemExit("%s should shrink to the sample width" % path)
+    if builder.child_names(root) != ["FloatDmg_%d" % i for i in range(len(FLOATS))]:
+        raise SystemExit("float children drifted")
+    crit = layer + "/FloatCrit"
+    builder.expect(crit, CRIT[0], CRIT[1], CRIT[2], CRIT[3], "暴击")
+    builder.expect_font(crit, 20)
+    builder.expect_label_color(crit, CRIT_COLOR)
+    builder.expect_sprite(crit, ART["block"], SIMPLE, CRIT_BG)
+    if builder.child_names(layer) != ["FloatDamageRoot", "FloatCrit"]:
+        raise SystemExit("float layer children drifted")
+    if builder.child_names(crit):
+        raise SystemExit("FloatCrit text stays on the node")
+
+    # Empty VFX anchors sit on the skill line. The banner and the stacked
+    # floats may share that point; they still stay off the slots and HUD.
+    field = [path for path in gap_paths if "/LayerVfx/" not in path]
+    assert_cross(builder, [banner, crit], field)
+    assert_cross(builder, float_paths, field + [banner, crit])
+    for head in head_paths:
+        owner = head[: -len("/HeadAnchor")]
+        others = [path for path in gap_paths if path != owner]
+        others.extend((banner, crit))
+        others.extend(float_paths)
+        others.extend(path for path in head_paths if path != head)
+        assert_cross(builder, [head], others)
+
+
 def check_battle(b):
     b.expect("BattlePage", 0, 0, PAGE_W, PAGE_H)
     b.expect("BattlePage/Bg", 0, 0, PAGE_W, PAGE_H)
@@ -744,14 +921,15 @@ def check_battle(b):
     b.expect("BattlePage/LayerField", 0, 0, PAGE_W, PAGE_H)
     b.expect("BattlePage/LayerField/EnemySlots", 0, 0, PAGE_W, PAGE_H)
     b.expect("BattlePage/LayerField/AllySlots", 0, 0, PAGE_W, PAGE_H)
-    if b.child_names("BattlePage") != ["Bg", "LayerField", "LayerVfx", "LayerHud"]:
-        raise SystemExit("BattlePage child order drifted")
+    if b.child_names("BattlePage") != ["Bg", "LayerField", "LayerVfx", "SkillNameBanner", "LayerHud", "LayerFloat"]:
+        raise SystemExit("BattlePage child order drifted: %s" % b.child_names("BattlePage"))
     if b.child_names("BattlePage/LayerField") != ["EnemySlots", "AllySlots"]:
         raise SystemExit("field layers drifted")
 
     enemy_names = ["Slot_E%d" % i for i in range(6)]
     ally_names = ["Slot_A%d" % i for i in range(6)]
     gap_paths = []
+    head_paths = []
     for i, x in enumerate(COLS):
         front = "BattlePage/LayerField/EnemySlots/Slot_E%d" % i
         back = "BattlePage/LayerField/EnemySlots/Slot_E%d" % (i + 3)
@@ -765,6 +943,12 @@ def check_battle(b):
         b.expect_sprite(back + "/Placeholder", ART["block"], SIMPLE, ENEMY_PLACE)
         b.expect_sprite(a_front + "/Placeholder", ART["block"], SIMPLE, ALLY_PLACE)
         b.expect_sprite(a_back + "/Placeholder", ART["block"], SIMPLE, ALLY_PLACE)
+        for slot in (front, a_front):
+            expect_head(b, slot)
+            head_paths.append(slot + "/HeadAnchor")
+        for slot in (back, a_back):
+            if b.child_names(slot) != ["Placeholder", "Label"]:
+                raise SystemExit("back slot grew children: %s %s" % (slot, b.child_names(slot)))
         gap_paths.extend((front, back, a_front, a_back))
     if b.child_names("BattlePage/LayerField/EnemySlots") != enemy_names:
         raise SystemExit("enemy slot order drifted: %s" % b.child_names("BattlePage/LayerField/EnemySlots"))
@@ -845,6 +1029,7 @@ def check_battle(b):
         "BattlePage/LayerVfx/VfxHit",
     ))
     assert_gaps(b, gap_paths)
+    expect_presentation(b, gap_paths, head_paths)
     assert_tree(b)
 
 
