@@ -25,6 +25,8 @@ import zipfile
 
 from PIL import Image, ImageDraw, ImageFont
 
+from check_citychrome_shell_id import class_id, library_id
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RES = os.path.join(ROOT, "client", "assets", "resources")
 OUT_DIR = os.path.join(ROOT, "client", "assets", "prefabs", "ui", "city")
@@ -468,7 +470,15 @@ def load_shell():
     value = meta.get("uuid") or ""
     if meta.get("importer") != "typescript" or len(value) < 32:
         raise SystemExit("shell meta missing uuid")
-    return {"type": compress_uuid(value), "uuid": value}
+    compressed = compress_uuid(value)
+    # class_id is the 22-char form. library_id is the 23-char filename form.
+    # Writing the filename into __type__ makes decodeUuid miss the class.
+    if compressed != class_id(value):
+        raise SystemExit("shell class id drifted: " + compressed)
+    banned = library_id(value)
+    if banned in text or banned == value:
+        raise SystemExit("shell stores the 23-char library id " + banned)
+    return {"type": compressed, "uuid": value}
 
 
 WHITE = color(255, 255, 255, 255)
@@ -1047,6 +1057,9 @@ def main():
     attach_comp_helpers(builder, sprites)
     check(builder)
     text = json.dumps(builder.objs, ensure_ascii=False, indent=2) + "\n"
+    banned = library_id(shell["uuid"])
+    if banned in text or shell["type"] == banned or len(shell["type"]) != 22:
+        raise SystemExit("refusing to write 23-char library id into CityChrome.prefab")
     with open(PREFAB_PATH, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(text)
     # Keep the existing prefab uuid. prefabLoad maps the path to it.

@@ -6,6 +6,18 @@
 
 `CityChromeShell` 只有 `@property` 节点引用。不加载 Prefab，不发协议。`USE_CITY_CHROME_PREFAB` 仍是原来的开关，本刀不改它。`CityChrome.ts` 只把已有绑定改到下面这些路径，好让顶栏名字、货币和五个底栏继续能写、能点。
 
+## 脚本类 id
+
+Prefab 上的 `__type__` 固定为 `c46KHSe2NOkI8Vai2cC0fj`。这是 `CityChromeShell.ts.meta` 的 uuid `c4e8a1d2-7b63-4e90-8f15-6a2d9c0b47e3` 走 `compressUuid(uuid, true)` 得到的 22 位类 id。不要改这处绑定。
+
+`c4e8aHSe2NOkI8Vai2cC0fj` 是同一个 uuid 的 23 位库文件名（`compressUuid(uuid, false)`，开头 5 位十六进制是 `c4e8a`）。它只出现在 `library/c4/` 的文件名里。引擎 `decodeUuid` 只解码 22 位，23 位会原样返回，不能拿来当类 id。
+
+Quick Compile 可以通过，控制台仍报 Missing class `c46KHSe2NOkI8Vai2cC0fj`。若 `client/temp/programming/**/chunks/*.js` 里是 `_RF.push({}, "c4e8aHSe2NOkI8Vai2cC0fj", "CityChromeShell")`，登记的 id 和 Prefab 查找的 id 不是同一个字符串。检查器里的「脚本编译失败」是这句 Missing class 的文案，不是 `CityChromeShell.ts` 的语法错误。仓库里的脚本、meta、Prefab 都没有这个 23 位串；它来自本机 `temp/programming` 缓存。meta 的 uuid 如果被写成这 23 位，`compressUuid` 发现不是 36 位 uuid 会原样返回，下一次编译还会把非法 id 写进 `_RF.push`。
+
+恢复：关掉 Creator，删掉 `client/temp/programming`，再打开工程让脚本重编。新 chunk 里应是 `_RF.push({}, "c46KHSe2NOkI8Vai2cC0fj", "CityChromeShell")`。不要把 23 位 id 写进 Prefab `__type__`，也不要写进脚本 meta 的 uuid。
+
+自检：`python3 client/tools/check_citychrome_shell_id.py`。
+
 ## 节点
 
 坐标是画面中心系。父节点不是根时，表里写的是换算后的画面位置。
