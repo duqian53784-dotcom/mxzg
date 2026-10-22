@@ -17,6 +17,10 @@
  * 「查询阵法」在本页，再发空 c2s 3099（GReqQueryFormation 无字段，整帧 040000001b0c0000，小端 1b 0c 00 00）。
  * 展示 unlockIds。不播 spine。不改阵法。不发 3098。不发 3100。不接 3020。
  * 挂在已合 3101 旁边、已合 3007 之后、进战之前。不从 3001 或 3101 自动接。
+ * 「GM 加英雄」在本页，发 c2s 2015（command=ADD_HERO，param 为类型号和 "9"）。类型号可改。成功没有 2015 回包，等 s2c 4030，记下 heros 的 hero_id 实例。
+ * 短等没有 4030 时 Toast「GM 未开」。s2c 1005 Toast 错误码。
+ * 「GM 上 MAIN」在本页，发 c2s 3100（type=0，formation_id=1，goddess_type=0，hero_id 用上一只 4030 的实例，position=2）。成功是空的 s2c 3100。
+ * 这两钮不进 pullIdle。只读「获取阵容」仍不发 3100。不接 3020。站位 1 和 4 不发。
  * 「请求战报」在本页，发 c2s 3102（battle_id、type，不是空壳）。不从 3001 或 3006 自动接。
  * 3001 / 3006 的战报不落库，拿它们的 battle_id 常回 BATTLE_REPORT_TIMEOUT。
  * 「切磋」在本页，发 c2s 3030（type、opponent_id、server_id，不是空壳）。opponent_id 不预填。
@@ -104,6 +108,17 @@ import {
   WIRE_STUDY_SELF,
   WIRE_STUDY_UNSYNCED_TOAST,
 } from "../net/protocol/wireStudy";
+import {
+  formatWireGmHero,
+  readWireGmAddHero,
+  WIRE_GM_BAD_TYPE,
+  WIRE_GM_CLOSED_TOAST,
+  WIRE_GM_COMMAND,
+  WIRE_GM_DEFAULT_TYPE,
+  WIRE_GM_NEED_HERO,
+  WIRE_GM_SILENT_MS,
+  WIRE_GM_UNSYNCED_TOAST,
+} from "../net/protocol/wireGmCommand";
 import { BattlePrefabShell, mountBattlePrefab, USE_BATTLE_PREFAB } from "./BattlePage";
 import { BattlePresentation, planBattlePresentation } from "./battlePresentation";
 import {
@@ -131,10 +146,11 @@ const BEAT_MS = 700;
 const PAGE_W = 720;
 const PAGE_H = 1280;
 /**
- * 底栏中心约 -575、高 140，顶边约 -505。返回钮底边在 -672。
- * 上滑这么多，底边停在底栏上方，查询阵法 / 获取阵容 / 关卡数据 / 返回都能点到。
+ * 底栏中心约 -575、高 140，顶边约 -505。返回钮底边在 -814。
+ * 上滑这么多，底边停在底栏上方，GM 加英雄 / GM 上 MAIN / 返回都能点到。
  */
-const PROBE_SCROLL_MAX = 220;
+const PROBE_SCROLL_MAX = 362;
+const LINEUP_SAVE_WAIT_MS = 3000;
 const DRAG_PX = 12;
 
 export interface WireMainlineHost {
@@ -152,7 +168,7 @@ export interface WireMainlinePage {
 }
 
 type Phase = "info" | "battle" | "done";
-type WaitKind = "3001" | "3006" | "3102" | "3103" | "3030" | "3007" | "3004" | "3101" | "3099";
+type WaitKind = "3001" | "3006" | "3102" | "3103" | "3030" | "3007" | "3004" | "3101" | "3099" | "2015" | "3100";
 
 export function buildWireMainlinePage(host: WireMainlineHost): WireMainlinePage {
   return new WireMainlineController(host);
@@ -180,6 +196,13 @@ class WireMainlineController implements WireMainlinePage {
   private seenIdleProbeSerial = 0;
   private seenLineUpSerial = 0;
   private seenFormationSerial = 0;
+  private seenGmHeroSerial = 0;
+  private seenLineUpSaveSerial = 0;
+  private seenWireErrorSerial = 0;
+  private gmTypeId = WIRE_GM_DEFAULT_TYPE;
+  private gmSaved = false;
+  private gmTimer: ReturnType<typeof setTimeout> | null = null;
+  private lineTimer: ReturnType<typeof setTimeout> | null = null;
   private chapterIdx = 1;
   private firstPos = 1;
   private battleId = "1";
@@ -207,6 +230,8 @@ class WireMainlineController implements WireMainlinePage {
   private idleProbeLabel: Node | null = null;
   private lineUpProbeLabel: Node | null = null;
   private formationProbeLabel: Node | null = null;
+  private gmLabel: Node | null = null;
+  private gmTypeField: TextField | null = null;
   private strengthLabel: Node | null = null;
   private battleIdField: TextField | null = null;
   private reportTypeField: TextField | null = null;
@@ -257,6 +282,9 @@ class WireMainlineController implements WireMainlinePage {
     this.seenIdleProbeSerial = WireSession.idleProbeSerial;
     this.seenLineUpSerial = WireSession.lineUpSerial;
     this.seenFormationSerial = WireSession.formationSerial;
+    this.seenGmHeroSerial = WireSession.gmHeroSerial;
+    this.seenLineUpSaveSerial = WireSession.lineUpSaveSerial;
+    this.seenWireErrorSerial = WireSession.wireErrorSerial;
     this.showInfo();
     if (!WireSession.hasChapterReward()) this.host.showToast(WIRE_CHAPTER_REWARD_UNSYNCED_TOAST);
     WireSession.pullChapterRewardList();
@@ -270,6 +298,7 @@ class WireMainlineController implements WireMainlinePage {
     if (this.disposed) return;
     this.disposed = true;
     this.waiting = false;
+    this.clearProbeTimer("all");
     this.unbindProbeScroll();
     this.wake(false);
     if (this.offSync) {
@@ -399,6 +428,48 @@ class WireMainlineController implements WireMainlinePage {
       this.write(this.statusLabel, this.statusText());
       return;
     }
+    if (this.waitKind === "2015") {
+      const heroReady = WireSession.gmHeroSerial !== this.seenGmHeroSerial;
+      const errReady = WireSession.wireErrorSerial !== this.seenWireErrorSerial;
+      if (!heroReady && !errReady) return;
+      this.clearProbeTimer("gm");
+      this.waiting = false;
+      this.waitKind = null;
+      if (heroReady) {
+        this.seenGmHeroSerial = WireSession.gmHeroSerial;
+        this.seenWireErrorSerial = WireSession.wireErrorSerial;
+        this.gmSaved = false;
+        this.write(this.gmLabel, this.gmText());
+        this.write(this.statusLabel, "4030 英雄实例 " + WireSession.gmHeroId);
+        return;
+      }
+      this.seenWireErrorSerial = WireSession.wireErrorSerial;
+      const errText = WireSession.wireErrorText || "服端错误";
+      this.host.showToast(errText);
+      this.write(this.statusLabel, errText);
+      return;
+    }
+    if (this.waitKind === "3100") {
+      const saved = WireSession.lineUpSaveSerial !== this.seenLineUpSaveSerial;
+      const errReady = WireSession.wireErrorSerial !== this.seenWireErrorSerial;
+      if (!saved && !errReady) return;
+      this.clearProbeTimer("line");
+      this.waiting = false;
+      this.waitKind = null;
+      if (saved) {
+        this.seenLineUpSaveSerial = WireSession.lineUpSaveSerial;
+        this.seenWireErrorSerial = WireSession.wireErrorSerial;
+        this.gmSaved = true;
+        this.write(this.gmLabel, this.gmText());
+        this.write(this.statusLabel, "3100 已上 MAIN");
+        return;
+      }
+      this.seenWireErrorSerial = WireSession.wireErrorSerial;
+      const errText = WireSession.wireErrorText || "服端错误";
+      this.host.showToast(errText);
+      this.write(this.statusLabel, errText);
+      return;
+    }
     if (this.waitKind !== "3102") return;
     if (WireSession.battleReportSerial === this.seenBattleReportSerial) return;
     this.seenBattleReportSerial = WireSession.battleReportSerial;
@@ -491,7 +562,12 @@ class WireMainlineController implements WireMainlinePage {
     place(createButton("查询阵法", () => this.probeFormation(), 140, 36, OPEN_FILL), this.body, -180, -614);
     place(createButton("获取阵容", () => this.pullLineUp(), 140, 36, OPEN_FILL), this.body, 0, -614);
     place(createButton("关卡数据", () => this.pullChapterData(), 140, 36, OPEN_FILL), this.body, 180, -614);
-    place(createButton("返回", () => this.host.close(), 200, 36, BACK_FILL), this.body, 0, -654);
+    this.gmLabel = place(createLabel(this.gmText(), 15, { color: TITLE, width: 640, height: 22 }), this.body, 0, -656);
+    this.gmTypeField = createField("类型号", 220, 36, { text: this.gmTypeId, maxLength: 16 });
+    place(this.gmTypeField.node, this.body, 0, -698);
+    place(createButton("GM 加英雄", () => this.addGmHero(), 160, 36, OPEN_FILL), this.body, -170, -746);
+    place(createButton("GM 上 MAIN", () => this.saveMainLine(), 160, 36, OPEN_FILL), this.body, 170, -746);
+    place(createButton("返回", () => this.host.close(), 200, 36, BACK_FILL), this.body, 0, -796);
   }
 
   private renderInfo(): void {
@@ -509,6 +585,7 @@ class WireMainlineController implements WireMainlinePage {
     this.write(this.idleProbeLabel, this.idleProbeText());
     this.write(this.lineUpProbeLabel, this.lineUpProbeText());
     this.write(this.formationProbeLabel, this.formationProbeText());
+    this.write(this.gmLabel, this.gmText());
     if (!this.waiting) this.write(this.statusLabel, this.statusText());
   }
 
@@ -573,6 +650,75 @@ class WireMainlineController implements WireMainlinePage {
     this.waiting = true;
     this.write(this.statusLabel, "已发 3101 空壳，等待阵容");
     GameLog.shared.info("Mainline", "wire lineup 3101 empty");
+  }
+
+  private addGmHero(): void {
+    if (this.disposed || this.phase === "battle" || this.waiting) return;
+    const typed = this.gmTypeField ? this.gmTypeField.getValue() : this.gmTypeId;
+    const query = readWireGmAddHero({ command: WIRE_GM_COMMAND, typeId: typed });
+    if (!query) {
+      this.write(this.gmLabel, WIRE_GM_BAD_TYPE);
+      return;
+    }
+    this.gmTypeId = query.params[0];
+    if (this.gmTypeField) this.gmTypeField.setValue(this.gmTypeId);
+    if (!this.host.connected()) {
+      this.host.showToast(errorText(ErrorCode.NET_NOT_CONNECTED));
+      return;
+    }
+    if (!WireSession.hasChapter()) {
+      this.host.showToast(WIRE_GM_UNSYNCED_TOAST);
+      return;
+    }
+    this.seenGmHeroSerial = WireSession.gmHeroSerial;
+    this.seenWireErrorSerial = WireSession.wireErrorSerial;
+    if (!WireSession.pullGmAddHero(this.gmTypeId)) {
+      this.host.showToast(WIRE_GM_UNSYNCED_TOAST);
+      return;
+    }
+    this.waitKind = "2015";
+    this.waiting = true;
+    this.write(this.statusLabel, "已发 2015，等待 4030");
+    this.armProbeTimer("gm", WIRE_GM_SILENT_MS, () => {
+      if (this.disposed || this.waitKind !== "2015") return;
+      this.waiting = false;
+      this.waitKind = null;
+      this.host.showToast(WIRE_GM_CLOSED_TOAST);
+      this.write(this.statusLabel, this.statusText());
+    });
+    GameLog.shared.info("Mainline", "wire gm 2015 ADD_HERO type=" + this.gmTypeId);
+  }
+
+  private saveMainLine(): void {
+    if (this.disposed || this.phase === "battle" || this.waiting) return;
+    if (WireSession.gmHeroId === null) {
+      this.host.showToast(WIRE_GM_NEED_HERO);
+      return;
+    }
+    if (!this.host.connected()) {
+      this.host.showToast(errorText(ErrorCode.NET_NOT_CONNECTED));
+      return;
+    }
+    if (!WireSession.hasChapter()) {
+      this.host.showToast(WIRE_GM_UNSYNCED_TOAST);
+      return;
+    }
+    this.seenLineUpSaveSerial = WireSession.lineUpSaveSerial;
+    this.seenWireErrorSerial = WireSession.wireErrorSerial;
+    if (!WireSession.pullMainLineUp()) {
+      this.host.showToast(WIRE_GM_NEED_HERO);
+      return;
+    }
+    this.waitKind = "3100";
+    this.waiting = true;
+    this.write(this.statusLabel, "已发 3100，等待空包");
+    this.armProbeTimer("line", LINEUP_SAVE_WAIT_MS, () => {
+      if (this.disposed || this.waitKind !== "3100") return;
+      this.waiting = false;
+      this.waitKind = null;
+      this.write(this.statusLabel, "3100 无回包");
+    });
+    GameLog.shared.info("Mainline", "wire lineup save 3100 hero_id=" + WireSession.gmHeroId + " position=2");
   }
 
   private pullChapterData(): void {
@@ -1198,6 +1344,36 @@ class WireMainlineController implements WireMainlinePage {
     }
   }
 
+  private gmText(): string {
+    const base = formatWireGmHero(WireSession.gmHeroId);
+    if (this.gmSaved && WireSession.gmHeroId !== null) return base + " · 已上 MAIN";
+    return base;
+  }
+
+  private armProbeTimer(which: "gm" | "line", ms: number, fire: () => void): void {
+    this.clearProbeTimer(which);
+    const timer = setTimeout(() => {
+      if (which === "gm") this.gmTimer = null;
+      else this.lineTimer = null;
+      fire();
+    }, ms);
+    const maybe = timer as { unref?: () => void };
+    if (typeof maybe.unref === "function") maybe.unref();
+    if (which === "gm") this.gmTimer = timer;
+    else this.lineTimer = timer;
+  }
+
+  private clearProbeTimer(which: "gm" | "line" | "all"): void {
+    if (which !== "line" && this.gmTimer) {
+      clearTimeout(this.gmTimer);
+      this.gmTimer = null;
+    }
+    if (which !== "gm" && this.lineTimer) {
+      clearTimeout(this.lineTimer);
+      this.lineTimer = null;
+    }
+  }
+
   private sleep(ms: number): Promise<boolean> {
     return new Promise((resolve) => {
       this.sleepResolve = resolve;
@@ -1371,6 +1547,8 @@ class WireMainlineController implements WireMainlinePage {
     this.idleProbeLabel = null;
     this.lineUpProbeLabel = null;
     this.formationProbeLabel = null;
+    this.gmLabel = null;
+    this.gmTypeField = null;
     this.battleIdField = null;
     this.reportTypeField = null;
     this.studyTypeField = null;

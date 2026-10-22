@@ -947,6 +947,26 @@ export const WireCmd = {
    * 不夹在 2001 和 3007 中间。不是签到列表 13010。不是成就列表 12010。不是世界等级 51001。不是背包 5001。不是星盘 68001。不是灵器 70001。
    */
   springOutingGrid: 76251,
+  /**
+   * c2s。主线页「GM 加英雄」才发。不进 pullIdle。空 cmd 不编。
+   * 2015 = 0x07DF，小端 df 07 00 00。GReqGMCommandNew。
+   * 字段 1 command（string），字段 2 param（repeated string）。
+   * 默认 ADD_HERO，param 是类型号和 "9"。成功没有 2015 回包。实例在 s2c 4030。
+   */
+  gmCommand: 2015,
+  /**
+   * s2c。客户端不发。GResHeroAdd。
+   * 字段 1 heros（repeated）。每条字段 1 是 hero_id 实例，不是类型号。
+   */
+  heroAdd: 4030,
+  /**
+   * c2s。主线页「GM 上 MAIN」才发。不进 pullIdle。空 cmd 不编。不是 3101。
+   * 3100 = 0x0C1C，小端 1c 0c 00 00。GReqLineUpSave。
+   * 字段 1 lineData（PSLineUpData）：1 type，2 formation_id，3 goddess_type，4 hero_list。
+   * hero_list 的字段 1 是 4030 的实例，字段 2 是 position。阵法 1 的站位只有 2/3/5/6/7/8/9。
+   * 成功是空的 s2c 3100。有包体不算成功。
+   */
+  lineUpSave: 3100,
 } as const;
 
 /**
