@@ -363,6 +363,7 @@ export function buildCityMapLayout(
     });
   }
 
+  // 这 33 个点只留给布局自检。CityMap 不再把它们挂到画面上，避免叠在 ActGroup 上。
   const activities = placeActivities(btn, viewW);
   return {
     viewW,

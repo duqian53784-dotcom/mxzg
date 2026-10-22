@@ -1,11 +1,12 @@
 ﻿/**
  * 主城壳（C2）。Canvas 下用代码生成顶栏、底栏和面板，不需要美术。
- * 顶栏底栏默认 USE_CITY_CHROME_PREFAB。false 时仍 mountCityChrome，代码 UI 不删。
+ * 顶栏底栏默认 USE_CITY_CHROME_PREFAB。false 时仍 mountCityChrome，代码顶底栏不删。
+ * 本文件不改这个开关，也不改 Boot。
  * 从 Boot 进来时，若场景上没挂本组件，Boot 会 addComponent。
- * 单独预览 Main：把 MainApp 挂到 Main 场景的 Canvas 上。
+ * 单独预览 Main：把 MainApp 挂到 Main 场景的 Canvas 上。开关为 true 时看到 Prefab 壳。
  * 顶栏和底栏在 UIShell 的 chrome 层，不进页面栈。系统面板走 PanelNav。
- * 主城页中间是 CityMap：视差底图和建筑点。底栏仍是五项，不改 CityChrome。
- * 主屏只留「活动」「更多」。只读入口的挂接约定在 cityHubEntries.ts。
+ * 主城页中间是 CityMap：视差底图和建筑点。底栏仍是五项。
+ * 主屏不再画红「活动」、蓝「更多」矩形。这两颗入口在 CityChrome Prefab 上。
  */
 import { _decorator, BlockInputEvents, Color, Component, Node, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
@@ -194,8 +195,6 @@ import {
   CITY_HUB_BUTTON_H,
   CITY_HUB_BUTTON_W,
   CITY_HUB_MORE_ID,
-  CITY_SCREEN_ACTIVITY,
-  CITY_SCREEN_MORE,
   CityHubEntry,
   CityHubSlot,
   cityHubEntries,
@@ -203,7 +202,7 @@ import {
 } from "./cityHubEntries";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
-/** 默认挂 CityChrome Prefab。false 时仍走 mountCityChrome，和接 Prefab 之前一样。 */
+/** 默认挂 CityChrome Prefab。false 时仍走 mountCityChrome，和接 Prefab 之前一样。本刀不改这个值，也不改 Boot。 */
 export const USE_CITY_CHROME_PREFAB = true;
 
 const { ccclass } = _decorator;
@@ -549,7 +548,11 @@ export class MainApp extends Component {
       this.chrome = mountCityChrome(shell.chromeLayer, onTab);
     } else {
       try {
-        this.chrome = await mountCityChromePrefab(shell.chromeLayer, onTab);
+        this.chrome = await mountCityChromePrefab(shell.chromeLayer, onTab, {
+          openActivity: () => this.openChild(CITY_HUB_ACTIVITY_ID),
+          openMore: () => this.openChild(CITY_HUB_MORE_ID),
+          openMail: () => this.openMail(),
+        });
         if (!this.isValid || !this.shell) {
           if (this.chrome) this.chrome.root.destroy();
           this.chrome = null;
@@ -747,27 +750,7 @@ export class MainApp extends Component {
       328
     );
 
-    // 只读/系统钮在 cityHubEntries。新只读刀用 attachReadonlyCityEntry，不要在主屏再放矩形。
-    const activityBtn = createButton(
-      CITY_SCREEN_ACTIVITY.title,
-      () => this.openChild(CITY_HUB_ACTIVITY_ID),
-      168,
-      48,
-      LIMITED_FILL,
-      20
-    );
-    activityBtn.name = "resident-" + CITY_HUB_ACTIVITY_ID;
-    place(activityBtn, page, CITY_SCREEN_ACTIVITY.x, CITY_SCREEN_ACTIVITY.y);
-    const moreBtn = createButton(
-      CITY_SCREEN_MORE.title,
-      () => this.openChild(CITY_HUB_MORE_ID),
-      168,
-      48,
-      OPEN_FILL,
-      20
-    );
-    moreBtn.name = "resident-" + CITY_HUB_MORE_ID;
-    place(moreBtn, page, CITY_SCREEN_MORE.x, CITY_SCREEN_MORE.y);
+    // 活动 / 更多入口在 CityChrome Prefab（ActGroup、UtilityRow/BtnMore）。这里不再画红蓝矩形。
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -1299,6 +1282,7 @@ export class MainApp extends Component {
       tabs.push({ id: tab.id, text: tabLabel(tab.title, access.open), state });
     }
     chrome.setTabs(tabs);
+    chrome.setCityExtras(this.panels?.current === CITY_TAB);
   }
 
   private refreshHub(): void {

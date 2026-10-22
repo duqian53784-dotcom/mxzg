@@ -1,8 +1,9 @@
 /**
  * 主城地图层。挂在主城页面里，顶栏和底栏仍是 CityChrome。
- * 视差底板用 resources/ui/maps/map-bg-city-*，建筑和活动图标用 resources/ui/city。
+ * 视差底板用 resources/ui/maps/map-bg-city-*，建筑图标用 resources/ui/city。
  * 点击只回调 atom，由 MainApp 走已有的 PanelNav，不另开一套导航。
  * 地图内容比设计画面宽，拖动是预期。根上的 Mask 把子节点裁在 viewW×viewH 里。
+ * 配置里的活动图标不再铺成通栏。右上活动在 CityChrome 的 ActGroup。
  */
 import { Button, Color, EventTouch, Mask, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
 import { GateSnapshot } from "../config/nav";
@@ -13,9 +14,7 @@ import {
   CITY_CFG_BTN,
   CITY_CFG_EFFECT,
   CITY_CFG_POS,
-  CityActivitySpot,
   CityEffectSpot,
-  CityMapLayout,
   CitySpot,
   MainCityBtnFile,
   MainCityEffectFile,
@@ -59,7 +58,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   const rootUi = root.addComponent(UITransform);
   rootUi.setContentSize(layout.viewW, layout.viewH);
   rootUi.setAnchorPoint(0.5, 0.5);
-  // 先定好画面尺寸再挂 Mask。矩形裁切跟这块 UITransform 走，活动图标也在根上，一并落在画面内。
+  // 先定好画面尺寸再挂 Mask。矩形裁切跟这块 UITransform 走。活动通栏不挂在这层。
   const mask = root.addComponent(Mask);
   mask.type = Mask.Type.GRAPHICS_RECT;
   root.parent = parent;
@@ -101,10 +100,6 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
     const built = await placeBuilding(views, layout.buildings[i], clickAtom);
     if (built) spots.set(layout.buildings[i].atom, built);
   }
-  for (let i = 0; i < layout.activities.length; i++) {
-    const built = await placeActivity(root, layout.activities[i], clickAtom);
-    if (built) spots.set(layout.activities[i].atom, built);
-  }
 
   let scroll = layout.scroll;
   let moved = 0;
@@ -142,7 +137,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   refreshLocks();
   GameLog.shared.info(
     "CityMap",
-    "ready buildings=" + layout.buildings.length + " activities=" + layout.activities.length + " scroll=" + scroll
+    "ready buildings=" + layout.buildings.length + " activities=0 scroll=" + scroll
   );
 
   return {
@@ -193,23 +188,6 @@ async function placeBuilding(
   const caption = createLabel(spot.label, 18, { color: LABEL_COLOR, width: Math.max(120, size.w) });
   caption.parent = node;
   caption.setPosition(0, -size.h * 0.5 - 14, 0);
-  bindAtom(node, spot.atom, onAtom);
-  return { sprite };
-}
-
-async function placeActivity(
-  root: Node,
-  spot: CityActivitySpot,
-  onAtom: (atom: string) => void
-): Promise<{ sprite: Sprite | null } | null> {
-  const frame = await loadFirst(spot.icons);
-  const node = uiNode("act-" + spot.atom);
-  const ui = node.addComponent(UITransform);
-  ui.setContentSize(34, 34);
-  ui.setAnchorPoint(0.5, 0.5);
-  node.parent = root;
-  node.setPosition(spot.x, spot.y, 0);
-  const sprite = frame ? paintSprite(node, frame) : null;
   bindAtom(node, spot.atom, onAtom);
   return { sprite };
 }

@@ -56,7 +56,7 @@
 
 底栏五个钮都有 `cc.Button`（缩放，`clickEvents` 为空）。选中时现有逻辑染的是圆底，不染 `Icon`。`Lock` 默认隐藏，锁定时由绑定打开。`Label` 文案仍走原来的 `setTabs`。
 
-`BtnActivity` / `BtnMorePanel` 没有可见底图。主屏上的红「活动」、蓝「更多」仍是 `MainApp.buildCity()` 画的，本刀不接。
+`BtnActivity` / `BtnMorePanel` 仍不激活，没有可见底图，避免盖住 `UtilityRow`。主屏不再画红「活动」、蓝「更多」矩形。`ActGroup` 上每个钮打开原来的活动列表，`UtilityRow/BtnMore` 以及录像、好友、排行打开原来的更多列表。`UtilityRow/BtnMail` 打开原来的邮件页。离开主城页时这两块先隐藏，免得压住面板。底栏五个钮仍走原来的 `onTab`。
 
 ## 贴图
 
@@ -93,7 +93,15 @@ zip 里另外盖上、本 Prefab 没用的图：`main-scene_spr-battle-bottom`�
 - 顶条是现有 `spr-up-bg`（蓝底金边），图集里没有另一张纯白顶条。
 - 加号是蓝色菱形 `btn-add-4`，不是圆角小蓝钮。
 - 召唤、铁匠铺没有独立圆标，用的是地图建筑牌（自带「召唤法阵」「铁匠铺」横幅），再加中文 `Label`。
-- 活动只放了 7 个占位，叠成两排靠右。`CityMap.placeActivities` 仍会按配置把活动图标铺成通栏，本刀不改地图拖动，也不改那条布局。运行时两套会叠在一起，等客户端把活动生成改挂到 `ActGroup` 再停掉通栏。
+- 活动只放了 7 个占位，叠成两排靠右。`CityMap` 不再把配置里的活动图标铺成通栏，避免和 `ActGroup` 叠在一起。地图拖动和建筑点不动。`placeActivities` 仍算出那 33 个点，只给布局自检，不往画面上挂。
 - 月卡条只有空节点 `MonthCard`。
 - 战力数字和等级徽章还是占位。现有绑定只写名字（名字串里仍带 `Lv`）、区服、金币、钻石。
-- 红「活动」、蓝「更多」仍由页面代码画在 (-160, -470) 和 (160, -470)。Prefab 里同坐标的桩是关着的，避免再叠一层纯色矩形。
+- 红「活动」、蓝「更多」矩形已停。入口改挂 Prefab：`ActGroup` 进活动列表，`UtilityRow/BtnMore` 进更多列表。同坐标的 `BtnActivity`、`BtnMorePanel` 继续关着。
+
+## 预览
+
+不改 `Boot.ts`，也不改 `USE_CITY_CHROME_PREFAB`。这个开关在主线上已经是 `true`，本刀保持原值。进主城走 `mountCityChromePrefab`，能看到金边顶底栏、右上 `ActGroup`、底栏上方 `UtilityRow`。代码通栏和红蓝矩形不再出现。
+
+Creator 里直接打开 `assets/prefabs/ui/city/CityChrome.prefab`。`BtnActivity`、`BtnMorePanel` 在层级里是关着的。
+
+要把壳退回纯代码顶底栏，把 `USE_CITY_CHROME_PREFAB` 临时改成 `false` 再预览。那只用于看旧壳，不要当成默认提交。
