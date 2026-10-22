@@ -1202,6 +1202,20 @@ import {
   WIRE_QI_SHEN_QI_UNSYNCED_TOAST,
   wireQiShenQiNote,
 } from "../assets/scripts/net/protocol/wireQiShenQi";
+import {
+  decodeWireZhuShenJiTan,
+  formatWireZhuShenJiTanLine,
+  WIRE_ZHU_SHEN_JI_TAN_BANNED_CMDS,
+  WIRE_ZHU_SHEN_JI_TAN_CMD,
+  WIRE_ZHU_SHEN_JI_TAN_EMPTY,
+  WIRE_ZHU_SHEN_JI_TAN_FIELD_NOTE,
+  WIRE_ZHU_SHEN_JI_TAN_FRAME,
+  WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE,
+  WIRE_ZHU_SHEN_JI_TAN_READONLY_TITLE,
+  WIRE_ZHU_SHEN_JI_TAN_SIDE_EFFECT,
+  WIRE_ZHU_SHEN_JI_TAN_UNSYNCED_TOAST,
+  wireZhuShenJiTanNote,
+} from "../assets/scripts/net/protocol/wireZhuShenJiTan";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1958,6 +1972,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("spaceTimeAdventure") === "city", "space time adventure stays on the city tab");
   assert(rootTabFor("magicTowerRoad") === "city", "magic tower road stays on the city tab");
   assert(rootTabFor("qiShenQi") === "city", "qi shen qi stays on the city tab");
+  assert(rootTabFor("zhuShenJiTan") === "city", "zhu shen ji tan stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -12422,6 +12437,198 @@ async function checkWs(): Promise<void> {
     "75101 note keeps the side effect and does not write gold or diamond"
   );
   assert(
+    WireCmd.zhuShenJiTan === 75121 &&
+      WireCmd.zhuShenJiTan !== WireCmd.qiShenQi &&
+      WireCmd.zhuShenJiTan !== 75101 &&
+      WireCmd.zhuShenJiTan !== 75122 &&
+      WireCmd.zhuShenJiTan !== 75131 &&
+      WireCmd.zhuShenJiTan !== 75001 &&
+      WireCmd.zhuShenJiTan !== 76501 &&
+      WireCmd.zhuShenJiTan !== 73002 &&
+      WireCmd.zhuShenJiTan !== 71001 &&
+      WireCmd.zhuShenJiTan !== 20011 &&
+      WireCmd.zhuShenJiTan !== 74121 &&
+      WireCmd.zhuShenJiTan !== 74122 &&
+      WireCmd.zhuShenJiTan !== 4601 &&
+      WireCmd.zhuShenJiTan !== 29001 &&
+      WireCmd.zhuShenJiTan !== 5001 &&
+      WireCmd.zhuShenJiTan !== 51001 &&
+      WireCmd.zhuShenJiTan !== 68001 &&
+      WireCmd.zhuShenJiTan !== 70001 &&
+      WireCmd.zhuShenJiTan !== 76542 &&
+      WireCmd.zhuShenJiTan !== 74120 &&
+      WireCmd.zhuShenJiTan !== 74001,
+    "online 75121 stays off the write cmds and the earlier idle pulls"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.zhuShenJiTan)) === WIRE_ZHU_SHEN_JI_TAN_FRAME, "empty c2s 75121");
+  assert(bytesToHex(encodeFrame(75121)) === "0400000071250100", "empty c2s 75121 hex");
+  assert(WIRE_ZHU_SHEN_JI_TAN_FRAME === "0400000071250100", "75121 frame constant");
+  assert(bytesToHex(encodeFrame(75121)) !== "040000005d250100", "75121 is not the 75101 frame");
+  assert(bytesToHex(encodeFrame(75122)) === "0400000072250100" && bytesToHex(encodeFrame(75122)) !== "0400000071250100", "75122 is not the 75121 frame");
+  assert(bytesToHex(encodeFrame(75131)) === "040000007b250100" && bytesToHex(encodeFrame(75131)) !== "0400000071250100", "75131 is not the 75121 frame");
+  for (let i = 0; i < WIRE_ZHU_SHEN_JI_TAN_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_ZHU_SHEN_JI_TAN_BANNED_CMDS[i] }) === null, WIRE_ZHU_SHEN_JI_TAN_BANNED_CMDS[i] + " is not encoded");
+  }
+  const zhuShenJiTanOwn = encodeWireMessage({ cmd: WIRE_ZHU_SHEN_JI_TAN_CMD });
+  assert(
+    zhuShenJiTanOwn !== null &&
+      bytesToHex(zhuShenJiTanOwn.bytes) === "0400000071250100" &&
+      bytesToHex(zhuShenJiTanOwn.bytes) !== "040000005d250100" &&
+      bytesToHex(zhuShenJiTanOwn.bytes) !== "0400000072250100" &&
+      bytesToHex(zhuShenJiTanOwn.bytes) !== "040000007b250100",
+    "wire.75121 encodes the empty 75121 frame and not 75101 or the banned cmds"
+  );
+  assert(WIRE_ZHU_SHEN_JI_TAN_CMD === "wire.75121", "zhu shen ji tan wire cmd");
+  assert(WIRE_ZHU_SHEN_JI_TAN_READONLY_TITLE === "诸神祭坛（真服只读）", "readonly zhu shen ji tan title");
+  assert(WIRE_ZHU_SHEN_JI_TAN_UNSYNCED_TOAST === "真服未同步", "unsynced zhu shen ji tan toast");
+  assert(WIRE_ZHU_SHEN_JI_TAN_EMPTY === "已同步空表", "empty zhu shen ji tan label");
+  assert(
+    WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("info.floor") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("moneyDrawNum") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("75122") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("75131") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("75001") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("76501") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("73002") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("71001") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("74121") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("74122") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("75101") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("5001") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("51001") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("68001") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("70001") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_READONLY_NOTE.indexOf("无 page") >= 0,
+    "75121 readonly note lists info.floor and the hard bans"
+  );
+  assert(
+    WIRE_ZHU_SHEN_JI_TAN_SIDE_EFFECT.indexOf("getPromotionInfo") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_SIDE_EFFECT.indexOf("轮次重置") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_SIDE_EFFECT.indexOf("getMoneyDrawNum") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_SIDE_EFFECT.indexOf("无养成写") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_SIDE_EFFECT.indexOf("0400000071250100") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_SIDE_EFFECT.indexOf("与 75101 分开发") >= 0,
+    "75121 side effect keeps the lazy create, the round reset and the daily refresh"
+  );
+  assert(
+    WIRE_ZHU_SHEN_JI_TAN_FIELD_NOTE.indexOf("info.floor") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_FIELD_NOTE.indexOf("moneyDrawNum") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_ZHU_SHEN_JI_TAN_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "75121 field note does not invent missing numbers"
+  );
+  const zhuShenJiTanEmpty = decodeWireZhuShenJiTan(new Uint8Array(0));
+  assert(
+    zhuShenJiTanEmpty !== null &&
+      zhuShenJiTanEmpty.floor === null &&
+      zhuShenJiTanEmpty.moneyDrawNum === null &&
+      zhuShenJiTanEmpty.marks.length === 0 &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanEmpty) === WIRE_ZHU_SHEN_JI_TAN_EMPTY &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanEmpty).indexOf("info.floor=") < 0 &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanEmpty).indexOf("moneyDrawNum=") < 0,
+    "empty 75121 body is 已同步空表 and does not invent zeros"
+  );
+  assert(decodeWireZhuShenJiTan(null) === null, "missing 75121 body stays unsynced");
+  assert(decodeWireZhuShenJiTan(Uint8Array.from([0x80])) === null, "bad 75121 varint returns null");
+  const zhuShenJiTanFloorZero = decodeWireZhuShenJiTan(fieldBytes(1, fieldVarint(1, 0)));
+  assert(
+    zhuShenJiTanFloorZero !== null &&
+      zhuShenJiTanFloorZero.floor === 0 &&
+      zhuShenJiTanFloorZero.moneyDrawNum === null &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanFloorZero) === "info.floor=0" &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanFloorZero).indexOf("moneyDrawNum=") < 0,
+    "present 75121 floor zero stays zero and omits moneyDrawNum"
+  );
+  const zhuShenJiTanMoneyZero = decodeWireZhuShenJiTan(fieldVarint(2, 0));
+  assert(
+    zhuShenJiTanMoneyZero !== null &&
+      zhuShenJiTanMoneyZero.moneyDrawNum === 0 &&
+      zhuShenJiTanMoneyZero.floor === null &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanMoneyZero) === "moneyDrawNum=0" &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanMoneyZero).indexOf("info.floor=") < 0,
+    "present 75121 moneyDrawNum zero stays zero and omits floor"
+  );
+  const zhuShenJiTanFloorNeg = decodeWireZhuShenJiTan(fieldBytes(1, fieldNeg1(1)));
+  assert(
+    zhuShenJiTanFloorNeg !== null &&
+      zhuShenJiTanFloorNeg.floor === -1 &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanFloorNeg) === "info.floor=-1",
+    "75121 floor -1 stays -1"
+  );
+  const zhuShenJiTanMoneyNeg = decodeWireZhuShenJiTan(fieldNeg1(2));
+  assert(
+    zhuShenJiTanMoneyNeg !== null &&
+      zhuShenJiTanMoneyNeg.moneyDrawNum === -1 &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanMoneyNeg) === "moneyDrawNum=-1",
+    "75121 moneyDrawNum -1 stays -1"
+  );
+  const zhuShenJiTanOnlyFloor = decodeWireZhuShenJiTan(fieldBytes(1, fieldVarint(1, 2)));
+  assert(
+    zhuShenJiTanOnlyFloor !== null &&
+      zhuShenJiTanOnlyFloor.floor === 2 &&
+      zhuShenJiTanOnlyFloor.moneyDrawNum === null &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanOnlyFloor) === "info.floor=2" &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanOnlyFloor).indexOf("moneyDrawNum=") < 0,
+    "75121 omitted moneyDrawNum stays omitted"
+  );
+  const zhuShenJiTanUnknown = decodeWireZhuShenJiTan(fieldVarint(4, 5));
+  assert(
+    zhuShenJiTanUnknown !== null &&
+      zhuShenJiTanUnknown.floor === null &&
+      zhuShenJiTanUnknown.moneyDrawNum === null &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanUnknown) === "字段4=5" &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanUnknown).indexOf("info.floor=") < 0,
+    "75121 unknown field stays a mark and does not invent named zeros"
+  );
+  const zhuShenJiTanMark = decodeWireZhuShenJiTan(fieldVarint(1, 3));
+  assert(
+    zhuShenJiTanMark !== null &&
+      zhuShenJiTanMark.floor === null &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanMark) === "字段1=3",
+    "75121 field 1 varint is a mark and not info.floor"
+  );
+  const zhuShenJiTanBoth = decodeWireZhuShenJiTan(concatBytes(fieldBytes(1, fieldVarint(1, 2)), fieldVarint(2, 0)));
+  assert(
+    zhuShenJiTanBoth !== null &&
+      zhuShenJiTanBoth.floor === 2 &&
+      zhuShenJiTanBoth.moneyDrawNum === 0 &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanBoth) === "info.floor=2 / moneyDrawNum=0",
+    "75121 keeps floor and a present zero moneyDrawNum"
+  );
+  const zhuShenJiTanInner = decodeWireZhuShenJiTan(fieldBytes(1, fieldVarint(3, 4)));
+  assert(
+    zhuShenJiTanInner !== null &&
+      zhuShenJiTanInner.floor === null &&
+      formatWireZhuShenJiTanLine(zhuShenJiTanInner) === "info.字段3=4",
+    "75121 inner unknown field stays an info mark"
+  );
+  assert(decodeWireZhuShenJiTan(fieldBytes(1, Uint8Array.from([0x80]))) === null, "bad 75121 info bytes return null");
+  const zhuShenJiTanSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.zhuShenJiTan, fieldBytes(1, fieldVarint(1, 0))), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    zhuShenJiTanSticky.frames.length === 2 &&
+      zhuShenJiTanSticky.frames[0].cmdId === 75121 &&
+      zhuShenJiTanSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireZhuShenJiTan(zhuShenJiTanSticky.frames[0].body)?.floor === 0,
+    "sticky 75121 frame stops at its length prefix"
+  );
+  const zhuShenJiTanNote = wireZhuShenJiTanNote(zhuShenJiTanEmpty || { floor: null, moneyDrawNum: null, marks: [] });
+  assert(
+    zhuShenJiTanNote.indexOf(WIRE_ZHU_SHEN_JI_TAN_SIDE_EFFECT) >= 0 &&
+      zhuShenJiTanNote.indexOf("不写金币") >= 0 &&
+      zhuShenJiTanNote.indexOf("不写钻石") >= 0,
+    "75121 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
     bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("f52e0000") < 0 &&
@@ -13547,7 +13754,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 54, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once and does not resend 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75102");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 55, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once and does not resend 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75102 or 75122");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -14657,6 +14864,39 @@ async function checkWs(): Promise<void> {
           assert(qiHex !== notFrames[n], "pullIdle 75101 frame is not " + notFrames[n]);
         }
         assert(qiHex !== "04000000fe2a0100", "pullIdle 75101 frame is not merged into the 76542 cmd");
+        assert(qiHex !== "0400000071250100", "pullIdle 75101 frame is not merged into the 75121 cmd");
+      }
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 54] as ArrayBuffer)) === "0400000071250100",
+        "pullIdle sends empty c2s 75121 after 75101 at frame index 54"
+      );
+      {
+        const zsjtHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 54] as ArrayBuffer));
+        const notFrames = [
+          "040000005d250100",
+          "04000000fe2a0100",
+          "0400000088210100",
+          "0400000011210100",
+          "0400000072250100",
+          "040000007b250100",
+          "04000000f9240100",
+          "04000000d52a0100",
+          "040000002a1d0100",
+          "0400000059150100",
+          "040000002b4e0000",
+          "0400000089210100",
+          "040000008a210100",
+          "04000000f9110000",
+          "0400000049710000",
+          "0400000089130000",
+          "0400000039c70000",
+          "04000000a1090100",
+          "0400000071110100",
+        ];
+        for (let n = 0; n < notFrames.length; n++) {
+          assert(zsjtHex !== notFrames[n], "pullIdle 75121 frame is not " + notFrames[n]);
+        }
+        assert(zsjtHex !== "040000005d250100", "pullIdle 75121 frame is not merged into the 75101 cmd");
       }
       {
         let formationFrames = 0;
@@ -14723,7 +14963,8 @@ async function checkWs(): Promise<void> {
           "04000000fd2a0100": true,
           "04000000f9240100": true,
           "040000005e250100": true,
-          "0400000071250100": true,
+          "0400000072250100": true,
+          "040000007b250100": true,
         };
         let weekendFrames = 0;
         let godRelicFrames = 0;
@@ -14733,9 +14974,10 @@ async function checkWs(): Promise<void> {
         let spaceTimeFrames = 0;
         let magicTowerFrames = 0;
         let qiShenQiFrames = 0;
+        let zhuShenJiTanFrames = 0;
         let astrolabeFrames = 0;
         let reikiFrames = 0;
-        for (let i = 0; i < 54; i++) {
+        for (let i = 0; i < 55; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -14756,6 +14998,7 @@ async function checkWs(): Promise<void> {
           if (hex === "0400000088210100") spaceTimeFrames += 1;
           if (hex === "04000000fe2a0100") magicTowerFrames += 1;
           if (hex === "040000005d250100") qiShenQiFrames += 1;
+          if (hex === "0400000071250100") zhuShenJiTanFrames += 1;
           if (hex === "04000000a1090100") astrolabeFrames += 1;
           if (hex === "0400000071110100") reikiFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
@@ -14781,11 +15024,12 @@ async function checkWs(): Promise<void> {
             spaceTimeFrames === 1 &&
             magicTowerFrames === 1 &&
             qiShenQiFrames === 1 &&
+            zhuShenJiTanFrames === 1 &&
             astrolabeFrames === 1 &&
             reikiFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once and 75101 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75102 75121 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once and 75121 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75102 75122 75131 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
         );
       }
       assert(
@@ -14889,6 +15133,8 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000fe2a0100") &&
           sawLog(lines, "发送 c2s 75101") &&
           sawLog(lines, "040000005d250100") &&
+          sawLog(lines, "发送 c2s 75121") &&
+          sawLog(lines, "0400000071250100") &&
           sawLog(lines, "发送 c2s 74121") === false &&
           sawLog(lines, "0400000089210100") === false &&
           sawLog(lines, "发送 c2s 74122") === false &&
@@ -14939,8 +15185,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000f9240100") === false &&
           sawLog(lines, "发送 c2s 75102") === false &&
           sawLog(lines, "040000005e250100") === false &&
-          sawLog(lines, "发送 c2s 75121") === false &&
-          sawLog(lines, "0400000071250100") === false &&
+          sawLog(lines, "发送 c2s 75122") === false &&
+          sawLog(lines, "0400000072250100") === false &&
+          sawLog(lines, "发送 c2s 75131") === false &&
+          sawLog(lines, "040000007b250100") === false &&
           sawLog(lines, "发送 c2s 74002") === false &&
           sawLog(lines, "0400000012210100") === false &&
           sawLog(lines, "发送 c2s 74003") === false &&
@@ -15175,6 +15423,9 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_QI_SHEN_QI_CMD);
       const qiShenQiSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(qiShenQiSent as ArrayBuffer)) === "040000005d250100", "wire.75101 frame");
+      roleNet.send(WIRE_ZHU_SHEN_JI_TAN_CMD);
+      const zhuShenJiTanSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(zhuShenJiTanSent as ArrayBuffer)) === "0400000071250100", "wire.75121 frame");
       const sentBeforeRechargeOther = roleSockets[0].sent.length;
       roleNet.send("wire.61002");
       roleNet.send("wire.62002");
@@ -15209,10 +15460,11 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.74149");
       roleNet.send("wire.76501");
       roleNet.send("wire.75102");
-      roleNet.send("wire.75121");
+      roleNet.send("wire.75122");
+      roleNet.send("wire.75131");
       roleNet.send("wire.75001");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75121 75001 and goal claim stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75131 75001 and goal claim stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.61002") &&
           sawLog(lines, "未发送 wire.62002") &&
@@ -15247,7 +15499,8 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.74149") &&
           sawLog(lines, "未发送 wire.76501") &&
           sawLog(lines, "未发送 wire.75102") &&
-          sawLog(lines, "未发送 wire.75121") &&
+          sawLog(lines, "未发送 wire.75122") &&
+          sawLog(lines, "未发送 wire.75131") &&
           sawLog(lines, "未发送 wire.75001") &&
           sawLog(lines, "未发送 goal7.claim"),
         "qi shen qi banned cmds and goal claim are not encoded"
@@ -19877,7 +20130,8 @@ async function checkWs(): Promise<void> {
         "75101 count zero does not replace the 76542 snapshot and does not invent idx"
       );
       roleSockets[0].push(encodeFrame(75102, fieldVarint(1, 9)));
-      roleSockets[0].push(encodeFrame(75121, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75122, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75131, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75001, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(76501, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(73002, fieldVarint(1, 9)));
@@ -19899,7 +20153,7 @@ async function checkWs(): Promise<void> {
             state: null,
             marks: [],
           }) === towerRoadBeforeQi,
-        "75102 75121 75001 76501 73002 71001 20011 4601 29001 74121 74122 5001 51001 68001 and 70001 do not replace the 75101 snapshot"
+        "75102 75122 75131 75001 76501 73002 71001 20011 4601 29001 74121 74122 5001 51001 68001 and 70001 do not replace the 75101 snapshot"
       );
       roleSockets[0].push(encodeFrame(75101));
       assert(
@@ -19938,6 +20192,63 @@ async function checkWs(): Promise<void> {
           }) === towerRoadBeforeQi &&
           sawWire("75101 解不开"),
         "bad 75101 keeps the previous qi shen qi and the 76542 snapshot"
+      );
+      assert(WireSession.hasZhuShenJiTan() === false, "75121 is unsynced until its own s2c");
+      const qiBeforeZsjt = formatWireQiShenQiLine(WireSession.qiShenQi || { buy: null, marks: [] });
+      roleSockets[0].push(encodeFrame(75121, fieldBytes(1, fieldVarint(1, 0))));
+      assert(
+        WireSession.hasZhuShenJiTan() &&
+          WireSession.zhuShenJiTan !== null &&
+          WireSession.zhuShenJiTan.floor === 0 &&
+          WireSession.zhuShenJiTan.moneyDrawNum === null &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan) === "info.floor=0" &&
+          formatWireQiShenQiLine(WireSession.qiShenQi || { buy: null, marks: [] }) === qiBeforeZsjt,
+        "75121 floor zero does not replace the 75101 snapshot and does not invent moneyDrawNum"
+      );
+      roleSockets[0].push(encodeFrame(75122, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75131, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76501, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(73002, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(71001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74121, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74122, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(5001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(51001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(68001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(70001, fieldVarint(1, 9)));
+      assert(
+        formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }) === "info.floor=0" &&
+          formatWireQiShenQiLine(WireSession.qiShenQi || { buy: null, marks: [] }) === qiBeforeZsjt,
+        "75122 75131 75001 76501 73002 71001 20011 4601 29001 74121 74122 5001 51001 68001 and 70001 do not replace the 75121 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(75121));
+      assert(
+        WireSession.hasZhuShenJiTan() &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }) === WIRE_ZHU_SHEN_JI_TAN_EMPTY &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }).indexOf("info.floor=") < 0 &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }).indexOf("moneyDrawNum=") < 0 &&
+          formatWireQiShenQiLine(WireSession.qiShenQi || { buy: null, marks: [] }) === qiBeforeZsjt,
+        "empty 75121 clears to 已同步空表 and does not replace the 75101 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(75121, fieldBytes(1, fieldVarint(1, 2))));
+      assert(
+        WireSession.zhuShenJiTan !== null &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan) === "info.floor=2" &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan).indexOf("moneyDrawNum=") < 0 &&
+          formatWireQiShenQiLine(WireSession.qiShenQi || { buy: null, marks: [] }) === qiBeforeZsjt,
+        "75121 shows only the fields that arrived"
+      );
+      roleSockets[0].push(encodeFrame(75121, Uint8Array.from([0x80])));
+      assert(
+        WireSession.zhuShenJiTan !== null &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan) === "info.floor=2" &&
+          formatWireQiShenQiLine(WireSession.qiShenQi || { buy: null, marks: [] }) === qiBeforeZsjt &&
+          sawWire("75121 解不开"),
+        "bad 75121 keeps the previous zhu shen ji tan and the 75101 snapshot"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
