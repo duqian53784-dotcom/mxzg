@@ -15751,6 +15751,7 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.1202");
       assert(roleSockets[0].sent.length === sentBeforeBannedBattle, "battle reward and mock stage cmds stay off the wire");
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
+      lines.length = 0;
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
       assert(roleSockets[0].sent.length === sentBeforeMailPull + 64, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once then 75901 once then 76001 once then 76101 once then 76301 once then 76081 once then 76520 once then 76251 once and does not resend 76520 or 76081 or 76301 or 76101 or 76001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
