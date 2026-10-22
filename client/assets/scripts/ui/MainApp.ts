@@ -85,6 +85,7 @@ import { buildWireZhuShenJiTanPage, WireZhuShenJiTanPage } from "./WireZhuShenJi
 import { buildWireMidFoodPage, WireMidFoodPage } from "./WireMidFoodPage";
 import { buildWireQiuShangMingYuePage, WireQiuShangMingYuePage } from "./WireQiuShangMingYuePage";
 import { buildWireWanShengLotteryPage, WireWanShengLotteryPage } from "./WireWanShengLotteryPage";
+import { buildWireHeiWuMissionPage, WireHeiWuMissionPage } from "./WireHeiWuMissionPage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -131,6 +132,7 @@ import { WIRE_ZHU_SHEN_JI_TAN_UNSYNCED_TOAST } from "../net/protocol/wireZhuShen
 import { WIRE_MID_FOOD_UNSYNCED_TOAST } from "../net/protocol/wireMidFood";
 import { WIRE_QIU_SHANG_MING_YUE_UNSYNCED_TOAST } from "../net/protocol/wireQiuShangMingYue";
 import { WIRE_WAN_SHENG_LOTTERY_UNSYNCED_TOAST } from "../net/protocol/wireWanShengLottery";
+import { WIRE_HEI_WU_MISSION_UNSYNCED_TOAST } from "../net/protocol/wireHeiWuMission";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -244,6 +246,7 @@ const ZHU_SHEN_JI_TAN_FILL = new Color(104, 56, 152, 255);
 const MID_FOOD_FILL = new Color(168, 96, 72, 255);
 const QIU_SHANG_MING_YUE_FILL = new Color(176, 132, 88, 255);
 const WAN_SHENG_LOTTERY_FILL = new Color(196, 92, 40, 255);
+const HEI_WU_MISSION_FILL = new Color(120, 48, 72, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -304,6 +307,7 @@ export class MainApp extends Component {
   private midFood: WireMidFoodPage | null = null;
   private qiuShangMingYue: WireQiuShangMingYuePage | null = null;
   private wanShengLottery: WireWanShengLotteryPage | null = null;
+  private heiWuMission: WireHeiWuMissionPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -447,6 +451,8 @@ export class MainApp extends Component {
     this.qiuShangMingYue = null;
     this.wanShengLottery?.dispose();
     this.wanShengLottery = null;
+    this.heiWuMission?.dispose();
+    this.heiWuMission = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -560,7 +566,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "zhuShenJiTan" || id === "midFood" || id === "qiuShangMingYue" || id === "wanShengLottery" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "zhuShenJiTan" || id === "midFood" || id === "qiuShangMingYue" || id === "wanShengLottery" || id === "heiWuMission" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -652,6 +658,7 @@ export class MainApp extends Component {
     if (id === "midFood") return this.mountMidFood();
     if (id === "qiuShangMingYue") return this.mountQiuShangMingYue();
     if (id === "wanShengLottery") return this.mountWanShengLottery();
+    if (id === "heiWuMission") return this.mountHeiWuMission();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -779,6 +786,7 @@ export class MainApp extends Component {
     place(createButton("赏月佳肴", () => this.openMidFood(), 160, 32, MID_FOOD_FILL, 14), page, 200, 446);
     place(createButton("秋赏明月", () => this.openQiuShangMingYue(), 160, 32, QIU_SHANG_MING_YUE_FILL, 14), page, -200, 446);
     place(createButton("万圣抽奖", () => this.openWanShengLottery(), 160, 32, WAN_SHENG_LOTTERY_FILL, 14), page, 0, 492);
+    place(createButton("黑五", () => this.openHeiWuMission(), 160, 32, HEI_WU_MISSION_FILL, 14), page, -200, 492);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -1005,6 +1013,7 @@ export class MainApp extends Component {
     if (id === "midFood") return this.blockWireMidFood();
     if (id === "qiuShangMingYue") return this.blockWireQiuShangMingYue();
     if (id === "wanShengLottery") return this.blockWireWanShengLottery();
+    if (id === "heiWuMission") return this.blockWireHeiWuMission();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -1444,11 +1453,19 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 75901 就停在主城。空包体也算同步。不重复拉 75801。不发 75902。不发 75903。不发 75904。不夹发 75931、75932。不夹发 75941–75944。不做 76001。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是秋赏明月 75801。不是赏月佳肴 75131。5001、51001、68001、70001 已有，勿重复。75801、75131、75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。75801 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  /** 没收到过 s2c 75901 就停在主城。空包体也算同步。不重复拉 75801。不发 75902。不发 75903。不发 75904。不夹发 75931、75932。不夹发 75941–75944。76001 黑五活动另帧，挂在其后，勿合并。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是秋赏明月 75801。不是赏月佳肴 75131。5001、51001、68001、70001 已有，勿重复。75801、75131、75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。75801 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
   private blockWireWanShengLottery(): boolean {
     if (Session.source === "wire" && WireSession.hasWanShengLottery()) return false;
     GameLog.shared.info("MainApp", "wire wan sheng lottery unsynced");
     this.shell?.showToast(WIRE_WAN_SHENG_LOTTERY_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 76001 就停在主城。空包体也算同步。不重复拉 75901。不发 76002。不发 76003。不发 76004。不发 76005。不夹发 76021、76022。不做 76101。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是万圣抽奖 75901。不是秋赏明月 75801。5001、51001、68001、70001 已有，勿重复。75901、75801、75131、75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。75901 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireHeiWuMission(): boolean {
+    if (Session.source === "wire" && WireSession.hasHeiWuMission()) return false;
+    GameLog.shared.info("MainApp", "wire hei wu mission unsynced");
+    this.shell?.showToast(WIRE_HEI_WU_MISSION_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -2735,7 +2752,7 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 真服万圣抽奖。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 select_info、lottery_reward、lottery_count、lottery_best_remaining_count、last_lottery_id。无选档、无抽奖、无领次数奖入口。不重复拉 75801。不发 75902。不发 75903。不发 75904。不夹发 75931、75932。不夹发 75941–75944。不做 76001。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是秋赏明月 75801。不是赏月佳肴 75131。5001、51001、68001、70001 已有，勿重复。75801、75131、75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 75801 分开发，勿合并。不并入 75801。本刀不重复拉 75801，也不重复拉 75131，也不重复拉 75121，也不重复拉 75101，也不重复拉 76542，也不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  /** 真服万圣抽奖。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 select_info、lottery_reward、lottery_count、lottery_best_remaining_count、last_lottery_id。无选档、无抽奖、无领次数奖入口。不重复拉 75801。不发 75902。不发 75903。不发 75904。不夹发 75931、75932。不夹发 75941–75944。76001 黑五活动另帧，挂在其后，勿合并。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是秋赏明月 75801。不是赏月佳肴 75131。5001、51001、68001、70001 已有，勿重复。75801、75131、75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 75801 分开发，勿合并。不并入 75801。本刀不重复拉 75801，也不重复拉 75131，也不重复拉 75121，也不重复拉 75101，也不重复拉 76542，也不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
   private openWanShengLottery(): void {
     GameLog.shared.info("MainApp", "click wan sheng lottery");
     if (this.blockWirePage("wanShengLottery")) return;
@@ -2755,6 +2772,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.wanShengLottery = page;
+    return page.node;
+  }
+
+  /** 真服黑五活动。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 mission、mission_box_reward_record、mission_reward_count、buy。无领任务奖、无进度写、无领任务箱、无购礼包入口。不重复拉 75901。不发 76002。不发 76003。不发 76004。不发 76005。不夹发 76021、76022。不做 76101。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是万圣抽奖 75901。不是秋赏明月 75801。5001、51001、68001、70001 已有，勿重复。75901、75801、75131、75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 75901 分开发，勿合并。不并入 75901。本刀不重复拉 75901，也不重复拉 75801，也不重复拉 75131，也不重复拉 75121，也不重复拉 75101，也不重复拉 76542，也不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  private openHeiWuMission(): void {
+    GameLog.shared.info("MainApp", "click hei wu mission");
+    if (this.blockWirePage("heiWuMission")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("heiWuMission");
+    this.refreshChrome();
+  }
+
+  private mountHeiWuMission(): Node {
+    this.heiWuMission?.dispose();
+    const page = buildWireHeiWuMissionPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.heiWuMission = page;
     return page.node;
   }
 
@@ -3645,6 +3685,10 @@ export class MainApp extends Component {
     if (id === "wanShengLottery") {
       this.wanShengLottery?.dispose();
       this.wanShengLottery = null;
+    }
+    if (id === "heiWuMission") {
+      this.heiWuMission?.dispose();
+      this.heiWuMission = null;
     }
     if (id === "bag") {
       this.bag?.dispose();
