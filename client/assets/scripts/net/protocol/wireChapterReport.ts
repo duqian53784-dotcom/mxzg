@@ -50,10 +50,10 @@ export const WIRE_CHAPTER_REPORT_ABSENT = "未带";
 export const WIRE_CHAPTER_REPORT_NO_REPORT = "没有 report";
 
 export const WIRE_CHAPTER_REPORT_NOTE =
-  "主线页「挂机战报」发 c2s 3006（GReqChapterReport，chapterIdx=1、firstPos=1 整帧 08000000be0b000008011001）。不是空帧。战斗链是 …→3012→3006。3102 挂在其后，不从本帧自动发。须已有 3007。不重发 3012、3010、3001、3007、3004、3099、3101、18001、3203。不发 3002、3005、3008、3011。硬禁 3013。3102 另帧，不从本帧自动发。硬禁 4601、29001。不把 Mock 1201/1202 当真服。report 走 3001 的 decodeWireBattleReport，rounds 走 planWireSpineReplay。不进 pullIdle，不夹活动号。缺字段不写成 0。空包体是已同步空表。未同步 Toast「真服未同步」。不回落 Mock。不写 receiveReward，不推进 chapterId，不落库。不写金币，不写钻石。不改 Boot";
+  "主线页「挂机战报」发 c2s 3006（GReqChapterReport，chapterIdx=1、firstPos=1 整帧 08000000be0b000008011001）。不是空帧。战斗链是 …→3012→3006。3102 挂在其后，不从本帧自动发。3004 空壳另帧挂在其后，不从本帧自动发。须已有 3007。不重发 3012、3010、3001、3007、3004、3099、3101、18001、3203。不发 3002、3005、3008、3011。硬禁 3013。3102 另帧，不从本帧自动发。硬禁 4601、29001。不把 Mock 1201/1202 当真服。report 走 3001 的 decodeWireBattleReport，rounds 走 planWireSpineReplay。不进 pullIdle，不夹活动号。缺字段不写成 0。空包体是已同步空表。未同步 Toast「真服未同步」。不回落 Mock。不写 receiveReward，不推进 chapterId，不落库。不写金币，不写钻石。不改 Boot";
 
 export const WIRE_CHAPTER_REPORT_SIDE_EFFECT =
-  "只 invoke battle(HANG_UP) 计算。不写 receiveReward，不推进 chapterId，不落库。无领奖，无扣费。胜了不回拉 3007。带 chapterIdx 和 firstPos，不是空帧，挂在已合 3012 之后，主线页点「挂机战报」才发。不重发 3012。不重发 3001。不进 pullIdle。不发 3002。不发 3005。不发 3008、3011。硬禁 3013。3102 另帧，不从本帧自动发。不重发 3007、3004、3010、3099、3101、18001、3203。硬禁 4601、29001";
+  "只 invoke battle(HANG_UP) 计算。不写 receiveReward，不推进 chapterId，不落库。无领奖，无扣费。胜了不回拉 3007。带 chapterIdx 和 firstPos，不是空帧，挂在已合 3012 之后，主线页点「挂机战报」才发。不重发 3012。不重发 3001。不进 pullIdle。不发 3002。不发 3005。不发 3008、3011。硬禁 3013。3102 另帧，不从本帧自动发。3004 空壳另帧，不从本帧自动发。不重发 3007、3004、3010、3099、3101、18001、3203。硬禁 4601、29001";
 
 /** 本刀不编码这些号。3005 / 3004 / 3001 / 3010 / 3012 / 3007 已有自己的帧，由战斗链断言不重发。3013 硬禁。 */
 export const WIRE_CHAPTER_REPORT_BANNED_CMDS = [

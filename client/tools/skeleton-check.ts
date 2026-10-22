@@ -605,8 +605,14 @@ import {
   decodeWireIdle,
   decodeWireIdleClaim,
   formatWireIdle,
+  formatWireIdleProbe,
   WIRE_IDLE_CLAIM_CMD,
   WIRE_IDLE_CMD,
+  WIRE_IDLE_FRAME,
+  WIRE_IDLE_PROBE_BANNED_CMDS,
+  WIRE_IDLE_PROBE_NOTE,
+  WIRE_IDLE_PROBE_SIDE_EFFECT,
+  WIRE_IDLE_PROBE_UNSYNCED_TOAST,
   wireIdleHasTime,
 } from "../assets/scripts/net/protocol/wireIdle";
 import { decodeWireRole, WIRE_ROLE_CMD } from "../assets/scripts/net/protocol/wireProfile";
@@ -16278,6 +16284,62 @@ async function checkWs(): Promise<void> {
     assert(idleMaxUnix.duration.indexOf("上限未同步") >= 0, "unix max is not a duration cap");
     assert(decodeWireIdle(new Uint8Array(0)) === null, "empty 3004 ignored");
     assert(decodeWireIdle(new Uint8Array([0x80])) === null, "bad 3004 ignored");
+    assert(
+      idleBoth !== null &&
+        formatWireIdleProbe(idleBoth).indexOf("reward_time 1792464848") >= 0 &&
+        formatWireIdleProbe(idleBoth).indexOf("max_reward_time 28800") >= 0,
+      "3004 probe shows reward_time and max_reward_time"
+    );
+    assert(
+      idleZero !== null && formatWireIdleProbe(idleZero).indexOf("reward_time 0") >= 0 && formatWireIdleProbe(idleZero).indexOf("max_reward_time 未带") >= 0,
+      "3004 probe keeps a present zero and does not invent max_reward_time"
+    );
+    assert(formatWireIdleProbe(null) === "挂机奖励 " + WIRE_IDLE_PROBE_UNSYNCED_TOAST, "unsynced 3004 probe toast text");
+    assert(WIRE_IDLE_FRAME === "04000000bc0b0000" && bytesToHex(encodeFrame(WireCmd.chapterItemList)) === WIRE_IDLE_FRAME, "3004 empty shell constant is bc 0b");
+    assert(bytesToHex(encodeFrame(3005)) === "04000000bd0b0000" && bytesToHex(encodeFrame(3005)) !== WIRE_IDLE_FRAME, "3005 is not the 3004 empty shell");
+    assert(bytesToHex(encodeFrame(3006)) !== WIRE_IDLE_FRAME && bytesToHex(encodeFrame(3007)) !== WIRE_IDLE_FRAME, "3006 and 3007 are not the 3004 shell");
+    assert(
+      WIRE_IDLE_PROBE_NOTE.indexOf("04000000bc0b0000") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("bc 0b 00 00") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("reward_time") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("max_reward_time") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("3006") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("不进 pullIdle") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("不从 3006 自动接") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("不领取") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("不落库") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("无扣费") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("不推进 chapterId") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("3005") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("3002") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("3008") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("3011") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("3013") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("4601") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("29001") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("1201") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("1202") >= 0 &&
+        WIRE_IDLE_PROBE_NOTE.indexOf("不改 Boot") >= 0 &&
+        WIRE_IDLE_PROBE_SIDE_EFFECT.indexOf("只读挂机奖励列表") >= 0 &&
+        WIRE_IDLE_PROBE_SIDE_EFFECT.indexOf("不领取") >= 0 &&
+        WIRE_IDLE_PROBE_SIDE_EFFECT.indexOf("不落库") >= 0 &&
+        WIRE_IDLE_PROBE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+        WIRE_IDLE_PROBE_SIDE_EFFECT.indexOf("不推进 chapterId") >= 0 &&
+        WIRE_IDLE_PROBE_SIDE_EFFECT.indexOf("04000000bc0b0000") >= 0 &&
+        WIRE_IDLE_PROBE_SIDE_EFFECT.indexOf("不进 pullIdle") >= 0 &&
+        WIRE_IDLE_PROBE_SIDE_EFFECT.indexOf("不写 Session.stageId") >= 0 &&
+        WIRE_IDLE_PROBE_SIDE_EFFECT.indexOf("3005") >= 0,
+      "3004 probe note names the empty shell, reward_time, max_reward_time, and the banned cmds"
+    );
+    for (let idleBan = 0; idleBan < WIRE_IDLE_PROBE_BANNED_CMDS.length; idleBan++) {
+      assert(encodeWireMessage({ cmd: WIRE_IDLE_PROBE_BANNED_CMDS[idleBan] }) === null, WIRE_IDLE_PROBE_BANNED_CMDS[idleBan] + " stays off the 3004 probe");
+    }
+    const idleShell = encodeWireMessage({ cmd: "wire.3004" });
+    assert(
+      idleShell !== null && idleShell.cmdId === 3004 && bytesToHex(idleShell.bytes) === WIRE_IDLE_FRAME && idleShell.note === "空体",
+      "3004 probe reuses the empty login frame"
+    );
+    assert(encodeWireMessage({ cmd: "wire.3005" }) !== null, "3005 stays encoded by its own module and is not reissued as 3004");
     const idleClaim = decodeWireIdleClaim(fieldVarint(1, 1792468000));
     assert(idleClaim !== null && idleClaim.rewardTime === 1792468000, "3005 field 1");
     const idleClaimOther = decodeWireIdleClaim(fieldVarint(2, 3));
@@ -16436,6 +16498,16 @@ async function checkWs(): Promise<void> {
       assert(
         WireSession.rewardTime === 1792464848 && WireSession.maxRewardTime === 28800 && WireSession.hasIdle(),
         "flush writes 3004 times"
+      );
+      assert(
+        WireSession.idleProbe !== null &&
+          WireSession.idleProbe.rewardTime === 1792464848 &&
+          WireSession.idleProbe.maxRewardTime === 28800 &&
+          formatWireIdleProbe(WireSession.idleProbe).indexOf("reward_time 1792464848") >= 0 &&
+          formatWireIdleProbe(WireSession.idleProbe).indexOf("max_reward_time 28800") >= 0 &&
+          Session.gold === 0 &&
+          Session.stageId === 1,
+        "flush shows 3004 reward_time and max_reward_time without writing gold or stage"
       );
       assert(Session.gold === 0 && Session.stageId === 1, "3004 does not write gold or stage");
       assert(
@@ -16861,6 +16933,14 @@ async function checkWs(): Promise<void> {
       );
       roleSockets[0].push(encodeFrame(WireCmd.chapterItemList, fieldVarint(2, 7200)));
       assert(WireSession.rewardTime === 1792464848 && WireSession.maxRewardTime === 7200, "later max keeps reward_time");
+      assert(
+        WireSession.idleProbe !== null &&
+          WireSession.idleProbe.maxRewardTime === 7200 &&
+          WireSession.idleProbe.rewardTime === null &&
+          formatWireIdleProbe(WireSession.idleProbe).indexOf("reward_time 未带") >= 0 &&
+          formatWireIdleProbe(WireSession.idleProbe).indexOf("max_reward_time 7200") >= 0,
+        "later 3004 max updates the probe without inventing reward_time"
+      );
       assert(Session.gold === 40, "3004 stays off the wallet");
       lines.length = 0;
       assert(WireSession.claimIdle(), "claim uses the open socket");
@@ -16869,6 +16949,14 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "发送 c2s 3005"), "idle claim is logged");
       roleSockets[0].push(encodeFrame(WireCmd.chapterItemReward, fieldVarint(1, 1792468000)));
       assert(WireSession.rewardTime === 1792468000 && WireSession.maxRewardTime === 7200, "3005 updates reward_time only");
+      assert(
+        WireSession.idleProbe !== null &&
+          WireSession.idleProbe.maxRewardTime === 7200 &&
+          WireSession.idleProbe.rewardTime === null &&
+          Session.gold === 40 &&
+          Session.diamond === 0,
+        "3005 does not replace the 3004 probe or pay the wallet"
+      );
       assert(Session.gold === 40 && Session.diamond === 0, "3005 does not pay the wallet");
       assert(WireSession.claimNote.indexOf("金币不改") >= 0 && WireSession.claimSerial === 1, "3005 note skips rewards");
       roleSockets[0].push(encodeFrame(WireCmd.chapterItemReward, fieldVarint(2, 9)));
@@ -17140,9 +17228,10 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.pullPreComputeStrength(), "3103 does not send without 3007 idx");
       assert(!WireSession.pullStudy(0, 2, 1), "3030 does not send without 3007 idx");
       assert(!WireSession.pullChapterProbe(), "3007 probe does not send without an idx");
+      assert(!WireSession.pullIdleProbe(), "3004 probe does not send without an idx");
       WireSession.nowIdx = savedNow;
       WireSession.maxIdx = savedMax;
-      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102, 3103, 3030 or another 3007 on the wire");
+      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102, 3103, 3030, another 3007 or 3004 on the wire");
       const sentBeforeQuick = roleSockets[0].sent.length;
       const goldBeforeQuick = Session.gold;
       const quickSentBefore = roleSockets[0].sent.length;
@@ -17223,7 +17312,51 @@ async function checkWs(): Promise<void> {
         WireSession.chapterReport !== null && WireSession.chapterReport.report !== null && WireSession.chapterReport.report.rounds.length === reportBeforeOther,
         "3005, 3013 and mock 1201 do not replace the 3006 report"
       );
-      assert(roleSockets[0].sent.length === sentBeforeReport + 1, "3006 reply does not auto-chain 3102");
+      assert(roleSockets[0].sent.length === sentBeforeReport + 1, "3006 reply does not auto-chain 3102 or 3004");
+      const sentBeforeIdleProbe = roleSockets[0].sent.length;
+      const goldBeforeIdleProbe = Session.gold;
+      const stageBeforeIdleProbe = Session.stageId;
+      const nowBeforeIdleProbe = WireSession.nowIdx;
+      const maxBeforeIdleProbe = WireSession.maxIdx;
+      const reportBeforeIdleProbe = WireSession.chapterReport;
+      assert(WireSession.pullIdleProbe(), "3004 probe pulls after 3006 when idx is present");
+      assert(roleSockets[0].sent.length === sentBeforeIdleProbe + 1, "3004 probe is one frame and does not resend 3006, 3005 or 3102");
+      const idleProbeSent = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeIdleProbe] as ArrayBuffer));
+      assert(
+        idleProbeSent === "04000000bc0b0000" && idleProbeSent !== "04000000bd0b0000" && idleProbeSent !== "08000000be0b000008011001",
+        "3004 probe is the empty shell after the merged 3006 slot and is not 3005 or 3006"
+      );
+      assert(Session.gold === goldBeforeIdleProbe && Session.diamond === 0 && Session.stageId === stageBeforeIdleProbe, "sending 3004 does not write gold, diamond or stage");
+      roleSockets[0].push(encodeFrame(WireCmd.chapterItemList, concatBytes(fieldVarint(1, 1792469000), fieldVarint(2, 0))));
+      assert(
+        WireSession.idleProbe !== null &&
+          WireSession.idleProbe.rewardTime === 1792469000 &&
+          WireSession.idleProbe.maxRewardTime === 0 &&
+          formatWireIdleProbe(WireSession.idleProbe).indexOf("reward_time 1792469000") >= 0 &&
+          formatWireIdleProbe(WireSession.idleProbe).indexOf("max_reward_time 0") >= 0 &&
+          WireSession.nowIdx === nowBeforeIdleProbe &&
+          WireSession.maxIdx === maxBeforeIdleProbe &&
+          WireSession.chapterReport === reportBeforeIdleProbe &&
+          Session.gold === goldBeforeIdleProbe &&
+          Session.stageId === stageBeforeIdleProbe &&
+          roleSockets[0].sent.length === sentBeforeIdleProbe + 1,
+        "3004 probe shows reward_time and max_reward_time and does not persist or advance"
+      );
+      roleSockets[0].push(encodeFrame(3005));
+      roleSockets[0].push(encodeFrame(3002, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3008, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3011, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3013, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 1)));
+      assert(
+        WireSession.idleProbe !== null &&
+          WireSession.idleProbe.rewardTime === 1792469000 &&
+          WireSession.idleProbe.maxRewardTime === 0 &&
+          WireSession.chapterReport === reportBeforeIdleProbe &&
+          roleSockets[0].sent.length === sentBeforeIdleProbe + 1,
+        "3005, 3002, 3008, 3011, 3013, 4601 and 29001 do not replace the 3004 probe or send another frame"
+      );
       const sentBeforeFetch = roleSockets[0].sent.length;
       const goldBeforeFetch = Session.gold;
       const nowBeforeFetch = WireSession.nowIdx;

@@ -6,6 +6,9 @@
  * 「挑战」在本页，发空 c2s 3001。已领首通在本页只读展示，打开时拉空 c2s 3010。
  * 快速战斗次数在本页只读展示，3010 之后再拉空 c2s 3012。不发 3013。
  * 「挂机战报」在本页，发 c2s 3006（chapterIdx、firstPos，不是空帧）。不发 3005。
+ * 「挂机奖励」在本页，再发空 c2s 3004（GReqChapterItemList 无字段，整帧 04000000bc0b0000）。
+ * 展示 reward_time、max_reward_time。不播 spine。不领取。
+ * 挂在已合 3006 之后，按钮在「挂机战报」旁边。不从 3006 自动接。
  * 「请求战报」在本页，发 c2s 3102（battle_id、type，不是空壳）。不从 3001 或 3006 自动接。
  * 3001 / 3006 的战报不落库，拿它们的 battle_id 常回 BATTLE_REPORT_TIMEOUT。
  * 「切磋」在本页，发 c2s 3030（type、opponent_id、server_id，不是空壳）。opponent_id 不预填。
@@ -54,6 +57,10 @@ import {
   formatWireChapterReport,
   WIRE_CHAPTER_REPORT_UNSYNCED_TOAST,
 } from "../net/protocol/wireChapterReport";
+import {
+  formatWireIdleProbe,
+  WIRE_IDLE_PROBE_UNSYNCED_TOAST,
+} from "../net/protocol/wireIdle";
 import {
   formatWireBattleReport,
   readWireBattleReportQuery,
@@ -109,7 +116,7 @@ export interface WireMainlinePage {
 }
 
 type Phase = "info" | "battle" | "done";
-type WaitKind = "3001" | "3006" | "3102" | "3103" | "3030" | "3007";
+type WaitKind = "3001" | "3006" | "3102" | "3103" | "3030" | "3007" | "3004";
 
 export function buildWireMainlinePage(host: WireMainlineHost): WireMainlinePage {
   return new WireMainlineController(host);
@@ -129,6 +136,7 @@ class WireMainlineController implements WireMainlinePage {
   private seenPreComputeSerial = 0;
   private seenStudySerial = 0;
   private seenChapterProbeSerial = 0;
+  private seenIdleProbeSerial = 0;
   private chapterIdx = 1;
   private firstPos = 1;
   private battleId = "1";
@@ -153,6 +161,7 @@ class WireMainlineController implements WireMainlinePage {
   private fetchLabel: Node | null = null;
   private studyLabel: Node | null = null;
   private chapterProbeLabel: Node | null = null;
+  private idleProbeLabel: Node | null = null;
   private strengthLabel: Node | null = null;
   private battleIdField: TextField | null = null;
   private reportTypeField: TextField | null = null;
@@ -188,6 +197,7 @@ class WireMainlineController implements WireMainlinePage {
     this.seenBattleReportSerial = WireSession.battleReportSerial;
     this.seenStudySerial = WireSession.studySerial;
     this.seenChapterProbeSerial = WireSession.chapterProbeSerial;
+    this.seenIdleProbeSerial = WireSession.idleProbeSerial;
     this.showInfo();
     if (!WireSession.hasChapterReward()) this.host.showToast(WIRE_CHAPTER_REWARD_UNSYNCED_TOAST);
     WireSession.pullChapterRewardList();
@@ -302,6 +312,15 @@ class WireMainlineController implements WireMainlinePage {
       this.write(this.statusLabel, this.statusText());
       return;
     }
+    if (this.waitKind === "3004") {
+      if (WireSession.idleProbeSerial === this.seenIdleProbeSerial) return;
+      this.seenIdleProbeSerial = WireSession.idleProbeSerial;
+      this.waiting = false;
+      this.waitKind = null;
+      this.write(this.idleProbeLabel, this.idleProbeText());
+      this.write(this.statusLabel, this.statusText());
+      return;
+    }
     if (this.waitKind !== "3102") return;
     if (WireSession.battleReportSerial === this.seenBattleReportSerial) return;
     this.seenBattleReportSerial = WireSession.battleReportSerial;
@@ -336,43 +355,50 @@ class WireMainlineController implements WireMainlinePage {
     place(createButton("关+", () => this.bump("idx", 1), 88, 36, BACK_FILL), this.body, -120, -18);
     place(createButton("位-", () => this.bump("pos", -1), 88, 36, BACK_FILL), this.body, 40, -18);
     place(createButton("位+", () => this.bump("pos", 1), 88, 36, BACK_FILL), this.body, 160, -18);
-    place(createButton("挂机战报", () => this.hangupReport(), 220, 40, OPEN_FILL), this.body, 0, -62);
-    place(createLabel(WIRE_BATTLE_REPORT_TIMEOUT_NOTE, 14, { color: MUTED, width: 640, height: 40 }), this.body, 0, -106);
+    place(createButton("挂机战报", () => this.hangupReport(), 200, 40, OPEN_FILL), this.body, -140, -62);
+    place(createButton("挂机奖励", () => this.pullIdleReward(), 200, 40, OPEN_FILL), this.body, 140, -62);
+    this.idleProbeLabel = place(
+      createLabel(this.idleProbeText(), 15, { color: TITLE, width: 640, height: 28 }),
+      this.body,
+      0,
+      -104
+    );
+    place(createLabel(WIRE_BATTLE_REPORT_TIMEOUT_NOTE, 14, { color: MUTED, width: 640, height: 40 }), this.body, 0, -142);
     this.battleIdField = createField("battle_id", 280, 36, { text: this.battleId, maxLength: 64 });
-    place(this.battleIdField.node, this.body, -150, -150);
+    place(this.battleIdField.node, this.body, -150, -186);
     this.reportTypeField = createField("type", 180, 36, { text: this.reportType, maxLength: 32 });
-    place(this.reportTypeField.node, this.body, 180, -150);
-    this.fetchLabel = place(createLabel(this.fetchText(), 16, { color: MUTED, width: 640 }), this.body, 0, -188);
-    place(createButton("请求战报", () => this.fetchBattleReport(), 200, 36, OPEN_FILL), this.body, 0, -226);
-    this.studyLabel = place(createLabel(this.studyText(), 16, { color: TITLE, width: 640, height: 32 }), this.body, 0, -264);
+    place(this.reportTypeField.node, this.body, 180, -186);
+    this.fetchLabel = place(createLabel(this.fetchText(), 16, { color: MUTED, width: 640 }), this.body, 0, -224);
+    place(createButton("请求战报", () => this.fetchBattleReport(), 200, 36, OPEN_FILL), this.body, 0, -262);
+    this.studyLabel = place(createLabel(this.studyText(), 16, { color: TITLE, width: 640, height: 32 }), this.body, 0, -300);
     this.studyTypeField = createField("type", 100, 36, { text: this.studyType, maxLength: 8 });
-    place(this.studyTypeField.node, this.body, -250, -304);
+    place(this.studyTypeField.node, this.body, -250, -340);
     this.studyServerField = createField("server_id", 140, 36, { text: this.studyServer, maxLength: 12 });
-    place(this.studyServerField.node, this.body, -40, -304);
+    place(this.studyServerField.node, this.body, -40, -340);
     this.studyOpponentField = createField("opponent_id", 200, 36, { text: this.studyOpponent, maxLength: 24 });
-    place(this.studyOpponentField.node, this.body, 190, -304);
-    place(createButton("切磋", () => this.studySpar(), 140, 36, OPEN_FILL), this.body, -120, -348);
-    place(createButton("再拉 3102", () => this.fetchPersistedReport(), 160, 36, BACK_FILL), this.body, 120, -348);
-    place(createLabel(WIRE_STUDY_PROBE_NOTE, 14, { color: MUTED, width: 640, height: 32 }), this.body, 0, -384);
-    this.strengthLabel = place(createLabel(this.strengthText(), 16, { color: TITLE, width: 640, height: 32 }), this.body, 0, -416);
+    place(this.studyOpponentField.node, this.body, 190, -340);
+    place(createButton("切磋", () => this.studySpar(), 140, 36, OPEN_FILL), this.body, -120, -384);
+    place(createButton("再拉 3102", () => this.fetchPersistedReport(), 160, 36, BACK_FILL), this.body, 120, -384);
+    place(createLabel(WIRE_STUDY_PROBE_NOTE, 14, { color: MUTED, width: 640, height: 32 }), this.body, 0, -420);
+    this.strengthLabel = place(createLabel(this.strengthText(), 16, { color: TITLE, width: 640, height: 32 }), this.body, 0, -452);
     this.heroIdsField = createField("hero_ids", 250, 36, { text: this.heroIdsText, maxLength: 180 });
-    place(this.heroIdsField.node, this.body, -190, -456);
+    place(this.heroIdsField.node, this.body, -190, -492);
     this.strengthTypeField = createField("type", 130, 36, { text: this.strengthType, maxLength: 32 });
-    place(this.strengthTypeField.node, this.body, 70, -456);
+    place(this.strengthTypeField.node, this.body, 70, -492);
     this.lineUpTypeField = createField("line_up", 110, 36, { text: this.lineUpTypeText, maxLength: 12 });
-    place(this.lineUpTypeField.node, this.body, 250, -456);
-    place(createButton("空壳探针", () => this.probeStrength(), 150, 36, OPEN_FILL), this.body, -220, -500);
-    place(createButton("预计算", () => this.precomputeStrength(), 140, 36, OPEN_FILL), this.body, 0, -500);
-    place(createButton("用3101", () => this.fillFromLineUp(), 140, 36, BACK_FILL), this.body, 210, -500);
+    place(this.lineUpTypeField.node, this.body, 250, -492);
+    place(createButton("空壳探针", () => this.probeStrength(), 150, 36, OPEN_FILL), this.body, -220, -536);
+    place(createButton("预计算", () => this.precomputeStrength(), 140, 36, OPEN_FILL), this.body, 0, -536);
+    place(createButton("用3101", () => this.fillFromLineUp(), 140, 36, BACK_FILL), this.body, 210, -536);
     this.chapterProbeLabel = place(
       createLabel(this.chapterProbeText(), 15, { color: TITLE, width: 640, height: 32 }),
       this.body,
       0,
-      -540
+      -576
     );
-    place(createButton("关卡数据", () => this.pullChapterData(), 160, 36, OPEN_FILL), this.body, -160, -578);
-    place(createButton("挑战", () => this.challenge(), 160, 36, OPEN_FILL), this.body, 140, -578);
-    place(createButton("返回", () => this.host.close(), 200, 36, BACK_FILL), this.body, 0, -618);
+    place(createButton("关卡数据", () => this.pullChapterData(), 160, 36, OPEN_FILL), this.body, -160, -614);
+    place(createButton("挑战", () => this.challenge(), 160, 36, OPEN_FILL), this.body, 140, -614);
+    place(createButton("返回", () => this.host.close(), 200, 36, BACK_FILL), this.body, 0, -654);
   }
 
   private renderInfo(): void {
@@ -387,7 +413,29 @@ class WireMainlineController implements WireMainlinePage {
     this.write(this.studyLabel, this.studyText());
     this.write(this.strengthLabel, this.strengthText());
     this.write(this.chapterProbeLabel, this.chapterProbeText());
+    this.write(this.idleProbeLabel, this.idleProbeText());
     if (!this.waiting) this.write(this.statusLabel, this.statusText());
+  }
+
+  private pullIdleReward(): void {
+    if (this.disposed || this.phase === "battle" || this.waiting) return;
+    if (!this.host.connected()) {
+      this.host.showToast(errorText(ErrorCode.NET_NOT_CONNECTED));
+      return;
+    }
+    if (!WireSession.hasChapter()) {
+      this.host.showToast(WIRE_IDLE_PROBE_UNSYNCED_TOAST);
+      return;
+    }
+    this.seenIdleProbeSerial = WireSession.idleProbeSerial;
+    if (!WireSession.pullIdleProbe()) {
+      this.host.showToast(WIRE_IDLE_PROBE_UNSYNCED_TOAST);
+      return;
+    }
+    this.waitKind = "3004";
+    this.waiting = true;
+    this.write(this.statusLabel, "已发 3004 空壳，等待挂机奖励");
+    GameLog.shared.info("Mainline", "wire idle reward 3004 empty");
   }
 
   private pullChapterData(): void {
@@ -775,6 +823,10 @@ class WireMainlineController implements WireMainlinePage {
     return formatWireChapterProbe(WireSession.chapterProbe);
   }
 
+  private idleProbeText(): string {
+    return formatWireIdleProbe(WireSession.idleProbe);
+  }
+
   private studyText(): string {
     const base = formatWireStudy(WireSession.study);
     if (!this.persistedBattleId) return base;
@@ -902,6 +954,7 @@ class WireMainlineController implements WireMainlinePage {
     this.fetchLabel = null;
     this.studyLabel = null;
     this.chapterProbeLabel = null;
+    this.idleProbeLabel = null;
     this.battleIdField = null;
     this.reportTypeField = null;
     this.studyTypeField = null;

@@ -88,8 +88,12 @@ export const WireCmd = {
    */
   study: 3030,
   /**
-   * c2s 空体。Battle.proto 的 GReqChapterItemList。进主城、空 c2s 3007 之后发。
-   * s2c 回 reward_time / max_reward_time。不是占位 idle.query（1301）。
+   * c2s 空体。Battle.proto 的 GReqChapterItemList。3004 = 0x0BBC，小端 bc 0b 00 00。
+   * 整帧 `04 00 00 00 bc 0b 00 00`。GReq 没有字段。
+   * 进主城、空 c2s 3007 之后发一次。主线页点「挂机奖励」再发同一空帧，挂在已合 3006 之后。
+   * 不从 3006 自动接。不进 pullIdle 的加发。不发 3005。
+   * s2c 是 GResChapterItemList，回 reward_time / max_reward_time。只读，不落库。
+   * 不是占位 idle.query（1301）。
    */
   chapterItemList: 3004,
   /**
