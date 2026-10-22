@@ -1102,9 +1102,15 @@ import {
   decodeWireFormation,
   formatWireFormationHead,
   formatWireFormationLine,
+  formatWireFormationProbe,
   WIRE_FORMATION_CMD,
   WIRE_FORMATION_EMPTY,
   WIRE_FORMATION_FIELD_NOTE,
+  WIRE_FORMATION_FRAME,
+  WIRE_FORMATION_PROBE_BANNED_CMDS,
+  WIRE_FORMATION_PROBE_NOTE,
+  WIRE_FORMATION_PROBE_SIDE_EFFECT,
+  WIRE_FORMATION_PROBE_UNSYNCED_TOAST,
   WIRE_FORMATION_READONLY_NOTE,
   WIRE_FORMATION_READONLY_TITLE,
   WIRE_FORMATION_SIDE_EFFECT,
@@ -9142,6 +9148,79 @@ async function checkWs(): Promise<void> {
       bytesToHex(encodeFrame(3099)).indexOf("5f270100") < 0,
     "3099 empty frame carries 1b 0c 00 00 and not the 28107 or 75615 cmd byte"
   );
+  const emptyFormationProbe = decodeWireFormation(new Uint8Array(0));
+  assert(
+    emptyFormationProbe !== null &&
+      formatWireFormationProbe(emptyFormationProbe).indexOf("unlockIds 空") >= 0 &&
+      formatWireFormationProbe(emptyFormationProbe).indexOf("unlockIds=0") < 0,
+    "3099 probe shows an empty unlockIds list and does not invent zero"
+  );
+  assert(formatWireFormationProbe(null) === "查询阵法 " + WIRE_FORMATION_PROBE_UNSYNCED_TOAST, "unsynced 3099 probe toast text");
+  assert(WIRE_FORMATION_FRAME === "040000001b0c0000" && bytesToHex(encodeFrame(WireCmd.formation)) === WIRE_FORMATION_FRAME, "3099 empty shell constant is 1b 0c");
+  assert(bytesToHex(encodeFrame(3098)) === "040000001a0c0000" && bytesToHex(encodeFrame(3098)) !== WIRE_FORMATION_FRAME, "3098 is not the 3099 empty shell");
+  assert(bytesToHex(encodeFrame(3100)) === "040000001c0c0000" && bytesToHex(encodeFrame(3100)) !== WIRE_FORMATION_FRAME, "3100 is not the 3099 empty shell");
+  assert(bytesToHex(encodeFrame(3101)) !== WIRE_FORMATION_FRAME && bytesToHex(encodeFrame(3020)) !== WIRE_FORMATION_FRAME, "3101 and 3020 are not the 3099 shell");
+  assert(
+    WIRE_FORMATION_PROBE_NOTE.indexOf("040000001b0c0000") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("1b 0c 00 00") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("unlockIds") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("GResQueryFormation") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3101") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3007") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3102") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3103") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3030") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("不进 pullIdle") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("不从 3001") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("不落库") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("无扣费") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("不改阵法") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3098") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3100") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3020") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3002") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3005") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3008") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3011") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("3013") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("4601") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("29001") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("1201") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("1202") >= 0 &&
+      WIRE_FORMATION_PROBE_NOTE.indexOf("不改 Boot") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("只读查询阵法") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("unlockIds") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("不落库") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("不改阵法") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("040000001b0c0000") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("不进 pullIdle") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("3098") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("3100") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("3020") >= 0 &&
+      WIRE_FORMATION_PROBE_SIDE_EFFECT.indexOf("不写 Session.stageId") >= 0,
+    "3099 probe note names the empty shell, unlockIds, and the banned cmds"
+  );
+  for (let formationBan = 0; formationBan < WIRE_FORMATION_PROBE_BANNED_CMDS.length; formationBan++) {
+    assert(encodeWireMessage({ cmd: WIRE_FORMATION_PROBE_BANNED_CMDS[formationBan] }) === null, WIRE_FORMATION_PROBE_BANNED_CMDS[formationBan] + " stays off the 3099 probe");
+  }
+  const formationShell = encodeWireMessage({ cmd: "wire.3099" });
+  assert(
+    formationShell !== null && formationShell.cmdId === 3099 && bytesToHex(formationShell.bytes) === WIRE_FORMATION_FRAME && formationShell.note === "空体",
+    "3099 probe reuses the empty login frame"
+  );
+  const formationProbeIds = decodeWireFormation(concatBytes(concatBytes(fieldVarint(1, 9), fieldVarint(1, 0)), fieldVarint(1, 8)));
+  assert(
+    formationProbeIds !== null &&
+      formatWireFormationProbe(formationProbeIds).indexOf("unlockIds=9,0,8") >= 0 &&
+      formatWireFormationProbe(formationProbeIds).indexOf("unlockIds 空") < 0,
+    "3099 probe shows unlockIds in arrival order"
+  );
+  const formationProbeZero = decodeWireFormation(fieldVarint(1, 0));
+  assert(
+    formationProbeZero !== null && formatWireFormationProbe(formationProbeZero).indexOf("unlockIds=0") >= 0,
+    "3099 probe keeps a present unlock id 0"
+  );
   assert(
     WireCmd.lineUp === 3101 &&
       WireCmd.lineUp !== WireCmd.formation &&
@@ -9338,6 +9417,17 @@ async function checkWs(): Promise<void> {
       lineupPageSrc.indexOf("不接 3020") >= 0 &&
       lineupPageSrc.indexOf("3101 不走") >= 0,
     "mainline page probes empty 3101 beside the battle buttons and does not play it as a report"
+  );
+  assert(
+    lineupPageSrc.indexOf("查询阵法") >= 0 &&
+      lineupPageSrc.indexOf("pullFormationProbe") >= 0 &&
+      lineupPageSrc.indexOf("formatWireFormationProbe") >= 0 &&
+      lineupPageSrc.indexOf("不发 3098") >= 0 &&
+      lineupPageSrc.indexOf("不发 3100") >= 0 &&
+      lineupPageSrc.indexOf("不接 3020") >= 0 &&
+      lineupPageSrc.indexOf("3099 不走") >= 0 &&
+      lineupPageSrc.indexOf('createButton("查询阵法"') >= 0,
+    "mainline page probes empty 3099 beside 3101 and does not play it as a report"
   );
   assert(decodeWireLineUp(null) === null, "null 3101 body is not a snapshot");
   assert(decodeWireLineUp(new Uint8Array([0x80])) === null, "bad 3101 ignored");
@@ -17323,9 +17413,10 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.pullChapterProbe(), "3007 probe does not send without an idx");
       assert(!WireSession.pullIdleProbe(), "3004 probe does not send without an idx");
       assert(!WireSession.pullLineUpProbe(), "3101 probe does not send without an idx");
+      assert(!WireSession.pullFormationProbe(), "3099 probe does not send without an idx");
       WireSession.nowIdx = savedNow;
       WireSession.maxIdx = savedMax;
-      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102, 3103, 3030, another 3007, 3004 or 3101 on the wire");
+      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102, 3103, 3030, another 3007, 3004, 3101 or 3099 on the wire");
       const sentBeforeQuick = roleSockets[0].sent.length;
       const goldBeforeQuick = Session.gold;
       const quickSentBefore = roleSockets[0].sent.length;
@@ -17631,6 +17722,64 @@ async function checkWs(): Promise<void> {
           WireSession.lineUpSerial === serialBeforeLineUpProbe + 1 &&
           roleSockets[0].sent.length === sentBeforeLineUpProbe + 1,
         "3100, 3020, 3002, 3005, 3008, 3011, 3013, 4601 and 29001 do not replace the 3101 probe or send another frame"
+      );
+      const sentBeforeFormationProbe = roleSockets[0].sent.length;
+      const goldBeforeFormationProbe = Session.gold;
+      const stageBeforeFormationProbe = Session.stageId;
+      const nowBeforeFormationProbe = WireSession.nowIdx;
+      const maxBeforeFormationProbe = WireSession.maxIdx;
+      const serialBeforeFormationProbe = WireSession.formationSerial;
+      const lineUpBeforeFormationProbe = WireSession.lineUp;
+      assert(WireSession.pullFormationProbe(), "3099 probe pulls beside 3101 when idx is present");
+      assert(roleSockets[0].sent.length === sentBeforeFormationProbe + 1, "3099 probe is one frame and does not resend 3101, 3102, 3103, 3030 or 3001");
+      const formationProbeSent = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeFormationProbe] as ArrayBuffer));
+      assert(
+        formationProbeSent === "040000001b0c0000" &&
+          formationProbeSent !== "040000001a0c0000" &&
+          formationProbeSent !== "040000001c0c0000" &&
+          formationProbeSent !== "040000001d0c0000" &&
+          formationProbeSent.indexOf("1b0c0000") >= 0,
+        "3099 probe is the empty shell 1b 0c and is not 3098, 3100 or 3101"
+      );
+      assert(
+        Session.gold === goldBeforeFormationProbe && Session.diamond === 0 && Session.stageId === stageBeforeFormationProbe,
+        "sending 3099 does not write gold, diamond or stage"
+      );
+      roleSockets[0].push(encodeFrame(WireCmd.formation, concatBytes(concatBytes(fieldVarint(1, 9), fieldVarint(1, 0)), fieldVarint(1, 8))));
+      assert(
+        WireSession.formation !== null &&
+          WireSession.formation.unlockIds.length === 3 &&
+          WireSession.formation.unlockIds[0] === 9 &&
+          WireSession.formation.unlockIds[1] === 0 &&
+          WireSession.formation.unlockIds[2] === 8 &&
+          formatWireFormationProbe(WireSession.formation).indexOf("unlockIds=9,0,8") >= 0 &&
+          WireSession.formationSerial === serialBeforeFormationProbe + 1 &&
+          WireSession.lineUp === lineUpBeforeFormationProbe &&
+          WireSession.nowIdx === nowBeforeFormationProbe &&
+          WireSession.maxIdx === maxBeforeFormationProbe &&
+          Session.gold === goldBeforeFormationProbe &&
+          Session.stageId === stageBeforeFormationProbe &&
+          roleSockets[0].sent.length === sentBeforeFormationProbe + 1,
+        "3099 probe shows unlockIds and does not persist, advance, or replace 3101"
+      );
+      roleSockets[0].push(encodeFrame(3098, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3100, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3020, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3002, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3005));
+      roleSockets[0].push(encodeFrame(3008, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3011, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3013, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 1)));
+      assert(
+        WireSession.formation !== null &&
+          WireSession.formation.unlockIds.length === 3 &&
+          WireSession.formation.unlockIds[0] === 9 &&
+          WireSession.formationSerial === serialBeforeFormationProbe + 1 &&
+          WireSession.lineUp === lineUpBeforeFormationProbe &&
+          roleSockets[0].sent.length === sentBeforeFormationProbe + 1,
+        "3098, 3100, 3020, 3002, 3005, 3008, 3011, 3013, 4601 and 29001 do not replace the 3099 probe or send another frame"
       );
       const sentBeforeStudy = roleSockets[0].sent.length;
       const goldBeforeStudy = Session.gold;
