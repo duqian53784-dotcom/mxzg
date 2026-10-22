@@ -18,7 +18,7 @@
 
 改完 `__type__` 之后清一次 `client/library` 和 `client/temp`，再打开工程让脚本重编。新 chunk 里应是 `_RF.push({}, "c4e8aHSe2NOkI8Vai2cC0fj", "CityChromeShell")`，并且和 Prefab `__type__` 相同。
 
-自检：`python3 client/tools/check_citychrome_shell_id.py`。
+自检：`python3 client/tools/check_citychrome_shell_id.py`。全仓 Prefab / scene 另跑 `python3 client/tools/check_script_type_ids.py`，22 位脚本 `__type__` 会失败。
 
 ## 节点
 
