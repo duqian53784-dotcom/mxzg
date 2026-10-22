@@ -4,7 +4,7 @@
  * 展示 max_idx（= chapterId）、res_reward_time（= startTime）、extra_reward_id。不播 spine。
  * 挂在已合 3001 / 3010 / 3012 之后，按钮在「挑战」前面。只读，不落库。
  * 「挑战」在本页，发空 c2s 3001。和「挂机战报」同一行（y=-22），首屏可见。
- * 信息页 body 放在裁切里，可上下拖动，底栏盖住的探针能拖上来。进战和结算把 body 挪回页面根，BattlePage 不进这层裁切。
+ * 信息页 body 放在裁切里，可上下拖动，底栏盖住的探针能拖上来。拖动手势挂在已有 UITransform 的裁切节点上，关掉裁切前摘掉。进战和结算把 body 挪回页面根，BattlePage 不进这层裁切。
  * 已领首通在本页只读展示，打开时拉空 c2s 3010。
  * 快速战斗次数在本页只读展示，3010 之后再拉空 c2s 3012。不发 3013。
  * 「挂机战报」在本页，发 c2s 3006（chapterIdx、firstPos，不是空帧）。不发 3005。
@@ -249,7 +249,6 @@ class WireMainlineController implements WireMainlinePage {
     this.viewport.parent = this.node;
     this.body = uiNode("body");
     this.body.parent = this.node;
-    this.bindProbeScroll();
     this.seenSerial = WireSession.battleSerial;
     this.seenReportSerial = WireSession.chapterReportSerial;
     this.seenBattleReportSerial = WireSession.battleReportSerial;
@@ -1251,7 +1250,13 @@ class WireMainlineController implements WireMainlinePage {
     paintBattleFloats(mount, row.floats);
   }
 
+  /**
+   * 手势只挂在已有 UITransform 的裁切节点上。
+   * 引擎 _sortPointerEventProcessorList 读 trans.cameraPriority；没有 UITransform 时 trans 是 null，预览里每次指针事件都炸。
+   * 关掉裁切或换父之前先摘掉，避免处理器留在列表里。
+   */
   private bindProbeScroll(): void {
+    if (this.offScroll || !this.viewport.isValid) return;
     const onStart = () => {
       this.dragMoved = 0;
     };
@@ -1261,16 +1266,17 @@ class WireMainlineController implements WireMainlinePage {
     const onEnd = () => {
       this.endProbeDrag();
     };
-    this.node.on(Node.EventType.TOUCH_START, onStart);
-    this.node.on(Node.EventType.TOUCH_MOVE, onMove);
-    this.node.on(Node.EventType.TOUCH_END, onEnd);
-    this.node.on(Node.EventType.TOUCH_CANCEL, onEnd);
+    const target = this.viewport;
+    target.on(Node.EventType.TOUCH_START, onStart);
+    target.on(Node.EventType.TOUCH_MOVE, onMove);
+    target.on(Node.EventType.TOUCH_END, onEnd);
+    target.on(Node.EventType.TOUCH_CANCEL, onEnd);
     this.offScroll = () => {
-      if (!this.node.isValid) return;
-      this.node.off(Node.EventType.TOUCH_START, onStart);
-      this.node.off(Node.EventType.TOUCH_MOVE, onMove);
-      this.node.off(Node.EventType.TOUCH_END, onEnd);
-      this.node.off(Node.EventType.TOUCH_CANCEL, onEnd);
+      if (!target.isValid) return;
+      target.off(Node.EventType.TOUCH_START, onStart);
+      target.off(Node.EventType.TOUCH_MOVE, onMove);
+      target.off(Node.EventType.TOUCH_END, onEnd);
+      target.off(Node.EventType.TOUCH_CANCEL, onEnd);
     };
   }
 
@@ -1328,10 +1334,12 @@ class WireMainlineController implements WireMainlinePage {
     this.viewport.active = true;
     if (this.body.parent !== this.viewport) this.body.parent = this.viewport;
     this.resetProbeScroll();
+    this.bindProbeScroll();
   }
 
-  /** 裁切只服务信息页。BattlePage 和代码战报挂在页面根上。 */
+  /** 裁切只服务信息页。先摘手势，再把 body 挪回页面根，BattlePage 不进这层裁切。 */
   private detachInfoScroll(): void {
+    this.unbindProbeScroll();
     this.resetProbeScroll();
     if (this.body.isValid && this.body.parent !== this.node) this.body.parent = this.node;
     if (this.viewport.isValid) this.viewport.active = false;
