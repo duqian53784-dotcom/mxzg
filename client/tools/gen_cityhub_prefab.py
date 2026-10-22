@@ -1,47 +1,45 @@
 # -*- coding: utf-8 -*-
 """Generate Creator 3.8.8 CityHub.prefab.
 
-Reads spriteFrame uuids from client/assets/resources/**/*.meta (@f9941).
-Does not touch Boot, MainApp, or USE_*_PREFAB flags.
+The hub middle is the old city: map-bg-city plates, building icons at
+maincitypos, and a screen-fixed mainline entry. It is not the debug
+button matrix (BtnIdle / BtnBag / …).
 
-Layout matches MainApp.buildCity() on a 720x1280 page (coords from center).
+Reads spriteFrame uuids from client/assets/resources/**/*.meta (@f9941).
+Does not invent art. Missing frames are listed and skipped.
+Keeps the existing prefab uuid so loadAny fallback stays valid.
 """
 import hashlib
 import json
 import os
-import uuid
 import base64
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RES = os.path.join(ROOT, "client", "assets", "resources")
 OUT_PREFAB = os.path.join(ROOT, "client", "assets", "prefabs", "ui", "city", "CityHub.prefab")
 OUT_META = OUT_PREFAB + ".meta"
+PREFAB_UUID = "118c08f7-43eb-477d-ab62-50f3ec65294f"
 
-# path under resources/ -> key
-SPRITE_FILES = {
-    "bg": "ui/city/bg-main-scene.jpg",
-    "title_bg": "ui/city/main-city_spr-title-bg.png",
-    "mission": "ui/city/main-city_icon-main_mission.png",
-    "mail": "ui/city/main-city_btn-mail-1.png",
-    "task": "ui/city/main-city_btn-task-1.png",
-    "shop": "ui/city/main-city_icon-main_shop.png",
-    "backpack": "ui/city/main-scene-lang_spr-backpack.png",
-    "btn_blue": "ui/common/button_btn-blue.png",
-    "btn_buy": "ui/common/button_btn-buy-1.png",
-    "btn_buy_p": "ui/common/button_btn-buy-2.png",
-    "btn_orange": "ui/common/button_btn-orange-big-1.png",
-    "btn_orange_p": "ui/common/button_btn-orange-big-2.png",
-    "btn_green": "ui/common/button_btn-green-big-1.png",
-    "btn_green_p": "ui/common/button_btn-green-big-2.png",
-    "btn_blue_big": "ui/common/button_btn-blue-big-1.png",
-    "btn_blue_big_p": "ui/common/button_btn-blue-big-2.png",
-    "btn_peach": "ui/common/buy-gold_btn-peach-1.png",
+CITY_VIEW_W = 720
+CITY_VIEW_H = 1280
+CITY_MAP_W = 1500
+CITY_MAP_H = 1280
+CITY_PARALLAX_SPEEDS = [1.3, 1, 0.82, 0.63]
+SCROLL = -390
+
+FRAME_SIZE = {
+    "1-1-1": (488, 937),
+    "1-2-1": (238, 1085),
+    "2-1-1": (1500, 890),
+    "3-1-1": (1428, 689),
+    "4-1-1": (1200, 900),
 }
 
 FONT_META = os.path.join(RES, "font", "FZCSJW-GB1-0.ttf.meta")
 LAYER_UI = 33554432
 
 objs = []
+GAPS = []
 
 
 def fid(seed: str) -> str:
@@ -83,17 +81,27 @@ def uuid_ref(u):
     return {"__uuid__": u}
 
 
-def load_sprite_frame(rel: str) -> str:
-    meta_path = os.path.join(RES, rel + ".meta")
+def load_sprite(rel: str):
+    meta_path = ""
+    for ext in (".png.meta", ".jpg.meta", ".meta"):
+        candidate = os.path.join(RES, rel + ext)
+        if os.path.isfile(candidate):
+            meta_path = candidate
+            break
+    if not meta_path:
+        return None
     with open(meta_path, encoding="utf-8") as f:
         data = json.load(f)
     sub = data.get("subMetas", {}).get("f9941")
     if not sub or sub.get("importer") != "sprite-frame":
-        raise SystemExit("missing sprite-frame f9941 in " + meta_path)
+        return None
     u = sub.get("uuid") or ""
     if not u.endswith("@f9941"):
-        raise SystemExit("spriteFrame uuid is not @f9941: " + meta_path)
-    return u
+        return None
+    user = sub.get("userData") or {}
+    w = user.get("rawWidth") or user.get("width") or 64
+    h = user.get("rawHeight") or user.get("height") or 64
+    return u, float(w), float(h)
 
 
 def load_font_uuid() -> str:
@@ -105,14 +113,15 @@ def load_font_uuid() -> str:
     return u
 
 
-SF = {key: load_sprite_frame(rel) for key, rel in SPRITE_FILES.items()}
 FONT = load_font_uuid()
-
 WHITE = color(255, 255, 255, 255)
-TITLE_COLOR = color(255, 228, 170, 255)
-MUTED = color(190, 205, 225, 255)
-GATE_COLOR = color(170, 190, 170, 255)
-NET_COLOR = color(160, 180, 210, 255)
+LABEL_COLOR = color(255, 244, 220, 255)
+known_uuids = {FONT}
+
+
+def remember(u):
+    known_uuids.add(u)
+    return u
 
 
 add({
@@ -127,7 +136,7 @@ add({
 })
 
 
-def make_node(name, parent_id, x, y, w, h, active=True):
+def make_node(name, parent_id, x, y, w, h, active=True, ax=0.5, ay=0.5, sx=1.0, sy=1.0):
     node = {
         "__type__": "cc.Node",
         "_name": name,
@@ -140,7 +149,7 @@ def make_node(name, parent_id, x, y, w, h, active=True):
         "_prefab": None,
         "_lpos": vec3(x, y, 0),
         "_lrot": quat(),
-        "_lscale": vec3(1, 1, 1),
+        "_lscale": vec3(sx, sy, 1),
         "_mobility": 0,
         "_layer": LAYER_UI,
         "_euler": vec3(0, 0, 0),
@@ -157,7 +166,7 @@ def make_node(name, parent_id, x, y, w, h, active=True):
         "_enabled": True,
         "__prefab": None,
         "_contentSize": size(w, h),
-        "_anchorPoint": vec2(0.5, 0.5),
+        "_anchorPoint": vec2(ax, ay),
         "_id": "",
     }
     uit_id = add(uit)
@@ -190,7 +199,7 @@ def append_comp(node_id, comp_obj, seed):
     return cid
 
 
-def add_sprite(node_id, sf_uuid, typ=0, size_mode=0, col=None):
+def add_sprite_comp(node_id, sf_uuid):
     spr = {
         "__type__": "cc.Sprite",
         "_name": "",
@@ -202,11 +211,11 @@ def add_sprite(node_id, sf_uuid, typ=0, size_mode=0, col=None):
         "_customMaterial": None,
         "_srcBlendFactor": 2,
         "_dstBlendFactor": 4,
-        "_color": col or WHITE,
-        "_spriteFrame": uuid_ref(sf_uuid) if sf_uuid else None,
-        "_type": typ,
+        "_color": WHITE,
+        "_spriteFrame": uuid_ref(sf_uuid),
+        "_type": 0,
         "_fillType": 0,
-        "_sizeMode": size_mode,
+        "_sizeMode": 0,
         "_fillCenter": vec2(0, 0),
         "_fillStart": 0,
         "_fillRange": 0,
@@ -218,7 +227,7 @@ def add_sprite(node_id, sf_uuid, typ=0, size_mode=0, col=None):
     return append_comp(node_id, spr, objs[node_id]["_name"] + "@" + str(node_id) + ":Sprite")
 
 
-def add_label(node_id, text, font_size, col, overflow=0, h_align=1, v_align=1, wrap=False, outline=False):
+def add_label(node_id, text, font_size, col):
     lab = {
         "__type__": "cc.Label",
         "_name": "",
@@ -232,14 +241,14 @@ def add_label(node_id, text, font_size, col, overflow=0, h_align=1, v_align=1, w
         "_dstBlendFactor": 4,
         "_color": col,
         "_string": text,
-        "_horizontalAlign": h_align,
-        "_verticalAlign": v_align,
+        "_horizontalAlign": 1,
+        "_verticalAlign": 1,
         "_actualFontSize": font_size,
         "_fontSize": font_size,
         "_fontFamily": "Arial",
         "_lineHeight": int(font_size * 1.25),
-        "_overflow": overflow,
-        "_enableWrapText": wrap,
+        "_overflow": 2,
+        "_enableWrapText": False,
         "_font": uuid_ref(FONT),
         "_isSystemFontUsed": False,
         "_spacingX": 0,
@@ -248,7 +257,7 @@ def add_label(node_id, text, font_size, col, overflow=0, h_align=1, v_align=1, w
         "_isUnderline": False,
         "_underlineHeight": 2,
         "_cacheMode": 0,
-        "_enableOutline": outline,
+        "_enableOutline": True,
         "_outlineColor": color(20, 16, 28, 220),
         "_outlineWidth": 2,
         "_enableShadow": False,
@@ -260,8 +269,7 @@ def add_label(node_id, text, font_size, col, overflow=0, h_align=1, v_align=1, w
     return append_comp(node_id, lab, objs[node_id]["_name"] + "@" + str(node_id) + ":Label")
 
 
-def add_button(node_id, normal_sf, pressed_sf=None):
-    pressed = pressed_sf or normal_sf
+def add_button(node_id, sf_uuid):
     btn = {
         "__type__": "cc.Button",
         "_name": "",
@@ -277,125 +285,201 @@ def add_button(node_id, normal_sf, pressed_sf=None):
         "_hoverColor": color(211, 211, 211, 255),
         "_pressedColor": color(200, 200, 200, 255),
         "_disabledColor": color(124, 124, 124, 255),
-        "_normalSprite": uuid_ref(normal_sf),
-        "_hoverSprite": uuid_ref(normal_sf),
-        "_pressedSprite": uuid_ref(pressed),
-        "_disabledSprite": uuid_ref(normal_sf),
+        "_normalSprite": uuid_ref(sf_uuid),
+        "_hoverSprite": uuid_ref(sf_uuid),
+        "_pressedSprite": uuid_ref(sf_uuid),
+        "_disabledSprite": uuid_ref(sf_uuid),
         "_duration": 0.1,
-        "_zoomScale": 1.05,
+        "_zoomScale": 0.94,
         "_target": ref(node_id),
         "_id": "",
     }
     return append_comp(node_id, btn, objs[node_id]["_name"] + "@" + str(node_id) + ":Button")
 
 
-def make_label_node(name, parent_id, x, y, w, h, text, font_size, col, overflow=0, wrap=False, outline=False):
-    nid = make_node(name, parent_id, x, y, w, h)
-    add_label(nid, text, font_size, col, overflow=overflow, wrap=wrap, outline=outline)
-    return nid
+def place_bl(parent_id, x, y):
+    """Anchor position in the parent's bottom-left space → local position."""
+    ui = None
+    for cid in objs[parent_id]["_components"]:
+        comp = objs[cid["__id__"]]
+        if comp.get("__type__") == "cc.UITransform":
+            ui = comp
+            break
+    pw = ui["_contentSize"]["width"]
+    ph = ui["_contentSize"]["height"]
+    ax = ui["_anchorPoint"]["x"]
+    ay = ui["_anchorPoint"]["y"]
+    return x - pw * ax, y - ph * ay
 
 
-def make_sprite_node(name, parent_id, x, y, w, h, sf, typ=0, col=None, size_mode=0):
-    nid = make_node(name, parent_id, x, y, w, h)
-    add_sprite(nid, sf, typ=typ, size_mode=size_mode, col=col)
-    return nid
+def layer_anchor_x(scroll, ratio, ox):
+    return scroll * (ratio - 1) + ox
 
 
-def make_button(name, parent_id, x, y, w, h, text, font_size, bg, pressed=None, icon=None, icon_w=44, icon_h=44):
-    """Button node: sliced Sprite + Button, child Label, optional Icon."""
-    nid = make_node(name, parent_id, x, y, w, h)
-    add_sprite(nid, bg, typ=1, size_mode=0)
-    add_button(nid, bg, pressed)
-    label_x = 0
-    label_w = w - 16
-    if icon:
-        icon_x = -w / 2 + icon_w / 2 + 10
-        make_sprite_node("Icon", nid, icon_x, 0, icon_w, icon_h, icon, typ=0, size_mode=0)
-        label_x = icon_w * 0.35
-        label_w = w - icon_w - 24
-    make_label_node(
-        "Label", nid, label_x, 0, label_w, h - 8, text, font_size, WHITE, overflow=1, outline=True
-    )
-    return nid
+def foreground_piece2_x(view_w, map_w, speed):
+    p2 = view_w - map_w
+    pos2x = -p2 + p2 * speed + map_w
+    return map_w + map_w - pos2x
 
 
-# Root matches pageRoot design size. Children use buildCity place() coords.
-root = make_node("CityHub", None, 0, 0, 720, 1280)
+def parent_for_z(zorder):
+    if zorder == 1:
+        return "spr_map_bg1_1"
+    if zorder == 3:
+        return "spr_map_bg3"
+    if zorder == 4:
+        return "spr_map_bg4"
+    return "spr_map_bg2"
+
+
+def map_frame(layer, piece):
+    return "ui/maps/map-bg-city-%d-%d-1" % (layer, piece)
+
+
+def effect_frame(para):
+    prefix = "eff_main_city_"
+    if not para or not para.startswith(prefix):
+        return None
+    return "ui/city/main-city-effect_" + para[len(prefix):] + "-0"
+
+
+# --- layout, same numbers as cityMapLayout.ts at variant 1 ---
+map_scale = CITY_VIEW_H / CITY_MAP_H
+content_w = CITY_MAP_W * map_scale
+speeds = CITY_PARALLAX_SPEEDS
+mid = CITY_MAP_W * 0.5 * map_scale
+sky_scale = map_scale * 1.2
+b11 = FRAME_SIZE["1-1-1"]
+b12 = FRAME_SIZE["1-2-1"]
+b21 = FRAME_SIZE["2-1-1"]
+b31 = FRAME_SIZE["3-1-1"]
+b41 = FRAME_SIZE["4-1-1"]
+
+root = make_node("CityHub", None, 0, 0, CITY_VIEW_W, CITY_VIEW_H)
 assert root == 1
 
-# Optional full-page scene. JPG is referenced, not copied.
-make_sprite_node("Bg", root, 0, 0, 720, 1280, SF["bg"], typ=0, size_mode=0)
-
-# Title is a Label (font 48) with the city title plaque behind the glyphs.
-title = make_node("Title", root, 0, 400, 360, 72)
-add_sprite(title, SF["title_bg"], typ=1, size_mode=0)
-add_label(title, "主城", 48, TITLE_COLOR, outline=True)
-
-# Wide hub buttons. Colors follow MainApp fill roles via existing button art.
-make_button(
-    "BtnMainline", root, 0, 280, 420, 76, "主线", 24,
-    SF["btn_blue"], icon=SF["mission"], icon_w=56, icon_h=58,
-)
-make_button(
-    "BtnIdle", root, 0, 200, 420, 64, "挂机", 24,
-    SF["btn_orange"], SF["btn_orange_p"],
-)
-make_button(
-    "BtnBag", root, 0, 120, 420, 64, "背包", 24,
-    SF["btn_green"], SF["btn_green_p"],
-    icon=SF["backpack"], icon_w=44, icon_h=44,
-)
-make_button(
-    "BtnMail", root, 0, 40, 420, 64, "邮件", 24,
-    SF["btn_blue_big"], SF["btn_blue_big_p"],
-    icon=SF["mail"], icon_w=44, icon_h=44,
+parallax_x, parallax_y = place_bl(root, SCROLL, 0)
+parallax = make_node(
+    "CityParallax", root, parallax_x, parallax_y, content_w, CITY_VIEW_H, ax=0, ay=0
 )
 
-# Four small entries on y=-120. No dedicated art except task + shop icons.
-make_button(
-    "BtnLogin7", root, -249, -120, 156, 52, "七日登录", 18,
-    SF["btn_peach"],
-)
-make_button(
-    "BtnGoal7", root, -83, -120, 156, 52, "七日目标", 18,
-    SF["btn_orange"], SF["btn_orange_p"],
-    icon=SF["task"], icon_w=32, icon_h=32,
-)
-make_button(
-    "BtnShop", root, 83, -120, 156, 52, "商店", 18,
-    SF["btn_blue_big"], SF["btn_blue_big_p"],
-    icon=SF["shop"], icon_w=48, icon_h=28,
-)
-make_button(
-    "BtnGift", root, 249, -120, 156, 52, "礼包", 18,
-    SF["btn_buy"], SF["btn_buy_p"],
+layers = {}
+
+
+def add_layer(name, ratio, ox, oy, ax, ay, w, h, scale):
+    x = layer_anchor_x(SCROLL, ratio, ox)
+    lx, ly = place_bl(parallax, x, oy)
+    nid = make_node(name, parallax, lx, ly, w, h, ax=ax, ay=ay, sx=scale, sy=scale)
+    layers[name] = nid
+    return nid
+
+
+def add_map_sprite(name, parent_name, x, y, ax, ay, w, h, rel):
+    loaded = load_sprite(rel)
+    if not loaded:
+        GAPS.append("map plate missing: " + rel)
+        return None
+    u, _rw, _rh = loaded
+    remember(u)
+    parent_id = layers[parent_name]
+    lx, ly = place_bl(parent_id, x, y)
+    nid = make_node(name, parent_id, lx, ly, w, h, ax=ax, ay=ay)
+    add_sprite_comp(nid, u)
+    layers[name] = nid
+    return nid
+
+
+add_layer("spr_map_bg4", speeds[3], mid, CITY_VIEW_H, 0.5, 1, b41[0], b41[1], sky_scale)
+add_layer("spr_map_bg3", speeds[2], mid, 390, 0.5, 0, b31[0], b31[1], map_scale)
+add_layer("spr_map_bg2", speeds[1], mid, 0, 0.5, 0, b21[0], b21[1], map_scale)
+add_layer("spr_map_bg1", speeds[0], 0, 0, 0, 0, CITY_MAP_W, CITY_MAP_H, map_scale)
+add_map_sprite("spr_map_bg4_1", "spr_map_bg4", b41[0] * 0.5, b41[1] * 0.5, 0.5, 0.5, b41[0], b41[1], map_frame(4, 1))
+add_map_sprite("spr_map_bg3_1", "spr_map_bg3", b31[0] * 0.5, b31[1] * 0.5, 0.5, 0.5, b31[0], b31[1], map_frame(3, 1))
+add_map_sprite("spr_map_bg2_1", "spr_map_bg2", b21[0] * 0.5, b21[1] * 0.5, 0.5, 0.5, b21[0], b21[1], map_frame(2, 1))
+add_map_sprite("spr_map_bg1_1", "spr_map_bg1", 0, 0, 0, 0, b11[0], b11[1], map_frame(1, 1))
+add_map_sprite(
+    "spr_map_bg1_2",
+    "spr_map_bg1",
+    foreground_piece2_x(CITY_VIEW_W, CITY_MAP_W, speeds[0]),
+    0,
+    1,
+    0,
+    b12[0],
+    b12[1],
+    map_frame(1, 2),
 )
 
-make_button(
-    "BtnLimited", root, 0, -188, 420, 48, "限时活动", 22,
-    SF["btn_orange"], SF["btn_orange_p"],
-)
+with open(os.path.join(RES, "config", "maincity", "maincityeffect.json"), encoding="utf-8") as f:
+    effect_file = json.load(f)
+for row in effect_file.get("maincityeffect") or []:
+    para = row.get("para") or ""
+    parent_name = row.get("parent") or ""
+    rel = effect_frame(para)
+    if not rel:
+        GAPS.append("spine effect has no bitmap: " + (para or "?"))
+        continue
+    if parent_name not in layers:
+        GAPS.append("effect parent missing: " + parent_name + " " + para)
+        continue
+    loaded = load_sprite(rel)
+    if not loaded:
+        GAPS.append("effect frame missing: " + rel)
+        continue
+    u, w, h = loaded
+    remember(u)
+    parent_id = layers[parent_name]
+    lx, ly = place_bl(parent_id, float(row.get("x") or 0), float(row.get("y") or 0))
+    nid = make_node("fx-" + para, parent_id, lx, ly, w, h)
+    add_sprite_comp(nid, u)
 
-# Utility row sits between mail (y=40) and the small row (y=-120), same as buildCity.
-make_button("BtnLog", root, -180, -40, 140, 48, "日志", 20, SF["btn_peach"])
-make_button("BtnNotice", root, 0, -40, 140, 48, "公告", 20, SF["btn_peach"])
-make_button("BtnNetDrop", root, 190, -40, 160, 48, "模拟断线", 20, SF["btn_peach"])
+with open(os.path.join(RES, "config", "maincity", "maincitypos.json"), encoding="utf-8") as f:
+    pos_file = json.load(f)
+building_count = 0
+for row in pos_file.get("main") or []:
+    atom = row.get("atom") or ""
+    if not atom:
+        continue
+    parent_name = parent_for_z(int(row.get("zorder") or 2))
+    rel = "ui/city/main-city_icon-" + atom
+    loaded = load_sprite(rel)
+    if not loaded:
+        GAPS.append("building icon missing: " + rel + ".png")
+        continue
+    if parent_name not in layers:
+        GAPS.append("building parent missing: " + parent_name + " " + atom)
+        continue
+    u, w, h = loaded
+    remember(u)
+    z = int(row.get("zorder") or 2)
+    scale_of = sky_scale if z == 4 else map_scale
+    spot_scale = 0.9 if scale_of == 0 else (1 / scale_of) * 0.9
+    parent_id = layers[parent_name]
+    lx, ly = place_bl(parent_id, float(row.get("x") or 0), float(row.get("y") or 0))
+    nid = make_node("spot-" + atom, parent_id, lx, ly, w, h, sx=spot_scale, sy=spot_scale)
+    add_sprite_comp(nid, u)
+    add_button(nid, u)
+    building_count += 1
 
-make_label_node(
-    "Hint", root, 0, -248, 640, 28,
-    "系统从底栏进入。带「锁」的点开会提示条件",
-    18, MUTED, outline=True,
-)
-make_label_node(
-    "Gate", root, 0, -330, 680, 72,
-    "网关…",
-    20, GATE_COLOR, overflow=1, wrap=True, outline=True,
-)
-make_label_node(
-    "NetState", root, 0, -420, 680, 28,
-    "网络 connected",
-    20, NET_COLOR, outline=True,
-)
+# Screen-fixed, parented on the root so a full-screen host does not eat map touches.
+# Bottom bar covers about y < -505. Utility row is on the right.
+mission = load_sprite("ui/city/main-city_icon-main_mission")
+if not mission:
+    GAPS.append("mainline icon missing: ui/city/main-city_icon-main_mission.png")
+else:
+    u, w, h = mission
+    remember(u)
+    btn = make_node("BtnMainline", root, -286, -400, w, h)
+    add_sprite_comp(btn, u)
+    add_button(btn, u)
+    label = make_node("Label", btn, 0, -h * 0.5 - 16, 150, 28)
+    add_label(label, "主线", 18, LABEL_COLOR)
+
+# 33 act icons stay off this prefab. CityChrome ActGroup already draws the
+# visible set, and a full strip covers the buildings. createmaincitybtn
+# btn-login-2..7 and 9..14 are not in resources/ui/city.
+GAPS.append("activity strip (33 createmaincitybtn icons) is not painted on CityHub; CityChrome ActGroup keeps the visible set, and 活动 still opens the full list")
+GAPS.append("map variant 2 plates exist (map-bg-city-*-2) and are unused; hub uses variant 1, same as CityMap")
+GAPS.append("bg-main-scene.jpg is not the scrolling city; hub uses map-bg-city plates")
 
 objs[0]["data"] = ref(1)
 
@@ -404,12 +488,11 @@ with open(OUT_PREFAB, "w", encoding="utf-8", newline="\n") as f:
     json.dump(objs, f, ensure_ascii=False, indent=2)
     f.write("\n")
 
-prefab_uuid = str(uuid.uuid4())
 meta = {
     "ver": "1.1.50",
     "importer": "prefab",
     "imported": True,
-    "uuid": prefab_uuid,
+    "uuid": PREFAB_UUID,
     "files": [".json"],
     "subMetas": {},
     "userData": {"syncNodeName": "CityHub"},
@@ -418,19 +501,23 @@ with open(OUT_META, "w", encoding="utf-8", newline="\n") as f:
     json.dump(meta, f, ensure_ascii=False, indent=2)
     f.write("\n")
 
-# --- checks ---
 names = [o["_name"] for o in objs if o.get("__type__") == "cc.Node"]
-required = [
-    "CityHub", "Bg", "Title",
-    "BtnMainline", "BtnIdle", "BtnBag", "BtnMail",
-    "BtnLogin7", "BtnGoal7", "BtnShop", "BtnGift",
-    "BtnLimited", "BtnLog", "BtnNotice", "BtnNetDrop",
-    "Hint", "Gate", "NetState",
-]
-for n in required:
-    assert n in names, "missing " + n
-for banned in ("Top", "Bottom", "Tab_city", "Tab_hero", "Tab_summon", "Tab_smith", "Tab_plays"):
-    assert banned not in names, "CityHub must stay separate from CityChrome: " + banned
+for required in (
+    "CityHub",
+    "CityParallax",
+    "spr_map_bg1",
+    "spr_map_bg2",
+    "spr_map_bg2_1",
+    "spr_map_bg1_1",
+    "spr_map_bg1_2",
+    "spot-main_summon",
+    "spot-main_smith_shop",
+    "BtnMainline",
+):
+    assert required in names, "missing " + required
+for banned in ("BtnIdle", "BtnBag", "BtnMail", "BtnLogin7", "BtnShop", "BtnGift", "Top", "Bottom", "TabCity"):
+    assert banned not in names, "debug matrix or chrome leaked: " + banned
+assert building_count == 19, building_count
 
 file_ids = []
 for o in objs:
@@ -439,54 +526,16 @@ for o in objs:
         assert len(o["fileId"]) == 22, o["fileId"]
 assert len(file_ids) == len(set(file_ids)), "duplicate fileId"
 
-known = set(SF.values()) | {FONT}
 for o in objs:
     for key in ("_spriteFrame", "_font", "_normalSprite", "_hoverSprite", "_pressedSprite", "_disabledSprite"):
         val = o.get(key)
         if isinstance(val, dict) and "__uuid__" in val:
-            assert val["__uuid__"] in known, val["__uuid__"]
-
-expect_pos = {
-    "Title": (0, 400),
-    "BtnMainline": (0, 280),
-    "BtnIdle": (0, 200),
-    "BtnBag": (0, 120),
-    "BtnMail": (0, 40),
-    "BtnLogin7": (-249, -120),
-    "BtnGoal7": (-83, -120),
-    "BtnShop": (83, -120),
-    "BtnGift": (249, -120),
-    "BtnLimited": (0, -188),
-    "BtnLog": (-180, -40),
-    "BtnNotice": (0, -40),
-    "BtnNetDrop": (190, -40),
-    "Hint": (0, -248),
-    "Gate": (0, -330),
-    "NetState": (0, -420),
-}
-for o in objs:
-    if o.get("__type__") == "cc.Node" and o["_name"] in expect_pos:
-        x, y = expect_pos[o["_name"]]
-        assert o["_lpos"]["x"] == x and o["_lpos"]["y"] == y, o["_name"]
-
-root_ui = objs[2]
-assert root_ui["__type__"] == "cc.UITransform"
-assert root_ui["_contentSize"]["width"] == 720
-assert root_ui["_contentSize"]["height"] == 1280
+            assert val["__uuid__"] in known_uuids, val["__uuid__"]
 
 print("Wrote", OUT_PREFAB)
-print("UUID", prefab_uuid)
-print("Objects", len(objs))
-print("NODE_TREE_START")
-
-
-def walk(nid, indent=0):
-    n = objs[nid]
-    print("  " * indent + n["_name"])
-    for c in n["_children"]:
-        walk(c["__id__"], indent + 1)
-
-
-walk(1)
-print("NODE_TREE_END")
+print("UUID", PREFAB_UUID)
+print("buildings", building_count)
+print("GAPS")
+for gap in GAPS:
+    print("- " + gap)
 print("OK")

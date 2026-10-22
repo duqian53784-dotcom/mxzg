@@ -5,8 +5,10 @@
  * 从 Boot 进来时，若场景上没挂本组件，Boot 会 addComponent。
  * 单独预览 Main：把 MainApp 挂到 Main 场景的 Canvas 上。开关为 true 时看到 Prefab 壳。
  * 顶栏和底栏在 UIShell 的 chrome 层，不进页面栈。系统面板走 PanelNav。
- * 主城页中间是 CityMap：视差底图和建筑点。底栏仍是五项。
- * 主屏不再画红「活动」、蓝「更多」矩形。这两颗入口在 CityChrome Prefab 上。
+ * 主城页中间默认 USE_CITY_HUB_PREFAB：CityHub Prefab 的地图和建筑。
+ * false 或加载失败时仍 mountCityMap，代码地图不删。底栏仍是五项。
+ * 主屏不再画红「活动」、蓝「更多」矩形，也不再铺调试按钮矩阵。
+ * 这两颗入口在 CityChrome Prefab 上。主线从 CityHub 的 BtnMainline 进。
  */
 import { _decorator, BlockInputEvents, Color, Component, Node, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
@@ -36,8 +38,8 @@ import { Proto } from "../net/protocol";
 import { BagPage, buildBagPage } from "./BagPage";
 import { CityChrome, mountCityChrome, mountCityChromePrefab, TabState } from "./CityChrome";
 import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
-import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage } from "./HeroPage";
-import { buildSummonPage, SummonPage } from "./SummonPage";
+import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage, mountHeroDetailPrefab, mountHeroListPrefab, USE_HERO_PREFAB } from "./HeroPage";
+import { buildSummonPage, mountSummonPrefab, SummonPage, USE_SUMMON_PREFAB } from "./SummonPage";
 import { buildWireSummonPage, WireSummonPage } from "./WireSummonPage";
 import { buildWireProphetPage, WireProphetPage } from "./WireProphetPage";
 import { buildWireJewelPage, WireJewelPage } from "./WireJewelPage";
@@ -187,6 +189,7 @@ import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
 import { CityMapHandle, mountCityMap } from "./CityMap";
+import { mountCityHubPrefab } from "./CityHub";
 import { cityAtomRoute } from "./cityMapLayout";
 import {
   CITY_DRAG_HINT,
@@ -202,8 +205,14 @@ import {
 } from "./cityHubEntries";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
-/** 默认挂 CityChrome Prefab。false 时仍走 mountCityChrome，和接 Prefab 之前一样。本刀不改这个值，也不改 Boot。 */
+/** 默认挂 CityChrome Prefab。false 时仍走 mountCityChrome，和接 Prefab 之前一样。不改 Boot。 */
 export const USE_CITY_CHROME_PREFAB = true;
+
+/**
+ * 主城中间默认挂 CityHub Prefab（map-bg-city 和建筑按钮）。
+ * false 时仍走 mountCityMap。加载失败也退回 mountCityMap。不改 Boot。
+ */
+export const USE_CITY_HUB_PREFAB = true;
 
 const { ccclass } = _decorator;
 
@@ -359,6 +368,9 @@ export class MainApp extends Component {
   private gift: GiftPage | null = null;
   private limited: LimitedPage | null = null;
   private selectedHeroId = 0;
+  private heroListTicket = 0;
+  private heroDetailTicket = 0;
+  private summonTicket = 0;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
   private cityMap: CityMapHandle | null = null;
@@ -740,7 +752,11 @@ export class MainApp extends Component {
     const page = this.pageRoot("CityPage");
     const mapHost = uiNode("CityMapHost");
     mapHost.parent = page;
-    void this.mountCityMap(mapHost);
+    if (!USE_CITY_HUB_PREFAB) {
+      void this.mountCityMap(mapHost);
+    } else {
+      void this.mountCityHub(mapHost);
+    }
 
     place(createLabel(CITY_DRAG_HINT, 16, { color: MUTED, width: 420 }), page, -120, 360);
     this.gateNode = place(
@@ -1169,6 +1185,37 @@ export class MainApp extends Component {
     if (id === "magicTowerLevelRank") return MAGIC_TOWER_LEVEL_RANK_FILL;
     if (id === "springOutingGrid") return SPRING_OUTING_GRID_FILL;
     return OPEN_FILL;
+  }
+
+  /**
+   * CityHub Prefab 铺满主城中间。失败时退回代码地图，不留空画面。
+   * BtnMainline 走原来的 openMainline，挑战仍进已经接上的主线页。
+   */
+  private async mountCityHub(host: Node): Promise<void> {
+    try {
+      const handle = await mountCityHubPrefab(
+        host,
+        (atom) => this.onCityAtom(atom),
+        () => this.openMainline(),
+        {
+          level: () => this.level(),
+          openDay: () => this.day(),
+          db: () => ConfigDb.current,
+        }
+      );
+      if (!this.isValid || !host.isValid) {
+        handle.dispose();
+        handle.root.destroy();
+        return;
+      }
+      this.cityMap = handle;
+      if (handle.mainButton) this.mainButton = handle.mainButton;
+      this.setMainButton(this.stageButtonText());
+    } catch (err) {
+      GameLog.shared.error("MainApp", "city hub prefab " + messageOf(err) + "，改用代码 UI");
+      if (!this.isValid || !host.isValid) return;
+      await this.mountCityMap(host);
+    }
   }
 
   /** 地图加载失败时主城按钮还在，不挡住进页面。 */
@@ -1952,18 +1999,52 @@ export class MainApp extends Component {
   private mountHeroList(): Node {
     if (Session.source === "wire") return this.mountWireHero();
     this.heroList?.dispose();
-    const page = buildHeroList({
-      showToast: (text) => this.shell?.showToast(text, 2200),
+    const hostCallbacks = {
+      showToast: (text: string) => this.shell?.showToast(text, 2200),
       alive: () => this.isValid,
       list: () => Proto.heroList({}, NetClient.shared),
-      openHero: (heroId) => {
+      openHero: (heroId: number) => {
         this.selectedHeroId = heroId;
         this.openChild("hero-detail");
       },
       close: () => this.back(),
-    });
-    this.heroList = page;
-    return page.node;
+    };
+    if (!USE_HERO_PREFAB) {
+      const page = buildHeroList(hostCallbacks);
+      this.heroList = page;
+      return page.node;
+    }
+    const host = uiNode("HeroListHost");
+    const ticket = ++this.heroListTicket;
+    void this.attachHeroList(host, ticket, hostCallbacks);
+    return host;
+  }
+
+  private async attachHeroList(
+    host: Node,
+    ticket: number,
+    hostCallbacks: {
+      showToast: (text: string) => void;
+      alive: () => boolean;
+      list: () => ReturnType<typeof Proto.heroList>;
+      openHero: (heroId: number) => void;
+      close: () => void;
+    }
+  ): Promise<void> {
+    try {
+      const page = await mountHeroListPrefab(host, hostCallbacks);
+      if (!this.isValid || ticket !== this.heroListTicket || !host.isValid) {
+        page.dispose();
+        return;
+      }
+      this.heroList = page;
+    } catch (err) {
+      if (!this.isValid || ticket !== this.heroListTicket || !host.isValid) return;
+      GameLog.shared.error("MainApp", "hero prefab " + messageOf(err) + "，改用代码 UI");
+      const page = buildHeroList(hostCallbacks);
+      page.node.parent = host;
+      this.heroList = page;
+    }
   }
 
   private mountWireHero(): Node {
@@ -1980,12 +2061,12 @@ export class MainApp extends Component {
 
   private mountHeroDetail(): Node {
     this.heroDetail?.dispose();
-    const page = buildHeroDetail({
+    const hostCallbacks = {
       heroId: () => this.selectedHeroId,
-      showToast: (text) => this.shell?.showToast(text, 2200),
+      showToast: (text: string) => this.shell?.showToast(text, 2200),
       alive: () => this.isValid,
       list: () => Proto.heroList({}, NetClient.shared),
-      upgrade: (heroId) => Proto.heroUpgrade({ heroId }, NetClient.shared),
+      upgrade: (heroId: number) => Proto.heroUpgrade({ heroId }, NetClient.shared),
       onProgress: () => {
         if (!this.isValid) return;
         this.refreshChrome();
@@ -1993,9 +2074,45 @@ export class MainApp extends Component {
         this.smith?.reload();
       },
       close: () => this.back(),
-    });
-    this.heroDetail = page;
-    return page.node;
+    };
+    if (Session.source === "wire" || !USE_HERO_PREFAB) {
+      const page = buildHeroDetail(hostCallbacks);
+      this.heroDetail = page;
+      return page.node;
+    }
+    const host = uiNode("HeroDetailHost");
+    const ticket = ++this.heroDetailTicket;
+    void this.attachHeroDetail(host, ticket, hostCallbacks);
+    return host;
+  }
+
+  private async attachHeroDetail(
+    host: Node,
+    ticket: number,
+    hostCallbacks: {
+      heroId: () => number;
+      showToast: (text: string) => void;
+      alive: () => boolean;
+      list: () => ReturnType<typeof Proto.heroList>;
+      upgrade: (heroId: number) => ReturnType<typeof Proto.heroUpgrade>;
+      onProgress: () => void;
+      close: () => void;
+    }
+  ): Promise<void> {
+    try {
+      const page = await mountHeroDetailPrefab(host, hostCallbacks);
+      if (!this.isValid || ticket !== this.heroDetailTicket || !host.isValid) {
+        page.dispose();
+        return;
+      }
+      this.heroDetail = page;
+    } catch (err) {
+      if (!this.isValid || ticket !== this.heroDetailTicket || !host.isValid) return;
+      GameLog.shared.error("MainApp", "hero detail prefab " + messageOf(err) + "，改用代码 UI");
+      const page = buildHeroDetail(hostCallbacks);
+      page.node.parent = host;
+      this.heroDetail = page;
+    }
   }
 
   /** 玩法「竞技场」。真服收到 18001 后走只读页，不挑战。Mock 仍受主线 Lv8。 */
@@ -3683,19 +3800,54 @@ export class MainApp extends Component {
   private mountSummon(): Node {
     if (Session.source === "wire") return this.mountWireSummon();
     this.summon?.dispose();
-    const page = buildSummonPage({
+    const hostCallbacks = {
       diamond: () => Session.diamond,
-      showToast: (text) => this.shell?.showToast(text, 2200),
+      showToast: (text: string) => this.shell?.showToast(text, 2200),
       alive: () => this.isValid,
-      pull: (count) => Proto.summonPull({ count }, NetClient.shared),
+      pull: (count: number) => Proto.summonPull({ count }, NetClient.shared),
       onProgress: () => {
         if (!this.isValid) return;
         this.refreshChrome();
       },
       close: () => this.back(),
-    });
-    this.summon = page;
-    return page.node;
+    };
+    if (!USE_SUMMON_PREFAB) {
+      const page = buildSummonPage(hostCallbacks);
+      this.summon = page;
+      return page.node;
+    }
+    const host = uiNode("SummonHost");
+    const ticket = ++this.summonTicket;
+    void this.attachSummon(host, ticket, hostCallbacks);
+    return host;
+  }
+
+  private async attachSummon(
+    host: Node,
+    ticket: number,
+    hostCallbacks: {
+      diamond: () => number;
+      showToast: (text: string) => void;
+      alive: () => boolean;
+      pull: (count: number) => ReturnType<typeof Proto.summonPull>;
+      onProgress: () => void;
+      close: () => void;
+    }
+  ): Promise<void> {
+    try {
+      const page = await mountSummonPrefab(host, hostCallbacks);
+      if (!this.isValid || ticket !== this.summonTicket || !host.isValid) {
+        page.dispose();
+        return;
+      }
+      this.summon = page;
+    } catch (err) {
+      if (!this.isValid || ticket !== this.summonTicket || !host.isValid) return;
+      GameLog.shared.error("MainApp", "summon prefab " + messageOf(err) + "，改用代码 UI");
+      const page = buildSummonPage(hostCallbacks);
+      page.node.parent = host;
+      this.summon = page;
+    }
   }
 
   private mountWireSummon(): Node {

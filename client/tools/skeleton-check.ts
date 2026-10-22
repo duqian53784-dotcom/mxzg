@@ -25752,6 +25752,15 @@ function checkCityHub(): void {
     "prefab entries still open the two hubs"
   );
   assert(mainApp.indexOf("export const USE_CITY_CHROME_PREFAB = true") >= 0, "prefab chrome default stays");
+  assert(mainApp.indexOf("export const USE_CITY_HUB_PREFAB = true") >= 0, "city hub prefab default stays on");
+  assert(mainApp.indexOf("mountCityHubPrefab") >= 0, "city hub prefab is mounted from MainApp");
+  const hubPrefabFile = join(process.cwd(), "client", "assets", "prefabs", "ui", "city", "CityHub.prefab");
+  const hubPaths = prefabChildPaths(hubPrefabFile);
+  assert(hubPaths.indexOf("CityParallax/spr_map_bg2/spr_map_bg2_1") >= 0, "city hub prefab has the city plate");
+  assert(hubPaths.indexOf("CityParallax/spr_map_bg2/spot-main_summon") >= 0, "city hub prefab has the summon building");
+  assert(hubPaths.indexOf("CityParallax/spr_map_bg1/spr_map_bg1_1/spot-main_smith_shop") >= 0, "city hub prefab has the smith building");
+  assert(hubPaths.indexOf("BtnMainline") >= 0, "city hub prefab has the mainline entry");
+  assert(hubPaths.indexOf("BtnIdle") < 0 && hubPaths.indexOf("BtnBag") < 0 && hubPaths.indexOf("BtnLogin7") < 0, "city hub prefab is not the debug button matrix");
   assert(mainApp.indexOf("mountCityChrome(") >= 0, "code chrome fallback stays");
   assert(mainApp.indexOf("setCityExtras") >= 0, "activity row hides off the city page");
   const chrome = readFileSync(uiSource("CityChrome.ts"), "utf8");

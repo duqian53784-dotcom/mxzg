@@ -2,7 +2,7 @@
  * 英雄列表和详情（C5）。升级消耗金币，星级只展示。
  * 不改 .scene。底栏「英雄」打开列表，点一名英雄再压一层详情。返回走页面栈。
  */
-import { Color, Node } from "cc";
+import { Color, instantiate, Node } from "cc";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import {
@@ -17,7 +17,36 @@ import {
 } from "../module/hero/growth";
 import { weaponLineText } from "../module/smith/forge";
 import { HeroCard, HeroListResp, HeroUpgradeResp } from "../net/protocol/types";
+import { HERO_PREFAB_PATH, bindClick, loadPrefab, requireNode, spawnPrefab } from "./prefabLoad";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
+
+/**
+ * Mock 英雄列表和详情默认挂 HeroPage.prefab。
+ * false，或加载 / 绑节点失败时，仍走下面的代码页。真服只读页不挂这份 Prefab。
+ */
+export const USE_HERO_PREFAB = true;
+
+export async function mountHeroListPrefab(parent: Node, host: HeroListHost): Promise<HeroListPage> {
+  const prefab = await loadPrefab(HERO_PREFAB_PATH);
+  const root = spawnPrefab(prefab, parent);
+  try {
+    return new HeroListController(host, root);
+  } catch (err) {
+    root.destroy();
+    throw err;
+  }
+}
+
+export async function mountHeroDetailPrefab(parent: Node, host: HeroDetailHost): Promise<HeroDetailPage> {
+  const prefab = await loadPrefab(HERO_PREFAB_PATH);
+  const root = spawnPrefab(prefab, parent);
+  try {
+    return new HeroDetailController(host, root);
+  } catch (err) {
+    root.destroy();
+    throw err;
+  }
+}
 
 const PAGE_BG = new Color(8, 16, 32, 255);
 const TITLE = new Color(255, 228, 170, 255);
@@ -73,8 +102,26 @@ class HeroListController implements HeroListPage {
   private ticket = 0;
   private toldError = false;
   private countLabel: Node | null = null;
+  private readonly prefabRows: boolean;
+  private readonly boundRows: { [name: string]: boolean } = {};
+  private rowHeroes: HeroCard[] = [];
 
-  constructor(private readonly host: HeroListHost) {
+  constructor(private readonly host: HeroListHost, existing?: Node) {
+    this.prefabRows = !!existing;
+    if (existing) {
+      this.node = existing;
+      this.body = existing;
+      this.rowsHost = requireNode(existing, "PanelList/RowsHost");
+      this.countLabel = requireNode(existing, "PanelList/Count");
+      const detail = existing.getChildByName("PanelDetail");
+      if (detail) detail.active = false;
+      const list = existing.getChildByName("PanelList");
+      if (list) list.active = true;
+      bindClick(requireNode(existing, "PanelList/BtnBack"), () => this.host.close());
+      GameLog.shared.info("Hero", "open list prefab");
+      void this.refresh();
+      return;
+    }
     this.node = uiNode("HeroListPage");
     place(createRect("bg", 720, 1280, PAGE_BG), this.node, 0, 0);
     this.body = uiNode("body");
@@ -117,6 +164,10 @@ class HeroListController implements HeroListPage {
   }
 
   private render(heroes: HeroCard[]): void {
+    if (this.prefabRows) {
+      this.renderPrefabRows(heroes);
+      return;
+    }
     const count = heroes.length;
     this.write(this.countLabel, count === 0 ? "暂无英雄" : count + " 名英雄 · 点名字查看详情");
     const old = this.rowsHost.getChildByName("rows");
@@ -144,6 +195,50 @@ class HeroListController implements HeroListPage {
       );
       place(button, rows, 0, top - i * step);
     }
+  }
+
+  private renderPrefabRows(heroes: HeroCard[]): void {
+    const count = heroes.length;
+    this.rowHeroes = heroes;
+    this.write(this.countLabel, count === 0 ? "暂无英雄" : count + " 名英雄 · 点名字查看详情");
+    const rows = requireNode(this.node, "PanelList/RowsHost/Rows");
+    const template = rows.getChildByName("Row_0");
+    if (!template) throw new Error("缺少节点 Row_0");
+    const kids = rows.children;
+    for (let i = 0; i < kids.length; i++) {
+      const child = kids[i];
+      if (child.name.indexOf("Row_") === 0) child.active = false;
+    }
+    for (let i = 0; i < heroes.length; i++) {
+      const hero = heroes[i];
+      let row = rows.getChildByName("Row_" + i);
+      if (!row) {
+        row = instantiate(template);
+        row.name = "Row_" + i;
+        row.parent = rows;
+      }
+      row.active = true;
+      row.setPosition(0, 300 - i * 100, 0);
+      const label = row.getChildByName("Label");
+      if (label) {
+        setText(label, heroRowText(hero.name, hero.level, hero.star) + " · 武器Lv" + (hero.weaponLevel || 1));
+      }
+      this.bindPrefabRow(row, i);
+    }
+  }
+
+  private bindPrefabRow(row: Node, index: number): void {
+    if (this.boundRows[row.name]) return;
+    this.boundRows[row.name] = true;
+    bindClick(row, () => this.openPrefabRow(index));
+  }
+
+  private openPrefabRow(index: number): void {
+    if (this.disposed) return;
+    const hero = this.rowHeroes[index];
+    if (!hero) return;
+    GameLog.shared.info("Hero", "open detail " + hero.id);
+    this.host.openHero(hero.id);
   }
 
   private noteError(text: string): void {
@@ -176,7 +271,28 @@ class HeroDetailController implements HeroDetailPage {
   private goldLabel: Node | null = null;
   private upgradeButton: Node | null = null;
 
-  constructor(private readonly host: HeroDetailHost) {
+  constructor(private readonly host: HeroDetailHost, existing?: Node) {
+    if (existing) {
+      this.node = existing;
+      this.body = existing;
+      const list = existing.getChildByName("PanelList");
+      if (list) list.active = false;
+      const detail = requireNode(existing, "PanelDetail");
+      detail.active = true;
+      this.nameLabel = requireNode(existing, "PanelDetail/Name");
+      this.levelLabel = requireNode(existing, "PanelDetail/Level");
+      this.atkLabel = requireNode(existing, "PanelDetail/Atk");
+      this.hpLabel = requireNode(existing, "PanelDetail/Hp");
+      this.defLabel = requireNode(existing, "PanelDetail/Def");
+      this.weaponLabel = requireNode(existing, "PanelDetail/Weapon");
+      this.goldLabel = requireNode(existing, "PanelDetail/Gold");
+      this.upgradeButton = requireNode(existing, "PanelDetail/BtnUpgrade");
+      bindClick(this.upgradeButton, () => void this.upgrade());
+      bindClick(requireNode(existing, "PanelDetail/BtnBack"), () => this.host.close());
+      GameLog.shared.info("Hero", "open detail prefab " + this.host.heroId());
+      void this.refresh();
+      return;
+    }
     this.node = uiNode("HeroDetailPage");
     place(createRect("bg", 720, 1280, PAGE_BG), this.node, 0, 0);
     this.body = uiNode("body");

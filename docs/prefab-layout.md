@@ -12,14 +12,17 @@
 | LoginPanel | `prefabs/ui/login/LoginPanel` | `Boot.ts` 的 `buildLoginPanel(...)` | `USE_LOGIN_PREFAB` |
 | CreateRolePanel | `prefabs/ui/login/CreateRolePanel` | `Boot.ts` 的 `buildCreateRolePanel(...)` | `USE_CREATE_ROLE_PREFAB` |
 | CityChrome | `prefabs/ui/city/CityChrome` | `MainApp.ts` 的 `mountCityChrome(...)` | `USE_CITY_CHROME_PREFAB` |
+| CityHub | `prefabs/ui/city/CityHub` | `MainApp.ts` 的 `buildCity()` | `USE_CITY_HUB_PREFAB` |
+| HeroPage | `prefabs/ui/hero/HeroPage` | `MainApp.ts` 的底栏「英雄」（Mock） | `USE_HERO_PREFAB` |
+| SummonPage | `prefabs/ui/summon/SummonPage` | `MainApp.ts` 的底栏「召唤」（Mock） | `USE_SUMMON_PREFAB` |
 
-三个 flag 默认 **true**：Mock 启动出 Login Prefab，创角出 CreateRole Prefab，进主城后顶栏底栏来自 CityChrome Prefab。
+Login / CreateRole / CityChrome / CityHub 四个主路径 flag 默认 **true**。Mock 启动出 Login Prefab，创角出 CreateRole Prefab，进主城后顶栏底栏来自 CityChrome，中间是 CityHub。底栏「英雄」「召唤」在 Mock 下再挂各自的 Prefab。真服只读页仍走原来的代码页。
 
 ## 回滚
 
-把要退回的常量改成 `false`。`false` 时仍调用原来的 `buildLoginPanel` / `buildCreateRolePanel` / `mountCityChrome`，代码搭 UI 没有删，行为与接 Prefab 之前一致。三个都改 `false` 即整页回到代码 UI。
+把要退回的常量改成 `false`。`false` 时仍调用原来的 `buildLoginPanel` / `buildCreateRolePanel` / `mountCityChrome` / `mountCityMap`，代码搭 UI 没有删。CityHub 改 `false` 时主城中间回到代码地图。
 
-加载失败会打日志（`login prefab …，改用代码 UI` / `create prefab` / `city chrome prefab`）并退回对应的代码 UI，避免预览停在空画面。这不等于把 flag 改成 false。
+加载失败会打日志（`login prefab …，改用代码 UI` / `create prefab` / `city chrome prefab` / `city hub prefab`）并退回对应的代码 UI，避免预览停在空画面。这不等于把 flag 改成 false。
 
 ## 节点
 
@@ -29,36 +32,36 @@
 
 适配只绑这些节点。Login 对外仍是 `setStatus` / `setDetail` / `setBusy` / `account` / `password` / `serverId`。CreateRole 仍是 `setStatus` / `setBusy` / `name`。CityChrome 仍是 `setIdentity` / `setCurrencies` / `setTabs`，底栏点击走原来的 `onTab`。
 
-## CityHub（P1，未接线）
+## CityHub（已接 MainApp）
 
 - **路径**：`client/assets/prefabs/ui/city/CityHub.prefab`（bundle 内 `ui/city/CityHub`）
-- **对照**：`MainApp.buildCity()`，设计基准 **720×1280**，坐标相对页面中心
-- **状态**：**未接** Boot、`MainApp.buildCity()`、以及任何 `USE_*_PREFAB`。主城枢纽仍由代码按钮画出。倩验收通过后，再由客户端加加载开关。
-- 与 CityChrome 分开：本 Prefab **没有** `Top` / `Bottom` / `Tab_*`。
-- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid，Prefab 目录里没有 PNG。
-- 再生：`python3 client/tools/gen_cityhub_prefab.py`（从现有 `.meta` 读 `@f9941`，不手写 uuid）
+- **挂载**：`MainApp.buildCity()`，`USE_CITY_HUB_PREFAB` 默认 **true**。加载失败退回 `mountCityMap`。不改 Boot。开关放在 MainApp，和 `USE_CITY_CHROME_PREFAB` 一样。
+- **对照**：`cityMapLayout.ts` 的方案 B，设计基准 **720×1280**。地图坐标是父节点左下角空间；`BtnMainline` 是画面中心系。
+- 与 CityChrome 分开：本 Prefab **没有** `Top` / `Bottom` / `Tab_*`。顶栏底栏仍是 CityChrome。
+- 不再是调试按钮矩阵。没有 `BtnIdle`、`BtnBag`、`BtnMail`、`BtnLogin7` 这一排矩形。
+- 素材只引用 `client/assets/resources/` 的 spriteFrame uuid。缺图不补假按钮。
+- 再生：`python3 client/tools/gen_cityhub_prefab.py`（从现有 `.meta` 读 `@f9941`，保留 Prefab uuid `118c08f7-43eb-477d-ab62-50f3ec65294f`）
 
-| 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
-|------|-------------|------|----------|
-| `Bg` | (0, 0) | 720×1280 | — |
-| `Title` | (0, 400) | 360×72 | `主城` |
-| `BtnMainline` | (0, 280) | 420×76 | `主线` |
-| `BtnIdle` | (0, 200) | 420×64 | `挂机` |
-| `BtnBag` | (0, 120) | 420×64 | `背包` |
-| `BtnMail` | (0, 40) | 420×64 | `邮件` |
-| `BtnLogin7` | (-249, -120) | 156×52 | `七日登录` |
-| `BtnGoal7` | (-83, -120) | 156×52 | `七日目标` |
-| `BtnShop` | (83, -120) | 156×52 | `商店` |
-| `BtnGift` | (249, -120) | 156×52 | `礼包` |
-| `BtnLimited` | (0, -188) | 420×48 | `限时活动` |
-| `BtnLog` | (-180, -40) | 140×48 | `日志` |
-| `BtnNotice` | (0, -40) | 140×48 | `公告` |
-| `BtnNetDrop` | (190, -40) | 160×48 | `模拟断线` |
-| `Hint` | (0, -248) | 640×28 | `系统从底栏进入。带「锁」的点开会提示条件` |
-| `Gate` | (0, -330) | 680×72 | `网关…` |
-| `NetState` | (0, -420) | 680×28 | `网络 connected` |
+| 节点 | 作用 |
+|------|------|
+| `CityParallax` | 可拖动的地图容器，初始滚到画面中心 |
+| `spr_map_bg1` … `spr_map_bg4` | 四层视差。近景 `bg1` 含 `spr_map_bg1_1` / `spr_map_bg1_2` |
+| `spr_map_bg*_1` | `ui/maps/map-bg-city-*-1` 底板 |
+| `spot-<atom>` | 19 个建筑，图标 `ui/city/main-city_icon-<atom>.png`，点击走原来的 `onCityAtom` |
+| `fx-<para>` | 有静帧的地图特效。`dx`、`chuanghu` 是脊柱，没有静帧，不放节点 |
+| `BtnMainline` | 画面左下的任务剑图标。打开原来的主线页，挑战仍进已经接上的战斗 |
 
-按钮节点上是 `cc.Sprite` + `cc.Button`（缩放过渡，`clickEvents` 为空）。文案在子节点 `Label`。有专用图的按钮另有子节点 `Icon`：`BtnMainline`（主线建筑）、`BtnBag`（背包）、`BtnMail`（邮件）、`BtnGoal7`（任务）、`BtnShop`（商店）。没有专用图的按钮只用通用按钮底加文字。`Title` 自身带 Label，底图是 `main-city_spr-title-bg`。
+建筑名字写在图标横幅上，Prefab 不再加第二行字。`BtnMainline` 的 `Label` 运行时写成当前关，例如 `主线 · 第1关`。
+
+### 缺口（不补假图）
+
+- 脊柱 `dx`、`chuanghu` 没有位图。
+- `createmaincitybtn` 的 33 个活动图标不铺在这张 Prefab 上，避免盖住建筑。右上仍是 CityChrome 的 `ActGroup`，「活动」列表仍是原来的入口。`btn-login-2..7`、`9..14` 仓内没有独立 PNG。
+- 地图用 variant 1。`map-bg-city-*-2` 在仓里，这张 Prefab 不用。
+- `ui/city/bg-main-scene.jpg` 不是这张可拖动的主城底板。
+- 底栏「铁匠铺」和「玩法」目录没有对应 Prefab，仍是代码页。玩法里的主线不在底栏；主线从 `BtnMainline` 进。
+- Mock 主线页本体仍是原来的代码页，这样挑战和战报不被这次改动拆开。真服挑战进战仍挂已有的 `BattlePage` Prefab。
+- 真服英雄 / 召唤只读页不挂 Mock 的 HeroPage / SummonPage。
 
 ## Mainline（P1，未接线）
 

@@ -114,7 +114,7 @@ Prefab `__type__` 与 Creator 3.8.8 `_RF.push` 必须是同一个 23 位字符�
 |--------|-----------|------|
 | `login/LoginPanel` | `ui/login/bg-loading.jpg` | 白 |
 | `login/CreateRolePanel` | `ui/login/bg-create-role.jpg` | 白 |
-| `city/CityHub` | `ui/city/bg-main-scene.jpg` | 白 |
+| `city/CityHub` | `ui/maps/map-bg-city-*` 视差板，不是全屏 `Bg` | 白 |
 | `city/CityChrome` | 顶 `main-scene_spr-up-bg`，底 `main-scene_spr-bottom-bg`（不是全屏地图） | 白 |
 | `bag/BagPage`、`bag/WireBagPage` | `ui/bag/map-bg-backpack-1.jpg` | 白 |
 | `hero/HeroPage`、`hero/WireHeroPage` | `ui/hero/map-bg-hero-palace-1.jpg` | 白 |
