@@ -25799,6 +25799,7 @@ function checkCityHub(): void {
       wireBattlePageSrc.indexOf("VfxSkill") >= 0 &&
       wireBattlePageSrc.indexOf("WireBattlePage 仍不挂") >= 0 &&
       wireBattlePageSrc.indexOf("不发新 c2s") >= 0 &&
+      wireBattlePageSrc.indexOf("回放结束不拆 BattlePage") >= 0 &&
       wireBattlePageSrc.indexOf("3103 不走") >= 0 &&
       wireBattlePageSrc.indexOf(".pvr") < 0 &&
       wireBattlePageSrc.indexOf("encodeFrame") < 0,
