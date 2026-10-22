@@ -33,6 +33,7 @@
  * USE_BATTLE_PREFAB 默认开。上述回放进战时挂 BattlePage.prefab：站位、血条、回合、战报，技能挂 VfxSkill，受击挂 VfxHit。WireBattlePage 仍不挂。
  * 同一份回放再写 Prefab 的 FloatDmg、FloatCrit、SkillNameBanner、前排 HeadAnchor。没有的 crit / level / buffs 藏起，不写成 0，也不编名字。
  * 开关关掉或 Prefab 加载失败时，仍用本页代码 UI，不另建这些挂点。跳过、撤退、关闭不发新 c2s。不改 Boot。
+ * 回放结束不拆 BattlePage。play 播完不再 showDone / clearBody。没有行动时只有站场，最后一拍只等 260ms，播完立刻拆页就是闪一下关掉。跳过停在最后一拍。撤退才进结算。关闭仍关掉主线页。没有恭喜获得层，不拿 3002 当自动关。
  * 不发 18001，不把 Mock 1201/1202 当战报。
  * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。3103 的 fighting=0 不 Toast。
  */
@@ -246,6 +247,8 @@ class WireMainlineController implements WireMainlinePage {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private sleepResolve: ((cont: boolean) => void) | null = null;
   private skipped = false;
+  /** 用户点了撤退。回放自己结束时不拆页，只有这个标记才进结算。 */
+  private wantResult = false;
   private spineWarned = false;
   private actors: SpineActor[] = [];
   private vfxNodes: { stem: string; node: Node; actor: SpineActor }[] = [];
@@ -953,12 +956,18 @@ class WireMainlineController implements WireMainlinePage {
     if (present.beats.length !== plan.beats.length) {
       GameLog.shared.warn("Mainline", "battle present beats " + present.beats.length + " / plan " + plan.beats.length);
     }
-    GameLog.shared.info("Mainline", "wire spine idx " + plan.stageId + " " + plan.stems.join(",") + " " + formatWireBattleMatch(snap, this.host.roleId()));
+    GameLog.shared.info("Mainline", "wire spine idx " + plan.stageId + " " + plan.stems.join(",") + " beats " + plan.beats.length + " " + formatWireBattleMatch(snap, this.host.roleId()));
+    this.wantResult = false;
     const ready = await this.showBattle(plan, present);
     if (!ready || this.disposed || !this.host.alive()) return;
     const played = await this.playback(plan);
-    if (!played || this.disposed || !this.host.alive()) return;
-    this.showDone(snap);
+    if (!played || this.disposed || !this.host.alive() || this.phase !== "battle") return;
+    if (this.wantResult) {
+      this.wantResult = false;
+      this.showDone(snap);
+      return;
+    }
+    this.holdBattle(snap);
   }
 
   private async showBattle(plan: WireSpineReplay, present: BattlePresentation): Promise<boolean> {
@@ -1004,7 +1013,10 @@ class WireMainlineController implements WireMainlinePage {
       0,
       -150
     );
-    place(createButton("跳过", () => this.skip(), 240, 52), this.body, 0, -280);
+    place(createButton("跳过", () => this.skip(), 200, 52), this.body, -140, -280);
+    place(createButton("关闭", () => {
+      if (!this.disposed) this.host.close();
+    }, 200, 52, BACK_FILL), this.body, 140, -280);
   }
 
   private mountPrefabBattle(plan: WireSpineReplay, shell: BattlePrefabShell): void {
@@ -1168,6 +1180,13 @@ class WireMainlineController implements WireMainlinePage {
     return true;
   }
 
+  /** 回放自己走完停在这里。站场、飘字、技能名都还在，等用户关或撤退。 */
+  private holdBattle(snap: WireBattleMatch): void {
+    if (this.disposed || this.phase !== "battle") return;
+    this.lastSnap = snap;
+    GameLog.shared.info("Mainline", "回放结束不拆 BattlePage " + formatWireBattleMatch(snap, this.host.roleId()));
+  }
+
   private showDone(snap: WireBattleMatch): void {
     this.phase = "done";
     this.lastSnap = snap;
@@ -1201,11 +1220,24 @@ class WireMainlineController implements WireMainlinePage {
     this.wake(true);
   }
 
-  /** 壳上的撤退。只结束本地回放，和跳过一样，不发 3002 / 3005 / 3020 / 3100 / 3098。 */
+  /**
+   * 壳上的撤退。只结束本地回放，不发 3002 / 3005 / 3020 / 3100 / 3098。
+   * 和跳过不一样：跳过停在最后一拍；撤退才拆战斗页，换成结算。
+   */
   private localRetreat(): void {
     if (this.disposed || this.phase !== "battle") return;
     GameLog.shared.info("Mainline", "撤退只结束本地回放，不发 c2s");
-    this.skip();
+    const snap = this.lastSnap;
+    if (!snap) return;
+    // sleep 还挂着时 skip 只把回放唤醒到最后一拍，showDone 等 play 回来再拆。
+    // wake 是微任务，这里如果立刻 showDone，最后一拍还没画完页就被清掉。
+    if (this.timer || this.sleepResolve) {
+      this.wantResult = true;
+      this.skip();
+      return;
+    }
+    this.wantResult = false;
+    this.showDone(snap);
   }
 
   private resultText(): string {
