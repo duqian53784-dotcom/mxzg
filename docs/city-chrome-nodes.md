@@ -8,13 +8,15 @@
 
 ## 脚本类 id
 
-Prefab 上的 `__type__` 固定为 `c46KHSe2NOkI8Vai2cC0fj`。这是 `CityChromeShell.ts.meta` 的 uuid `c4e8a1d2-7b63-4e90-8f15-6a2d9c0b47e3` 走 `compressUuid(uuid, true)` 得到的 22 位类 id。不要改这处绑定。
+稳定 chunk id、Prefab `__type__`、Creator 3.8.8 打包器写进 `_RF.push` 的 id，是同一个 23 位字符串：`c4e8aHSe2NOkI8Vai2cC0fj`。
 
-`c4e8aHSe2NOkI8Vai2cC0fj` 是同一个 uuid 的 23 位库文件名（`compressUuid(uuid, false)`，开头 5 位十六进制是 `c4e8a`）。它只出现在 `library/c4/` 的文件名里。引擎 `decodeUuid` 只解码 22 位，23 位会原样返回，不能拿来当类 id。
+它来自 `CityChromeShell.ts.meta` 的 uuid `c4e8a1d2-7b63-4e90-8f15-6a2d9c0b47e3`，走 `compressUuid(uuid, false)`（保留头 **5**，十六进制头是 `c4e8a`）。meta uuid 保持这 36 位，不要重铸，也不要把压缩串写回 `.meta`。
 
-Quick Compile 可以通过，控制台仍报 Missing class `c46KHSe2NOkI8Vai2cC0fj`。若 `client/temp/programming/**/chunks/*.js` 里是 `_RF.push({}, "c4e8aHSe2NOkI8Vai2cC0fj", "CityChromeShell")`，登记的 id 和 Prefab 查找的 id 不是同一个字符串。检查器里的「脚本编译失败」是这句 Missing class 的文案，不是 `CityChromeShell.ts` 的语法错误。仓库里的脚本、meta、Prefab 都没有这个 23 位串；它来自本机 `temp/programming` 缓存。meta 的 uuid 如果被写成这 23 位，`compressUuid` 发现不是 36 位 uuid 会原样返回，下一次编译还会把非法 id 写进 `_RF.push`。
+仓库里的对照是 `Boot.scene`。Boot 组件的 `__type__` 是 `7a774EzNstHxZ/KPGZkNwxs`，同样是 `Boot.ts.meta` 的 uuid `7a774133-36cb-47c5-9fca-3c6664370c6c` 走保留头 5 的 23 位形式。打包器 `_RF.push` 用的也是这一档。
 
-恢复：关掉 Creator，删掉 `client/temp/programming`，再打开工程让脚本重编。新 chunk 里应是 `_RF.push({}, "c46KHSe2NOkI8Vai2cC0fj", "CityChromeShell")`。不要把 23 位 id 写进 Prefab `__type__`，也不要写进脚本 meta 的 uuid。
+旧的 22 位 `c46KHSe2NOkI8Vai2cC0fj` 是 `compressUuid(uuid, true)`（保留头 2）。Prefab 若仍用它，就和 `_RF.push` 的 23 位对不上，检查器显示 MissingScript / 「脚本编译失败」。#150 里「删掉 temp、只接受 `c46…`」已经过时，不要再按那个恢复。
+
+改完 `__type__` 之后清一次 `client/library` 和 `client/temp`，再打开工程让脚本重编。新 chunk 里应是 `_RF.push({}, "c4e8aHSe2NOkI8Vai2cC0fj", "CityChromeShell")`，并且和 Prefab `__type__` 相同。
 
 自检：`python3 client/tools/check_citychrome_shell_id.py`。
 
