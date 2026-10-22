@@ -1,14 +1,19 @@
 # 战斗表现 Prefab
 
-主线战斗的表现壳，和一份更薄的真服接线占位。两页没有共用的根。给以后的 Client 换 Prefab 用，这一刀只落节点和贴图引用。
+主线战斗的表现壳，和一份更薄的真服接线占位。两页没有共用的根。
 
 | Prefab | 路径（相对 assets） | 状态 |
 |--------|---------------------|------|
-| BattlePage | `prefabs/ui/battle/BattlePage` | **未接** |
+| BattlePage | `prefabs/ui/battle/BattlePage` | **已接** 真服进战 |
 | WireBattlePage | `prefabs/ui/battle/WireBattlePage` | **未接** |
 
 - **路径**：`client/assets/prefabs/ui/battle/BattlePage.prefab`、`client/assets/prefabs/ui/battle/WireBattlePage.prefab`
-- **状态**：**未接** Boot、`MainApp`、`MainlinePage.ts`、`WireMainlinePage.ts`，以及任何 `USE_*_PREFAB`。不改协议脚本，不删代码 UI。运行时仍走代码搭的战斗页。验收通过后再由客户端加加载开关。
+- **开关**：`client/assets/scripts/ui/BattlePage.ts` 的 `USE_BATTLE_PREFAB`，默认 `true`，和登录、主城壳一样。改成 `false` 再预览，真服进战回到 `WireMainlinePage` 里原来的代码 UI。代码 UI 不删。不改 `Boot.ts`，不改 `USE_CITY_CHROME_PREFAB`，不改 CityChrome / 通用 Prefab 的 `__type__`。
+- **怎么打开**：预览加 `?transport=ws` 进真服主城，打开「更多」里的主线。页内仍用已经接好的按钮发 **3001**（挑战）、**3030**（切磋）或 **3102**（请求战报）。有 report 才进战斗表现，这时挂 BattlePage。**3006** 挂机战报本来就走同一套回放，所以也会看到这张壳。不新开 c2s。3103、3101、3099 仍不进这页。Mock 关卡页（`MainlinePage.ts`）仍是代码色块，不挂这张壳。
+- **吃哪些已有数据**：`planWireSpineReplay` 的 slots / beats。站位进 `Slot_E0`–`E2`、`Slot_A0`–`A2`（后排 `E3`–`E5`、`A3`–`A5` 留着壳上的占位）。血量写 `EnemyHp_*` / `AllyHp_*` 的 `Label`，两边都有数时才改 `Fill` 宽度；缺一边不写成 0，空着的三格血条保持 Prefab 里的 `120/120`、`100/100`。回合行写 `TopBar/RoundLabel`，同一行再写 `Log`。技能特效挂 `LayerVfx/VfxSkill`，受击挂 `LayerVfx/VfxHit`，无锚点时就停在文档里的 (0, 180) / (0, 120)。`VfxScreen` 保持空挂点，现有拍没有全屏角色。技能条 `Label` 在有技能拍时写成 batch2 的 stem；填充保持 Prefab 占位，因为 3001 / 3030 / 3102 不带技能槽能量。战剑、战旗没有对应槽，挂在 `LayerField` 上，坐标仍是原来的代码回放。
+- **按钮**：`BtnSkip` 跳过本地回放。`BtnRetreat` 同样只结束本地回放，不发 3002 / 3005 / 3020 / 3100 / 3098。`BtnClose` 关掉主线页，不发新帧。
+- **WireBattlePage**：没有站位和特效挂点。探针按钮仍在原来的真服主线页上，所以这张占位不挂。
+- **状态**：不改协议脚本，不删代码 UI。加载失败时 Toast「战斗 Prefab 未加载，改用代码 UI」，同一页继续播。
 - 设计基准 **720×1280**，坐标相对父节点中心。`LayerField`、`LayerVfx`、`LayerHud`、`EnemySlots`、`AllySlots`、`HpBars`、`SkillBars` 都是铺满页面的 (0, 0) 容器，所以它们的直接子节点就是页面坐标。`TopBar` 例外，它自己在页面上，子节点是它的本地坐标。
 - 不挂脚本组件。Prefab 里的 `__type__` 只有 `cc.*`。现有通用壳的脚本 id 仍是 23 位 packer（保留头 5）。这一刀没有新的类 id，生成器会拒绝非 `cc.*` 组件，也会拒绝 22 位脚本 id，避免退回 `compressUuid(uuid, true)`。
 - 不嵌 Spine。`VfxSkill` / `VfxHit` / `VfxScreen` 只有 `cc.UITransform`。Spine 仍在 `client/assets/resources/spine/`。不迁 PVR 的 skill / skill-effect / hero-beattack。

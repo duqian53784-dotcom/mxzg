@@ -1,7 +1,7 @@
 # Prefab / 资源目录约定（P0）
 
 - **素材**（图/音/字）：`client/assets/resources/`（`ui/`、`audio/`、`font/` 等）
-- 全屏 `map-bg` / `promotion-bg` 批次的文件对照见 [`asset-batch-map-bg.md`](asset-batch-map-bg.md)。页面 `Bg` 已换成实图；哪些页仍用 win-bg 染色、哪些只是内卡染色，见 [`prefab-common-and-tidy.md`](prefab-common-and-tidy.md)。下文有的小节还停在旧的 win-bg 染色描述，以那份实扫为准。`battle-scene` 未纳入。战斗表现壳见 [`battle-prefab-layout.md`](battle-prefab-layout.md)，未接 Boot / `USE_*`。
+- 全屏 `map-bg` / `promotion-bg` 批次的文件对照见 [`asset-batch-map-bg.md`](asset-batch-map-bg.md)。页面 `Bg` 已换成实图；哪些页仍用 win-bg 染色、哪些只是内卡染色，见 [`prefab-common-and-tidy.md`](prefab-common-and-tidy.md)。下文有的小节还停在旧的 win-bg 染色描述，以那份实扫为准。`battle-scene` 未纳入。战斗表现壳见 [`battle-prefab-layout.md`](battle-prefab-layout.md)。BattlePage 由 `USE_BATTLE_PREFAB` 挂进真服进战，不改 Boot。WireBattlePage 仍未接。
 - **界面 Prefab**：`client/assets/prefabs/ui/`（与素材分目录，勿把 Prefab 和 PNG 放同一层）
 - Prefab 内 SpriteFrame 仍通过 uuid 引用 `resources/` 下素材
 - **CreateRole 已合**入 `client/assets/prefabs/ui/login/CreateRolePanel.prefab`
@@ -673,17 +673,17 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 
 `BtnGold` / `BtnItem` / `BtnDiamond` 是 `wishPayButton("gold" | "item" | "diamond", 0, 5)`，字号 22。次数还没用完，所以不是 `今日已用完`。金币花费是 `WISH_GOLD_COST` 30，钻石是 `WISH_DIAMOND_COST` 5，许愿符是 `WISH_ITEM_COST` 1，钮上的道具名同样来自 `WISH_TOKEN_NAME`。三钮和 `BtnBack` 的 Sprite 都是 `button_btn-blue-big`，tint 分别是 `GOLD_FILL`、`ITEM_FILL`、`DIAMOND_FILL`、`BACK_FILL`。`BtnBack` 文案是 `返回`，没传字号，走 `createButton` 默认 24。四个按钮的 `clickEvents` 都是空的，子节点只有 `Label`。
 
-## Battle / 战斗表现（未接线）
+## Battle / 战斗表现
 
 主线战斗表现壳和真服接线占位各一份 Prefab。节点约定、坐标和实际引用的图见 [`battle-prefab-layout.md`](battle-prefab-layout.md)。
 
 | Prefab | 路径（相对 assets） | 状态 |
 |--------|---------------------|------|
-| BattlePage | `prefabs/ui/battle/BattlePage` | **未接** |
+| BattlePage | `prefabs/ui/battle/BattlePage` | **已接** 真服进战（`USE_BATTLE_PREFAB`，默认开） |
 | WireBattlePage | `prefabs/ui/battle/WireBattlePage` | **未接** |
 
 - **路径**：`client/assets/prefabs/ui/battle/BattlePage.prefab`、`client/assets/prefabs/ui/battle/WireBattlePage.prefab`
-- **状态**：**未接** Boot、`MainApp`、页面脚本，以及任何 `USE_*_PREFAB`。不改协议。运行时仍走代码 UI。
+- **状态**：BattlePage 挂在 `WireMainlinePage` 的进战回放上，吃已经接好的 3001 / 3030 / 3102（3006 走同一套回放）。不改 Boot，不改协议，不删代码 UI。`USE_BATTLE_PREFAB` 在 `BattlePage.ts`，改成 `false` 就回到代码战斗页。WireBattlePage 仍不挂。
 - 仓内没有 `resources/ui/battle/`。页面 `Bg` 用主线 `map-bg-mission-1.jpg`（`@f9941`，白，简单模式，拉到 720×1280）。不是染色占位。
 - 不挂脚本组件，所以没有壳 `__type__`。以后若加壳，必须是 23 位 packer id，不要退回 22 位。
 - 再生：`python3 client/tools/gen_battle_prefab.py`
