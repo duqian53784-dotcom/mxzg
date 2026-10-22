@@ -81,6 +81,7 @@ import { buildWireTimeTowerPage, WireTimeTowerPage } from "./WireTimeTowerPage";
 import { buildWireSpaceTimeAdventurePage, WireSpaceTimeAdventurePage } from "./WireSpaceTimeAdventurePage";
 import { buildWireMagicTowerRoadPage, WireMagicTowerRoadPage } from "./WireMagicTowerRoadPage";
 import { buildWireQiShenQiPage, WireQiShenQiPage } from "./WireQiShenQiPage";
+import { buildWireZhuShenJiTanPage, WireZhuShenJiTanPage } from "./WireZhuShenJiTanPage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -123,6 +124,7 @@ import { WIRE_TIME_TOWER_UNSYNCED_TOAST } from "../net/protocol/wireTimeTower";
 import { WIRE_SPACE_TIME_ADVENTURE_UNSYNCED_TOAST } from "../net/protocol/wireSpaceTimeAdventure";
 import { WIRE_MAGIC_TOWER_ROAD_UNSYNCED_TOAST } from "../net/protocol/wireMagicTowerRoad";
 import { WIRE_QI_SHEN_QI_UNSYNCED_TOAST } from "../net/protocol/wireQiShenQi";
+import { WIRE_ZHU_SHEN_JI_TAN_UNSYNCED_TOAST } from "../net/protocol/wireZhuShenJiTan";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -232,6 +234,7 @@ const TIME_TOWER_FILL = new Color(88, 72, 148, 255);
 const SPACE_TIME_ADVENTURE_FILL = new Color(72, 120, 148, 255);
 const MAGIC_TOWER_ROAD_FILL = new Color(120, 72, 96, 255);
 const QI_SHEN_QI_FILL = new Color(148, 108, 48, 255);
+const ZHU_SHEN_JI_TAN_FILL = new Color(104, 56, 152, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -288,6 +291,7 @@ export class MainApp extends Component {
   private spaceTimeAdventure: WireSpaceTimeAdventurePage | null = null;
   private magicTowerRoad: WireMagicTowerRoadPage | null = null;
   private qiShenQi: WireQiShenQiPage | null = null;
+  private zhuShenJiTan: WireZhuShenJiTanPage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -423,6 +427,8 @@ export class MainApp extends Component {
     this.magicTowerRoad = null;
     this.qiShenQi?.dispose();
     this.qiShenQi = null;
+    this.zhuShenJiTan?.dispose();
+    this.zhuShenJiTan = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -536,7 +542,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "zhuShenJiTan" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -624,6 +630,7 @@ export class MainApp extends Component {
     if (id === "spaceTimeAdventure") return this.mountSpaceTimeAdventure();
     if (id === "magicTowerRoad") return this.mountMagicTowerRoad();
     if (id === "qiShenQi") return this.mountQiShenQi();
+    if (id === "zhuShenJiTan") return this.mountZhuShenJiTan();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -747,6 +754,7 @@ export class MainApp extends Component {
     place(createButton("时空冒险", () => this.openSpaceTimeAdventure(), 160, 32, SPACE_TIME_ADVENTURE_FILL, 14), page, 0, 400);
     place(createButton("斩魔之路", () => this.openMagicTowerRoad(), 160, 32, MAGIC_TOWER_ROAD_FILL, 14), page, -200, 400);
     place(createButton("七神器", () => this.openQiShenQi(), 160, 32, QI_SHEN_QI_FILL, 14), page, 200, 400);
+    place(createButton("诸神祭坛", () => this.openZhuShenJiTan(), 180, 32, ZHU_SHEN_JI_TAN_FILL, 14), page, 0, 446);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -969,6 +977,7 @@ export class MainApp extends Component {
     if (id === "spaceTimeAdventure") return this.blockWireSpaceTimeAdventure();
     if (id === "magicTowerRoad") return this.blockWireMagicTowerRoad();
     if (id === "qiShenQi") return this.blockWireQiShenQi();
+    if (id === "zhuShenJiTan") return this.blockWireZhuShenJiTan();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -1376,11 +1385,19 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 75101 就停在主城。空包体也算同步。不重复拉 76542。不发 75102。75102 是购买推送 s2c，勿当 c2s。本模块无独立购写号。不做 75121。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。76542 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  /** 没收到过 s2c 75101 就停在主城。空包体也算同步。不重复拉 76542。不发 75102。75102 是购买推送 s2c，勿当 c2s。本模块无独立购写号。75121 诸神祭坛另帧，挂在其后，勿合并。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。76542 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
   private blockWireQiShenQi(): boolean {
     if (Session.source === "wire" && WireSession.hasQiShenQi()) return false;
     GameLog.shared.info("MainApp", "wire qi shen qi unsynced");
     this.shell?.showToast(WIRE_QI_SHEN_QI_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 75121 就停在主城。空包体也算同步。不重复拉 75101。不发 75122。75122 是抽奖，不编码、不发送。不做 75131。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是七神器 75101。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。75101 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireZhuShenJiTan(): boolean {
+    if (Session.source === "wire" && WireSession.hasZhuShenJiTan()) return false;
+    GameLog.shared.info("MainApp", "wire zhu shen ji tan unsynced");
+    this.shell?.showToast(WIRE_ZHU_SHEN_JI_TAN_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -2575,7 +2592,7 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 真服七神器。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 buy。无购买入口。不重复拉 76542。不发 75102。75102 是购买推送 s2c，勿当 c2s。本模块无独立购写号。不做 75121。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 76542 分开发，勿合并。不并入 76542。本刀不重复拉 76542，也不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  /** 真服七神器。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 buy。无购买入口。不重复拉 76542。不发 75102。75102 是购买推送 s2c，勿当 c2s。本模块无独立购写号。75121 诸神祭坛另帧，挂在其后，勿合并。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 76542 分开发，勿合并。不并入 76542。本刀不重复拉 76542，也不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
   private openQiShenQi(): void {
     GameLog.shared.info("MainApp", "click qi shen qi");
     if (this.blockWirePage("qiShenQi")) return;
@@ -2595,6 +2612,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.qiShenQi = page;
+    return page.node;
+  }
+
+  /** 真服诸神祭坛。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 info.floor 与 moneyDrawNum。无抽奖入口。不重复拉 75101。不发 75122。75122 是抽奖，不编码、不发送。不做 75131。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是七神器 75101。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 75101 分开发，勿合并。不并入 75101。本刀不重复拉 75101，也不重复拉 76542，也不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  private openZhuShenJiTan(): void {
+    GameLog.shared.info("MainApp", "click zhu shen ji tan");
+    if (this.blockWirePage("zhuShenJiTan")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("zhuShenJiTan");
+    this.refreshChrome();
+  }
+
+  private mountZhuShenJiTan(): Node {
+    this.zhuShenJiTan?.dispose();
+    const page = buildWireZhuShenJiTanPage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.zhuShenJiTan = page;
     return page.node;
   }
 
@@ -3469,6 +3509,10 @@ export class MainApp extends Component {
     if (id === "qiShenQi") {
       this.qiShenQi?.dispose();
       this.qiShenQi = null;
+    }
+    if (id === "zhuShenJiTan") {
+      this.zhuShenJiTan?.dispose();
+      this.zhuShenJiTan = null;
     }
     if (id === "bag") {
       this.bag?.dispose();
