@@ -3,7 +3,9 @@
  * 「关卡数据」在本页，再发空 c2s 3007（GReqChapterData 无字段，整帧 04000000bf0b0000）。
  * 展示 max_idx（= chapterId）、res_reward_time（= startTime）、extra_reward_id。不播 spine。
  * 挂在已合 3001 / 3010 / 3012 之后，按钮在「挑战」前面。只读，不落库。
- * 「挑战」在本页，发空 c2s 3001。已领首通在本页只读展示，打开时拉空 c2s 3010。
+ * 「挑战」在本页，发空 c2s 3001。和「挂机战报」同一行（y=-22），首屏可见。
+ * 信息页 body 放在裁切里，可上下拖动，底栏盖住的探针能拖上来。进战和结算把 body 挪回页面根，BattlePage 不进这层裁切。
+ * 已领首通在本页只读展示，打开时拉空 c2s 3010。
  * 快速战斗次数在本页只读展示，3010 之后再拉空 c2s 3012。不发 3013。
  * 「挂机战报」在本页，发 c2s 3006（chapterIdx、firstPos，不是空帧）。不发 3005。
  * 「挂机奖励」在本页，再发空 c2s 3004（GReqChapterItemList 无字段，整帧 04000000bc0b0000）。
@@ -30,7 +32,7 @@
  * 不发 18001，不把 Mock 1201/1202 当战报。
  * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。3103 的 fighting=0 不 Toast。
  */
-import { Color, Node } from "cc";
+import { Button, Color, EditBox, EventTouch, Mask, Node, UITransform } from "cc";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import { WireSession } from "../net/WireSession";
@@ -126,6 +128,14 @@ const LOG_COLOR = new Color(214, 224, 236, 255);
 const ENEMY_Y = 300;
 const ALLY_Y = 20;
 const BEAT_MS = 700;
+const PAGE_W = 720;
+const PAGE_H = 1280;
+/**
+ * 底栏中心约 -575、高 140，顶边约 -505。返回钮底边在 -672。
+ * 上滑这么多，底边停在底栏上方，查询阵法 / 获取阵容 / 关卡数据 / 返回都能点到。
+ */
+const PROBE_SCROLL_MAX = 220;
+const DRAG_PX = 12;
 
 export interface WireMainlineHost {
   alive(): boolean;
@@ -151,7 +161,12 @@ export function buildWireMainlinePage(host: WireMainlineHost): WireMainlinePage 
 class WireMainlineController implements WireMainlinePage {
   readonly node: Node;
   private readonly body: Node;
+  private readonly viewport: Node;
   private disposed = false;
+  private scrollY = 0;
+  private dragMoved = 0;
+  private dragging = false;
+  private offScroll: (() => void) | null = null;
   private waiting = false;
   private waitKind: WaitKind | null = null;
   private phase: Phase = "info";
@@ -223,9 +238,18 @@ class WireMainlineController implements WireMainlinePage {
 
   constructor(private readonly host: WireMainlineHost) {
     this.node = uiNode("WireMainlinePage");
-    place(createRect("bg", 720, 1280, PAGE_BG), this.node, 0, 0);
+    place(createRect("bg", PAGE_W, PAGE_H, PAGE_BG), this.node, 0, 0);
+    this.viewport = uiNode("probe-scroll");
+    const viewUi = this.viewport.addComponent(UITransform);
+    viewUi.setContentSize(PAGE_W, PAGE_H);
+    viewUi.setAnchorPoint(0.5, 0.5);
+    const mask = this.viewport.addComponent(Mask);
+    mask.type = Mask.Type.GRAPHICS_RECT;
+    this.viewport.active = false;
+    this.viewport.parent = this.node;
     this.body = uiNode("body");
     this.body.parent = this.node;
+    this.bindProbeScroll();
     this.seenSerial = WireSession.battleSerial;
     this.seenReportSerial = WireSession.chapterReportSerial;
     this.seenBattleReportSerial = WireSession.battleReportSerial;
@@ -247,6 +271,7 @@ class WireMainlineController implements WireMainlinePage {
     if (this.disposed) return;
     this.disposed = true;
     this.waiting = false;
+    this.unbindProbeScroll();
     this.wake(false);
     if (this.offSync) {
       this.offSync();
@@ -395,6 +420,7 @@ class WireMainlineController implements WireMainlinePage {
   private showInfo(): void {
     this.phase = "info";
     this.clearBody();
+    this.attachInfoScroll();
     place(createLabel(WIRE_MAINLINE_READONLY_TITLE, 40, { color: TITLE }), this.body, 0, 550);
     this.nowLabel = place(createLabel(this.nowText(), 28, { color: TITLE, width: 640 }), this.body, 0, 460);
     this.maxLabel = place(createLabel(this.maxText(), 28, { color: TITLE, width: 640 }), this.body, 0, 410);
@@ -409,8 +435,9 @@ class WireMainlineController implements WireMainlinePage {
     place(createButton("关+", () => this.bump("idx", 1), 88, 36, BACK_FILL), this.body, -120, 22);
     place(createButton("位-", () => this.bump("pos", -1), 88, 36, BACK_FILL), this.body, 40, 22);
     place(createButton("位+", () => this.bump("pos", 1), 88, 36, BACK_FILL), this.body, 160, 22);
-    place(createButton("挂机战报", () => this.hangupReport(), 200, 40, OPEN_FILL), this.body, -140, -22);
-    place(createButton("挂机奖励", () => this.pullIdleReward(), 200, 40, OPEN_FILL), this.body, 140, -22);
+    place(createButton("挂机战报", () => this.hangupReport(), 168, 40, OPEN_FILL), this.body, -204, -22);
+    place(createButton("挑战", () => this.challenge(), 140, 40, OPEN_FILL), this.body, 0, -22);
+    place(createButton("挂机奖励", () => this.pullIdleReward(), 168, 40, OPEN_FILL), this.body, 204, -22);
     this.idleProbeLabel = place(
       createLabel(this.idleProbeText(), 15, { color: TITLE, width: 640, height: 28 }),
       this.body,
@@ -462,10 +489,9 @@ class WireMainlineController implements WireMainlinePage {
       0,
       -574
     );
-    place(createButton("查询阵法", () => this.probeFormation(), 140, 36, OPEN_FILL), this.body, -270, -614);
-    place(createButton("获取阵容", () => this.pullLineUp(), 140, 36, OPEN_FILL), this.body, -90, -614);
-    place(createButton("关卡数据", () => this.pullChapterData(), 140, 36, OPEN_FILL), this.body, 90, -614);
-    place(createButton("挑战", () => this.challenge(), 120, 36, OPEN_FILL), this.body, 250, -614);
+    place(createButton("查询阵法", () => this.probeFormation(), 140, 36, OPEN_FILL), this.body, -180, -614);
+    place(createButton("获取阵容", () => this.pullLineUp(), 140, 36, OPEN_FILL), this.body, 0, -614);
+    place(createButton("关卡数据", () => this.pullChapterData(), 140, 36, OPEN_FILL), this.body, 180, -614);
     place(createButton("返回", () => this.host.close(), 200, 36, BACK_FILL), this.body, 0, -654);
   }
 
@@ -1225,7 +1251,94 @@ class WireMainlineController implements WireMainlinePage {
     paintBattleFloats(mount, row.floats);
   }
 
+  private bindProbeScroll(): void {
+    const onStart = () => {
+      this.dragMoved = 0;
+    };
+    const onMove = (event: EventTouch) => {
+      this.dragProbe(event);
+    };
+    const onEnd = () => {
+      this.endProbeDrag();
+    };
+    this.node.on(Node.EventType.TOUCH_START, onStart);
+    this.node.on(Node.EventType.TOUCH_MOVE, onMove);
+    this.node.on(Node.EventType.TOUCH_END, onEnd);
+    this.node.on(Node.EventType.TOUCH_CANCEL, onEnd);
+    this.offScroll = () => {
+      if (!this.node.isValid) return;
+      this.node.off(Node.EventType.TOUCH_START, onStart);
+      this.node.off(Node.EventType.TOUCH_MOVE, onMove);
+      this.node.off(Node.EventType.TOUCH_END, onEnd);
+      this.node.off(Node.EventType.TOUCH_CANCEL, onEnd);
+    };
+  }
+
+  private unbindProbeScroll(): void {
+    if (!this.offScroll) return;
+    this.offScroll();
+    this.offScroll = null;
+  }
+
+  /** 只拖信息页。进战 / 结算时 body 不在裁切里，避免把 BattlePage 一起拖走。 */
+  private dragProbe(event: EventTouch): void {
+    if (this.disposed || this.phase !== "info" || !this.viewport.active) return;
+    const delta = event && event.getUIDelta ? event.getUIDelta() : null;
+    const dy = delta && typeof delta.y === "number" ? delta.y : 0;
+    if (dy === 0) return;
+    this.dragMoved += Math.abs(dy);
+    if (this.dragMoved < DRAG_PX) return;
+    if (!this.dragging) {
+      this.dragging = true;
+      this.setProbeInput(false);
+    }
+    this.scrollY = clampScroll(this.scrollY + dy, PROBE_SCROLL_MAX);
+    this.body.setPosition(0, this.scrollY, 0);
+  }
+
+  private endProbeDrag(): void {
+    const wasDragging = this.dragging;
+    this.dragMoved = 0;
+    this.dragging = false;
+    if (wasDragging) this.setProbeInput(true);
+  }
+
+  private setProbeInput(enabled: boolean): void {
+    if (!this.body.isValid) return;
+    const kids = this.body.children;
+    for (let i = 0; i < kids.length; i++) {
+      const kid = kids[i];
+      if (!kid.isValid) continue;
+      const button = kid.getComponent(Button);
+      if (button) button.interactable = enabled;
+      const field = kid.getComponent(EditBox);
+      if (field) field.enabled = enabled;
+    }
+  }
+
+  private resetProbeScroll(): void {
+    this.scrollY = 0;
+    this.dragMoved = 0;
+    this.dragging = false;
+    if (this.body.isValid) this.body.setPosition(0, 0, 0);
+  }
+
+  private attachInfoScroll(): void {
+    if (!this.viewport.isValid || !this.body.isValid) return;
+    this.viewport.active = true;
+    if (this.body.parent !== this.viewport) this.body.parent = this.viewport;
+    this.resetProbeScroll();
+  }
+
+  /** 裁切只服务信息页。BattlePage 和代码战报挂在页面根上。 */
+  private detachInfoScroll(): void {
+    this.resetProbeScroll();
+    if (this.body.isValid && this.body.parent !== this.node) this.body.parent = this.node;
+    if (this.viewport.isValid) this.viewport.active = false;
+  }
+
   private clearBody(): void {
+    this.detachInfoScroll();
     this.battleShell = null;
     this.present = null;
     this.presentMount = null;
@@ -1267,6 +1380,12 @@ class WireMainlineController implements WireMainlinePage {
   private write(node: Node | null, text: string): void {
     if (node && node.isValid) setText(node, text);
   }
+}
+
+function clampScroll(value: number, max: number): number {
+  if (!isFinite(value) || value < 0) return 0;
+  if (value > max) return max;
+  return value;
 }
 
 function clampProbe(value: number): number {
