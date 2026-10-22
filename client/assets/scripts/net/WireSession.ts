@@ -591,10 +591,10 @@ import { wireBody } from "./protocol/wireLogin";
  * 相对顺序是 2001 → 5001 → 3007 → 3004 → 15000 → 4001 → 17000 → 12010 → 18001 → 22000 → 21010 → 27001 → 4004 → 13044 → 4101 → 4013 → 74100 → 51001 → 20001 → 20012 → 70001 → 73001 → 74300 → 68001 → 75501 → 59001 → 59010 → 55001 → 34001 → 32001 → 4402 → 4401 → 4201 → 74104 → 28100 → 28200 → 75601 → 75606 → 75615 → 28107 → 3099 → 3101 → 20101 → 3203 → 4044 → 13010 → 12020 → 26002 → 26001 → 61001 → 62001 → 63001 → 69001 → 74001 → 74120 → 76542 → 75101 → 75121 → 75131 → 75801 → 75901 → 76001 → 76101 → 76301 → 76081 → 76520 → 76251。不等 s2c 2001。51001 在 74100 之后发一次，20001 接在 51001 之后，20012 接在 20001 之后，70001 接在 20012 之后，73001 接在 70001 之后，74300 接在 73001 之后，68001 接在 74300 之后，75501 接在 68001 之后，59001 接在 75501 之后，59010 接在 59001 之后，55001 接在 59010 之后，34001 接在 55001 之后，32001 接在 34001 之后，4402 接在 32001 之后，4401 接在 4402 之后，4201 接在 4401 之后，74104 接在 4201 之后，28100 接在 74104 之后，28200 接在 28100 之后，75601 接在 28200 之后，75606 接在 75601 之后，75615 接在 75606 之后，28107 接在 75615 之后，3099 接在 28107 之后，3101 接在 3099 之后，20101 接在 3101 之后，3203 接在 20101 之后，4044 接在 3203 之后，13010 接在 4044 之后，12020 接在 13010 之后，26002 接在 12020 之后，26001 接在 26002 之后。不夹在 2001 和 3007 中间。11005、58017 仍不发。不做 3007 的加发。
  * 不发 5010，也不发 5004–5009、5011–5013。不发邮件领取、已读、删除。不发英雄升级。空 c2s 20001 只读，不发 20018，不发 20004、20010。空 c2s 20012 只读，不发 20013，不做 13260。空 c2s 70001 只读，不发 70002、70003、70004、70005、70006。70007、70008 仅推送，不当拉包请求。不做 20011。空 c2s 73001 只读，不发 73002、73003、73004。73002 有懒建和日刷写库，不当纯只读。本号无写库。不做 20011。空 c2s 74300 只读，不发 74301 升级/升阶、74302 装备/卸/换、74303 重置。74304 是推送，勿发、勿当拉包。本号无写库。不做 20011。与 74100 同城养成段。空 c2s 68001 只读，无 page。不发 68002 激活元素、68003 点亮星盘、68004 重置、68006 激活星盘。68005 是更新星数常量，勿当拉包。轻懒建，首次 load 可能 astrolabeDao.add 空行，无扣费、无领奖、无日刷写库，管理员认定可接受。不做 20011。空 c2s 75501 只读，无 page。不发 75502 添加、75503 卸下、75504 开格子、75505 清 cd。75506 是等级推送，勿当拉包。轻懒建，首次 get 可能 doCreate + tweakCubeDao.add，建免费槽并按战力塞供奉，无扣费、无领奖，管理员认定可接受，同星盘。不做 34001。不做 20011。空 c2s 59001 只读，无 page。handler scanDragonInfo 不读 msg。不发 59002 放源石、59003 提升鉴定、59005 加速鉴定、59006 鉴定领奖、59007 提升圣龙等级、59008 圣物替换、59009 调顺序、59011、59012 升星、59013 分解。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。轻懒建，首次 dragonDao.add。无扣费，无领奖。不做 34001。不做 20011。空 c2s 55001 只读，无 page。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。34001 是另只读，单独在 55001 之后拉包，勿与 55001 合并。不发 34002。34003 是解锁推送，勿发、勿当拉包。32001 另只读接在其后。不做 20011。34001 只读，无 page。轻懒建，RoleHeadPortraitService.select 无记录则 dao.add 默认解锁头。无扣费，无领奖，不改当前头像。不点金。不发 12020，不领奖。不发 18002、18003、18005、18007、18008。不发 22001。22002 只收。不发 21011、21012。21013 只收。不发 27002、27003、27004。4201 是英雄祈愿空体，接在 4401 之后。不发 4202。74104 另只读接在其后，勿合并。不发 4002、4005。不做 58001、58007。4004 不是 4001。不发 13041、13042、13043。13044 不是 4004。不发 4102、4103、4104、4105、4106、4107。不做 9001。4101 不是 4001，也不是 13044。不发 4014。4014 仅 s2c 推送。不把 4013 当领奖再发写号。4013 不是 4001，也不是 4101。不发 74101 升级、74102 携带、74103 卸下。74105、74106 仅 s2c 推送，不主动发。74100 不是 4001，也不是 4013。51001 无写操作号。20101 是进行中活动，另帧挂在 3101 之后，不发 20102。空 c2s 4402 只读，无 page。GReqHeroFashionList 空体。不发 4403 激活、4404 替换/使用、4405 皮肤升级。4406 无实现，勿发。4401 穿戴皮肤英雄列表另只读接在其后，勿合并。不做 20011。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮剔除，并可能把英雄 fashionId 置 0。只读展示。无扣费，无领奖。挂在 32001 之后。
  * s2c 2001 按 Role.proto：字段 9 角色名、字段 6 等级、字段 2 金币、字段 1 宝石（顶栏钻石）。
- * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。
+ * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。字段 1 res_reward_time 和字段 4 extra_reward_id 只在主线页探针展示，不写进按钮。
  * 不写 Session.stageId，主城按钮用 mainlineLabel()。
  * 至少有一个 idx 时点按钮打开只读代码页；两个都没有仍 Toast。
- * 不打开 Mock 关卡页，不发 3002。3010 是主线页只读已领首通，挂在已合 3001 之后，不进 pullIdle，不重发 3001。3012 是主线页只读快速战斗次数，挂在 3010 之后，不进 pullIdle，不重发 3010、3001。硬禁 3013。3006 是主线页挂机战报，挂在 3012 之后，点按钮才发，不进 pullIdle，不发 3005，胜了不回拉 3007。3102 是主线页请求战报，挂在 3006 之后，点按钮才发，不进 pullIdle，不从 3001 或 3006 自动接。纯读 getReport，无领奖，无扣费。3001/3006 的 battle_id 常回 BATTLE_REPORT_TIMEOUT。3103 是主线页预计算战斗力，挂在 3102 之后，点按钮才发，不进 pullIdle，不从 3102 自动接。只计算，不开战，不落库。空 hero_ids 回 fighting=0 仍是成功。不播 spine。3030 是主线页切磋，点按钮才发，不进 pullIdle。开战 STUDY 并落库。无领奖，无扣钻，不推进 chapterId。不从本帧自动发 3102。
+ * 不打开 Mock 关卡页，不发 3002。3010 是主线页只读已领首通，挂在已合 3001 之后，不进 pullIdle，不重发 3001。3012 是主线页只读快速战斗次数，挂在 3010 之后，不进 pullIdle，不重发 3010、3001。硬禁 3013。3006 是主线页挂机战报，挂在 3012 之后，点按钮才发，不进 pullIdle，不发 3005，胜了不回拉 3007。3102 是主线页请求战报，挂在 3006 之后，点按钮才发，不进 pullIdle，不从 3001 或 3006 自动接。纯读 getReport，无领奖，无扣费。3001/3006 的 battle_id 常回 BATTLE_REPORT_TIMEOUT。3103 是主线页预计算战斗力，挂在 3102 之后，点按钮才发，不进 pullIdle，不从 3102 自动接。只计算，不开战，不落库。空 hero_ids 回 fighting=0 仍是成功。不播 spine。3030 是主线页切磋，点按钮才发，不进 pullIdle。开战 STUDY 并落库。无领奖，无扣钻，不推进 chapterId。不从本帧自动发 3102。3007 空壳探针在主线页点「关卡数据」再发同一空帧，挂在已合 3001 / 3010 / 3012 之后、进战之前。只读 RoleMission。不落库，无扣费，不推进 chapterId。不进 pullIdle。
  * s2c 3004 按 Battle.proto：字段 1 reward_time、字段 2 max_reward_time。缺的不写成 0。
  * 不写 Session.gold。挂机页用 rewardTime / maxRewardTime。没有这两项时主城挂机只 Toast。
  * s2c 3005 只改 reward_time。没有奖励清单，不改金币和钻石。
@@ -714,6 +714,10 @@ export class WireSession {
   static nowIdx: number | null = null;
   /** s2c 3007 字段 3。0 是服上的 0。没出现过是 null。 */
   static maxIdx: number | null = null;
+  /** 最近一帧解开的 s2c 3007，给主线页「关卡数据」。null 表示还没收到。不写 Session.stageId。 */
+  static chapterProbe: WireChapterProgress | null = null;
+  /** 每记下一次关卡探针加一。主线页用来认领回包。3007 本身不落库。 */
+  static chapterProbeSerial = 0;
   /** 最近一帧能解开的 s2c 3001。null 表示还没收到。空包体是已同步空表。 */
   static battleMatch: WireBattleMatch | null = null;
   /** 每处理一帧能解开的 s2c 3001 加一。主线页用来认领回包。 */
@@ -1469,6 +1473,8 @@ export class WireSession {
   static prepareCity(): void {
     this.nowIdx = null;
     this.maxIdx = null;
+    this.chapterProbe = null;
+    this.chapterProbeSerial = 0;
     this.battleMatch = null;
     this.battleSerial = 0;
     this.chapterReward = null;
@@ -1630,6 +1636,8 @@ export class WireSession {
       this.resetHeroGather();
       this.nowIdx = null;
       this.maxIdx = null;
+      this.chapterProbe = null;
+      this.chapterProbeSerial = 0;
       this.battleMatch = null;
       this.battleSerial = 0;
       this.chapterReward = null;
@@ -1791,6 +1799,8 @@ export class WireSession {
     this.resetHeroGather();
     this.nowIdx = null;
     this.maxIdx = null;
+    this.chapterProbe = null;
+    this.chapterProbeSerial = 0;
     this.battleMatch = null;
     this.battleSerial = 0;
     this.chapterReward = null;
@@ -1990,6 +2000,22 @@ export class WireSession {
     net.send(WIRE_CHAPTER_CMD);
   }
 
+  /**
+   * 主线页「关卡数据」。再发一帧空的 c2s 3007，整帧 04000000bf0b0000。
+   * GReqChapterData 没有字段。挂在已合 3001 / 3010 / 3012 之后，进战前拉关卡状态。
+   * 不进 pullIdle，不重发 3001、3010、3012、3006、3102、3103、3030。
+   * 没连上或还没有 3007 idx 时返回 false。
+   * 只读 RoleMission。不落库，无扣费，不推进 chapterId。不写 Session.stageId。
+   * 不发 3002、3005、3008、3011。硬禁 3013、4601、29001。
+   */
+  static pullChapterProbe(): boolean {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return false;
+    if (!this.hasChapter()) return false;
+    net.send(WIRE_CHAPTER_CMD);
+    return true;
+  }
+
   /** 主城「主线」按钮。还没有 now_idx / max_idx 时是「主线 · 未同步」。 */
   static mainlineLabel(): string {
     return formatWireMainline(this.nowIdx, this.maxIdx);
@@ -1997,7 +2023,12 @@ export class WireSession {
 
   /** 主城主线入口。两个 idx 都没出现过就不打开只读页。max_idx=0 算有。 */
   static hasChapter(): boolean {
-    return wireChapterHasIdx({ nowIdx: this.nowIdx, maxIdx: this.maxIdx });
+    return wireChapterHasIdx({
+      nowIdx: this.nowIdx,
+      maxIdx: this.maxIdx,
+      resRewardTime: null,
+      extraRewardIds: [],
+    });
   }
 
   /**
@@ -3056,6 +3087,11 @@ export class WireSession {
     }
     if (!wireChapterHasIdx(progress)) {
       GameLog.shared.info("Wire", "s2c 3007 没有 now_idx/max_idx，主线不改");
+      if (Session.source === "wire" && Session.role) {
+        this.chapterProbe = copyChapterProbe(progress);
+        this.chapterProbeSerial += 1;
+        this.emit();
+      }
       return;
     }
     this.rememberChapter(progress);
@@ -4664,6 +4700,8 @@ export class WireSession {
     this.pendingChapter = {
       nowIdx: progress.nowIdx !== null ? progress.nowIdx : prev ? prev.nowIdx : null,
       maxIdx: progress.maxIdx !== null ? progress.maxIdx : prev ? prev.maxIdx : null,
+      resRewardTime: progress.resRewardTime !== null ? progress.resRewardTime : prev ? prev.resRewardTime : null,
+      extraRewardIds: progress.extraRewardIds.length > 0 ? progress.extraRewardIds.slice() : prev ? prev.extraRewardIds.slice() : [],
     };
   }
 
@@ -4699,6 +4737,8 @@ export class WireSession {
     if (Session.source !== "wire" || !Session.role) return;
     if (progress.nowIdx !== null) this.nowIdx = progress.nowIdx;
     if (progress.maxIdx !== null) this.maxIdx = progress.maxIdx;
+    this.chapterProbe = copyChapterProbe(progress);
+    this.chapterProbeSerial += 1;
     this.pendingChapter = null;
     GameLog.shared.info("Wire", wireChapterNote(progress));
     this.emit();
@@ -6983,6 +7023,15 @@ function copyPvpOpponent(row: WirePvpOpponent): WirePvpOpponent {
     playerId: row.playerId,
     name: row.name,
     marks: row.marks.map((mark) => ({ field: mark.field, text: mark.text })),
+  };
+}
+
+function copyChapterProbe(progress: WireChapterProgress): WireChapterProgress {
+  return {
+    nowIdx: progress.nowIdx,
+    maxIdx: progress.maxIdx,
+    resRewardTime: progress.resRewardTime,
+    extraRewardIds: progress.extraRewardIds.slice(),
   };
 }
 

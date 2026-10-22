@@ -1,5 +1,8 @@
 /**
  * 真服主线页。展示 s2c 3007 的 now_idx / max_idx。
+ * 「关卡数据」在本页，再发空 c2s 3007（GReqChapterData 无字段，整帧 04000000bf0b0000）。
+ * 展示 max_idx（= chapterId）、res_reward_time（= startTime）、extra_reward_id。不播 spine。
+ * 挂在已合 3001 / 3010 / 3012 之后，按钮在「挑战」前面。只读，不落库。
  * 「挑战」在本页，发空 c2s 3001。已领首通在本页只读展示，打开时拉空 c2s 3010。
  * 快速战斗次数在本页只读展示，3010 之后再拉空 c2s 3012。不发 3013。
  * 「挂机战报」在本页，发 c2s 3006（chapterIdx、firstPos，不是空帧）。不发 3005。
@@ -34,6 +37,8 @@ import {
 } from "../net/protocol/wireBattle";
 import {
   formatWireChapterIdx,
+  formatWireChapterProbe,
+  WIRE_CHAPTER_PROBE_UNSYNCED_TOAST,
   WIRE_MAINLINE_READONLY_NOTE,
   WIRE_MAINLINE_READONLY_TITLE,
 } from "../net/protocol/wireChapter";
@@ -104,7 +109,7 @@ export interface WireMainlinePage {
 }
 
 type Phase = "info" | "battle" | "done";
-type WaitKind = "3001" | "3006" | "3102" | "3103" | "3030";
+type WaitKind = "3001" | "3006" | "3102" | "3103" | "3030" | "3007";
 
 export function buildWireMainlinePage(host: WireMainlineHost): WireMainlinePage {
   return new WireMainlineController(host);
@@ -123,6 +128,7 @@ class WireMainlineController implements WireMainlinePage {
   private seenBattleReportSerial = 0;
   private seenPreComputeSerial = 0;
   private seenStudySerial = 0;
+  private seenChapterProbeSerial = 0;
   private chapterIdx = 1;
   private firstPos = 1;
   private battleId = "1";
@@ -146,6 +152,7 @@ class WireMainlineController implements WireMainlinePage {
   private reportLabel: Node | null = null;
   private fetchLabel: Node | null = null;
   private studyLabel: Node | null = null;
+  private chapterProbeLabel: Node | null = null;
   private strengthLabel: Node | null = null;
   private battleIdField: TextField | null = null;
   private reportTypeField: TextField | null = null;
@@ -180,6 +187,7 @@ class WireMainlineController implements WireMainlinePage {
     this.seenReportSerial = WireSession.chapterReportSerial;
     this.seenBattleReportSerial = WireSession.battleReportSerial;
     this.seenStudySerial = WireSession.studySerial;
+    this.seenChapterProbeSerial = WireSession.chapterProbeSerial;
     this.showInfo();
     if (!WireSession.hasChapterReward()) this.host.showToast(WIRE_CHAPTER_REWARD_UNSYNCED_TOAST);
     WireSession.pullChapterRewardList();
@@ -285,6 +293,15 @@ class WireMainlineController implements WireMainlinePage {
       void this.play({ empty: false, report: spar.report, marks: spar.marks });
       return;
     }
+    if (this.waitKind === "3007") {
+      if (WireSession.chapterProbeSerial === this.seenChapterProbeSerial) return;
+      this.seenChapterProbeSerial = WireSession.chapterProbeSerial;
+      this.waiting = false;
+      this.waitKind = null;
+      this.write(this.chapterProbeLabel, this.chapterProbeText());
+      this.write(this.statusLabel, this.statusText());
+      return;
+    }
     if (this.waitKind !== "3102") return;
     if (WireSession.battleReportSerial === this.seenBattleReportSerial) return;
     this.seenBattleReportSerial = WireSession.battleReportSerial;
@@ -347,8 +364,15 @@ class WireMainlineController implements WireMainlinePage {
     place(createButton("空壳探针", () => this.probeStrength(), 150, 36, OPEN_FILL), this.body, -220, -500);
     place(createButton("预计算", () => this.precomputeStrength(), 140, 36, OPEN_FILL), this.body, 0, -500);
     place(createButton("用3101", () => this.fillFromLineUp(), 140, 36, BACK_FILL), this.body, 210, -500);
-    place(createButton("挑战", () => this.challenge(), 200, 36, OPEN_FILL), this.body, 0, -548);
-    place(createButton("返回", () => this.host.close(), 200, 36, BACK_FILL), this.body, 0, -592);
+    this.chapterProbeLabel = place(
+      createLabel(this.chapterProbeText(), 15, { color: TITLE, width: 640, height: 32 }),
+      this.body,
+      0,
+      -540
+    );
+    place(createButton("关卡数据", () => this.pullChapterData(), 160, 36, OPEN_FILL), this.body, -160, -578);
+    place(createButton("挑战", () => this.challenge(), 160, 36, OPEN_FILL), this.body, 140, -578);
+    place(createButton("返回", () => this.host.close(), 200, 36, BACK_FILL), this.body, 0, -618);
   }
 
   private renderInfo(): void {
@@ -362,7 +386,29 @@ class WireMainlineController implements WireMainlinePage {
     this.write(this.fetchLabel, this.fetchText());
     this.write(this.studyLabel, this.studyText());
     this.write(this.strengthLabel, this.strengthText());
+    this.write(this.chapterProbeLabel, this.chapterProbeText());
     if (!this.waiting) this.write(this.statusLabel, this.statusText());
+  }
+
+  private pullChapterData(): void {
+    if (this.disposed || this.phase === "battle" || this.waiting) return;
+    if (!this.host.connected()) {
+      this.host.showToast(errorText(ErrorCode.NET_NOT_CONNECTED));
+      return;
+    }
+    if (!WireSession.hasChapter()) {
+      this.host.showToast(WIRE_CHAPTER_PROBE_UNSYNCED_TOAST);
+      return;
+    }
+    this.seenChapterProbeSerial = WireSession.chapterProbeSerial;
+    if (!WireSession.pullChapterProbe()) {
+      this.host.showToast(WIRE_CHAPTER_PROBE_UNSYNCED_TOAST);
+      return;
+    }
+    this.waitKind = "3007";
+    this.waiting = true;
+    this.write(this.statusLabel, "已发 3007 空壳，等待关卡数据");
+    GameLog.shared.info("Mainline", "wire chapter data 3007 empty");
   }
 
   private challenge(): void {
@@ -725,6 +771,10 @@ class WireMainlineController implements WireMainlinePage {
     return report + "\n" + this.nowText() + "\n" + this.maxText() + "\n" + this.quickText() + hang + fetched + spar;
   }
 
+  private chapterProbeText(): string {
+    return formatWireChapterProbe(WireSession.chapterProbe);
+  }
+
   private studyText(): string {
     const base = formatWireStudy(WireSession.study);
     if (!this.persistedBattleId) return base;
@@ -851,6 +901,7 @@ class WireMainlineController implements WireMainlinePage {
     this.reportLabel = null;
     this.fetchLabel = null;
     this.studyLabel = null;
+    this.chapterProbeLabel = null;
     this.battleIdField = null;
     this.reportTypeField = null;
     this.studyTypeField = null;

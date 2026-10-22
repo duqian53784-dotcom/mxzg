@@ -127,10 +127,10 @@ s2c 1002 字段 1 是新角色 id。日志里创角成功后会再发一次 1001
 
 | 字节 | 字段 | 三例解开的值 | 主城按钮 |
 |------|------|----------------|----------|
-| `08 …` | 1 varint，`res_reward_time` | 1792412535 / 1792464848 / 1792466742 | 不写。这是上次领资源的 unix 秒 |
+| `08 …` | 1 varint，`res_reward_time` | 1792412535 / 1792464848 / 1792466742 | 不写进主城按钮。等于 RoleMission.startTime。主线页「关卡数据」展示 |
 | （没有 `10`） | 2 varint，`now_idx` | 三例都没有这个字段 | 不写成 0。按钮上不出现「当前」 |
 | `18 00` | 3 varint，`max_idx` | 0 | **最高 0**。0 是包里的 0 |
-| （没有） | 4 repeated，`extra_reward_id` | 三例都没有 | 不读 |
+| （没有） | 4 repeated，`extra_reward_id` | 三例都没有 | 主线页探针按出现顺序展示。没有写「未带」。不写成 idx，也不写成 0 |
 
 所以日志这三例的按钮是「主线 · 最高 0」，不是「主线 · 未同步」，也不是 Mock 的「主线 · 第 1 关」。`Session.stageId` 仍是进主城时的占位 1，不拿来画按钮，也不拿来发 `stage.enter`。两个 idx 都没有时，点这颗按钮仍 Toast，不打开页。至少有一个 idx（含这一例的最高 0）时，点按钮打开代码页「主线（真服只读）」：当前 idx 缺则写「未同步」，最高 idx 缺则写「未同步」，并写「页内「挑战」发空 c2s 3001，report 播 spine，不发 3002」。不打开 Mock 关卡列表，不发 3002。主线页打开时只读拉空 c2s 3010，挂在已合 3001 之后，不进 pullIdle，不重发 3001。接着只读拉空 c2s 3012（快速战斗次数，整帧 04000000c40b0000），挂在 3010 之后，不重发 3010。硬禁 3013。挑战只发空 c2s 3001，不发 1202 结算。
 
@@ -138,13 +138,21 @@ s2c 1002 字段 1 是新角色 id。日志里创角成功后会再发一次 1001
 
 解不开的 3007（半截、坏 varint、空包）直接忽略，按钮保持上一次。拆帧循环不因此停。占位表里没有 3007。Mock 的 `stage.enter` 仍是 **1201**。
 
+## 关卡数据 3007（主线页点「关卡数据」再发空壳，不进活动链）
+
+登录链里的空 c2s **3007** 仍在，整帧 `04 00 00 00 bf 0b 00 00`（`04000000bf0b0000`）。`GReqChapterData` 没有字段。主线页在已合的 **3001 / 3010 / 3012** 之后、点「挑战」之前，可以再发同一空壳。按钮和 3030、3102 的探针并排。不进 `pullIdle`，不重发 3001、3010、3012、3006、3102、3103、3030。
+
+s2c 仍是 `GResChapterData`。页上写出这一包实际带上的三列：`max_idx`（= `RoleMission.chapterId`）、`res_reward_time`（= `startTime`）、`extra_reward_id`（repeated，按出现顺序）。没有的列写「未带」，不写成 0。出现的 0 仍写 0。时间和 extra 不写进主城按钮，也不写 `Session.stageId`。
+
+服侧只读 `RoleMission`。不落库，无扣费，不推进 chapterId。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。不把 1201/1202 当真服。不写金币，不写钻石。不改 Boot、USE_*、CityChrome、CityMap、SafeArea。
+
 ## 主线进战 3001（点挑战才发，不进活动链）
 
 空 c2s **3001** 是 `GReqBattleMatch`，没有字段。整帧 `04 00 00 00 b9 0b 00 00`。s2c 是 `GResBattleMatch`：字段 1 `report` 是 `BattleReport`。空包体是已同步空表，不播 Mock。`BattleReport` 字段 2 是 `battle_type`，不是胜负。出现的 0 仍是 0。胜负看 `win_id`，对照 `atk_id` 或当前角色 id。没有 `win_id` 不写成 0，不判胜，不回拉 3007。`rounds` 解成回合和行动。有 report 时在主线页里播 `resources/spine/` 首批套的站场和回合攻击（`10105008`、`10405005`、`10405006`、`10405007`、`10505005`、`10505010`；英雄号对上则用 `10101` 等站立套），另挂 `zhandoujijian` 的 `idle` 和 `battle-sword` 的 `stand`。胜且没有防守英雄时敌方用 `crusade_boss_die`。行动带 `skill_id` 时，对 #145 batch2 技能套取模，在攻击者身上再挂一个命名 Spine（`zadan`、`zadan_tx`、`heidong`、`guangzhu`、`jiban`、`Dragon-1`…`Dragon-4`、`act`、`chaihong`、`ZDKS`、`hytx`、`lizi`、`dx`、`lijijihuo`、`zhihuanfazhen`、`prophet-tree-effect-1`、`prophet-tree-effect-2`）。有 `hits` 时在受击者身上挂 `yanwu`。没有技能号、没有 hits，或表是空的，就不挂这层，站场和攻击照旧。这是原型，不是旧技能表。不播 `bisha`，不播英雄 `hit` 动作，不接 `hd/skill`、`hd/skill-effect`、`hero-beattack` 的 PVR。这些命名套仍是 Spine **3.7.94**，工程是 Creator **3.8.8** 自带的 spine-3.8 运行时，曲线、约束、裁剪可能导入失败或播不出来；失败时跳过该特效，不拆站场和攻击。本刀不重导出。加载失败 Toast「spine 未加载」。不回落 Mock。
 
 服侧 `BattleHandler.challenge` 读 `RoleMission.chapterId` 打 chapterId+1。3007 的 max_idx 就是这个 chapterId。胜则写 receiveReward / chapterId / missionRankTime。本端不发 3002；服可能另推 first_reward。Handler 内未见扣体力。
 
-插入点是独立主线进战：已合的 3007 之后，可选已有的 3101，然后才是页内 3001。不接在 76251 活动链末，不夹活动号。`pullIdle` 不发 3001。3102 是请求战报，主线页另发，不从 3001 自动接。3103 是预计算战斗力，主线页另发，不从 3102 自动接，不播 spine。3006 是挂机战报，主线页另发，不从 3001 发。胜（`win_id` 对上 `atk_id` 或角色 id）后再拉一次已有的空 c2s 3007 刷新 idx，不是登录链加发。`battle_type` 单独不回拉。
+插入点是独立主线进战：已合的 3007 之后，可选已有的 3101，页内先点「关卡数据」再发空 3007，然后才是页内 3001。不接在 76251 活动链末，不夹活动号。`pullIdle` 不发 3001。3102 是请求战报，主线页另发，不从 3001 自动接。3103 是预计算战斗力，主线页另发，不从 3102 自动接，不播 spine。3006 是挂机战报，主线页另发，不从 3001 发。胜（`win_id` 对上 `atk_id` 或角色 id）后再拉一次已有的空 c2s 3007 刷新 idx，不是登录链加发。`battle_type` 单独不回拉。
 
 入口在「更多」里已有的主线页内。主屏不新增矩形。两个 idx 都没有时 Toast「真服未同步」，不回落 Mock，不把 1201/1202 当战报。不发 3002、3005、3008、3011、3013、3100、3097、3098、18002、18001。硬禁 4601、29001。不改 Boot、USE_*、CityMap、SafeArea。
 

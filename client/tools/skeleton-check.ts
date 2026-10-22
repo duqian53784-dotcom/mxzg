@@ -481,8 +481,14 @@ import {
 import {
   decodeWireChapter,
   formatWireChapterIdx,
+  formatWireChapterProbe,
   formatWireMainline,
   WIRE_CHAPTER_CMD,
+  WIRE_CHAPTER_FRAME,
+  WIRE_CHAPTER_PROBE_BANNED_CMDS,
+  WIRE_CHAPTER_PROBE_NOTE,
+  WIRE_CHAPTER_PROBE_SIDE_EFFECT,
+  WIRE_CHAPTER_PROBE_UNSYNCED_TOAST,
   WIRE_MAINLINE_READONLY_NOTE,
   WIRE_MAINLINE_READONLY_TITLE,
 } from "../assets/scripts/net/protocol/wireChapter";
@@ -16175,6 +16181,73 @@ async function checkWs(): Promise<void> {
     );
     const chapterExtra = decodeWireChapter(concatBytes(fieldVarint(3, 2), fieldVarint(4, 11)));
     assert(chapterExtra !== null && chapterExtra.nowIdx === null && chapterExtra.maxIdx === 2, "extra_reward_id is not an idx");
+    assert(
+      chapterTimeOnly !== null && chapterTimeOnly.resRewardTime === 1792464848 && chapterTimeOnly.extraRewardIds.length === 0,
+      "res_reward_time is kept and is not written as an extra id"
+    );
+    const loggedChapter = decodeWireChapter(chapterSamples[1]);
+    assert(
+      loggedChapter !== null &&
+        loggedChapter.maxIdx === 0 &&
+        loggedChapter.resRewardTime === 1792464848 &&
+        loggedChapter.extraRewardIds.length === 0 &&
+        formatWireChapterProbe(loggedChapter).indexOf("max_idx 0 (= chapterId)") >= 0 &&
+        formatWireChapterProbe(loggedChapter).indexOf("res_reward_time 1792464848 (= startTime)") >= 0 &&
+        formatWireChapterProbe(loggedChapter).indexOf("extra_reward_id 未带") >= 0,
+      "logged 3007 shows max_idx 0, res_reward_time and a missing extra_reward_id"
+    );
+    const chapterIds = decodeWireChapter(concatBytes(fieldVarint(1, 1792464848), concatBytes(fieldVarint(3, 4), concatBytes(fieldVarint(4, 3), fieldVarint(4, 0)))));
+    assert(
+      chapterIds !== null &&
+        chapterIds.maxIdx === 4 &&
+        chapterIds.resRewardTime === 1792464848 &&
+        chapterIds.extraRewardIds.join(",") === "3,0" &&
+        formatWireChapterProbe(chapterIds).indexOf("extra_reward_id 3,0") >= 0,
+      "extra_reward_id keeps order and a present zero"
+    );
+    assert(formatWireChapterProbe(null) === "关卡数据 " + WIRE_CHAPTER_PROBE_UNSYNCED_TOAST, "unsynced 3007 probe toast text");
+    assert(WIRE_CHAPTER_FRAME === "04000000bf0b0000" && bytesToHex(encodeFrame(WireCmd.chapterData)) === WIRE_CHAPTER_FRAME, "3007 empty shell constant is bf 0b");
+    assert(
+      WIRE_CHAPTER_PROBE_NOTE.indexOf("04000000bf0b0000") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("max_idx") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("chapterId") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("res_reward_time") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("startTime") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("extra_reward_id") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("不进 pullIdle") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("只读 RoleMission") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("不落库") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("无扣费") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("不推进 chapterId") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("3002") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("3005") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("3008") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("3011") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("3013") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("4601") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("29001") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("1201") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("1202") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("不改 Boot") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("3030") >= 0 &&
+        WIRE_CHAPTER_PROBE_NOTE.indexOf("3102") >= 0 &&
+        WIRE_CHAPTER_PROBE_SIDE_EFFECT.indexOf("只读 RoleMission") >= 0 &&
+        WIRE_CHAPTER_PROBE_SIDE_EFFECT.indexOf("不落库") >= 0 &&
+        WIRE_CHAPTER_PROBE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+        WIRE_CHAPTER_PROBE_SIDE_EFFECT.indexOf("不推进 chapterId") >= 0 &&
+        WIRE_CHAPTER_PROBE_SIDE_EFFECT.indexOf("04000000bf0b0000") >= 0 &&
+        WIRE_CHAPTER_PROBE_SIDE_EFFECT.indexOf("不进 pullIdle") >= 0 &&
+        WIRE_CHAPTER_PROBE_SIDE_EFFECT.indexOf("不写 Session.stageId") >= 0,
+      "3007 probe note names the empty shell, the three fields, and the banned cmds"
+    );
+    for (let chapterBan = 0; chapterBan < WIRE_CHAPTER_PROBE_BANNED_CMDS.length; chapterBan++) {
+      assert(encodeWireMessage({ cmd: WIRE_CHAPTER_PROBE_BANNED_CMDS[chapterBan] }) === null, WIRE_CHAPTER_PROBE_BANNED_CMDS[chapterBan] + " stays off the 3007 probe");
+    }
+    const chapterShell = encodeWireMessage({ cmd: "wire.3007" });
+    assert(
+      chapterShell !== null && chapterShell.cmdId === 3007 && bytesToHex(chapterShell.bytes) === WIRE_CHAPTER_FRAME && chapterShell.note === "空体",
+      "3007 probe reuses the empty login frame"
+    );
     assert(decodeWireChapter(new Uint8Array(0)) === null, "empty 3007 ignored");
     assert(decodeWireChapter(chapterSamples[1].subarray(0, 3)) === null, "truncated 3007 ignored");
     assert(decodeWireChapter(new Uint8Array([0xff, 0xff, 0xff])) === null, "bad 3007 ignored");
@@ -16347,6 +16420,17 @@ async function checkWs(): Promise<void> {
       WireSession.prepareCity();
       WireSession.flush();
       assert(WireSession.nowIdx === null && WireSession.maxIdx === 0, "flush writes max_idx 0 from the log");
+      assert(
+        WireSession.chapterProbe !== null &&
+          WireSession.chapterProbe.maxIdx === 0 &&
+          WireSession.chapterProbe.resRewardTime === 1792464848 &&
+          WireSession.chapterProbe.extraRewardIds.length === 0 &&
+          formatWireChapterProbe(WireSession.chapterProbe).indexOf("(= chapterId)") >= 0 &&
+          formatWireChapterProbe(WireSession.chapterProbe).indexOf("(= startTime)") >= 0 &&
+          Session.stageId === 1 &&
+          Session.gold === 0,
+        "flush shows 3007 max_idx and res_reward_time without writing stage or gold"
+      );
       assert(WireSession.mainlineLabel() === "主线 · 最高 0", "city label leaves 未同步");
       assert(WireSession.hasChapter(), "max_idx 0 opens the readonly page");
       assert(
@@ -16748,6 +16832,14 @@ async function checkWs(): Promise<void> {
       assert(WireSession.maxIdx === 0 && WireSession.nowIdx === null && sawWire("3007 解不开"), "bad 3007 keeps the label");
       roleSockets[0].push(encodeFrame(WireCmd.chapterData, fieldVarint(1, 1792464848)));
       assert(WireSession.maxIdx === 0 && WireSession.nowIdx === null && sawWire("没有 now_idx"), "reward time does not clear idx");
+      assert(
+        WireSession.chapterProbe !== null &&
+          WireSession.chapterProbe.resRewardTime === 1792464848 &&
+          WireSession.chapterProbe.maxIdx === null &&
+          WireSession.maxIdx === 0 &&
+          Session.stageId === 1,
+        "reward time updates the probe and does not clear the city idx"
+      );
       roleSockets[0].push(encodeFrame(WireCmd.chapterData, fieldVarint(2, 7)));
       assert(WireSession.nowIdx === 7 && WireSession.maxIdx === 0, "later now_idx keeps max_idx");
       assert(WireSession.mainlineLabel() === "主线 · 当前 7 / 最高 0", "label shows both idx");
@@ -17047,9 +17139,10 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.pullBattleReport("1", "1"), "3102 does not send without 3007 idx");
       assert(!WireSession.pullPreComputeStrength(), "3103 does not send without 3007 idx");
       assert(!WireSession.pullStudy(0, 2, 1), "3030 does not send without 3007 idx");
+      assert(!WireSession.pullChapterProbe(), "3007 probe does not send without an idx");
       WireSession.nowIdx = savedNow;
       WireSession.maxIdx = savedMax;
-      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102, 3103 or 3030 on the wire");
+      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102, 3103, 3030 or another 3007 on the wire");
       const sentBeforeQuick = roleSockets[0].sent.length;
       const goldBeforeQuick = Session.gold;
       const quickSentBefore = roleSockets[0].sent.length;
@@ -17312,6 +17405,51 @@ async function checkWs(): Promise<void> {
       assert(
         studyFollow === "0b0000001e0c00000a023737120131" && studyFollow.indexOf("d60b0000") < 0,
         "3102 follow-up uses battle_id 77 type 1 and is not another 3030"
+      );
+      const sentBeforeChapterProbe = roleSockets[0].sent.length;
+      const goldBeforeChapterProbe = Session.gold;
+      const stageBeforeChapterProbe = Session.stageId;
+      const nowBeforeChapterProbe = WireSession.nowIdx;
+      assert(WireSession.pullChapterProbe(), "3007 probe pulls before battle when idx is present");
+      assert(roleSockets[0].sent.length === sentBeforeChapterProbe + 1, "3007 probe is one frame and does not resend 3030, 3102 or 3001");
+      const chapterProbeSent = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeChapterProbe] as ArrayBuffer));
+      assert(
+        chapterProbeSent === "04000000bf0b0000" && chapterProbeSent !== "04000000d60b0000" && chapterProbeSent !== "040000001e0c0000",
+        "3007 probe is the empty shell and is not 3030 or 3102"
+      );
+      assert(Session.gold === goldBeforeChapterProbe && Session.diamond === 0 && Session.stageId === stageBeforeChapterProbe, "sending 3007 does not write gold, diamond or stage");
+      roleSockets[0].push(
+        encodeFrame(
+          WireCmd.chapterData,
+          concatBytes(fieldVarint(1, 1792464848), concatBytes(fieldVarint(3, 4), concatBytes(fieldVarint(4, 3), fieldVarint(4, 0))))
+        )
+      );
+      assert(
+        WireSession.chapterProbe !== null &&
+          WireSession.chapterProbe.maxIdx === 4 &&
+          WireSession.chapterProbe.resRewardTime === 1792464848 &&
+          WireSession.chapterProbe.extraRewardIds.join(",") === "3,0" &&
+          formatWireChapterProbe(WireSession.chapterProbe).indexOf("max_idx 4 (= chapterId)") >= 0 &&
+          formatWireChapterProbe(WireSession.chapterProbe).indexOf("res_reward_time 1792464848 (= startTime)") >= 0 &&
+          formatWireChapterProbe(WireSession.chapterProbe).indexOf("extra_reward_id 3,0") >= 0 &&
+          WireSession.maxIdx === 4 &&
+          WireSession.nowIdx === nowBeforeChapterProbe &&
+          Session.gold === goldBeforeChapterProbe &&
+          Session.stageId === stageBeforeChapterProbe &&
+          roleSockets[0].sent.length === sentBeforeChapterProbe + 1,
+        "3007 probe shows max_idx, res_reward_time and extra_reward_id and does not persist"
+      );
+      roleSockets[0].push(encodeFrame(3002, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3008, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3011, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3013, fieldVarint(1, 1)));
+      roleSockets[0].push(encodeFrame(3005));
+      assert(
+        WireSession.chapterProbe !== null &&
+          WireSession.chapterProbe.maxIdx === 4 &&
+          WireSession.chapterProbe.extraRewardIds.join(",") === "3,0" &&
+          roleSockets[0].sent.length === sentBeforeChapterProbe + 1,
+        "3002, 3008, 3011, 3013 and 3005 do not replace the 3007 probe or send another frame"
       );
       roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
       assert(WireSession.battleMatch !== null && WireSession.battleMatch.empty, "mock 1201 does not replace the 3001 report");
