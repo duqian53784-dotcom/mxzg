@@ -37,6 +37,46 @@ export function battleVfxPath(role: BattleVfxRole): string {
   return "LayerVfx/VfxScreen";
 }
 
+/** #163 场内挂点。缺了就整页退回代码 UI，不另建同名节点。 */
+export const BATTLE_FLOAT_LAYER_PATH = "LayerFloat";
+export const BATTLE_FLOAT_ROOT_PATH = "LayerFloat/FloatDamageRoot";
+export const BATTLE_FLOAT_CRIT_PATH = "LayerFloat/FloatCrit";
+export const BATTLE_SKILL_NAME_BANNER_PATH = "SkillNameBanner";
+export const BATTLE_SKILL_NAME_LABEL_PATH = "SkillNameBanner/SkillNameLabel";
+export const BATTLE_FLOAT_SLOT_COUNT = 4;
+export const BATTLE_BUFF_SLOT_COUNT = 3;
+
+export function battleFloatDmgPath(index: number): string | null {
+  if (!slotIndex(index, BATTLE_FLOAT_SLOT_COUNT - 1)) return null;
+  return BATTLE_FLOAT_ROOT_PATH + "/FloatDmg_" + index;
+}
+
+/** 前排 0–2 才有 HeadAnchor。后排返回 null。 */
+export function battleHeadPath(side: BattleSlotSide, index: number): string | null {
+  if (!slotIndex(index, 2)) return null;
+  const slot = battleSlotPath(side, index);
+  if (!slot) return null;
+  return slot + "/HeadAnchor";
+}
+
+export function battleLevelLabelPath(side: BattleSlotSide, index: number): string | null {
+  const head = battleHeadPath(side, index);
+  if (!head) return null;
+  return head + "/LevelLabel";
+}
+
+export function battleBuffRowPath(side: BattleSlotSide, index: number): string | null {
+  const head = battleHeadPath(side, index);
+  if (!head) return null;
+  return head + "/BuffRow";
+}
+
+export function battleBuffIconPath(side: BattleSlotSide, index: number, buffIndex: number): string | null {
+  const row = battleBuffRowPath(side, index);
+  if (!row || !slotIndex(buffIndex, BATTLE_BUFF_SLOT_COUNT - 1)) return null;
+  return row + "/Buff_" + buffIndex;
+}
+
 /** 进战绑定时必须存在的节点。缺一个就整页退回代码 UI。 */
 export function battlePrefabRequiredPaths(): string[] {
   const paths = [
@@ -58,7 +98,17 @@ export function battlePrefabRequiredPaths(): string[] {
     "LayerHud/Log",
     "LayerHud/BtnSkip",
     "LayerHud/BtnRetreat",
+    BATTLE_FLOAT_LAYER_PATH,
+    BATTLE_FLOAT_ROOT_PATH,
+    BATTLE_FLOAT_CRIT_PATH,
+    BATTLE_SKILL_NAME_BANNER_PATH,
+    BATTLE_SKILL_NAME_BANNER_PATH + "/BannerBg",
+    BATTLE_SKILL_NAME_LABEL_PATH,
   ];
+  for (let f = 0; f < BATTLE_FLOAT_SLOT_COUNT; f++) {
+    const dmg = battleFloatDmgPath(f);
+    if (dmg) paths.push(dmg);
+  }
   for (let i = 0; i < 6; i++) {
     const enemy = battleSlotPath("enemy", i);
     const ally = battleSlotPath("ally", i);
@@ -79,6 +129,19 @@ export function battlePrefabRequiredPaths(): string[] {
       paths.push(allyHp + "/Label");
     }
     if (skill) paths.push(skill);
+    for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
+      const side: BattleSlotSide = sideIndex === 0 ? "enemy" : "ally";
+      const head = battleHeadPath(side, i);
+      const level = battleLevelLabelPath(side, i);
+      const buffs = battleBuffRowPath(side, i);
+      if (head) paths.push(head);
+      if (level) paths.push(level);
+      if (buffs) paths.push(buffs);
+      for (let b = 0; b < BATTLE_BUFF_SLOT_COUNT; b++) {
+        const icon = battleBuffIconPath(side, i, b);
+        if (icon) paths.push(icon);
+      }
+    }
   }
   return paths;
 }

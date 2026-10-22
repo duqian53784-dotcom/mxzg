@@ -10,7 +10,7 @@
 - **路径**：`client/assets/prefabs/ui/battle/BattlePage.prefab`、`client/assets/prefabs/ui/battle/WireBattlePage.prefab`
 - **开关**：`client/assets/scripts/ui/BattlePage.ts` 的 `USE_BATTLE_PREFAB`，默认 `true`，和登录、主城壳一样。改成 `false` 再预览，真服进战回到 `WireMainlinePage` 里原来的代码 UI。代码 UI 不删。不改 `Boot.ts`，不改 `USE_CITY_CHROME_PREFAB`，不改 CityChrome / 通用 Prefab 的 `__type__`。
 - **怎么打开**：预览加 `?transport=ws` 进真服主城，打开「更多」里的主线。页内仍用已经接好的按钮发 **3001**（挑战）、**3030**（切磋）或 **3102**（请求战报）。有 report 才进战斗表现，这时挂 BattlePage。**3006** 挂机战报本来就走同一套回放，所以也会看到这张壳。不新开 c2s。3103、3101、3099 仍不进这页。Mock 关卡页（`MainlinePage.ts`）仍是代码色块，不挂这张壳。
-- **吃哪些已有数据**：`planWireSpineReplay` 的 slots / beats。站位进 `Slot_E0`–`E2`、`Slot_A0`–`A2`（后排 `E3`–`E5`、`A3`–`A5` 留着壳上的占位）。血量写 `EnemyHp_*` / `AllyHp_*` 的 `Label`，两边都有数时才改 `Fill` 宽度；缺一边不写成 0，空着的三格血条保持 Prefab 里的 `120/120`、`100/100`。回合行写 `TopBar/RoundLabel`，同一行再写 `Log`。技能特效挂 `LayerVfx/VfxSkill`，受击挂 `LayerVfx/VfxHit`，无锚点时就停在文档里的 (0, 180) / (0, 120)。`VfxScreen` 保持空挂点，现有拍没有全屏角色。技能条 `Label` 在有技能拍时写成 batch2 的 stem；填充保持 Prefab 占位，因为 3001 / 3030 / 3102 不带技能槽能量。战剑、战旗没有对应槽，挂在 `LayerField` 上，坐标仍是原来的代码回放。飘字、暴击、技能名、前排头顶等级和 buff 这一刀只加挂点，`BattlePage.ts` 还不写它们。
+- **吃哪些已有数据**：`planWireSpineReplay` 的 slots / beats，外加同一份 report 上已经解开的命中和英雄。站位进 `Slot_E0`–`E2`、`Slot_A0`–`A2`（后排 `E3`–`E5`、`A3`–`A5` 留着壳上的占位）。血量写 `EnemyHp_*` / `AllyHp_*` 的 `Label`，两边都有数时才改 `Fill` 宽度；缺一边不写成 0，空着的三格血条保持 Prefab 里的 `120/120`、`100/100`。回合行写 `TopBar/RoundLabel`，同一行再写 `Log`。技能特效挂 `LayerVfx/VfxSkill`，受击挂 `LayerVfx/VfxHit`，无锚点时就停在文档里的 (0, 180) / (0, 120)。`VfxScreen` 保持空挂点，现有拍没有全屏角色。技能条 `Label` 在有技能拍时写成 batch2 的 stem；填充保持 Prefab 占位，因为 3001 / 3030 / 3102 不带技能槽能量。战剑、战旗没有对应槽，挂在 `LayerField` 上，坐标仍是原来的代码回放。飘字写 `LayerFloat/FloatDamageRoot/FloatDmg_0`–`FloatDmg_3`，暴击写 `LayerFloat/FloatCrit`，技能名写 `SkillNameBanner/SkillNameLabel`，前排头顶写 `HeadAnchor/LevelLabel` 和 `HeadAnchor/BuffRow`。`hurt` 缺失不画，不写成 0。`crit`、`level`、`buffs` 只有报告上已经带了才显示；没有就藏起，不写成 0，也不把 `marks` 里的号猜成暴击、等级或 buff。不另建同名代码节点。
 - **按钮**：`BtnSkip` 跳过本地回放。`BtnRetreat` 同样只结束本地回放，不发 3002 / 3005 / 3020 / 3100 / 3098。`BtnClose` 关掉主线页，不发新帧。
 - **WireBattlePage**：没有站位和特效挂点。探针按钮仍在原来的真服主线页上，所以这张占位不挂。
 - **状态**：不改协议脚本，不删代码 UI。加载失败时 Toast「战斗 Prefab 未加载，改用代码 UI」，同一页继续播。
@@ -80,7 +80,7 @@
 
 ### 场内表现挂点
 
-给以后绑飘字、暴击、技能名和头顶 buff。当前 `BattlePage.ts` 不读这些节点，也不改 `USE_BATTLE_PREFAB`。站位没有重排：敌前排仍在 y=300，我前排仍在 y=20。
+进战回放写这些节点，不改坐标，也不另建同名代码节点。缺字段就藏起，清掉编辑器占位（`-12345`、`圣光打击`、`Lv.1`、三色 buff），不写成 0。站位没有重排：敌前排仍在 y=300，我前排仍在 y=20。
 
 `SkillNameBanner` 是根的直接子节点，水平居中，底边离敌前排槽底（y=240）8px。它和空的 `VfxSkill` 在竖直方向交一点；那个锚点没有图。`LayerFloat` 的四条伤害可以互相叠，不和槽、血条、技能名、暴击标抢 8px 空隙。`FloatCrit` 在飘字左侧。
 
@@ -144,6 +144,13 @@ Slot_E0–E2 / Slot_A0–A2
 | `BtnRetreat` | (140, -568) | 200×52 | `撤退` |
 
 血条和技能条的 `Fill` 是左对齐的窄条（锚点仍在中心，所以 x 为负）：血条填充 112×14，本地 x=-24；技能填充 72×16，本地 x=-54。只有三格血条和三格技能条，对应现在代码里的三人横排。后排三个站位没有条。
+
+场内挂点怎么填，仍走 **3001 / 3030 / 3102 / 3006** 的 `planWireSpineReplay`，不新开 c2s。
+
+- **大数字**：行动拍上每条命中的 `hurt`，按顺序写 `FloatDmg_0`–`FloatDmg_3`。`hurt` 缺失不占一条，不写成 0。出现的 0 仍写 `0`。超过四条不另建节点。不用到的格子藏起，并清掉 `-12345` 这类占位。
+- **「暴击」**：这四条里有一条命中的 `crit` 为 true 或非 0 数字时，打开 `FloatCrit`，文案保持 `暴击`。没有这个字段不打开，也不把 `marks` 的某个号猜成暴击。`crit` 为 0 或 false 同样不打开。
+- **技能名**：这一拍 `skill_id` 有值才打开 `SkillNameBanner`。名字用 `wireSpineSkillStem` 的现成 stem。表对不上就写 `技能 ` 加 id，不编造技能名，也不留 `圣光打击`。没有 `skill_id` 就关掉条。底栏 `SkillBar_*` 仍是原来的能量占位。
+- **头顶等级 / buff**：只写前排、而且是报告里真正带上的英雄（每人最多前三个，不含补位）。`level` 缺失就藏起 `LevelLabel` 并清掉 `Lv.1`，不写 0。出现的 0 仍写 `Lv.0`。`buffs` 缺失或为空就藏起 `BuffRow`，不把三颗染色块当成 buff。有 id 时按顺序亮 `Buff_0`–`Buff_2`，多出来的不另建，不编 buff 名。后排没有 `HeadAnchor`，不补。
 
 ## WireBattlePage
 

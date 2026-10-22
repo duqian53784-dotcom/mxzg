@@ -2,6 +2,8 @@
  * 绑定 BattlePage.prefab。节点名对齐 docs/battle-prefab-layout.md。
  * 路径相对 assets：prefabs/ui/battle/BattlePage。不走 resources.load。
  * 不挂脚本组件，不改 Prefab。USE_BATTLE_PREFAB 为 false，或加载 / 绑节点失败时，调用方仍走代码 UI。
+ * 飘字写 LayerFloat/FloatDmg_0..3 和 FloatCrit，技能名写 SkillNameBanner，前排头顶写 HeadAnchor。
+ * 这些节点必须已经在 Prefab 上。缺一个就整页退回代码 UI，不另建同名节点。
  * 不发协议。WireBattlePage 没有站位和特效挂点，这一刀不挂它。
  */
 import { Node, UITransform } from "cc";
@@ -18,6 +20,7 @@ import {
   hpFillLayout,
   vfxLocal,
 } from "./battlePrefabLayout";
+import { BattlePresentMount, bindBattlePresent } from "./battlePresentView";
 import { bindClick, loadPrefab, requireNode, spawnPrefab } from "./prefabLoad";
 import { setText } from "./UiKit";
 
@@ -44,6 +47,8 @@ export interface BattlePrefabShell {
   bindSkip(fn: () => void): void;
   bindRetreat(fn: () => void): void;
   bindClose(fn: () => void): void;
+  /** 大伤害数字和中场技能名。等级、buff 挂在站位上，不在这里。 */
+  present: BattlePresentMount;
 }
 
 export async function mountBattlePrefab(parent: Node): Promise<BattlePrefabShell> {
@@ -113,6 +118,7 @@ function bindBattlePrefab(root: Node): BattlePrefabShell {
     bindClose(fn: () => void): void {
       bindClick(close, fn);
     },
+    present: bindBattlePresent(root),
   };
 }
 

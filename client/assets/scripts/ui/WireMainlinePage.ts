@@ -25,7 +25,8 @@
  * 主线入口已在「更多」，不往主屏再放矩形。
  * 收到 report 在本页播 spine 站场、回合攻击，以及 batch2 技能/受击特效。3001、3006、3102 和 3030 都走 planWireSpineReplay。3103 不走。3101 不走。3099 不走。
  * USE_BATTLE_PREFAB 默认开。上述回放进战时挂 BattlePage.prefab：站位、血条、回合、战报，技能挂 VfxSkill，受击挂 VfxHit。WireBattlePage 仍不挂。
- * 开关关掉或 Prefab 加载失败时，仍用本页代码 UI。跳过、撤退、关闭不发新 c2s。不改 Boot。
+ * 同一份回放再写 Prefab 的 FloatDmg、FloatCrit、SkillNameBanner、前排 HeadAnchor。没有的 crit / level / buffs 藏起，不写成 0，也不编名字。
+ * 开关关掉或 Prefab 加载失败时，仍用本页代码 UI，不另建这些挂点。跳过、撤退、关闭不发新 c2s。不改 Boot。
  * 不发 18001，不把 Mock 1201/1202 当战报。
  * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。3103 的 fighting=0 不 Toast。
  */
@@ -102,6 +103,14 @@ import {
   WIRE_STUDY_UNSYNCED_TOAST,
 } from "../net/protocol/wireStudy";
 import { BattlePrefabShell, mountBattlePrefab, USE_BATTLE_PREFAB } from "./BattlePage";
+import { BattlePresentation, planBattlePresentation } from "./battlePresentation";
+import {
+  BattlePresentMount,
+  clearBattleOverhead,
+  paintBattleFloats,
+  paintBattleOverhead,
+  paintBattleSkillName,
+} from "./battlePresentView";
 import { mountBattleSpine, SpineActor } from "./battleSpine";
 import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
@@ -207,6 +216,9 @@ class WireMainlineController implements WireMainlinePage {
   private logLabel: Node | null = null;
   private logLines: string[] = [];
   private battleShell: BattlePrefabShell | null = null;
+  private present: BattlePresentation | null = null;
+  private presentMount: BattlePresentMount | null = null;
+  private slotRoots: Node[] = [];
   private lastSnap: WireBattleMatch | null = null;
 
   constructor(private readonly host: WireMainlineHost) {
@@ -766,20 +778,25 @@ class WireMainlineController implements WireMainlinePage {
       return;
     }
     const plan = planWireSpineReplay(snap.report, this.host.roleId(), stage);
+    const present = planBattlePresentation(snap.report, plan);
+    if (present.beats.length !== plan.beats.length) {
+      GameLog.shared.warn("Mainline", "battle present beats " + present.beats.length + " / plan " + plan.beats.length);
+    }
     GameLog.shared.info("Mainline", "wire spine idx " + plan.stageId + " " + plan.stems.join(",") + " " + formatWireBattleMatch(snap, this.host.roleId()));
-    const ready = await this.showBattle(plan);
+    const ready = await this.showBattle(plan, present);
     if (!ready || this.disposed || !this.host.alive()) return;
     const played = await this.playback(plan);
     if (!played || this.disposed || !this.host.alive()) return;
     this.showDone(snap);
   }
 
-  private async showBattle(plan: WireSpineReplay): Promise<boolean> {
+  private async showBattle(plan: WireSpineReplay, present: BattlePresentation): Promise<boolean> {
     this.phase = "battle";
     this.skipped = false;
     this.spineWarned = false;
     this.logLines = [];
     this.clearBody();
+    this.present = present;
     if (USE_BATTLE_PREFAB) {
       try {
         const shell = await mountBattlePrefab(this.body);
@@ -796,6 +813,7 @@ class WireMainlineController implements WireMainlinePage {
         GameLog.shared.warn("Mainline", "battle prefab " + messageOf(err) + "，改用代码 UI");
         this.host.showToast("战斗 Prefab 未加载，改用代码 UI");
         this.clearBody();
+        this.present = present;
       }
     }
     this.mountCodeBattle(plan);
@@ -828,7 +846,9 @@ class WireMainlineController implements WireMainlinePage {
     shell.bindClose(() => {
       if (!this.disposed) this.host.close();
     });
+    this.presentMount = shell.present;
     this.actors = [];
+    this.slotRoots = [];
     this.nameLabels = [];
     this.hpLabels = [];
     this.hpNow = [];
@@ -849,6 +869,7 @@ class WireMainlineController implements WireMainlinePage {
         this.nameLabels.push(name || root);
         this.hpLabels.push(hp || root);
         this.hpNow.push(slot.hp);
+        this.slotRoots.push(root);
         this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex)));
         continue;
       }
@@ -859,9 +880,11 @@ class WireMainlineController implements WireMainlinePage {
       this.nameLabels.push(name);
       this.hpLabels.push(hp);
       this.hpNow.push(slot.hp);
+      this.slotRoots.push(root);
       this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex)));
     }
     this.mountPrefabVfx(plan, shell);
+    this.paintOverhead(plan);
   }
 
   private mountPrefabVfx(plan: WireSpineReplay, shell: BattlePrefabShell): void {
@@ -891,6 +914,7 @@ class WireMainlineController implements WireMainlinePage {
 
   private mountSlots(plan: WireSpineReplay): void {
     this.actors = [];
+    this.slotRoots = [];
     this.nameLabels = [];
     this.hpLabels = [];
     this.hpNow = [];
@@ -907,6 +931,7 @@ class WireMainlineController implements WireMainlinePage {
       this.nameLabels.push(name);
       this.hpLabels.push(hp);
       this.hpNow.push(slot.hp);
+      this.slotRoots.push(root);
       const slotIndex = i;
       this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex)));
     }
@@ -1123,6 +1148,7 @@ class WireMainlineController implements WireMainlinePage {
     if (this.logLines.length > 4) this.logLines.shift();
     if (this.logLabel && this.logLabel.isValid) setText(this.logLabel, this.logLines.join("\n"));
     this.paintPrefabBeat(plan, beat);
+    this.paintPresentBeat(plan, beat);
   }
 
   private paintPrefabBeat(plan: WireSpineReplay, beat: WireSpineReplay["beats"][number]): void {
@@ -1170,8 +1196,40 @@ class WireMainlineController implements WireMainlinePage {
     if (resolve) resolve(cont);
   }
 
+  private paintOverhead(plan: WireSpineReplay): void {
+    const present = this.present;
+    for (let i = 0; i < this.slotRoots.length; i++) {
+      const slot = plan.slots[i];
+      const root = this.slotRoots[i];
+      if (!root || !root.isValid) continue;
+      if (!slot || (slot.side !== "ally" && slot.side !== "enemy")) continue;
+      let row: BattlePresentation["overhead"][number] | null = null;
+      if (present) {
+        for (let r = 0; r < present.overhead.length; r++) {
+          if (present.overhead[r].slot === i) row = present.overhead[r];
+        }
+      }
+      if (!row) clearBattleOverhead(root);
+      else paintBattleOverhead(root, row);
+    }
+  }
+
+  private paintPresentBeat(plan: WireSpineReplay, beat: WireSpineReplay["beats"][number]): void {
+    const mount = this.presentMount;
+    const present = this.present;
+    if (!mount || !present) return;
+    const index = plan.beats.indexOf(beat);
+    if (index < 0 || index >= present.beats.length) return;
+    const row = present.beats[index];
+    paintBattleSkillName(mount, row.skillName);
+    paintBattleFloats(mount, row.floats);
+  }
+
   private clearBody(): void {
     this.battleShell = null;
+    this.present = null;
+    this.presentMount = null;
+    this.slotRoots = [];
     this.actors = [];
     this.vfxNodes = [];
     this.nameLabels = [];

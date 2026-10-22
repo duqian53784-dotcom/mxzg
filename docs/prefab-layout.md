@@ -683,7 +683,7 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | WireBattlePage | `prefabs/ui/battle/WireBattlePage` | **未接** |
 
 - **路径**：`client/assets/prefabs/ui/battle/BattlePage.prefab`、`client/assets/prefabs/ui/battle/WireBattlePage.prefab`
-- **状态**：BattlePage 挂在 `WireMainlinePage` 的进战回放上，吃已经接好的 3001 / 3030 / 3102（3006 走同一套回放）。不改 Boot，不改协议，不删代码 UI。`USE_BATTLE_PREFAB` 在 `BattlePage.ts`，改成 `false` 就回到代码战斗页。WireBattlePage 仍不挂。
+- **状态**：BattlePage 挂在 `WireMainlinePage` 的进战回放上，吃已经接好的 3001 / 3030 / 3102（3006 走同一套回放）。同一份回放写 `LayerFloat` 的 `FloatDmg_0`–`3` 和 `FloatCrit`、`SkillNameBanner`、前排 `HeadAnchor`。缺字段藏起，不写成 0，不另建挂点。不改 Boot，不改协议，不删代码 UI。`USE_BATTLE_PREFAB` 在 `BattlePage.ts`，改成 `false` 就回到代码战斗页。WireBattlePage 仍不挂。
 - 仓内没有 `resources/ui/battle/`。页面 `Bg` 用主线 `map-bg-mission-1.jpg`（`@f9941`，白，简单模式，拉到 720×1280）。不是染色占位。
 - 不挂脚本组件，所以没有壳 `__type__`。以后若加壳，必须是 23 位 packer id，不要退回 22 位。
 - 再生：`python3 client/tools/gen_battle_prefab.py`
