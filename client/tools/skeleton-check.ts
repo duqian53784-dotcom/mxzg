@@ -530,6 +530,19 @@ import {
   WIRE_QUICK_BATTLE_UNSYNCED_TOAST,
 } from "../assets/scripts/net/protocol/wireQuickBattle";
 import {
+  decodeWireChapterReport,
+  encodeWireChapterReportBody,
+  formatWireChapterReport,
+  normalizeWireChapterReportIndex,
+  WIRE_CHAPTER_REPORT_BANNED_CMDS,
+  WIRE_CHAPTER_REPORT_CMD,
+  WIRE_CHAPTER_REPORT_EMPTY,
+  WIRE_CHAPTER_REPORT_FRAME,
+  WIRE_CHAPTER_REPORT_NOTE,
+  WIRE_CHAPTER_REPORT_SIDE_EFFECT,
+  WIRE_CHAPTER_REPORT_UNSYNCED_TOAST,
+} from "../assets/scripts/net/protocol/wireChapterReport";
+import {
   decodeWireIdle,
   decodeWireIdleClaim,
   formatWireIdle,
@@ -14615,10 +14628,11 @@ async function checkWs(): Promise<void> {
     battlePacket !== null && battlePacket.cmdId === 3001 && bytesToHex(battlePacket.bytes) === "04000000b90b0000" && battlePacket.note === "空体",
     "wire.3001 encodes the empty challenge frame"
   );
-  const bannedBattle = ["wire.3002", "wire.3006", "wire.3008", "wire.3011", "wire.3013", "wire.3100", "wire.3102", "wire.3097", "wire.3098", "wire.18002", "wire.4601", "wire.29001", "wire.1201", "wire.1202"];
+  const bannedBattle = ["wire.3002", "wire.3008", "wire.3011", "wire.3013", "wire.3100", "wire.3102", "wire.3097", "wire.3098", "wire.18002", "wire.4601", "wire.29001", "wire.1201", "wire.1202"];
   for (let bi = 0; bi < bannedBattle.length; bi++) {
     assert(encodeWireMessage({ cmd: bannedBattle[bi] }) === null, bannedBattle[bi] + " stays off the 3001 encoder");
   }
+  assert(encodeWireMessage({ cmd: "wire.3006" }) !== null, "3006 stays encoded by its own module and is not reissued as 3001");
   assert(decodeWireBattleMatch(null) === null, "missing 3001 body stays unsynced");
   assert(decodeWireBattleMatch(Uint8Array.from([0x80])) === null, "bad 3001 varint does not become a report");
   const emptyBattle = decodeWireBattleMatch(new Uint8Array(0));
@@ -15032,6 +15046,160 @@ async function checkWs(): Promise<void> {
       WIRE_QUICK_BATTLE_SIDE_EFFECT.indexOf("不重发 3010") >= 0 &&
       WIRE_QUICK_BATTLE_SIDE_EFFECT.indexOf("硬禁 3013") >= 0,
     "3012 note names the frame, the battle-chain slot, and the banned cmds"
+  );
+  assert(
+    WireCmd.chapterReport === 3006 &&
+      WireCmd.chapterReport !== WireCmd.quickBattleInit &&
+      WireCmd.chapterReport !== WireCmd.chapterRewardList &&
+      WireCmd.chapterReport !== WireCmd.battleMatch &&
+      WireCmd.chapterReport !== WireCmd.chapterData &&
+      WireCmd.chapterReport !== WireCmd.chapterItemList &&
+      WireCmd.chapterReport !== WireCmd.chapterItemReward,
+    "online 3006 stays off 3012, 3010, 3001, 3007, 3004 and 3005"
+  );
+  assert(bytesToHex(encodeFrame(3006)) === "04000000be0b0000", "empty 3006 shell is be 0b and is not the probe");
+  assert(WIRE_CHAPTER_REPORT_FRAME === "08000000be0b000008011001", "3006 probe frame constant");
+  assert(WIRE_CHAPTER_REPORT_FRAME !== "04000000be0b0000", "3006 probe is not an empty frame");
+  assert(bytesToHex(encodeFrame(3006, encodeWireChapterReportBody(1, 1))) === WIRE_CHAPTER_REPORT_FRAME, "chapterIdx=1 firstPos=1 frame");
+  assert(bytesToHex(encodeWireChapterReportBody(1, 1)) === "08011001", "3006 body is field 1 = 1 and field 2 = 1");
+  assert(bytesToHex(encodeFrame(3006, encodeWireChapterReportBody(2, 3))) === "08000000be0b000008021003", "3006 keeps chapterIdx 2 and firstPos 3");
+  assert(normalizeWireChapterReportIndex(0) === 1 && normalizeWireChapterReportIndex(-4) === 1 && normalizeWireChapterReportIndex(1.9) === 1, "3006 does not encode a zero index");
+  assert(bytesToHex(encodeFrame(3005)) === "04000000bd0b0000" && bytesToHex(encodeFrame(3005)) !== WIRE_CHAPTER_REPORT_FRAME, "3005 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(3004)) !== WIRE_CHAPTER_REPORT_FRAME, "3004 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(3012)) !== WIRE_CHAPTER_REPORT_FRAME, "3012 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(3013)) !== WIRE_CHAPTER_REPORT_FRAME, "3013 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(3002)) !== WIRE_CHAPTER_REPORT_FRAME, "3002 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(3008)) !== WIRE_CHAPTER_REPORT_FRAME, "3008 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(3011)) !== WIRE_CHAPTER_REPORT_FRAME, "3011 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(3102)) !== WIRE_CHAPTER_REPORT_FRAME, "3102 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== WIRE_CHAPTER_REPORT_FRAME, "4601 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== WIRE_CHAPTER_REPORT_FRAME, "29001 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(1201)) !== WIRE_CHAPTER_REPORT_FRAME, "mock 1201 is not the 3006 frame");
+  assert(bytesToHex(encodeFrame(1202)) !== WIRE_CHAPTER_REPORT_FRAME, "mock 1202 is not the 3006 frame");
+  const reportPacket = encodeWireMessage({ cmd: WIRE_CHAPTER_REPORT_CMD });
+  assert(
+    reportPacket !== null &&
+      reportPacket.cmdId === 3006 &&
+      bytesToHex(reportPacket.bytes) === WIRE_CHAPTER_REPORT_FRAME &&
+      reportPacket.note === "chapterIdx=1 firstPos=1",
+    "wire.3006 encodes the chapterIdx=1 firstPos=1 probe"
+  );
+  const reportPacket23 = encodeWireMessage({ cmd: WIRE_CHAPTER_REPORT_CMD, data: { chapterIdx: 2, firstPos: 3 } });
+  assert(
+    reportPacket23 !== null && bytesToHex(reportPacket23.bytes) === "08000000be0b000008021003" && reportPacket23.note === "chapterIdx=2 firstPos=3",
+    "wire.3006 encodes the caller chapterIdx and firstPos"
+  );
+  for (let cri = 0; cri < WIRE_CHAPTER_REPORT_BANNED_CMDS.length; cri++) {
+    assert(encodeWireMessage({ cmd: WIRE_CHAPTER_REPORT_BANNED_CMDS[cri] }) === null, WIRE_CHAPTER_REPORT_BANNED_CMDS[cri] + " stays off the 3006 encoder");
+  }
+  assert(encodeWireMessage({ cmd: "wire.3013" }) === null, "3013 stays unencoded");
+  assert(encodeWireMessage({ cmd: "wire.3005" }) !== null, "3005 stays encoded by its own module and is not reissued as 3006");
+  assert(encodeWireMessage({ cmd: "wire.3004" }) !== null, "3004 stays encoded by its own module and is not reissued as 3006");
+  assert(encodeWireMessage({ cmd: "wire.3012" }) !== null, "3012 stays encoded by its own module and is not reissued as 3006");
+  assert(encodeWireMessage({ cmd: "wire.3010" }) !== null, "3010 stays encoded by its own module and is not reissued as 3006");
+  assert(encodeWireMessage({ cmd: "wire.3001" }) !== null, "3001 stays encoded by its own module and is not reissued as 3006");
+  assert(encodeWireMessage({ cmd: "wire.3007" }) !== null, "3007 stays encoded by its own module and is not reissued as 3006");
+  assert(decodeWireChapterReport(null) === null, "missing 3006 body stays unsynced");
+  assert(decodeWireChapterReport(new Uint8Array([0x80])) === null, "bad 3006 varint does not become a report");
+  const emptyChapterReport = decodeWireChapterReport(new Uint8Array(0));
+  assert(
+    emptyChapterReport !== null &&
+      emptyChapterReport.empty &&
+      emptyChapterReport.report === null &&
+      emptyChapterReport.chapterIdx === null &&
+      emptyChapterReport.firstPos === null &&
+      formatWireChapterReport(emptyChapterReport) === "挂机战报 " + WIRE_CHAPTER_REPORT_EMPTY &&
+      formatWireChapterReport(emptyChapterReport).indexOf("chapterIdx=0") < 0,
+    "empty 3006 body is 已同步空表 and does not invent zero"
+  );
+  assert(formatWireChapterReport(null) === "挂机战报 " + WIRE_CHAPTER_REPORT_UNSYNCED_TOAST, "unsynced 3006 toast text");
+  const reportZero = decodeWireChapterReport(concatBytes(fieldVarint(2, 0), fieldVarint(3, 1)));
+  assert(
+    reportZero !== null &&
+      !reportZero.empty &&
+      reportZero.report === null &&
+      reportZero.chapterIdx === 0 &&
+      reportZero.firstPos === 1 &&
+      formatWireChapterReport(reportZero).indexOf("chapterIdx=0") >= 0 &&
+      formatWireChapterReport(reportZero).indexOf("没有 report") >= 0,
+    "present 3006 chapterIdx 0 stays zero and does not invent a report"
+  );
+  const hangReportBody = concatBytes(fieldBytes(1, roundBody), concatBytes(fieldVarint(2, 1), fieldVarint(3, 1)));
+  const hangReport = decodeWireChapterReport(hangReportBody);
+  const hangVia3001 = decodeWireBattleMatch(fieldBytes(1, roundBody));
+  assert(
+    hangReport !== null &&
+      hangReport.report !== null &&
+      hangVia3001 !== null &&
+      hangVia3001.report !== null &&
+      hangReport.chapterIdx === 1 &&
+      hangReport.firstPos === 1 &&
+      hangReport.report.rounds.length === hangVia3001.report.rounds.length &&
+      hangReport.report.rounds[0].actions[0].atkPos === 1 &&
+      hangReport.report.rounds[0].actions[0].skillId === 9 &&
+      hangReport.report.atkHeroes[0].heroId === 10105008 &&
+      hangReport.report.atkHeroes[0].hp === 80,
+    "3006 report reuses the 3001 BattleReport decode, including rounds"
+  );
+  const hangPlan = planWireSpineReplay(hangReport.report, null, hangReport.chapterIdx === null ? 1 : hangReport.chapterIdx);
+  const hangViaPlan = planWireSpineReplay(hangVia3001.report, null, 1);
+  assert(
+    hangPlan.stageId === 1 &&
+      hangPlan.stems.join(",") === hangViaPlan.stems.join(",") &&
+      hangPlan.beats.length === hangViaPlan.beats.length &&
+      hangPlan.beats.length >= 2 &&
+      hangPlan.beats[0].line.indexOf("站场") >= 0 &&
+      hangPlan.beats[1].line === hangViaPlan.beats[1].line &&
+      hangPlan.stems.indexOf("bisha") < 0,
+    "3006 rounds drive the same planWireSpineReplay path as 3001"
+  );
+  const hangAbsent = decodeWireChapterReport(fieldVarint(7, 9));
+  assert(
+    hangAbsent !== null &&
+      hangAbsent.chapterIdx === null &&
+      hangAbsent.firstPos === null &&
+      hangAbsent.report === null &&
+      formatWireChapterReport(hangAbsent).indexOf("没有 report") >= 0 &&
+      formatWireChapterReport(hangAbsent).indexOf("chapterIdx=0") < 0 &&
+      formatWireChapterReport(hangAbsent).indexOf("字段7=9") >= 0,
+    "3006 without chapterIdx does not invent zero"
+  );
+  const hangNeg = decodeWireChapterReport(fieldNeg1(2));
+  assert(hangNeg !== null && hangNeg.chapterIdx === -1 && formatWireChapterReport(hangNeg).indexOf("chapterIdx=-1") >= 0, "3006 keeps -1");
+  const hangBadReport = decodeWireChapterReport(fieldBytes(1, Uint8Array.from([0x80])));
+  assert(hangBadReport === null, "a 3006 report blob that will not decode is ignored");
+  assert(
+    WIRE_CHAPTER_REPORT_NOTE.indexOf("08000000be0b000008011001") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("3012") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("3001") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("planWireSpineReplay") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("decodeWireBattleReport") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("不进 pullIdle") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("3002") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("3005") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("3008") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("3011") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("3013") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("3102") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("4601") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("29001") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("1201") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("1202") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("不改 Boot") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("已同步空表") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("receiveReward") >= 0 &&
+      WIRE_CHAPTER_REPORT_NOTE.indexOf("chapterId") >= 0 &&
+      WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("HANG_UP") >= 0 &&
+      WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("不写 receiveReward") >= 0 &&
+      WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("不推进 chapterId") >= 0 &&
+      WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("不落库") >= 0 &&
+      WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("不回拉 3007") >= 0 &&
+      WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("不重发 3012") >= 0 &&
+      WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("不发 3005") >= 0 &&
+      WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("硬禁 3013") >= 0,
+    "3006 note names the frame, the spine reuse, and the banned cmds"
   );
   const loginBody = encodeObservedLoginBody(960011, 1792466798);
   assert(
@@ -16217,9 +16385,10 @@ async function checkWs(): Promise<void> {
       WireSession.maxIdx = null;
       assert(!WireSession.pullChapterRewardList(), "3010 does not send without 3007 idx");
       assert(!WireSession.pullQuickBattleCount(), "3012 does not send without 3007 idx");
+      assert(!WireSession.pullChapterReport(1, 1), "3006 does not send without 3007 idx");
       WireSession.nowIdx = savedNow;
       WireSession.maxIdx = savedMax;
-      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010 or 3012 on the wire");
+      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012 or 3006 on the wire");
       const sentBeforeQuick = roleSockets[0].sent.length;
       const goldBeforeQuick = Session.gold;
       const quickSentBefore = roleSockets[0].sent.length;
@@ -16255,6 +16424,51 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(3013, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
       assert(WireSession.quickBattle !== null && WireSession.quickBattle.battleCount === quickBeforeOther, "3013 and mock 1201 do not replace the 3012 counts");
+      const sentBeforeReport = roleSockets[0].sent.length;
+      const goldBeforeReport = Session.gold;
+      const nowBeforeReport = WireSession.nowIdx;
+      const maxBeforeReport = WireSession.maxIdx;
+      assert(WireSession.pullChapterReport(1, 1), "3006 pulls when 3007 idx is present");
+      assert(roleSockets[0].sent.length === sentBeforeReport + 1, "3006 is one frame and does not resend 3012, 3001, 3005 or the idle chain");
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeReport] as ArrayBuffer)) === "08000000be0b000008011001",
+        "chapter report frame is c2s 3006 chapterIdx=1 firstPos=1 after the merged 3012 slot"
+      );
+      assert(Session.gold === goldBeforeReport && Session.diamond === 0, "3006 does not write gold or diamond");
+      roleSockets[0].push(encodeFrame(WireCmd.chapterReport));
+      assert(
+        WireSession.hasChapterReport() &&
+          WireSession.chapterReport !== null &&
+          WireSession.chapterReport.empty &&
+          WireSession.chapterReport.report === null &&
+          WireSession.chapterReport.chapterIdx === null &&
+          formatWireChapterReport(WireSession.chapterReport).indexOf("已同步空表") >= 0,
+        "empty 3006 is a synced empty table"
+      );
+      assert(roleSockets[0].sent.length === sentBeforeReport + 1, "empty 3006 does not pull 3007 or 3005");
+      roleSockets[0].push(
+        encodeFrame(WireCmd.chapterReport, concatBytes(fieldBytes(1, roundBody), concatBytes(fieldVarint(2, 1), fieldVarint(3, 0))))
+      );
+      assert(
+        WireSession.chapterReport !== null &&
+          WireSession.chapterReport.report !== null &&
+          WireSession.chapterReport.report.rounds.length === 1 &&
+          WireSession.chapterReport.chapterIdx === 1 &&
+          WireSession.chapterReport.firstPos === 0 &&
+          WireSession.nowIdx === nowBeforeReport &&
+          WireSession.maxIdx === maxBeforeReport &&
+          Session.gold === goldBeforeReport &&
+          roleSockets[0].sent.length === sentBeforeReport + 1,
+        "3006 keeps the report and a present zero, does not advance chapter idx, and does not write gold"
+      );
+      const reportBeforeOther = WireSession.chapterReport.report.rounds.length;
+      roleSockets[0].push(encodeFrame(3005));
+      roleSockets[0].push(encodeFrame(3013, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
+      assert(
+        WireSession.chapterReport !== null && WireSession.chapterReport.report !== null && WireSession.chapterReport.report.rounds.length === reportBeforeOther,
+        "3005, 3013 and mock 1201 do not replace the 3006 report"
+      );
       roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
       assert(WireSession.battleMatch !== null && WireSession.battleMatch.empty, "mock 1201 does not replace the 3001 report");
       const sentBeforeBannedBattle = roleSockets[0].sent.length;
@@ -16301,6 +16515,12 @@ async function checkWs(): Promise<void> {
         }
       }
       assert(quickFramesInIdle === 0, "pullIdle does not send empty c2s 3012");
+      let reportFramesInIdle = 0;
+      for (let idleH = 0; idleH < 64; idleH++) {
+        const idleHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + idleH] as ArrayBuffer));
+        if (idleHex.indexOf("be0b0000") >= 0) reportFramesInIdle += 1;
+      }
+      assert(reportFramesInIdle === 0, "pullIdle does not send c2s 3006");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 1] as ArrayBuffer)) === "04000000983a0000",
         "pullIdle sends empty c2s 15000 after 3004"
