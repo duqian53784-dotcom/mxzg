@@ -49,6 +49,14 @@ export const WireCmd = {
    */
   quickBattleInit: 3012,
   /**
+   * c2s GReqChapterReport。不是空体。字段 1 chapterIdx，字段 2 firstPos。
+   * 探针 chapterIdx=1、firstPos=1 的整帧是 `08 00 00 00 be 0b 00 00 08 01 10 01`。
+   * 3006 = 0x0BBE，小端 be 0b 00 00。主线页点「挂机战报」才发，挂在已合 3012 之后。
+   * 不进 pullIdle。s2c 是 GResChapterReport。只算 HANG_UP，不写 receiveReward，不推进 chapterId，不落库。
+   * 不是占位 stage.enter（1201），也不是挂机领取 3005。
+   */
+  chapterReport: 3006,
+  /**
    * c2s 空体。Battle.proto 的 GReqChapterItemList。进主城、空 c2s 3007 之后发。
    * s2c 回 reward_time / max_reward_time。不是占位 idle.query（1301）。
    */
