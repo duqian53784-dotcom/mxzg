@@ -83,6 +83,7 @@ import { buildWireMagicTowerRoadPage, WireMagicTowerRoadPage } from "./WireMagic
 import { buildWireQiShenQiPage, WireQiShenQiPage } from "./WireQiShenQiPage";
 import { buildWireZhuShenJiTanPage, WireZhuShenJiTanPage } from "./WireZhuShenJiTanPage";
 import { buildWireMidFoodPage, WireMidFoodPage } from "./WireMidFoodPage";
+import { buildWireQiuShangMingYuePage, WireQiuShangMingYuePage } from "./WireQiuShangMingYuePage";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -127,6 +128,7 @@ import { WIRE_MAGIC_TOWER_ROAD_UNSYNCED_TOAST } from "../net/protocol/wireMagicT
 import { WIRE_QI_SHEN_QI_UNSYNCED_TOAST } from "../net/protocol/wireQiShenQi";
 import { WIRE_ZHU_SHEN_JI_TAN_UNSYNCED_TOAST } from "../net/protocol/wireZhuShenJiTan";
 import { WIRE_MID_FOOD_UNSYNCED_TOAST } from "../net/protocol/wireMidFood";
+import { WIRE_QIU_SHANG_MING_YUE_UNSYNCED_TOAST } from "../net/protocol/wireQiuShangMingYue";
 import { buildMailPage, MailPage } from "./MailPage";
 import { buildSmithPage, SmithPage } from "./SmithPage";
 import { ArenaPage, buildArenaPage } from "./ArenaPage";
@@ -238,6 +240,7 @@ const MAGIC_TOWER_ROAD_FILL = new Color(120, 72, 96, 255);
 const QI_SHEN_QI_FILL = new Color(148, 108, 48, 255);
 const ZHU_SHEN_JI_TAN_FILL = new Color(104, 56, 152, 255);
 const MID_FOOD_FILL = new Color(168, 96, 72, 255);
+const QIU_SHANG_MING_YUE_FILL = new Color(176, 132, 88, 255);
 
 @ccclass("MainApp")
 export class MainApp extends Component {
@@ -296,6 +299,7 @@ export class MainApp extends Component {
   private qiShenQi: WireQiShenQiPage | null = null;
   private zhuShenJiTan: WireZhuShenJiTanPage | null = null;
   private midFood: WireMidFoodPage | null = null;
+  private qiuShangMingYue: WireQiuShangMingYuePage | null = null;
   private bag: BagPage | WireBagPage | null = null;
   private mail: MailPage | WireMailPage | null = null;
   private smith: SmithPage | null = null;
@@ -435,6 +439,8 @@ export class MainApp extends Component {
     this.zhuShenJiTan = null;
     this.midFood?.dispose();
     this.midFood = null;
+    this.qiuShangMingYue?.dispose();
+    this.qiuShangMingYue = null;
     this.bag?.dispose();
     this.bag = null;
     this.mail?.dispose();
@@ -548,7 +554,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "zhuShenJiTan" || id === "midFood" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "zhuShenJiTan" || id === "midFood" || id === "qiuShangMingYue" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -638,6 +644,7 @@ export class MainApp extends Component {
     if (id === "qiShenQi") return this.mountQiShenQi();
     if (id === "zhuShenJiTan") return this.mountZhuShenJiTan();
     if (id === "midFood") return this.mountMidFood();
+    if (id === "qiuShangMingYue") return this.mountQiuShangMingYue();
     if (id === "bag") return this.mountBag();
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
@@ -763,6 +770,7 @@ export class MainApp extends Component {
     place(createButton("七神器", () => this.openQiShenQi(), 160, 32, QI_SHEN_QI_FILL, 14), page, 200, 400);
     place(createButton("诸神祭坛", () => this.openZhuShenJiTan(), 180, 32, ZHU_SHEN_JI_TAN_FILL, 14), page, 0, 446);
     place(createButton("赏月佳肴", () => this.openMidFood(), 160, 32, MID_FOOD_FILL, 14), page, 200, 446);
+    place(createButton("秋赏明月", () => this.openQiuShangMingYue(), 160, 32, QIU_SHANG_MING_YUE_FILL, 14), page, -200, 446);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -987,6 +995,7 @@ export class MainApp extends Component {
     if (id === "qiShenQi") return this.blockWireQiShenQi();
     if (id === "zhuShenJiTan") return this.blockWireZhuShenJiTan();
     if (id === "midFood") return this.blockWireMidFood();
+    if (id === "qiuShangMingYue") return this.blockWireQiuShangMingYue();
     if (Session.source !== "wire") return false;
     if (id === "city" || id === "log") return false;
     if (id === "idle") return this.blockWireIdle();
@@ -1410,11 +1419,19 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 没收到过 s2c 75131 就停在主城。空包体也算同步。不重复拉 75121。不发 75132。75132 是购买推送 s2c，勿当 c2s。不夹 75122。不夹 75102。不做 75801。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是诸神祭坛 75121。不是七神器 75101。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。75121 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  /** 没收到过 s2c 75131 就停在主城。空包体也算同步。不重复拉 75121。不发 75132。75132 是购买推送 s2c，勿当 c2s。不夹 75122。不夹 75102。75801 秋赏明月另帧，挂在其后，勿合并。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是诸神祭坛 75121。不是七神器 75101。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。75121 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
   private blockWireMidFood(): boolean {
     if (Session.source === "wire" && WireSession.hasMidFood()) return false;
     GameLog.shared.info("MainApp", "wire mid food unsynced");
     this.shell?.showToast(WIRE_MID_FOOD_UNSYNCED_TOAST, 2200);
+    return true;
+  }
+
+  /** 没收到过 s2c 75801 就停在主城。空包体也算同步。不重复拉 75131。不发 75802。不发 75803。不发 75804。不做 75901。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是赏月佳肴 75131。不是诸神祭坛 75121。不是七神器 75101。不是斩魔之路 76542。5001、51001、68001、70001 已有，勿重复。75131、75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。75131 单独到不算。Mock 主城这颗按钮同样只 Toast，不回落 Mock。 */
+  private blockWireQiuShangMingYue(): boolean {
+    if (Session.source === "wire" && WireSession.hasQiuShangMingYue()) return false;
+    GameLog.shared.info("MainApp", "wire qiu shang ming yue unsynced");
+    this.shell?.showToast(WIRE_QIU_SHANG_MING_YUE_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -2655,7 +2672,7 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 真服赏月佳肴。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 buy。无购买入口。不重复拉 75121。不发 75132。75132 是购买推送 s2c，勿当 c2s。不夹 75122。不夹 75102。不做 75801。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是诸神祭坛 75121。不是七神器 75101。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 75121 分开发，勿合并。不并入 75121。本刀不重复拉 75121，也不重复拉 75101，也不重复拉 76542，也不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  /** 真服赏月佳肴。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 buy。无购买入口。不重复拉 75121。不发 75132。75132 是购买推送 s2c，勿当 c2s。不夹 75122。不夹 75102。75801 秋赏明月另帧，挂在其后，勿合并。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是诸神祭坛 75121。不是七神器 75101。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 75121 分开发，勿合并。不并入 75121。本刀不重复拉 75121，也不重复拉 75101，也不重复拉 76542，也不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
   private openMidFood(): void {
     GameLog.shared.info("MainApp", "click mid food");
     if (this.blockWirePage("midFood")) return;
@@ -2675,6 +2692,29 @@ export class MainApp extends Component {
       close: () => this.back(),
     });
     this.midFood = page;
+    return page.node;
+  }
+
+  /** 真服秋赏明月。未同步 Toast「真服未同步」。已同步压入只读页，只写实际出现的 select_info、lottery_reward、lottery_count、lottery_best_remaining_count。无选档、无抽奖、无领次数奖入口。不重复拉 75131。不发 75802。不发 75803。不发 75804。不做 75901。不做 75001。不做 76501。不做 73002。不做 71001。不做 20011。不夹发 74121。不夹发 74122。不是赏月佳肴 75131。不是诸神祭坛 75121。不是七神器 75101。不是斩魔之路 76542。不是时空冒险 74120。不是时空魔塔 74001。5001、51001、68001、70001 已有，勿重复。75131、75121、75101、76542、74120、74001、69001、63001、62001、61001、26001、26002、12020、13010、4044、3203、20101、3101、3099 勿再发。4601 有 page，硬禁。29001 有 page，硬禁。与 75131 分开发，勿合并。不并入 75131。本刀不重复拉 75131，也不重复拉 75121，也不重复拉 75101，也不重复拉 76542，也不重复拉 74120，也不重复拉 74001，也不重复拉 69001，也不重复拉 63001，也不重复拉 62001，也不重复拉 61001，也不重复拉 26001，也不重复拉 26002，也不重复拉 12020，也不重复拉 13010，也不重复拉 4044，也不重复拉 3203，也不重复拉 20101，也不重复拉 3101，也不重复拉 3099。 */
+  private openQiuShangMingYue(): void {
+    GameLog.shared.info("MainApp", "click qiu shang ming yue");
+    if (this.blockWirePage("qiuShangMingYue")) return;
+    const net = this.cityNet();
+    if (net.state !== "connected") {
+      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+      return;
+    }
+    this.panels?.openChild("qiuShangMingYue");
+    this.refreshChrome();
+  }
+
+  private mountQiuShangMingYue(): Node {
+    this.qiuShangMingYue?.dispose();
+    const page = buildWireQiuShangMingYuePage({
+      alive: () => this.isValid,
+      close: () => this.back(),
+    });
+    this.qiuShangMingYue = page;
     return page.node;
   }
 
@@ -3557,6 +3597,10 @@ export class MainApp extends Component {
     if (id === "midFood") {
       this.midFood?.dispose();
       this.midFood = null;
+    }
+    if (id === "qiuShangMingYue") {
+      this.qiuShangMingYue?.dispose();
+      this.qiuShangMingYue = null;
     }
     if (id === "bag") {
       this.bag?.dispose();
