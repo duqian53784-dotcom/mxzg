@@ -1258,6 +1258,20 @@ import {
   WIRE_WAN_SHENG_LOTTERY_UNSYNCED_TOAST,
   wireWanShengLotteryNote,
 } from "../assets/scripts/net/protocol/wireWanShengLottery";
+import {
+  decodeWireHeiWuMission,
+  formatWireHeiWuMissionLine,
+  WIRE_HEI_WU_MISSION_BANNED_CMDS,
+  WIRE_HEI_WU_MISSION_CMD,
+  WIRE_HEI_WU_MISSION_EMPTY,
+  WIRE_HEI_WU_MISSION_FIELD_NOTE,
+  WIRE_HEI_WU_MISSION_FRAME,
+  WIRE_HEI_WU_MISSION_READONLY_NOTE,
+  WIRE_HEI_WU_MISSION_READONLY_TITLE,
+  WIRE_HEI_WU_MISSION_SIDE_EFFECT,
+  WIRE_HEI_WU_MISSION_UNSYNCED_TOAST,
+  wireHeiWuMissionNote,
+} from "../assets/scripts/net/protocol/wireHeiWuMission";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -2018,6 +2032,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("midFood") === "city", "mid food stays on the city tab");
   assert(rootTabFor("qiuShangMingYue") === "city", "qiu shang ming yue stays on the city tab");
   assert(rootTabFor("wanShengLottery") === "city", "wan sheng lottery stays on the city tab");
+  assert(rootTabFor("heiWuMission") === "city", "hei wu mission stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -13279,6 +13294,229 @@ async function checkWs(): Promise<void> {
       wanNote.indexOf("不写钻石") >= 0,
     "75901 note keeps the side effect and does not write gold or diamond"
   );
+
+  assert(
+    WireCmd.heiWuMission === 76001 &&
+      WireCmd.heiWuMission !== WireCmd.wanShengLottery &&
+      WireCmd.heiWuMission !== WireCmd.qiuShangMingYue &&
+      WireCmd.heiWuMission !== 76002 &&
+      WireCmd.heiWuMission !== 76003 &&
+      WireCmd.heiWuMission !== 76004 &&
+      WireCmd.heiWuMission !== 76005 &&
+      WireCmd.heiWuMission !== 76021 &&
+      WireCmd.heiWuMission !== 76022 &&
+      WireCmd.heiWuMission !== 76101 &&
+      WireCmd.heiWuMission !== 75901 &&
+      WireCmd.heiWuMission !== 75801 &&
+      WireCmd.heiWuMission !== 75131 &&
+      WireCmd.heiWuMission !== 75001 &&
+      WireCmd.heiWuMission !== 76501 &&
+      WireCmd.heiWuMission !== 73002 &&
+      WireCmd.heiWuMission !== 71001 &&
+      WireCmd.heiWuMission !== 20011 &&
+      WireCmd.heiWuMission !== 74121 &&
+      WireCmd.heiWuMission !== 74122 &&
+      WireCmd.heiWuMission !== 4601 &&
+      WireCmd.heiWuMission !== 29001 &&
+      WireCmd.heiWuMission !== 5001 &&
+      WireCmd.heiWuMission !== 51001 &&
+      WireCmd.heiWuMission !== 68001 &&
+      WireCmd.heiWuMission !== 70001,
+    "online 76001 stays off the write cmds and the earlier idle pulls"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.heiWuMission)) === WIRE_HEI_WU_MISSION_FRAME, "empty c2s 76001");
+  assert(bytesToHex(encodeFrame(76001)) === "04000000e1280100", "empty c2s 76001 hex");
+  assert(WIRE_HEI_WU_MISSION_FRAME === "04000000e1280100", "76001 frame constant");
+  assert(bytesToHex(encodeFrame(76001)) !== "040000007d280100", "76001 is not the 75901 frame");
+  assert(bytesToHex(encodeFrame(76002)) === "04000000e2280100" && bytesToHex(encodeFrame(76002)) !== "04000000e1280100", "76002 is not the 76001 frame");
+  assert(bytesToHex(encodeFrame(76003)) === "04000000e3280100" && bytesToHex(encodeFrame(76003)) !== "04000000e1280100", "76003 is not the 76001 frame");
+  assert(bytesToHex(encodeFrame(76004)) === "04000000e4280100" && bytesToHex(encodeFrame(76004)) !== "04000000e1280100", "76004 is not the 76001 frame");
+  assert(bytesToHex(encodeFrame(76005)) === "04000000e5280100" && bytesToHex(encodeFrame(76005)) !== "04000000e1280100", "76005 is not the 76001 frame");
+  assert(bytesToHex(encodeFrame(76021)) === "04000000f5280100" && bytesToHex(encodeFrame(76021)) !== "04000000e1280100", "76021 is not the 76001 frame");
+  assert(bytesToHex(encodeFrame(76022)) === "04000000f6280100" && bytesToHex(encodeFrame(76022)) !== "04000000e1280100", "76022 is not the 76001 frame");
+  assert(bytesToHex(encodeFrame(76101)) === "0400000045290100" && bytesToHex(encodeFrame(76101)) !== "04000000e1280100", "76101 is not the 76001 frame");
+  for (let i = 0; i < WIRE_HEI_WU_MISSION_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_HEI_WU_MISSION_BANNED_CMDS[i] }) === null, WIRE_HEI_WU_MISSION_BANNED_CMDS[i] + " is not encoded");
+  }
+  const heiOwn = encodeWireMessage({ cmd: WIRE_HEI_WU_MISSION_CMD });
+  assert(
+    heiOwn !== null &&
+      bytesToHex(heiOwn.bytes) === "04000000e1280100" &&
+      bytesToHex(heiOwn.bytes) !== "040000007d280100" &&
+      bytesToHex(heiOwn.bytes) !== "04000000e2280100" &&
+      bytesToHex(heiOwn.bytes) !== "04000000e3280100" &&
+      bytesToHex(heiOwn.bytes) !== "04000000e4280100" &&
+      bytesToHex(heiOwn.bytes) !== "04000000e5280100" &&
+      bytesToHex(heiOwn.bytes) !== "04000000f5280100" &&
+      bytesToHex(heiOwn.bytes) !== "04000000f6280100" &&
+      bytesToHex(heiOwn.bytes) !== "0400000045290100",
+    "wire.76001 encodes the empty 76001 frame and not 75901 or the banned cmds"
+  );
+  assert(WIRE_HEI_WU_MISSION_CMD === "wire.76001", "hei wu mission wire cmd");
+  assert(WIRE_HEI_WU_MISSION_READONLY_TITLE === "黑五（真服只读）", "readonly hei wu mission title");
+  assert(WIRE_HEI_WU_MISSION_UNSYNCED_TOAST === "真服未同步", "unsynced hei wu mission toast");
+  assert(WIRE_HEI_WU_MISSION_EMPTY === "已同步空表", "empty hei wu mission label");
+  assert(
+    WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("mission") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("mission_box_reward_record") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("mission_reward_count") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("buy") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("76002") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("76003") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("76004") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("76005") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("76021") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("75901") >= 0 &&
+      WIRE_HEI_WU_MISSION_READONLY_NOTE.indexOf("无 page") >= 0,
+    "76001 readonly note lists the four fields and the hard bans"
+  );
+  assert(
+    WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("轮次清 mission") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("非开启回默认") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("无养成写") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("04000000e1280100") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("与 75901 分开发") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("不并入 75901") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("76002") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("76003") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("76004") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("76005") >= 0 &&
+      WIRE_HEI_WU_MISSION_SIDE_EFFECT.indexOf("76021") >= 0,
+    "76001 side effect keeps the lazy create and does not claim or buy"
+  );
+  assert(
+    WIRE_HEI_WU_MISSION_FIELD_NOTE.indexOf("mission") >= 0 &&
+      WIRE_HEI_WU_MISSION_FIELD_NOTE.indexOf("mission_reward_count") >= 0 &&
+      WIRE_HEI_WU_MISSION_FIELD_NOTE.indexOf("buy") >= 0 &&
+      WIRE_HEI_WU_MISSION_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_HEI_WU_MISSION_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "76001 field note does not invent missing numbers"
+  );
+  const heiEmpty = decodeWireHeiWuMission(new Uint8Array(0));
+  assert(
+    heiEmpty !== null &&
+      heiEmpty.mission === null &&
+      heiEmpty.missionBoxRewardRecord === null &&
+      heiEmpty.missionRewardCount === null &&
+      heiEmpty.buy === null &&
+      heiEmpty.marks.length === 0 &&
+      formatWireHeiWuMissionLine(heiEmpty) === WIRE_HEI_WU_MISSION_EMPTY &&
+      formatWireHeiWuMissionLine(heiEmpty).indexOf("mission=") < 0 &&
+      formatWireHeiWuMissionLine(heiEmpty).indexOf("mission_box_reward_record=") < 0 &&
+      formatWireHeiWuMissionLine(heiEmpty).indexOf("mission_reward_count=") < 0 &&
+      formatWireHeiWuMissionLine(heiEmpty).indexOf("buy=") < 0,
+    "empty 76001 body is 已同步空表 and does not invent zeros"
+  );
+  assert(decodeWireHeiWuMission(null) === null, "missing 76001 body stays unsynced");
+  assert(decodeWireHeiWuMission(Uint8Array.from([0x80])) === null, "bad 76001 varint returns null");
+  const heiCountZero = decodeWireHeiWuMission(fieldVarint(3, 0));
+  assert(
+    heiCountZero !== null &&
+      heiCountZero.missionRewardCount === 0 &&
+      heiCountZero.mission === null &&
+      heiCountZero.missionBoxRewardRecord === null &&
+      heiCountZero.buy === null &&
+      formatWireHeiWuMissionLine(heiCountZero) === "mission_reward_count=0" &&
+      formatWireHeiWuMissionLine(heiCountZero).indexOf("mission=") < 0 &&
+      formatWireHeiWuMissionLine(heiCountZero).indexOf("buy=") < 0,
+    "present 76001 mission_reward_count zero stays zero and omits the other fields"
+  );
+  const heiCountNeg = decodeWireHeiWuMission(fieldNeg1(3));
+  assert(
+    heiCountNeg !== null &&
+      heiCountNeg.missionRewardCount === -1 &&
+      heiCountNeg.mission === null &&
+      heiCountNeg.buy === null &&
+      formatWireHeiWuMissionLine(heiCountNeg) === "mission_reward_count=-1" &&
+      formatWireHeiWuMissionLine(heiCountNeg).indexOf("mission=") < 0 &&
+      formatWireHeiWuMissionLine(heiCountNeg).indexOf("buy=") < 0,
+    "present 76001 mission_reward_count -1 stays -1"
+  );
+  const heiBuyZero = decodeWireHeiWuMission(fieldVarint(4, 0));
+  assert(
+    heiBuyZero !== null &&
+      heiBuyZero.buy !== null &&
+      heiBuyZero.buy[0].kind === "num" &&
+      heiBuyZero.buy[0].value === 0 &&
+      heiBuyZero.missionRewardCount === null &&
+      formatWireHeiWuMissionLine(heiBuyZero) === "buy=0" &&
+      formatWireHeiWuMissionLine(heiBuyZero).indexOf("mission_reward_count=") < 0,
+    "present 76001 buy zero stays zero and omits mission_reward_count"
+  );
+  const heiBuyNeg = decodeWireHeiWuMission(fieldNeg1(4));
+  assert(
+    heiBuyNeg !== null &&
+      heiBuyNeg.buy !== null &&
+      heiBuyNeg.buy[0].kind === "num" &&
+      heiBuyNeg.buy[0].value === -1 &&
+      heiBuyNeg.missionRewardCount === null &&
+      formatWireHeiWuMissionLine(heiBuyNeg) === "buy=-1" &&
+      formatWireHeiWuMissionLine(heiBuyNeg).indexOf("mission_reward_count=") < 0,
+    "present 76001 buy -1 stays -1"
+  );
+  const heiInnerZero = decodeWireHeiWuMission(fieldBytes(1, fieldVarint(2, 0)));
+  assert(
+    heiInnerZero !== null &&
+      heiInnerZero.mission !== null &&
+      heiInnerZero.missionRewardCount === null &&
+      heiInnerZero.buy === null &&
+      formatWireHeiWuMissionLine(heiInnerZero) === "mission=字段2=0" &&
+      formatWireHeiWuMissionLine(heiInnerZero).indexOf("mission_reward_count=") < 0 &&
+      formatWireHeiWuMissionLine(heiInnerZero).indexOf("buy=") < 0,
+    "76001 mission keeps an inner present zero by field number"
+  );
+  const heiMissionZero = decodeWireHeiWuMission(fieldVarint(1, 0));
+  assert(
+    heiMissionZero !== null &&
+      heiMissionZero.mission !== null &&
+      heiMissionZero.mission[0].kind === "num" &&
+      heiMissionZero.mission[0].value === 0 &&
+      formatWireHeiWuMissionLine(heiMissionZero) === "mission=0",
+    "present 76001 mission zero stays zero"
+  );
+  const heiUnknown = decodeWireHeiWuMission(fieldVarint(5, 5));
+  assert(
+    heiUnknown !== null &&
+      heiUnknown.mission === null &&
+      heiUnknown.missionRewardCount === null &&
+      heiUnknown.buy === null &&
+      formatWireHeiWuMissionLine(heiUnknown) === "字段5=5" &&
+      formatWireHeiWuMissionLine(heiUnknown).indexOf("mission=") < 0 &&
+      formatWireHeiWuMissionLine(heiUnknown).indexOf("mission_reward_count=") < 0 &&
+      formatWireHeiWuMissionLine(heiUnknown).indexOf("buy=") < 0,
+    "76001 unknown field stays a mark and does not invent named zeros"
+  );
+  const heiCountBytes = decodeWireHeiWuMission(fieldBytes(3, fieldVarint(1, 1)));
+  assert(
+    heiCountBytes !== null &&
+      heiCountBytes.missionRewardCount === null &&
+      formatWireHeiWuMissionLine(heiCountBytes).indexOf("mission_reward_count=") < 0 &&
+      formatWireHeiWuMissionLine(heiCountBytes).indexOf("字段3=") >= 0,
+    "76001 field 3 bytes stay a mark and are not coerced to 0"
+  );
+  const heiSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.heiWuMission, fieldVarint(3, 0)), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    heiSticky.frames.length === 2 &&
+      heiSticky.frames[0].cmdId === 76001 &&
+      heiSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireHeiWuMission(heiSticky.frames[0].body)?.missionRewardCount === 0,
+    "sticky 76001 frame stops at its length prefix"
+  );
+  const heiNote = wireHeiWuMissionNote(heiEmpty || { mission: null, missionBoxRewardRecord: null, missionRewardCount: null, buy: null, marks: [] });
+  assert(
+    heiNote.indexOf(WIRE_HEI_WU_MISSION_SIDE_EFFECT) >= 0 &&
+      heiNote.indexOf("不写金币") >= 0 &&
+      heiNote.indexOf("不写钻石") >= 0,
+    "76001 note keeps the side effect and does not write gold or diamond"
+  );
   assert(
     bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
@@ -14405,7 +14643,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 58, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once then 75901 once and does not resend 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 59, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once then 75901 once then 76001 once and does not resend 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -15633,6 +15871,29 @@ async function checkWs(): Promise<void> {
         }
         assert(wanHex !== "0400000019280100", "pullIdle 75901 frame is not merged into the 75801 cmd");
       }
+
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 58] as ArrayBuffer)) === "04000000e1280100",
+        "pullIdle sends empty c2s 76001 after 75901 at frame index 58"
+      );
+      {
+        const heiHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 58] as ArrayBuffer));
+        const notFrames = [
+          "040000007d280100",
+          "0400000019280100",
+          "04000000e2280100",
+          "04000000e3280100",
+          "04000000e4280100",
+          "04000000e5280100",
+          "04000000f5280100",
+          "04000000f6280100",
+          "0400000045290100",
+        ];
+        for (let n = 0; n < notFrames.length; n++) {
+          assert(heiHex !== notFrames[n], "pullIdle 76001 frame is not " + notFrames[n]);
+        }
+        assert(heiHex !== "040000007d280100", "pullIdle 76001 frame is not merged into the 75901 cmd");
+      }
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -15712,7 +15973,13 @@ async function checkWs(): Promise<void> {
           "04000000a6280100": true,
           "04000000a7280100": true,
           "04000000a8280100": true,
-          "04000000e1280100": true,
+          "04000000e2280100": true,
+          "04000000e3280100": true,
+          "04000000e4280100": true,
+          "04000000e5280100": true,
+          "04000000f5280100": true,
+          "04000000f6280100": true,
+          "0400000045290100": true,
         };
         let weekendFrames = 0;
         let godRelicFrames = 0;
@@ -15726,9 +15993,10 @@ async function checkWs(): Promise<void> {
         let midFoodFrames = 0;
         let qiuShangFrames = 0;
         let wanShengFrames = 0;
+        let blackFiveFrames = 0;
         let astrolabeFrames = 0;
         let reikiFrames = 0;
-        for (let i = 0; i < 58; i++) {
+        for (let i = 0; i < 59; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -15753,6 +16021,7 @@ async function checkWs(): Promise<void> {
           if (hex === "040000007b250100") midFoodFrames += 1;
           if (hex === "0400000019280100") qiuShangFrames += 1;
           if (hex === "040000007d280100") wanShengFrames += 1;
+          if (hex === "04000000e1280100") blackFiveFrames += 1;
           if (hex === "04000000a1090100") astrolabeFrames += 1;
           if (hex === "0400000071110100") reikiFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
@@ -15782,11 +16051,12 @@ async function checkWs(): Promise<void> {
             midFoodFrames === 1 &&
             qiuShangFrames === 1 &&
             wanShengFrames === 1 &&
+            blackFiveFrames === 1 &&
             astrolabeFrames === 1 &&
             reikiFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once, 75131 once and 75801 once and 75901 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once, 75131 once and 75801 once and 75901 once and 76001 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76002 76003 76004 76005 76021 76022 76101 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
         );
       }
       assert(
@@ -15976,8 +16246,22 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000a7280100") === false &&
           sawLog(lines, "发送 c2s 75944") === false &&
           sawLog(lines, "04000000a8280100") === false &&
-          sawLog(lines, "发送 c2s 76001") === false &&
-          sawLog(lines, "04000000e1280100") === false &&
+          sawLog(lines, "发送 c2s 76001") &&
+          sawLog(lines, "04000000e1280100") &&
+          sawLog(lines, "发送 c2s 76002") === false &&
+          sawLog(lines, "04000000e2280100") === false &&
+          sawLog(lines, "发送 c2s 76003") === false &&
+          sawLog(lines, "04000000e3280100") === false &&
+          sawLog(lines, "发送 c2s 76004") === false &&
+          sawLog(lines, "04000000e4280100") === false &&
+          sawLog(lines, "发送 c2s 76005") === false &&
+          sawLog(lines, "04000000e5280100") === false &&
+          sawLog(lines, "发送 c2s 76021") === false &&
+          sawLog(lines, "04000000f5280100") === false &&
+          sawLog(lines, "发送 c2s 76022") === false &&
+          sawLog(lines, "04000000f6280100") === false &&
+          sawLog(lines, "发送 c2s 76101") === false &&
+          sawLog(lines, "0400000045290100") === false &&
           sawLog(lines, "发送 c2s 74002") === false &&
           sawLog(lines, "0400000012210100") === false &&
           sawLog(lines, "发送 c2s 74003") === false &&
@@ -16224,6 +16508,9 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_WAN_SHENG_LOTTERY_CMD);
       const wanSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(wanSent as ArrayBuffer)) === "040000007d280100", "wire.75901 frame");
+      roleNet.send(WIRE_HEI_WU_MISSION_CMD);
+      const heiSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(heiSent as ArrayBuffer)) === "04000000e1280100", "wire.76001 frame");
       const sentBeforeRechargeOther = roleSockets[0].sent.length;
       roleNet.send("wire.61002");
       roleNet.send("wire.62002");
@@ -16272,10 +16559,16 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.75942");
       roleNet.send("wire.75943");
       roleNet.send("wire.75944");
-      roleNet.send("wire.76001");
+      roleNet.send("wire.76002");
+      roleNet.send("wire.76003");
+      roleNet.send("wire.76004");
+      roleNet.send("wire.76005");
+      roleNet.send("wire.76021");
+      roleNet.send("wire.76022");
+      roleNet.send("wire.76101");
       roleNet.send("wire.75001");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76001 75001 and goal claim stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76002 76003 76004 76005 76021 76022 76101 75001 and goal claim stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.61002") &&
           sawLog(lines, "未发送 wire.62002") &&
@@ -16324,7 +16617,13 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.75942") &&
           sawLog(lines, "未发送 wire.75943") &&
           sawLog(lines, "未发送 wire.75944") &&
-          sawLog(lines, "未发送 wire.76001") &&
+          sawLog(lines, "未发送 wire.76002") &&
+          sawLog(lines, "未发送 wire.76003") &&
+          sawLog(lines, "未发送 wire.76004") &&
+          sawLog(lines, "未发送 wire.76005") &&
+          sawLog(lines, "未发送 wire.76021") &&
+          sawLog(lines, "未发送 wire.76022") &&
+          sawLog(lines, "未发送 wire.76101") &&
           sawLog(lines, "未发送 wire.75001") &&
           sawLog(lines, "未发送 goal7.claim"),
         "qi shen qi banned cmds and goal claim are not encoded"
@@ -21235,12 +21534,67 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(75932, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75941, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75944, fieldVarint(1, 9)));
-      roleSockets[0].push(encodeFrame(76001, fieldVarint(1, 9)));
       assert(
         formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }) === "last_lottery_id=0" &&
           formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === "lottery_count=0" &&
+          formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === midBeforeQiuClear &&
+          WireSession.hasHeiWuMission() === false,
+        "75902 75903 75904 75931 75932 75941 75944 do not replace the 75901 snapshot and 76001 stays unsynced"
+      );
+      roleSockets[0].push(encodeFrame(76001, fieldVarint(1, 9)));
+      assert(
+        WireSession.hasHeiWuMission() &&
+          formatWireHeiWuMissionLine(WireSession.heiWuMission || { mission: null, missionBoxRewardRecord: null, missionRewardCount: null, buy: null, marks: [] }) === "mission=9" &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }) === "last_lottery_id=0" &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === "lottery_count=0" &&
           formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === midBeforeQiuClear,
-        "75902 75903 75904 75931 75932 75941 75944 and 76001 do not replace the 75901 snapshot"
+        "76001 mission does not replace the 75901 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(76001));
+      assert(
+        WireSession.hasHeiWuMission() &&
+          formatWireHeiWuMissionLine(WireSession.heiWuMission || { mission: null, missionBoxRewardRecord: null, missionRewardCount: null, buy: null, marks: [] }) === WIRE_HEI_WU_MISSION_EMPTY &&
+          formatWireHeiWuMissionLine(WireSession.heiWuMission || { mission: null, missionBoxRewardRecord: null, missionRewardCount: null, buy: null, marks: [] }).indexOf("mission=") < 0 &&
+          formatWireHeiWuMissionLine(WireSession.heiWuMission || { mission: null, missionBoxRewardRecord: null, missionRewardCount: null, buy: null, marks: [] }).indexOf("mission_reward_count=") < 0 &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }) === "last_lottery_id=0",
+        "empty 76001 body is 已同步空表 and does not replace the 75901 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(76001, fieldVarint(3, 0)));
+      assert(
+        WireSession.heiWuMission !== null &&
+          WireSession.heiWuMission.missionRewardCount === 0 &&
+          WireSession.heiWuMission.mission === null &&
+          WireSession.heiWuMission.buy === null &&
+          formatWireHeiWuMissionLine(WireSession.heiWuMission) === "mission_reward_count=0" &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }) === "last_lottery_id=0",
+        "76001 shows a present zero and omits the missing fields"
+      );
+      roleSockets[0].push(encodeFrame(76001, fieldNeg1(4)));
+      assert(
+        WireSession.heiWuMission !== null &&
+          formatWireHeiWuMissionLine(WireSession.heiWuMission) === "buy=-1" &&
+          formatWireHeiWuMissionLine(WireSession.heiWuMission).indexOf("mission_reward_count=") < 0,
+        "76001 keeps a present -1 and omits mission_reward_count"
+      );
+      roleSockets[0].push(encodeFrame(76001, fieldVarint(3, 0)));
+      roleSockets[0].push(encodeFrame(76001, Uint8Array.from([0x80])));
+      assert(
+        WireSession.heiWuMission !== null &&
+          formatWireHeiWuMissionLine(WireSession.heiWuMission) === "mission_reward_count=0" &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }) === "last_lottery_id=0" &&
+          sawWire("76001 解不开"),
+        "bad 76001 keeps the previous snapshot and the 75901 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(76002, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76003, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76004, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76005, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76021, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76022, fieldVarint(1, 9)));
+      assert(
+        formatWireHeiWuMissionLine(WireSession.heiWuMission || { mission: null, missionBoxRewardRecord: null, missionRewardCount: null, buy: null, marks: [] }) === "mission_reward_count=0" &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }) === "last_lottery_id=0",
+        "76002 76003 76004 76005 76021 76022 do not replace the 76001 snapshot"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
