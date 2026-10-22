@@ -126,8 +126,11 @@ const BOTTOM_PAD_WIDTH = 728;
 const BOTTOM_PAD_COLOR = new Color(46, 26, 22, 255);
 
 /**
- * 绑定 CityChrome.prefab。Top/Bottom 下是 Name、Sub、Gold、Diamond 和 Tab_*。
+ * 绑定 CityChrome.prefab。
+ * TopBar 下是 LblName、LblSub、CurrencyGold/Value、CurrencyGem/Value。
+ * BottomBar 下是 TabCity、TabHero、TabSummon、TabForge、TabPlay，子节点 Label、Lock。
  * 路径相对 assets：prefabs/ui/city/CityChrome。不走 resources.load。
+ * 不改加载开关。活动 / 更多入口仍由页面代码绘制，Prefab 里只留未激活桩。
  */
 export async function mountCityChromePrefab(parent: Node, onTab: (id: string) => void): Promise<CityChrome> {
   const prefab = await loadPrefab(CITY_CHROME_PREFAB_PATH);
@@ -142,14 +145,21 @@ export async function mountCityChromePrefab(parent: Node, onTab: (id: string) =>
 
 function bindCityChromePrefab(root: Node, onTab: (id: string) => void): CityChrome {
   sealBottomBg(root);
-  const nameNode = requireNode(root, "Top/Name");
-  const subNode = requireNode(root, "Top/Sub");
-  const goldNode = requireNode(root, "Top/Gold");
-  const diamondNode = requireNode(root, "Top/Diamond");
+  const nameNode = requireNode(root, "TopBar/LblName");
+  const subNode = requireNode(root, "TopBar/LblSub");
+  const goldNode = requireNode(root, "TopBar/CurrencyGold/Value");
+  const diamondNode = requireNode(root, "TopBar/CurrencyGem/Value");
+  const tabPath: { [id: string]: string } = {
+    city: "BottomBar/TabCity",
+    hero: "BottomBar/TabHero",
+    summon: "BottomBar/TabSummon",
+    smith: "BottomBar/TabForge",
+    plays: "BottomBar/TabPlay",
+  };
   const buttons: { [id: string]: Node } = {};
   for (let i = 0; i < BOTTOM_TABS.length; i++) {
     const entry = BOTTOM_TABS[i];
-    const button = requireNode(root, "Bottom/Tab_" + entry.id);
+    const button = requireNode(root, tabPath[entry.id]);
     const lock = button.getChildByName("Lock");
     if (lock) lock.active = false;
     bindClick(button, () => onTab(entry.id));
@@ -182,11 +192,11 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void): CityChro
 }
 
 /**
- * Bottom/Bg 背后垫满宽实色，并略加宽贴图节点，盖住 640→720 的左右透边。
- * 不改五个 Tab 的位置。Top/Bg 原始 616×146 且左缘不透明，这里不垫。
+ * BottomBar/Bg 背后垫满宽实色，并略加宽贴图节点，盖住 640→720 的左右透边。
+ * 不改五个 Tab 的位置。顶栏原图左缘不透明，这里不垫。
  */
 function sealBottomBg(root: Node): void {
-  const bg = requireNode(root, "Bottom/Bg");
+  const bg = requireNode(root, "BottomBar/Bg");
   const ui = bg.getComponent(UITransform);
   const height = ui && ui.contentSize && typeof ui.contentSize.height === "number" ? ui.contentSize.height : 129;
   if (ui) ui.setContentSize(BOTTOM_BG_WIDTH, height);
