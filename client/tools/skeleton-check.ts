@@ -1244,6 +1244,20 @@ import {
   WIRE_QIU_SHANG_MING_YUE_UNSYNCED_TOAST,
   wireQiuShangMingYueNote,
 } from "../assets/scripts/net/protocol/wireQiuShangMingYue";
+import {
+  decodeWireWanShengLottery,
+  formatWireWanShengLotteryLine,
+  WIRE_WAN_SHENG_LOTTERY_BANNED_CMDS,
+  WIRE_WAN_SHENG_LOTTERY_CMD,
+  WIRE_WAN_SHENG_LOTTERY_EMPTY,
+  WIRE_WAN_SHENG_LOTTERY_FIELD_NOTE,
+  WIRE_WAN_SHENG_LOTTERY_FRAME,
+  WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE,
+  WIRE_WAN_SHENG_LOTTERY_READONLY_TITLE,
+  WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT,
+  WIRE_WAN_SHENG_LOTTERY_UNSYNCED_TOAST,
+  wireWanShengLotteryNote,
+} from "../assets/scripts/net/protocol/wireWanShengLottery";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -2003,6 +2017,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("zhuShenJiTan") === "city", "zhu shen ji tan stays on the city tab");
   assert(rootTabFor("midFood") === "city", "mid food stays on the city tab");
   assert(rootTabFor("qiuShangMingYue") === "city", "qiu shang ming yue stays on the city tab");
+  assert(rootTabFor("wanShengLottery") === "city", "wan sheng lottery stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -13030,6 +13045,240 @@ async function checkWs(): Promise<void> {
       qiuNote.indexOf("不写钻石") >= 0,
     "75801 note keeps the side effect and does not write gold or diamond"
   );
+
+  assert(
+    WireCmd.wanShengLottery === 75901 &&
+      WireCmd.wanShengLottery !== WireCmd.qiuShangMingYue &&
+      WireCmd.wanShengLottery !== WireCmd.midFood &&
+      WireCmd.wanShengLottery !== 75902 &&
+      WireCmd.wanShengLottery !== 75903 &&
+      WireCmd.wanShengLottery !== 75904 &&
+      WireCmd.wanShengLottery !== 75931 &&
+      WireCmd.wanShengLottery !== 75932 &&
+      WireCmd.wanShengLottery !== 75941 &&
+      WireCmd.wanShengLottery !== 75944 &&
+      WireCmd.wanShengLottery !== 76001 &&
+      WireCmd.wanShengLottery !== 75801 &&
+      WireCmd.wanShengLottery !== 75131 &&
+      WireCmd.wanShengLottery !== 75001 &&
+      WireCmd.wanShengLottery !== 76501 &&
+      WireCmd.wanShengLottery !== 73002 &&
+      WireCmd.wanShengLottery !== 71001 &&
+      WireCmd.wanShengLottery !== 20011 &&
+      WireCmd.wanShengLottery !== 74121 &&
+      WireCmd.wanShengLottery !== 74122 &&
+      WireCmd.wanShengLottery !== 4601 &&
+      WireCmd.wanShengLottery !== 29001 &&
+      WireCmd.wanShengLottery !== 5001 &&
+      WireCmd.wanShengLottery !== 51001 &&
+      WireCmd.wanShengLottery !== 68001 &&
+      WireCmd.wanShengLottery !== 70001,
+    "online 75901 stays off the write cmds and the earlier idle pulls"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.wanShengLottery)) === WIRE_WAN_SHENG_LOTTERY_FRAME, "empty c2s 75901");
+  assert(bytesToHex(encodeFrame(75901)) === "040000007d280100", "empty c2s 75901 hex");
+  assert(WIRE_WAN_SHENG_LOTTERY_FRAME === "040000007d280100", "75901 frame constant");
+  assert(bytesToHex(encodeFrame(75901)) !== "0400000019280100", "75901 is not the 75801 frame");
+  assert(bytesToHex(encodeFrame(75902)) === "040000007e280100" && bytesToHex(encodeFrame(75902)) !== "040000007d280100", "75902 is not the 75901 frame");
+  assert(bytesToHex(encodeFrame(75903)) === "040000007f280100" && bytesToHex(encodeFrame(75903)) !== "040000007d280100", "75903 is not the 75901 frame");
+  assert(bytesToHex(encodeFrame(75904)) === "0400000080280100" && bytesToHex(encodeFrame(75904)) !== "040000007d280100", "75904 is not the 75901 frame");
+  assert(bytesToHex(encodeFrame(75931)) === "040000009b280100" && bytesToHex(encodeFrame(75931)) !== "040000007d280100", "75931 is not the 75901 frame");
+  assert(bytesToHex(encodeFrame(75932)) === "040000009c280100" && bytesToHex(encodeFrame(75932)) !== "040000007d280100", "75932 is not the 75901 frame");
+  assert(bytesToHex(encodeFrame(75941)) === "04000000a5280100" && bytesToHex(encodeFrame(75941)) !== "040000007d280100", "75941 is not the 75901 frame");
+  assert(bytesToHex(encodeFrame(75942)) === "04000000a6280100" && bytesToHex(encodeFrame(75942)) !== "040000007d280100", "75942 is not the 75901 frame");
+  assert(bytesToHex(encodeFrame(75943)) === "04000000a7280100" && bytesToHex(encodeFrame(75943)) !== "040000007d280100", "75943 is not the 75901 frame");
+  assert(bytesToHex(encodeFrame(75944)) === "04000000a8280100" && bytesToHex(encodeFrame(75944)) !== "040000007d280100", "75944 is not the 75901 frame");
+  assert(bytesToHex(encodeFrame(76001)) === "04000000e1280100" && bytesToHex(encodeFrame(76001)) !== "040000007d280100", "76001 is not the 75901 frame");
+  for (let i = 0; i < WIRE_WAN_SHENG_LOTTERY_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_WAN_SHENG_LOTTERY_BANNED_CMDS[i] }) === null, WIRE_WAN_SHENG_LOTTERY_BANNED_CMDS[i] + " is not encoded");
+  }
+  const wanOwn = encodeWireMessage({ cmd: WIRE_WAN_SHENG_LOTTERY_CMD });
+  assert(
+    wanOwn !== null &&
+      bytesToHex(wanOwn.bytes) === "040000007d280100" &&
+      bytesToHex(wanOwn.bytes) !== "0400000019280100" &&
+      bytesToHex(wanOwn.bytes) !== "040000007b250100" &&
+      bytesToHex(wanOwn.bytes) !== "040000007e280100" &&
+      bytesToHex(wanOwn.bytes) !== "040000007f280100" &&
+      bytesToHex(wanOwn.bytes) !== "0400000080280100" &&
+      bytesToHex(wanOwn.bytes) !== "040000009b280100" &&
+      bytesToHex(wanOwn.bytes) !== "040000009c280100" &&
+      bytesToHex(wanOwn.bytes) !== "04000000a5280100" &&
+      bytesToHex(wanOwn.bytes) !== "04000000a8280100" &&
+      bytesToHex(wanOwn.bytes) !== "04000000e1280100",
+    "wire.75901 encodes the empty 75901 frame and not 75801 or the banned cmds"
+  );
+  assert(WIRE_WAN_SHENG_LOTTERY_CMD === "wire.75901", "wan sheng lottery wire cmd");
+  assert(WIRE_WAN_SHENG_LOTTERY_READONLY_TITLE === "万圣抽奖（真服只读）", "readonly wan sheng lottery title");
+  assert(WIRE_WAN_SHENG_LOTTERY_UNSYNCED_TOAST === "真服未同步", "unsynced wan sheng lottery toast");
+  assert(WIRE_WAN_SHENG_LOTTERY_EMPTY === "已同步空表", "empty wan sheng lottery label");
+  assert(
+    WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("select_info") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("lottery_reward") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("lottery_count") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("lottery_best_remaining_count") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("last_lottery_id") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("75902") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("75903") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("75904") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("75931") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("75941") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("75801") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_READONLY_NOTE.indexOf("无 page") >= 0,
+    "75901 readonly note lists the five fields and the hard bans"
+  );
+  assert(
+    WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("getPromotionInfo") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("轮次清 select") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("非开启回默认") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("无抽奖") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("040000007d280100") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("与 75801 分开发") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("不并入 75801") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("75902") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("75903") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT.indexOf("75904") >= 0,
+    "75901 side effect keeps the lazy create and does not draw or claim"
+  );
+  assert(
+    WIRE_WAN_SHENG_LOTTERY_FIELD_NOTE.indexOf("select_info") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_FIELD_NOTE.indexOf("lottery_count") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_FIELD_NOTE.indexOf("last_lottery_id") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_WAN_SHENG_LOTTERY_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "75901 field note does not invent missing numbers"
+  );
+  const wanEmpty = decodeWireWanShengLottery(new Uint8Array(0));
+  assert(
+    wanEmpty !== null &&
+      wanEmpty.selectInfo === null &&
+      wanEmpty.lotteryReward === null &&
+      wanEmpty.lotteryCount === null &&
+      wanEmpty.lotteryBestRemainingCount === null &&
+      wanEmpty.lastLotteryId === null &&
+      wanEmpty.marks.length === 0 &&
+      formatWireWanShengLotteryLine(wanEmpty) === WIRE_WAN_SHENG_LOTTERY_EMPTY &&
+      formatWireWanShengLotteryLine(wanEmpty).indexOf("lottery_count=") < 0 &&
+      formatWireWanShengLotteryLine(wanEmpty).indexOf("select_info=") < 0 &&
+      formatWireWanShengLotteryLine(wanEmpty).indexOf("lottery_reward=") < 0 &&
+      formatWireWanShengLotteryLine(wanEmpty).indexOf("lottery_best_remaining_count=") < 0 &&
+      formatWireWanShengLotteryLine(wanEmpty).indexOf("last_lottery_id=") < 0,
+    "empty 75901 body is 已同步空表 and does not invent zeros"
+  );
+  assert(decodeWireWanShengLottery(null) === null, "missing 75901 body stays unsynced");
+  assert(decodeWireWanShengLottery(Uint8Array.from([0x80])) === null, "bad 75901 varint returns null");
+  const wanCountZero = decodeWireWanShengLottery(fieldVarint(3, 0));
+  assert(
+    wanCountZero !== null &&
+      wanCountZero.lotteryCount === 0 &&
+      wanCountZero.selectInfo === null &&
+      wanCountZero.lotteryReward === null &&
+      wanCountZero.lotteryBestRemainingCount === null &&
+      wanCountZero.lastLotteryId === null &&
+      formatWireWanShengLotteryLine(wanCountZero) === "lottery_count=0" &&
+      formatWireWanShengLotteryLine(wanCountZero).indexOf("select_info=") < 0 &&
+      formatWireWanShengLotteryLine(wanCountZero).indexOf("last_lottery_id=") < 0,
+    "present 75901 lottery_count zero stays zero and omits the other fields"
+  );
+  const wanBestNeg = decodeWireWanShengLottery(fieldNeg1(4));
+  assert(
+    wanBestNeg !== null &&
+      wanBestNeg.lotteryBestRemainingCount === -1 &&
+      wanBestNeg.lotteryCount === null &&
+      wanBestNeg.lastLotteryId === null &&
+      formatWireWanShengLotteryLine(wanBestNeg) === "lottery_best_remaining_count=-1" &&
+      formatWireWanShengLotteryLine(wanBestNeg).indexOf("lottery_count=") < 0 &&
+      formatWireWanShengLotteryLine(wanBestNeg).indexOf("last_lottery_id=") < 0,
+    "present 75901 lottery_best_remaining_count -1 stays -1"
+  );
+  const wanLastZero = decodeWireWanShengLottery(fieldVarint(5, 0));
+  assert(
+    wanLastZero !== null &&
+      wanLastZero.lastLotteryId === 0 &&
+      wanLastZero.lotteryCount === null &&
+      formatWireWanShengLotteryLine(wanLastZero) === "last_lottery_id=0" &&
+      formatWireWanShengLotteryLine(wanLastZero).indexOf("lottery_count=") < 0,
+    "present 75901 last_lottery_id zero stays zero and omits lottery_count"
+  );
+  const wanLastNeg = decodeWireWanShengLottery(fieldNeg1(5));
+  assert(
+    wanLastNeg !== null &&
+      wanLastNeg.lastLotteryId === -1 &&
+      wanLastNeg.lotteryCount === null &&
+      formatWireWanShengLotteryLine(wanLastNeg) === "last_lottery_id=-1" &&
+      formatWireWanShengLotteryLine(wanLastNeg).indexOf("lottery_count=") < 0,
+    "present 75901 last_lottery_id -1 stays -1"
+  );
+  const wanInnerZero = decodeWireWanShengLottery(fieldBytes(1, fieldVarint(2, 0)));
+  assert(
+    wanInnerZero !== null &&
+      wanInnerZero.selectInfo !== null &&
+      wanInnerZero.lotteryCount === null &&
+      wanInnerZero.lastLotteryId === null &&
+      formatWireWanShengLotteryLine(wanInnerZero) === "select_info=字段2=0" &&
+      formatWireWanShengLotteryLine(wanInnerZero).indexOf("lottery_count=") < 0 &&
+      formatWireWanShengLotteryLine(wanInnerZero).indexOf("last_lottery_id=") < 0,
+    "75901 select_info keeps an inner present zero by field number"
+  );
+  const wanSelectZero = decodeWireWanShengLottery(fieldVarint(1, 0));
+  assert(
+    wanSelectZero !== null &&
+      wanSelectZero.selectInfo !== null &&
+      wanSelectZero.selectInfo[0].kind === "num" &&
+      wanSelectZero.selectInfo[0].value === 0 &&
+      formatWireWanShengLotteryLine(wanSelectZero) === "select_info=0",
+    "present 75901 select_info zero stays zero"
+  );
+  const wanUnknown = decodeWireWanShengLottery(fieldVarint(6, 5));
+  assert(
+    wanUnknown !== null &&
+      wanUnknown.selectInfo === null &&
+      wanUnknown.lotteryCount === null &&
+      wanUnknown.lastLotteryId === null &&
+      formatWireWanShengLotteryLine(wanUnknown) === "字段6=5" &&
+      formatWireWanShengLotteryLine(wanUnknown).indexOf("select_info=") < 0 &&
+      formatWireWanShengLotteryLine(wanUnknown).indexOf("lottery_count=") < 0 &&
+      formatWireWanShengLotteryLine(wanUnknown).indexOf("last_lottery_id=") < 0,
+    "75901 unknown field stays a mark and does not invent named zeros"
+  );
+  const wanLastBytes = decodeWireWanShengLottery(fieldBytes(5, fieldVarint(1, 1)));
+  assert(
+    wanLastBytes !== null &&
+      wanLastBytes.lastLotteryId === null &&
+      formatWireWanShengLotteryLine(wanLastBytes).indexOf("last_lottery_id=") < 0 &&
+      formatWireWanShengLotteryLine(wanLastBytes).indexOf("字段5=") >= 0,
+    "75901 field 5 bytes stay a mark and are not coerced to 0"
+  );
+  const wanCountBytes = decodeWireWanShengLottery(fieldBytes(3, fieldVarint(1, 1)));
+  assert(
+    wanCountBytes !== null &&
+      wanCountBytes.lotteryCount === null &&
+      formatWireWanShengLotteryLine(wanCountBytes).indexOf("lottery_count=") < 0 &&
+      formatWireWanShengLotteryLine(wanCountBytes).indexOf("字段3=") >= 0,
+    "75901 field 3 bytes stay a mark and are not coerced to 0"
+  );
+  const wanSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.wanShengLottery, fieldVarint(5, 0)), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    wanSticky.frames.length === 2 &&
+      wanSticky.frames[0].cmdId === 75901 &&
+      wanSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireWanShengLottery(wanSticky.frames[0].body)?.lastLotteryId === 0,
+    "sticky 75901 frame stops at its length prefix"
+  );
+  const wanNote = wireWanShengLotteryNote(wanEmpty || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] });
+  assert(
+    wanNote.indexOf(WIRE_WAN_SHENG_LOTTERY_SIDE_EFFECT) >= 0 &&
+      wanNote.indexOf("不写金币") >= 0 &&
+      wanNote.indexOf("不写钻石") >= 0,
+    "75901 note keeps the side effect and does not write gold or diamond"
+  );
   assert(
     bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
@@ -14156,7 +14405,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 57, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once and does not resend 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 58, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once then 75901 once and does not resend 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -15358,6 +15607,32 @@ async function checkWs(): Promise<void> {
         }
         assert(qiuHex !== "040000007b250100", "pullIdle 75801 frame is not merged into the 75131 cmd");
       }
+
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 57] as ArrayBuffer)) === "040000007d280100",
+        "pullIdle sends empty c2s 75901 after 75801 at frame index 57"
+      );
+      {
+        const wanHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 57] as ArrayBuffer));
+        const notFrames = [
+          "0400000019280100",
+          "040000007b250100",
+          "040000007e280100",
+          "040000007f280100",
+          "0400000080280100",
+          "040000009b280100",
+          "040000009c280100",
+          "04000000a5280100",
+          "04000000a6280100",
+          "04000000a7280100",
+          "04000000a8280100",
+          "04000000e1280100",
+        ];
+        for (let n = 0; n < notFrames.length; n++) {
+          assert(wanHex !== notFrames[n], "pullIdle 75901 frame is not " + notFrames[n]);
+        }
+        assert(wanHex !== "0400000019280100", "pullIdle 75901 frame is not merged into the 75801 cmd");
+      }
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -15428,7 +15703,16 @@ async function checkWs(): Promise<void> {
           "040000001a280100": true,
           "040000001b280100": true,
           "040000001c280100": true,
-          "040000007d280100": true,
+          "040000007e280100": true,
+          "040000007f280100": true,
+          "0400000080280100": true,
+          "040000009b280100": true,
+          "040000009c280100": true,
+          "04000000a5280100": true,
+          "04000000a6280100": true,
+          "04000000a7280100": true,
+          "04000000a8280100": true,
+          "04000000e1280100": true,
         };
         let weekendFrames = 0;
         let godRelicFrames = 0;
@@ -15441,9 +15725,10 @@ async function checkWs(): Promise<void> {
         let zhuShenJiTanFrames = 0;
         let midFoodFrames = 0;
         let qiuShangFrames = 0;
+        let wanShengFrames = 0;
         let astrolabeFrames = 0;
         let reikiFrames = 0;
-        for (let i = 0; i < 57; i++) {
+        for (let i = 0; i < 58; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -15467,6 +15752,7 @@ async function checkWs(): Promise<void> {
           if (hex === "0400000071250100") zhuShenJiTanFrames += 1;
           if (hex === "040000007b250100") midFoodFrames += 1;
           if (hex === "0400000019280100") qiuShangFrames += 1;
+          if (hex === "040000007d280100") wanShengFrames += 1;
           if (hex === "04000000a1090100") astrolabeFrames += 1;
           if (hex === "0400000071110100") reikiFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
@@ -15495,11 +15781,12 @@ async function checkWs(): Promise<void> {
             zhuShenJiTanFrames === 1 &&
             midFoodFrames === 1 &&
             qiuShangFrames === 1 &&
+            wanShengFrames === 1 &&
             astrolabeFrames === 1 &&
             reikiFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once, 75131 once and 75801 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75802 75803 75804 75901 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once, 75131 once and 75801 once and 75901 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
         );
       }
       assert(
@@ -15669,6 +15956,28 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "040000001b280100") === false &&
           sawLog(lines, "发送 c2s 75804") === false &&
           sawLog(lines, "040000001c280100") === false &&
+          sawLog(lines, "发送 c2s 75901") &&
+          sawLog(lines, "040000007d280100") &&
+          sawLog(lines, "发送 c2s 75902") === false &&
+          sawLog(lines, "040000007e280100") === false &&
+          sawLog(lines, "发送 c2s 75903") === false &&
+          sawLog(lines, "040000007f280100") === false &&
+          sawLog(lines, "发送 c2s 75904") === false &&
+          sawLog(lines, "0400000080280100") === false &&
+          sawLog(lines, "发送 c2s 75931") === false &&
+          sawLog(lines, "040000009b280100") === false &&
+          sawLog(lines, "发送 c2s 75932") === false &&
+          sawLog(lines, "040000009c280100") === false &&
+          sawLog(lines, "发送 c2s 75941") === false &&
+          sawLog(lines, "04000000a5280100") === false &&
+          sawLog(lines, "发送 c2s 75942") === false &&
+          sawLog(lines, "04000000a6280100") === false &&
+          sawLog(lines, "发送 c2s 75943") === false &&
+          sawLog(lines, "04000000a7280100") === false &&
+          sawLog(lines, "发送 c2s 75944") === false &&
+          sawLog(lines, "04000000a8280100") === false &&
+          sawLog(lines, "发送 c2s 76001") === false &&
+          sawLog(lines, "04000000e1280100") === false &&
           sawLog(lines, "发送 c2s 74002") === false &&
           sawLog(lines, "0400000012210100") === false &&
           sawLog(lines, "发送 c2s 74003") === false &&
@@ -15912,6 +16221,9 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_QIU_SHANG_MING_YUE_CMD);
       const qiuSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(qiuSent as ArrayBuffer)) === "0400000019280100", "wire.75801 frame");
+      roleNet.send(WIRE_WAN_SHENG_LOTTERY_CMD);
+      const wanSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(wanSent as ArrayBuffer)) === "040000007d280100", "wire.75901 frame");
       const sentBeforeRechargeOther = roleSockets[0].sent.length;
       roleNet.send("wire.61002");
       roleNet.send("wire.62002");
@@ -15951,10 +16263,19 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.75802");
       roleNet.send("wire.75803");
       roleNet.send("wire.75804");
-      roleNet.send("wire.75901");
+      roleNet.send("wire.75902");
+      roleNet.send("wire.75903");
+      roleNet.send("wire.75904");
+      roleNet.send("wire.75931");
+      roleNet.send("wire.75932");
+      roleNet.send("wire.75941");
+      roleNet.send("wire.75942");
+      roleNet.send("wire.75943");
+      roleNet.send("wire.75944");
+      roleNet.send("wire.76001");
       roleNet.send("wire.75001");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75802 75803 75804 75901 75001 and goal claim stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76001 75001 and goal claim stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.61002") &&
           sawLog(lines, "未发送 wire.62002") &&
@@ -15994,7 +16315,16 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.75802") &&
           sawLog(lines, "未发送 wire.75803") &&
           sawLog(lines, "未发送 wire.75804") &&
-          sawLog(lines, "未发送 wire.75901") &&
+          sawLog(lines, "未发送 wire.75902") &&
+          sawLog(lines, "未发送 wire.75903") &&
+          sawLog(lines, "未发送 wire.75904") &&
+          sawLog(lines, "未发送 wire.75931") &&
+          sawLog(lines, "未发送 wire.75932") &&
+          sawLog(lines, "未发送 wire.75941") &&
+          sawLog(lines, "未发送 wire.75942") &&
+          sawLog(lines, "未发送 wire.75943") &&
+          sawLog(lines, "未发送 wire.75944") &&
+          sawLog(lines, "未发送 wire.76001") &&
           sawLog(lines, "未发送 wire.75001") &&
           sawLog(lines, "未发送 goal7.claim"),
         "qi shen qi banned cmds and goal claim are not encoded"
@@ -20850,14 +21180,67 @@ async function checkWs(): Promise<void> {
           sawWire("75801 解不开"),
         "bad 75801 keeps the previous snapshot and the 75131 snapshot"
       );
+      assert(WireSession.hasWanShengLottery() === false, "75901 is unsynced until its own s2c");
       roleSockets[0].push(encodeFrame(75802, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75803, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75804, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75901, fieldVarint(1, 9)));
       assert(
         formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === "lottery_count=0" &&
+          formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === midBeforeQiuClear &&
+          WireSession.hasWanShengLottery() &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }) === "select_info=9",
+        "75802 75803 75804 do not replace the 75801 snapshot and 75901 select_info does not replace 75801 or 75131"
+      );
+      roleSockets[0].push(encodeFrame(75901));
+      assert(
+        WireSession.hasWanShengLottery() &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }) === WIRE_WAN_SHENG_LOTTERY_EMPTY &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }).indexOf("lottery_count=") < 0 &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }).indexOf("last_lottery_id=") < 0 &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === "lottery_count=0" &&
           formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === midBeforeQiuClear,
-        "75802 75803 75804 and 75901 do not replace the 75801 snapshot"
+        "empty 75901 body is 已同步空表 and does not replace the 75801 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(75901, fieldVarint(3, 0)));
+      assert(
+        WireSession.wanShengLottery !== null &&
+          WireSession.wanShengLottery.lotteryCount === 0 &&
+          WireSession.wanShengLottery.lastLotteryId === null &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery) === "lottery_count=0" &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === "lottery_count=0",
+        "75901 shows a present zero and omits the missing fields"
+      );
+      roleSockets[0].push(encodeFrame(75901, fieldNeg1(5)));
+      assert(
+        WireSession.wanShengLottery !== null &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery) === "last_lottery_id=-1" &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery).indexOf("lottery_count=") < 0,
+        "75901 keeps a present -1 and omits lottery_count"
+      );
+      roleSockets[0].push(encodeFrame(75901, fieldVarint(5, 0)));
+      roleSockets[0].push(encodeFrame(75901, Uint8Array.from([0x80])));
+      assert(
+        WireSession.wanShengLottery !== null &&
+          formatWireWanShengLotteryLine(WireSession.wanShengLottery) === "last_lottery_id=0" &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === "lottery_count=0" &&
+          formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === midBeforeQiuClear &&
+          sawWire("75901 解不开"),
+        "bad 75901 keeps the previous snapshot and the 75801 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(75902, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75903, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75904, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75931, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75932, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75941, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75944, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76001, fieldVarint(1, 9)));
+      assert(
+        formatWireWanShengLotteryLine(WireSession.wanShengLottery || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, lastLotteryId: null, marks: [] }) === "last_lottery_id=0" &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === "lottery_count=0" &&
+          formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === midBeforeQiuClear,
+        "75902 75903 75904 75931 75932 75941 75944 and 76001 do not replace the 75901 snapshot"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
