@@ -140,7 +140,7 @@ s2c 1002 字段 1 是新角色 id。日志里创角成功后会再发一次 1001
 
 ## 主线进战 3001（点挑战才发，不进活动链）
 
-空 c2s **3001** 是 `GReqBattleMatch`，没有字段。整帧 `04 00 00 00 b9 0b 00 00`。s2c 是 `GResBattleMatch`：字段 1 `report` 是 `BattleReport`。空包体是已同步空表，不播 Mock。`BattleReport` 字段 2 是 `battle_type`，不是胜负。出现的 0 仍是 0。胜负看 `win_id`，对照 `atk_id` 或当前角色 id。没有 `win_id` 不写成 0，不判胜，不回拉 3007。`rounds` 解成回合和行动。有 report 时在主线页里播 `resources/spine/` 首批套的站场和回合攻击（`10105008`、`10405005`、`10405006`、`10405007`、`10505005`、`10505010`；英雄号对上则用 `10101` 等站立套），另挂 `zhandoujijian` 的 `idle` 和 `battle-sword` 的 `stand`。胜且没有防守英雄时敌方用 `crusade_boss_die`。不播 `bisha`，不播受击。加载失败 Toast「spine 未加载」。不回落 Mock。
+空 c2s **3001** 是 `GReqBattleMatch`，没有字段。整帧 `04 00 00 00 b9 0b 00 00`。s2c 是 `GResBattleMatch`：字段 1 `report` 是 `BattleReport`。空包体是已同步空表，不播 Mock。`BattleReport` 字段 2 是 `battle_type`，不是胜负。出现的 0 仍是 0。胜负看 `win_id`，对照 `atk_id` 或当前角色 id。没有 `win_id` 不写成 0，不判胜，不回拉 3007。`rounds` 解成回合和行动。有 report 时在主线页里播 `resources/spine/` 首批套的站场和回合攻击（`10105008`、`10405005`、`10405006`、`10405007`、`10505005`、`10505010`；英雄号对上则用 `10101` 等站立套），另挂 `zhandoujijian` 的 `idle` 和 `battle-sword` 的 `stand`。胜且没有防守英雄时敌方用 `crusade_boss_die`。行动带 `skill_id` 时，对 #145 batch2 技能套取模，在攻击者身上再挂一个命名 Spine（`zadan`、`zadan_tx`、`heidong`、`guangzhu`、`jiban`、`Dragon-1`…`Dragon-4`、`act`、`chaihong`、`ZDKS`、`hytx`、`lizi`、`dx`、`lijijihuo`、`zhihuanfazhen`、`prophet-tree-effect-1`、`prophet-tree-effect-2`）。有 `hits` 时在受击者身上挂 `yanwu`。没有技能号、没有 hits，或表是空的，就不挂这层，站场和攻击照旧。这是原型，不是旧技能表。不播 `bisha`，不播英雄 `hit` 动作，不接 `hd/skill`、`hd/skill-effect`、`hero-beattack` 的 PVR。这些命名套仍是 Spine **3.7.94**，工程是 Creator **3.8.8** 自带的 spine-3.8 运行时，曲线、约束、裁剪可能导入失败或播不出来；失败时跳过该特效，不拆站场和攻击。本刀不重导出。加载失败 Toast「spine 未加载」。不回落 Mock。
 
 服侧 `BattleHandler.challenge` 读 `RoleMission.chapterId` 打 chapterId+1。3007 的 max_idx 就是这个 chapterId。胜则写 receiveReward / chapterId / missionRankTime。本端不发 3002；服可能另推 first_reward。Handler 内未见扣体力。
 
@@ -152,7 +152,7 @@ s2c 1002 字段 1 是新角色 id。日志里创角成功后会再发一次 1001
 
 c2s **3006** 是 `GReqChapterReport`，不是空帧。3006 = 0x0BBE，小端 `be 0b 00 00`。字段 1 `chapterIdx`，字段 2 `firstPos`。探针 chapterIdx=1、firstPos=1 的整帧是 `08 00 00 00 be 0b 00 00 08 01 10 01`。客户端没有章节表，页上默认 1、1，可用「关」「位」加减。小于 1 的数发出前收成 1。
 
-s2c 是 `GResChapterReport`：字段 1 `report` 是 `BattleReport`，字段 2 `chapterIdx`，字段 3 `firstPos`。`report` 的 rounds 和 3001 同一套，走 `decodeWireBattleReport`，有 report 时走 `planWireSpineReplay` / `mountBattleSpine`。不另写 spine。空包体是已同步空表。没有 report 时 Toast「真服未同步」，不回落 Mock。
+s2c 是 `GResChapterReport`：字段 1 `report` 是 `BattleReport`，字段 2 `chapterIdx`，字段 3 `firstPos`。`report` 的 rounds 和 3001 同一套，走 `decodeWireBattleReport`，有 report 时走 `planWireSpineReplay` / `mountBattleSpine`，技能和受击也挂同一套 batch2 命名特效。不另写 spine。空包体是已同步空表。没有 report 时 Toast「真服未同步」，不回落 Mock。
 
 战斗链是 …→3012→3006。挂在已合 3012 之后，不重发 3012，不重发 3001。不进 `pullIdle`，不夹活动号。服侧只 invoke battle(HANG_UP) 计算：不写 receiveReward，不推进 chapterId，不落库。无领奖，无扣费。胜了不回拉 3007。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。3102 另帧，不从本帧自动发。不把 1201/1202 当战报。不写金币，不写钻石。不改 Boot、USE_*、CityChrome、CityMap、SafeArea。
 
@@ -160,7 +160,7 @@ s2c 是 `GResChapterReport`：字段 1 `report` 是 `BattleReport`，字段 2 `c
 
 c2s **3102** 是 `GReqBattleReport`，不是空壳。3102 = 0x0C1E，小端 `1e 0c 00 00`。字段 1 `battle_id`（string），字段 2 `type`（string）。空壳 `04 00 00 00 1e 0c 00 00`（`040000001e0c0000`）不够。探针 battle_id=1、type=1 的整帧是 `0a 00 00 00 1e 0c 00 00 0a 01 31 12 01 31`（`0a0000001e0c00000a0131120131`）。页上两个输入默认 1、1，空白发出前收成 1。
 
-s2c 是 `GResBattleReport`：字段 1 `report` 是 `BattleReport`，字段 2 `type`（string）。`report` 的 rounds 和 3001 / 3006 同一套，走 `decodeWireBattleReport`，有 report 时走 `planWireSpineReplay` / `mountBattleSpine`。不另写 spine。空包体是已同步空表。没有 report 时 Toast「真服未同步」，不回落 Mock。
+s2c 是 `GResBattleReport`：字段 1 `report` 是 `BattleReport`，字段 2 `type`（string）。`report` 的 rounds 和 3001 / 3006 同一套，走 `decodeWireBattleReport`，有 report 时走 `planWireSpineReplay` / `mountBattleSpine`，技能和受击也挂同一套 batch2 命名特效。不另写 spine。空包体是已同步空表。没有 report 时 Toast「真服未同步」，不回落 Mock。
 
 战斗链是 …→3006→3102。挂在已合 3006 之后，点「请求战报」才发。不重发 3006，不重发 3001。不从 3001 或 3006 的回包自动接。3001 / 3006 的战报不落库，拿它们的 battle_id 去调 3102 常回 `BATTLE_REPORT_TIMEOUT`。这一帧只给已落库的战报（切磋 / 竞技）或已知有效的 battle_id。不进 `pullIdle`，不夹活动号。服侧纯读 `getReport`：无领奖，无扣费。胜了不回拉 3007。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。不发 3100、3097、3098。3103 另帧挂在其后，不从本帧自动发，不播 spine。不把 1201/1202 当战报。不写金币，不写钻石。不改 Boot、USE_*、CityChrome、CityMap、SafeArea。
 

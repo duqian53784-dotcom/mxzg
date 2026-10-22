@@ -3,7 +3,7 @@
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isEntryOpen, isServerGateOpen, listOpenEntries } from "../assets/scripts/config/gates";
 import {
@@ -502,9 +502,14 @@ import {
   WIRE_SPINE_BOSS,
   WIRE_SPINE_ENEMY_STEMS,
   WIRE_SPINE_FLAG,
+  WIRE_SPINE_HIT_STEM,
   WIRE_SPINE_LOAD_FAIL,
+  WIRE_SPINE_SKILL_STEMS,
   WIRE_SPINE_SWORD,
   wireMainlineFightStage,
+  wireSpineHitStem,
+  wireSpineSkillStem,
+  wireSpineVfxClip,
 } from "../assets/scripts/net/protocol/wireBattle";
 import {
   decodeWireChapterReward,
@@ -14799,13 +14804,17 @@ async function checkWs(): Promise<void> {
       typePlan.stems.indexOf(WIRE_SPINE_FLAG) >= 0 &&
       typePlan.stems.indexOf(WIRE_SPINE_SWORD) >= 0 &&
       typePlan.stems.indexOf("bisha") < 0 &&
-      typePlan.stems.indexOf(WIRE_SPINE_BOSS) < 0,
+      typePlan.stems.indexOf(WIRE_SPINE_BOSS) < 0 &&
+      typePlan.stems.indexOf(WIRE_SPINE_HIT_STEM) < 0 &&
+      typePlan.beats[0].vfx.length === 0,
     "battle_type alone stands on the default spines and does not play the mock script"
   );
   const winPlan = planWireSpineReplay(winByAtk.report as NonNullable<typeof winByAtk.report>, null, 4);
   let winAttack = false;
   let winDie = false;
+  let winVfx = 0;
   for (let wi = 0; wi < winPlan.beats.length; wi++) {
+    winVfx += winPlan.beats[wi].vfx.length;
     for (let wc = 0; wc < winPlan.beats[wi].cues.length; wc++) {
       if (winPlan.beats[wi].cues[wc].clip === "attack") winAttack = true;
       if (winPlan.beats[wi].cues[wc].clip === "die") winDie = true;
@@ -14818,8 +14827,10 @@ async function checkWs(): Promise<void> {
       winPlan.beats[0].line.indexOf("站场") >= 0 &&
       winAttack &&
       winDie &&
+      winVfx === 0 &&
       winPlan.stems.indexOf(WIRE_SPINE_BOSS) >= 0 &&
-      winPlan.stems.indexOf("bisha") < 0,
+      winPlan.stems.indexOf("bisha") < 0 &&
+      winPlan.stems.indexOf(WIRE_SPINE_HIT_STEM) < 0,
     "a win without defenders plays an ally attack and crusade_boss_die"
   );
   const roundPlan = planWireSpineReplay(roundReport.report as NonNullable<typeof roundReport.report>, null, 1);
@@ -14831,24 +14842,99 @@ async function checkWs(): Promise<void> {
   assert(
     roundPlan.slots[0].stem === "10105008" &&
       roundPlan.slots[1].stem === "10101" &&
+      roundPlan.beats[0].vfx.length === 0 &&
       attackBeat.line.indexOf("回合 1") >= 0 &&
       attackBeat.line.indexOf("攻击") >= 0 &&
-      attackBeat.line.indexOf("技能 9 未播") >= 0 &&
+      attackBeat.line.indexOf("技能 9 act") >= 0 &&
+      attackBeat.line.indexOf("未播") < 0 &&
       attackBeat.line.indexOf("伤害 15") >= 0 &&
+      attackBeat.line.indexOf("受击 yanwu") >= 0 &&
       attackBeat.hp[1] === 0 &&
       !roundHit &&
+      attackBeat.vfx.length === 2 &&
+      attackBeat.vfx[0].role === "skill" &&
+      attackBeat.vfx[0].stem === "act" &&
+      attackBeat.vfx[0].anchor === 0 &&
+      attackBeat.vfx[1].role === "hit" &&
+      attackBeat.vfx[1].stem === WIRE_SPINE_HIT_STEM &&
+      attackBeat.vfx[1].anchor === 1 &&
+      roundPlan.stems.indexOf("act") >= 0 &&
+      roundPlan.stems.indexOf("yanwu") >= 0 &&
       roundPlan.stems.indexOf("bisha") < 0,
-    "rounds drive an attack cue, keep the hit hp, and do not play hit or bisha"
+    "rounds drive an attack cue, keep the hit hp, and mount batch2 skill and yanwu instead of hero hit or bisha"
+  );
+  assert(
+    wireSpineSkillStem(null) === null &&
+      wireSpineSkillStem(9, []) === null &&
+      wireSpineHitStem(0) === null &&
+      wireSpineHitStem(2, "") === null &&
+      wireSpineSkillStem(0) === "zadan" &&
+      wireSpineSkillStem(4) === "jiban" &&
+      wireSpineSkillStem(9) === WIRE_SPINE_SKILL_STEMS[9 % WIRE_SPINE_SKILL_STEMS.length] &&
+      WIRE_SPINE_SKILL_STEMS.indexOf("bisha") < 0 &&
+      WIRE_SPINE_SKILL_STEMS.indexOf("yanwu") < 0 &&
+      WIRE_SPINE_SKILL_STEMS.indexOf(WIRE_SPINE_HIT_STEM) < 0 &&
+      wireSpineVfxClip("yanwu") === "act1" &&
+      wireSpineVfxClip("act") === "attack" &&
+      wireSpineVfxClip("Dragon-1") === "attack" &&
+      wireSpineVfxClip("lijijihuo") === "idle" &&
+      wireSpineVfxClip("guangzhu") === "stand" &&
+      wireSpineVfxClip("act") !== "hit",
+    "skill ids modulo the batch2 table, and an empty map or missing hits skip vfx"
+  );
+  const spineRoot = existsSync(join(process.cwd(), "client", "assets", "resources", "spine"))
+    ? join(process.cwd(), "client", "assets", "resources", "spine")
+    : join(process.cwd(), "assets", "resources", "spine");
+  const vfxPacks = WIRE_SPINE_SKILL_STEMS.concat([WIRE_SPINE_HIT_STEM]);
+  for (let vi = 0; vi < vfxPacks.length; vi++) {
+    const stem = vfxPacks[vi];
+    const jsonPath = join(spineRoot, stem + ".json");
+    assert(
+      existsSync(jsonPath) &&
+        existsSync(join(spineRoot, stem + ".atlas")) &&
+        existsSync(join(spineRoot, stem + ".png")) &&
+        readFileSync(jsonPath, "utf8").indexOf('"spine":"3.7.94"') >= 0,
+      stem + " is a Spine 3.7.94 batch2 pack already under resources/spine"
+    );
+  }
+  const battleSpineSrc = readFileSync(uiSource("battleSpine.ts"), "utf8");
+  const mainlineSpineSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
+  assert(
+    battleSpineSrc.indexOf("effect") >= 0 &&
+      mainlineSpineSrc.indexOf("mountVfx") >= 0 &&
+      mainlineSpineSrc.indexOf("3103 不走") >= 0 &&
+      mainlineSpineSrc.indexOf(".pvr") < 0 &&
+      battleSpineSrc.indexOf("bisha") >= 0,
+    "mainline mounts batch2 skeletons beside hero spines and still skips 3103"
+  );
+  const spineDoc = readFileSync(join(process.cwd(), "docs", "h5-websocket.md"), "utf8");
+  const batch2Doc = readFileSync(join(process.cwd(), "docs", "battle-spine-batch2.md"), "utf8");
+  assert(
+    spineDoc.indexOf("3.7.94") >= 0 &&
+      spineDoc.indexOf("3.8.8") >= 0 &&
+      spineDoc.indexOf("不是旧技能表") >= 0 &&
+      spineDoc.indexOf("yanwu") >= 0 &&
+      batch2Doc.indexOf("3.7.94") >= 0 &&
+      batch2Doc.indexOf("3.8.8") >= 0 &&
+      batch2Doc.indexOf("不重导出") >= 0,
+    "docs keep the Spine 3.7.94 to Creator 3.8.8 compat risk"
   );
   const noActor = concatBytes(fieldVarint(2, 3), fieldBytes(2, fieldVarint(2, 4)));
   const noActorReport = decodeWireBattleMatch(fieldBytes(1, fieldBytes(6, noActor)));
   assert(noActorReport !== null && noActorReport.report !== null && noActorReport.report.rounds[0].index === null, "missing round index stays null");
   assert(noActorReport.report.rounds[0].actions[0].atkPos === null && noActorReport.report.rounds[0].actions[0].skillId === 4, "missing atk_pos stays null");
   const noActorPlan = planWireSpineReplay(noActorReport.report, null, 1);
+  const noActorBeat = noActorPlan.beats[noActorPlan.beats.length - 1];
   assert(
-    noActorPlan.beats[noActorPlan.beats.length - 1].line.indexOf("回合未带") >= 0 &&
-      noActorPlan.beats[noActorPlan.beats.length - 1].line.indexOf("行动者未带") >= 0 &&
-      noActorPlan.beats[noActorPlan.beats.length - 1].line.indexOf("位置 0") < 0,
+    noActorBeat.line.indexOf("回合未带") >= 0 &&
+      noActorBeat.line.indexOf("行动者未带") >= 0 &&
+      noActorBeat.line.indexOf("位置 0") < 0 &&
+      noActorBeat.line.indexOf("技能 4 jiban") >= 0 &&
+      noActorBeat.line.indexOf("未播") < 0 &&
+      noActorBeat.vfx.length === 1 &&
+      noActorBeat.vfx[0].stem === "jiban" &&
+      noActorBeat.vfx[0].anchor === null &&
+      noActorBeat.vfx[0].role === "skill",
     "a missing actor is not written as position 0"
   );
   const bothPos = concatBytes(fieldBytes(7, fieldVarint(1, 1)), fieldBytes(8, fieldVarint(1, 1)));
@@ -14861,7 +14947,9 @@ async function checkWs(): Promise<void> {
     if (bothPlan.beats[bothPlan.beats.length - 1].cues[bc].clip === "attack") bothAttack = true;
   }
   assert(
-    bothPlan.beats[bothPlan.beats.length - 1].line.indexOf("阵营未带") >= 0 && !bothAttack,
+    bothPlan.beats[bothPlan.beats.length - 1].line.indexOf("阵营未带") >= 0 &&
+      !bothAttack &&
+      bothPlan.beats[bothPlan.beats.length - 1].vfx.length === 0,
     "the same pos on both sides does not invent an attacker"
   );
   assert(WIRE_SPINE_LOAD_FAIL === "spine 未加载", "spine load failure has a visible toast");

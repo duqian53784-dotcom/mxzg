@@ -57,6 +57,19 @@
 - **降权未收（偏 UI/场景装饰/体积或非主线战斗）**：jiemian, shangcheng, yingxiongtiao, chaojidajiang, crtq_touzi, chibang, chuan, chuanghu, hudie, liushui, penquan, windmill, jindutiao, zhaohuanlibao, mofang, new, heishi, res-block, x_1..x_6, t1..t5, g, dwvs, djjs, qyjs, jldj, sqbx, yjyx, yxsc, znz, zuanshi02, tiejiangguang 等
 - **纯数字英雄/皮肤站场**：本刀不扩全量（#138 已抽主线站场）
 
+## 回放接线（技能 / 受击原型）
+
+`planWireSpineReplay` 在已有的站场 / 攻击之外，按回合行动挂上表命名套。3001、3006、3102 共用这一份计划。3103 仍不播 spine。
+
+- 有 `skill_id`：绝对值取整后对技能套取模。顺序是 `zadan`、`zadan_tx`、`heidong`、`guangzhu`、`jiban`、`Dragon-1`、`Dragon-2`、`Dragon-3`、`Dragon-4`、`act`、`chaihong`、`ZDKS`、`hytx`、`lizi`、`dx`、`lijijihuo`、`zhihuanfazhen`、`prophet-tree-effect-1`、`prophet-tree-effect-2`。`yanwu` 不在这张表里。
+- 有 `hits`：受击位挂 `yanwu`。没有 hits 不挂。
+- 技能号缺失，或表是空的：不挂特效。站场和攻击照旧。
+- 不播 `bisha`，不播英雄 `hit`。不接 `hd/skill`、`hd/skill-effect`、`hero-beattack` 的 PVR。
+
+不是旧技能表，只让真服回放能看出不同技能号。
+
+Spine **3.7.94** 对 Creator **3.8.8** 的 spine-3.8 运行时仍有兼容风险（曲线、约束、裁剪）。这一刀不重导出。Creator 里播不出来时，该特效跳过，不拆站场和攻击。
+
 ## 验收
 
 - zip 内含 `spine/` 下每套三件套 + `docs/battle-spine-batch2.md`
