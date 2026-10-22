@@ -3,8 +3,10 @@
  * 「挑战」在本页，发空 c2s 3001。已领首通在本页只读展示，打开时拉空 c2s 3010。
  * 快速战斗次数在本页只读展示，3010 之后再拉空 c2s 3012。不发 3013。
  * 「挂机战报」在本页，发 c2s 3006（chapterIdx、firstPos，不是空帧）。不发 3005。
+ * 「请求战报」在本页，发 c2s 3102（battle_id、type，不是空壳）。不从 3001 或 3006 自动接。
+ * 3001 / 3006 的战报不落库，拿它们的 battle_id 常回 BATTLE_REPORT_TIMEOUT。
  * 主线入口已在「更多」，不往主屏再放矩形。
- * 收到 report 在本页播 spine 站场和回合动作，3001 和 3006 都走 planWireSpineReplay。
+ * 收到 report 在本页播 spine 站场和回合动作，3001、3006 和 3102 都走 planWireSpineReplay。
  * 不发 18001，不把 Mock 1201/1202 当战报。
  * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。
  */
@@ -41,8 +43,14 @@ import {
   formatWireChapterReport,
   WIRE_CHAPTER_REPORT_UNSYNCED_TOAST,
 } from "../net/protocol/wireChapterReport";
+import {
+  formatWireBattleReport,
+  readWireBattleReportQuery,
+  WIRE_BATTLE_REPORT_TIMEOUT_NOTE,
+  WIRE_BATTLE_REPORT_UNSYNCED_TOAST,
+} from "../net/protocol/wireBattleReport";
 import { mountBattleSpine, SpineActor } from "./battleSpine";
-import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
+import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
 const PAGE_BG = new Color(8, 16, 32, 255);
 const TITLE = new Color(255, 228, 170, 255);
@@ -72,7 +80,7 @@ export interface WireMainlinePage {
 }
 
 type Phase = "info" | "battle" | "done";
-type WaitKind = "3001" | "3006";
+type WaitKind = "3001" | "3006" | "3102";
 
 export function buildWireMainlinePage(host: WireMainlineHost): WireMainlinePage {
   return new WireMainlineController(host);
@@ -88,8 +96,11 @@ class WireMainlineController implements WireMainlinePage {
   private replayKind: WaitKind = "3001";
   private seenSerial = 0;
   private seenReportSerial = 0;
+  private seenBattleReportSerial = 0;
   private chapterIdx = 1;
   private firstPos = 1;
+  private battleId = "1";
+  private reportType = "1";
   private offSync: (() => void) | null = null;
   private nowLabel: Node | null = null;
   private maxLabel: Node | null = null;
@@ -98,6 +109,9 @@ class WireMainlineController implements WireMainlinePage {
   private quickLabel: Node | null = null;
   private hangLabel: Node | null = null;
   private reportLabel: Node | null = null;
+  private fetchLabel: Node | null = null;
+  private battleIdField: TextField | null = null;
+  private reportTypeField: TextField | null = null;
   private statusLabel: Node | null = null;
   private resultLabel: Node | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -120,6 +134,7 @@ class WireMainlineController implements WireMainlinePage {
     this.body.parent = this.node;
     this.seenSerial = WireSession.battleSerial;
     this.seenReportSerial = WireSession.chapterReportSerial;
+    this.seenBattleReportSerial = WireSession.battleReportSerial;
     this.showInfo();
     if (!WireSession.hasChapterReward()) this.host.showToast(WIRE_CHAPTER_REWARD_UNSYNCED_TOAST);
     WireSession.pullChapterRewardList();
@@ -161,22 +176,39 @@ class WireMainlineController implements WireMainlinePage {
       void this.play(snap);
       return;
     }
-    if (WireSession.chapterReportSerial === this.seenReportSerial) return;
-    this.seenReportSerial = WireSession.chapterReportSerial;
+    if (this.waitKind === "3006") {
+      if (WireSession.chapterReportSerial === this.seenReportSerial) return;
+      this.seenReportSerial = WireSession.chapterReportSerial;
+      this.waiting = false;
+      this.waitKind = null;
+      const report = WireSession.chapterReport;
+      if (!report || !report.report) {
+        this.host.showToast(WIRE_CHAPTER_REPORT_UNSYNCED_TOAST);
+        this.phase = "info";
+        this.showInfo();
+        return;
+      }
+      const echoed = report.chapterIdx;
+      const stage = echoed !== null && echoed >= 1 ? Math.floor(echoed) : this.chapterIdx;
+      this.replayKind = "3006";
+      this.phase = "battle";
+      void this.play({ empty: false, report: report.report, marks: report.marks }, stage);
+      return;
+    }
+    if (WireSession.battleReportSerial === this.seenBattleReportSerial) return;
+    this.seenBattleReportSerial = WireSession.battleReportSerial;
     this.waiting = false;
     this.waitKind = null;
-    const report = WireSession.chapterReport;
-    if (!report || !report.report) {
-      this.host.showToast(WIRE_CHAPTER_REPORT_UNSYNCED_TOAST);
+    const fetched = WireSession.battleReport;
+    if (!fetched || !fetched.report) {
+      this.host.showToast(WIRE_BATTLE_REPORT_UNSYNCED_TOAST);
       this.phase = "info";
       this.showInfo();
       return;
     }
-    const echoed = report.chapterIdx;
-    const stage = echoed !== null && echoed >= 1 ? Math.floor(echoed) : this.chapterIdx;
-    this.replayKind = "3006";
+    this.replayKind = "3102";
     this.phase = "battle";
-    void this.play({ empty: false, report: report.report, marks: report.marks }, stage);
+    void this.play({ empty: false, report: fetched.report, marks: fetched.marks });
   }
 
   private showInfo(): void {
@@ -190,15 +222,22 @@ class WireMainlineController implements WireMainlinePage {
     this.quickLabel = place(createLabel(this.quickText(), 22, { color: TITLE, width: 640, height: 56 }), this.body, 0, 70);
     this.statusLabel = place(createLabel(this.statusText(), 22, { color: MUTED, width: 640 }), this.body, 0, 20);
     place(createLabel(WIRE_MAINLINE_READONLY_NOTE, 16, { color: MUTED, width: 640, height: 96 }), this.body, 0, -40);
-    this.hangLabel = place(createLabel(this.hangText(), 20, { color: TITLE, width: 640 }), this.body, 0, -130);
-    this.reportLabel = place(createLabel(this.reportText(), 18, { color: MUTED, width: 640, height: 48 }), this.body, 0, -175);
-    place(createButton("关-", () => this.bump("idx", -1), 88, 40, BACK_FILL), this.body, -240, -230);
-    place(createButton("关+", () => this.bump("idx", 1), 88, 40, BACK_FILL), this.body, -120, -230);
-    place(createButton("位-", () => this.bump("pos", -1), 88, 40, BACK_FILL), this.body, 40, -230);
-    place(createButton("位+", () => this.bump("pos", 1), 88, 40, BACK_FILL), this.body, 160, -230);
-    place(createButton("挂机战报", () => this.hangupReport(), 240, 48, OPEN_FILL), this.body, 0, -290);
-    place(createButton("挑战", () => this.challenge(), 240, 48, OPEN_FILL), this.body, 0, -360);
-    place(createButton("返回", () => this.host.close(), 240, 44, BACK_FILL), this.body, 0, -430);
+    this.hangLabel = place(createLabel(this.hangText(), 20, { color: TITLE, width: 640 }), this.body, 0, -120);
+    this.reportLabel = place(createLabel(this.reportText(), 18, { color: MUTED, width: 640, height: 40 }), this.body, 0, -158);
+    place(createButton("关-", () => this.bump("idx", -1), 88, 36, BACK_FILL), this.body, -240, -200);
+    place(createButton("关+", () => this.bump("idx", 1), 88, 36, BACK_FILL), this.body, -120, -200);
+    place(createButton("位-", () => this.bump("pos", -1), 88, 36, BACK_FILL), this.body, 40, -200);
+    place(createButton("位+", () => this.bump("pos", 1), 88, 36, BACK_FILL), this.body, 160, -200);
+    place(createButton("挂机战报", () => this.hangupReport(), 240, 44, OPEN_FILL), this.body, 0, -248);
+    place(createLabel(WIRE_BATTLE_REPORT_TIMEOUT_NOTE, 14, { color: MUTED, width: 640, height: 56 }), this.body, 0, -310);
+    this.battleIdField = createField("battle_id", 280, 40, { text: this.battleId, maxLength: 64 });
+    place(this.battleIdField.node, this.body, -150, -360);
+    this.reportTypeField = createField("type", 180, 40, { text: this.reportType, maxLength: 32 });
+    place(this.reportTypeField.node, this.body, 180, -360);
+    this.fetchLabel = place(createLabel(this.fetchText(), 16, { color: MUTED, width: 640 }), this.body, 0, -400);
+    place(createButton("请求战报", () => this.fetchBattleReport(), 240, 44, OPEN_FILL), this.body, 0, -448);
+    place(createButton("挑战", () => this.challenge(), 240, 44, OPEN_FILL), this.body, 0, -508);
+    place(createButton("返回", () => this.host.close(), 240, 40, BACK_FILL), this.body, 0, -568);
   }
 
   private renderInfo(): void {
@@ -209,6 +248,7 @@ class WireMainlineController implements WireMainlinePage {
     this.write(this.quickLabel, this.quickText());
     this.write(this.hangLabel, this.hangText());
     this.write(this.reportLabel, this.reportText());
+    this.write(this.fetchLabel, this.fetchText());
     if (!this.waiting) this.write(this.statusLabel, this.statusText());
   }
 
@@ -254,6 +294,36 @@ class WireMainlineController implements WireMainlinePage {
     this.waiting = true;
     this.write(this.statusLabel, "已发 3006，等待战报");
     GameLog.shared.info("Mainline", "wire chapter report 3006 chapterIdx=" + this.chapterIdx + " firstPos=" + this.firstPos);
+  }
+
+  private fetchBattleReport(): void {
+    if (this.disposed || this.phase === "battle" || this.waiting) return;
+    if (!this.host.connected()) {
+      this.host.showToast(errorText(ErrorCode.NET_NOT_CONNECTED));
+      return;
+    }
+    if (!WireSession.hasChapter()) {
+      this.host.showToast(WIRE_BATTLE_REPORT_UNSYNCED_TOAST);
+      return;
+    }
+    const typedId = this.battleIdField ? this.battleIdField.getValue() : this.battleId;
+    const typedType = this.reportTypeField ? this.reportTypeField.getValue() : this.reportType;
+    const query = readWireBattleReportQuery({ battleId: typedId, type: typedType });
+    this.battleId = query.battleId;
+    this.reportType = query.type;
+    if (this.battleIdField) this.battleIdField.setValue(query.battleId);
+    if (this.reportTypeField) this.reportTypeField.setValue(query.type);
+    this.write(this.fetchLabel, this.fetchText());
+    this.seenBattleReportSerial = WireSession.battleReportSerial;
+    if (!WireSession.pullBattleReport(query.battleId, query.type)) {
+      this.host.showToast(WIRE_BATTLE_REPORT_UNSYNCED_TOAST);
+      return;
+    }
+    this.waitKind = "3102";
+    this.replayKind = "3102";
+    this.waiting = true;
+    this.write(this.statusLabel, "已发 3102，等待战报");
+    GameLog.shared.info("Mainline", "wire battle report 3102 battle_id=" + query.battleId + " type=" + query.type);
   }
 
   private bump(which: "idx" | "pos", delta: number): void {
@@ -362,9 +432,20 @@ class WireMainlineController implements WireMainlinePage {
     place(createLabel(headline, 56, { color }), this.body, 0, 360);
     this.resultLabel = place(createLabel(this.resultText(), 22, { color: MUTED, width: 640, height: 160 }), this.body, 0, 180);
     place(createLabel("spine 站场 / 回合动作，技能受击后续再接", 18, { color: MUTED, width: 640 }), this.body, 0, 40);
-    const again = this.replayKind === "3006" ? "再看战报" : "再挑战";
-    place(createButton(again, () => (this.replayKind === "3006" ? this.hangupReport() : this.challenge()), 240, 52, OPEN_FILL), this.body, 0, -80);
+    const again = this.replayKind === "3001" ? "再挑战" : "再看战报";
+    place(
+      createButton(again, () => this.again(), 240, 52, OPEN_FILL),
+      this.body,
+      0,
+      -80
+    );
     place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -170);
+  }
+
+  private again(): void {
+    if (this.replayKind === "3006") this.hangupReport();
+    else if (this.replayKind === "3102") this.fetchBattleReport();
+    else this.challenge();
   }
 
   private skip(): void {
@@ -377,7 +458,12 @@ class WireMainlineController implements WireMainlinePage {
     const snap = this.lastSnap;
     const report = snap && snap.report ? formatWireBattleMatch(snap, this.host.roleId()) : "没有 report";
     const hang = this.replayKind === "3006" ? "\n" + this.reportText() : "";
-    return report + "\n" + this.nowText() + "\n" + this.maxText() + "\n" + this.quickText() + hang;
+    const fetched = this.replayKind === "3102" ? "\n" + this.fetchText() : "";
+    return report + "\n" + this.nowText() + "\n" + this.maxText() + "\n" + this.quickText() + hang + fetched;
+  }
+
+  private fetchText(): string {
+    return formatWireBattleReport(WireSession.battleReport) + " / battle_id " + this.battleId + " / type " + this.reportType;
   }
 
   private hangText(): string {
@@ -470,6 +556,9 @@ class WireMainlineController implements WireMainlinePage {
     this.quickLabel = null;
     this.hangLabel = null;
     this.reportLabel = null;
+    this.fetchLabel = null;
+    this.battleIdField = null;
+    this.reportTypeField = null;
     this.statusLabel = null;
     this.resultLabel = null;
     const kids = this.body.children.slice();

@@ -543,6 +543,21 @@ import {
   WIRE_CHAPTER_REPORT_UNSYNCED_TOAST,
 } from "../assets/scripts/net/protocol/wireChapterReport";
 import {
+  decodeWireGetBattleReport,
+  encodeWireBattleReportBody,
+  formatWireBattleReport,
+  normalizeWireBattleReportText,
+  WIRE_BATTLE_REPORT_BANNED_CMDS,
+  WIRE_BATTLE_REPORT_CMD,
+  WIRE_BATTLE_REPORT_EMPTY,
+  WIRE_BATTLE_REPORT_EMPTY_SHELL,
+  WIRE_BATTLE_REPORT_FRAME,
+  WIRE_BATTLE_REPORT_NOTE,
+  WIRE_BATTLE_REPORT_SIDE_EFFECT,
+  WIRE_BATTLE_REPORT_TIMEOUT_NOTE,
+  WIRE_BATTLE_REPORT_UNSYNCED_TOAST,
+} from "../assets/scripts/net/protocol/wireBattleReport";
+import {
   decodeWireIdle,
   decodeWireIdleClaim,
   formatWireIdle,
@@ -8907,7 +8922,6 @@ async function checkWs(): Promise<void> {
     "wire.3097",
     "wire.3098",
     "wire.3100",
-    "wire.3102",
     "wire.3030",
     "wire.3103",
     "wire.20011",
@@ -9096,7 +9110,6 @@ async function checkWs(): Promise<void> {
     "wire.3098",
     "wire.3097",
     "wire.3030",
-    "wire.3102",
     "wire.3103",
     "wire.20011",
     "wire.4601",
@@ -14628,11 +14641,12 @@ async function checkWs(): Promise<void> {
     battlePacket !== null && battlePacket.cmdId === 3001 && bytesToHex(battlePacket.bytes) === "04000000b90b0000" && battlePacket.note === "空体",
     "wire.3001 encodes the empty challenge frame"
   );
-  const bannedBattle = ["wire.3002", "wire.3008", "wire.3011", "wire.3013", "wire.3100", "wire.3102", "wire.3097", "wire.3098", "wire.18002", "wire.4601", "wire.29001", "wire.1201", "wire.1202"];
+  const bannedBattle = ["wire.3002", "wire.3008", "wire.3011", "wire.3013", "wire.3100", "wire.3097", "wire.3098", "wire.18002", "wire.4601", "wire.29001", "wire.1201", "wire.1202"];
   for (let bi = 0; bi < bannedBattle.length; bi++) {
     assert(encodeWireMessage({ cmd: bannedBattle[bi] }) === null, bannedBattle[bi] + " stays off the 3001 encoder");
   }
   assert(encodeWireMessage({ cmd: "wire.3006" }) !== null, "3006 stays encoded by its own module and is not reissued as 3001");
+  assert(encodeWireMessage({ cmd: "wire.3102" }) !== null, "3102 stays encoded by its own module and is not reissued as 3001");
   assert(decodeWireBattleMatch(null) === null, "missing 3001 body stays unsynced");
   assert(decodeWireBattleMatch(Uint8Array.from([0x80])) === null, "bad 3001 varint does not become a report");
   const emptyBattle = decodeWireBattleMatch(new Uint8Array(0));
@@ -15200,6 +15214,182 @@ async function checkWs(): Promise<void> {
       WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("不发 3005") >= 0 &&
       WIRE_CHAPTER_REPORT_SIDE_EFFECT.indexOf("硬禁 3013") >= 0,
     "3006 note names the frame, the spine reuse, and the banned cmds"
+  );
+  assert(
+    WireCmd.battleReport === 3102 &&
+      WireCmd.battleReport !== WireCmd.chapterReport &&
+      WireCmd.battleReport !== WireCmd.battleMatch &&
+      WireCmd.battleReport !== WireCmd.quickBattleInit &&
+      WireCmd.battleReport !== WireCmd.formation &&
+      WireCmd.battleReport !== WireCmd.lineUp,
+    "online 3102 stays off 3006, 3001, 3012, 3099 and 3101"
+  );
+  assert(bytesToHex(encodeFrame(3102)) === WIRE_BATTLE_REPORT_EMPTY_SHELL, "empty 3102 shell is 1e 0c and is not the probe");
+  assert(WIRE_BATTLE_REPORT_EMPTY_SHELL === "040000001e0c0000", "3102 empty shell constant");
+  assert(WIRE_BATTLE_REPORT_FRAME === "0a0000001e0c00000a0131120131", "3102 probe frame constant");
+  assert(WIRE_BATTLE_REPORT_FRAME !== WIRE_BATTLE_REPORT_EMPTY_SHELL, "3102 probe is not an empty frame");
+  assert(bytesToHex(encodeFrame(3102, encodeWireBattleReportBody("1", "1"))) === WIRE_BATTLE_REPORT_FRAME, "battle_id=1 type=1 frame");
+  assert(bytesToHex(encodeWireBattleReportBody("1", "1")) === "0a0131120131", "3102 body is string field 1 = 1 and string field 2 = 1");
+  assert(
+    bytesToHex(encodeFrame(3102, encodeWireBattleReportBody("abc", "PVP"))) === "0e0000001e0c00000a036162631203505650",
+    "3102 keeps battle_id abc and type PVP"
+  );
+  assert(
+    normalizeWireBattleReportText("", "1", 64) === "1" &&
+      normalizeWireBattleReportText("  ", "1", 64) === "1" &&
+      normalizeWireBattleReportText(0, "1", 64) === "1",
+    "3102 does not encode a blank battle_id"
+  );
+  assert(bytesToHex(encodeFrame(3006)) !== WIRE_BATTLE_REPORT_FRAME, "3006 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(3001)) !== WIRE_BATTLE_REPORT_FRAME, "3001 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(3005)) !== WIRE_BATTLE_REPORT_FRAME, "3005 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(3013)) !== WIRE_BATTLE_REPORT_FRAME, "3013 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(3002)) !== WIRE_BATTLE_REPORT_FRAME, "3002 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(3008)) !== WIRE_BATTLE_REPORT_FRAME, "3008 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(3011)) !== WIRE_BATTLE_REPORT_FRAME, "3011 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(3100)) !== WIRE_BATTLE_REPORT_FRAME, "3100 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(3097)) !== WIRE_BATTLE_REPORT_FRAME, "3097 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(3098)) !== WIRE_BATTLE_REPORT_FRAME, "3098 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(4601)) !== WIRE_BATTLE_REPORT_FRAME, "4601 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(29001)) !== WIRE_BATTLE_REPORT_FRAME, "29001 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(1201)) !== WIRE_BATTLE_REPORT_FRAME, "mock 1201 is not the 3102 frame");
+  assert(bytesToHex(encodeFrame(1202)) !== WIRE_BATTLE_REPORT_FRAME, "mock 1202 is not the 3102 frame");
+  const fetchPacket = encodeWireMessage({ cmd: WIRE_BATTLE_REPORT_CMD });
+  assert(
+    fetchPacket !== null &&
+      fetchPacket.cmdId === 3102 &&
+      bytesToHex(fetchPacket.bytes) === WIRE_BATTLE_REPORT_FRAME &&
+      fetchPacket.note === "battle_id=1 type=1",
+    "wire.3102 encodes the battle_id=1 type=1 probe"
+  );
+  const fetchPacketNamed = encodeWireMessage({ cmd: WIRE_BATTLE_REPORT_CMD, data: { battleId: "abc", type: "PVP" } });
+  assert(
+    fetchPacketNamed !== null &&
+      bytesToHex(fetchPacketNamed.bytes) === "0e0000001e0c00000a036162631203505650" &&
+      fetchPacketNamed.note === "battle_id=abc type=PVP",
+    "wire.3102 encodes the caller battle_id and type"
+  );
+  assert(encodeWireMessage({ cmd: WIRE_BATTLE_REPORT_CMD, data: { battleId: "   ", type: "" } }) !== null, "blank 3102 query still encodes the probe body");
+  assert(
+    bytesToHex(encodeWireMessage({ cmd: WIRE_BATTLE_REPORT_CMD, data: { battleId: "   ", type: "" } })?.bytes || new Uint8Array(0)) === WIRE_BATTLE_REPORT_FRAME,
+    "blank 3102 query falls back to battle_id=1 type=1 and is not the empty shell"
+  );
+  for (let bri = 0; bri < WIRE_BATTLE_REPORT_BANNED_CMDS.length; bri++) {
+    assert(encodeWireMessage({ cmd: WIRE_BATTLE_REPORT_BANNED_CMDS[bri] }) === null, WIRE_BATTLE_REPORT_BANNED_CMDS[bri] + " stays off the 3102 encoder");
+  }
+  assert(encodeWireMessage({ cmd: "wire.3013" }) === null, "3013 stays unencoded");
+  assert(encodeWireMessage({ cmd: "wire.3005" }) !== null, "3005 stays encoded by its own module and is not reissued as 3102");
+  assert(encodeWireMessage({ cmd: "wire.3006" }) !== null, "3006 stays encoded by its own module and is not reissued as 3102");
+  assert(encodeWireMessage({ cmd: "wire.3001" }) !== null, "3001 stays encoded by its own module and is not reissued as 3102");
+  assert(encodeWireMessage({ cmd: "wire.3012" }) !== null, "3012 stays encoded by its own module and is not reissued as 3102");
+  assert(decodeWireGetBattleReport(null) === null, "missing 3102 body stays unsynced");
+  assert(decodeWireGetBattleReport(new Uint8Array([0x80])) === null, "bad 3102 varint does not become a report");
+  const emptyFetched = decodeWireGetBattleReport(new Uint8Array(0));
+  assert(
+    emptyFetched !== null &&
+      emptyFetched.empty &&
+      emptyFetched.report === null &&
+      emptyFetched.type === null &&
+      formatWireBattleReport(emptyFetched) === "请求战报 " + WIRE_BATTLE_REPORT_EMPTY &&
+      formatWireBattleReport(emptyFetched).indexOf("type=1") < 0,
+    "empty 3102 body is 已同步空表 and does not invent type 1"
+  );
+  assert(formatWireBattleReport(null) === "请求战报 " + WIRE_BATTLE_REPORT_UNSYNCED_TOAST, "unsynced 3102 toast text");
+  const fetchTypeOnly = decodeWireGetBattleReport(fieldBytes(2, Uint8Array.from([0x31])));
+  assert(
+    fetchTypeOnly !== null &&
+      !fetchTypeOnly.empty &&
+      fetchTypeOnly.report === null &&
+      fetchTypeOnly.type === "1" &&
+      formatWireBattleReport(fetchTypeOnly).indexOf("type=1") >= 0 &&
+      formatWireBattleReport(fetchTypeOnly).indexOf("没有 report") >= 0,
+    "present 3102 type stays a string and does not invent a report"
+  );
+  const fetchedBody = concatBytes(fieldBytes(1, roundBody), fieldBytes(2, Uint8Array.from([0x61, 0x62])));
+  const fetched = decodeWireGetBattleReport(fetchedBody);
+  const fetchedVia3001 = decodeWireBattleMatch(fieldBytes(1, roundBody));
+  assert(
+    fetched !== null &&
+      fetched.report !== null &&
+      fetchedVia3001 !== null &&
+      fetchedVia3001.report !== null &&
+      fetched.type === "ab" &&
+      fetched.report.rounds.length === fetchedVia3001.report.rounds.length &&
+      fetched.report.rounds[0].actions[0].atkPos === 1 &&
+      fetched.report.rounds[0].actions[0].skillId === 9 &&
+      fetched.report.atkHeroes[0].heroId === 10105008 &&
+      fetched.report.atkHeroes[0].hp === 80,
+    "3102 report reuses the 3001 BattleReport decode, including rounds"
+  );
+  const fetchedPlan = planWireSpineReplay(fetched.report, null, 1);
+  const fetchedViaPlan = planWireSpineReplay(fetchedVia3001.report, null, 1);
+  assert(
+    fetchedPlan.stageId === 1 &&
+      fetchedPlan.stems.join(",") === fetchedViaPlan.stems.join(",") &&
+      fetchedPlan.beats.length === fetchedViaPlan.beats.length &&
+      fetchedPlan.beats.length >= 2 &&
+      fetchedPlan.beats[0].line.indexOf("站场") >= 0 &&
+      fetchedPlan.beats[1].line === fetchedViaPlan.beats[1].line &&
+      fetchedPlan.stems.indexOf("bisha") < 0,
+    "3102 rounds drive the same planWireSpineReplay path as 3001"
+  );
+  const fetchAbsent = decodeWireGetBattleReport(fieldVarint(7, 9));
+  assert(
+    fetchAbsent !== null &&
+      fetchAbsent.type === null &&
+      fetchAbsent.report === null &&
+      formatWireBattleReport(fetchAbsent).indexOf("没有 report") >= 0 &&
+      formatWireBattleReport(fetchAbsent).indexOf("type=1") < 0 &&
+      formatWireBattleReport(fetchAbsent).indexOf("字段7=9") >= 0,
+    "3102 without type does not invent a default string"
+  );
+  const fetchEmptyType = decodeWireGetBattleReport(fieldBytes(2, new Uint8Array(0)));
+  assert(
+    fetchEmptyType !== null && fetchEmptyType.type === "" && formatWireBattleReport(fetchEmptyType).indexOf("type 空") >= 0,
+    "3102 keeps a present empty type string"
+  );
+  const fetchBadReport = decodeWireGetBattleReport(fieldBytes(1, Uint8Array.from([0x80])));
+  assert(fetchBadReport === null, "a 3102 report blob that will not decode is ignored");
+  assert(
+    WIRE_BATTLE_REPORT_NOTE.indexOf("0a0000001e0c00000a0131120131") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("040000001e0c0000") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3006") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3001") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("planWireSpineReplay") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("decodeWireBattleReport") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("不进 pullIdle") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("不从 3001 或 3006 自动接") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("BATTLE_REPORT_TIMEOUT") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3002") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3005") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3008") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3011") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3013") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3100") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3097") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("3098") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("4601") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("29001") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("1201") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("1202") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("不改 Boot") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("已同步空表") >= 0 &&
+      WIRE_BATTLE_REPORT_NOTE.indexOf("getReport") >= 0 &&
+      WIRE_BATTLE_REPORT_TIMEOUT_NOTE.indexOf("BATTLE_REPORT_TIMEOUT") >= 0 &&
+      WIRE_BATTLE_REPORT_TIMEOUT_NOTE.indexOf("不自动接在 3001/3006 后面") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("getReport") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("不回拉 3007") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("不从 3001 或 3006 自动接") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("BATTLE_REPORT_TIMEOUT") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("不重发 3006") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("不发 3005") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("硬禁 3013") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("3100") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("3097") >= 0 &&
+      WIRE_BATTLE_REPORT_SIDE_EFFECT.indexOf("3098") >= 0,
+    "3102 note names the frame, the spine reuse, the timeout caveat, and the banned cmds"
   );
   const loginBody = encodeObservedLoginBody(960011, 1792466798);
   assert(
@@ -16386,9 +16576,10 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.pullChapterRewardList(), "3010 does not send without 3007 idx");
       assert(!WireSession.pullQuickBattleCount(), "3012 does not send without 3007 idx");
       assert(!WireSession.pullChapterReport(1, 1), "3006 does not send without 3007 idx");
+      assert(!WireSession.pullBattleReport("1", "1"), "3102 does not send without 3007 idx");
       WireSession.nowIdx = savedNow;
       WireSession.maxIdx = savedMax;
-      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012 or 3006 on the wire");
+      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006 or 3102 on the wire");
       const sentBeforeQuick = roleSockets[0].sent.length;
       const goldBeforeQuick = Session.gold;
       const quickSentBefore = roleSockets[0].sent.length;
@@ -16469,6 +16660,64 @@ async function checkWs(): Promise<void> {
         WireSession.chapterReport !== null && WireSession.chapterReport.report !== null && WireSession.chapterReport.report.rounds.length === reportBeforeOther,
         "3005, 3013 and mock 1201 do not replace the 3006 report"
       );
+      assert(roleSockets[0].sent.length === sentBeforeReport + 1, "3006 reply does not auto-chain 3102");
+      const sentBeforeFetch = roleSockets[0].sent.length;
+      const goldBeforeFetch = Session.gold;
+      const nowBeforeFetch = WireSession.nowIdx;
+      const maxBeforeFetch = WireSession.maxIdx;
+      assert(WireSession.pullBattleReport("1", "1"), "3102 pulls when 3007 idx is present");
+      assert(roleSockets[0].sent.length === sentBeforeFetch + 1, "3102 is one frame and does not resend 3006, 3001, 3005 or the idle chain");
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeFetch] as ArrayBuffer)) === "0a0000001e0c00000a0131120131",
+        "battle report frame is c2s 3102 battle_id=1 type=1 after the merged 3006 slot"
+      );
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeFetch] as ArrayBuffer)) !== "040000001e0c0000",
+        "3102 probe is not the empty shell"
+      );
+      assert(Session.gold === goldBeforeFetch && Session.diamond === 0, "3102 does not write gold or diamond");
+      roleSockets[0].push(encodeFrame(WireCmd.battleReport));
+      assert(
+        WireSession.hasBattleReport() &&
+          WireSession.battleReport !== null &&
+          WireSession.battleReport.empty &&
+          WireSession.battleReport.report === null &&
+          WireSession.battleReport.type === null &&
+          formatWireBattleReport(WireSession.battleReport).indexOf("已同步空表") >= 0,
+        "empty 3102 is a synced empty table"
+      );
+      assert(roleSockets[0].sent.length === sentBeforeFetch + 1, "empty 3102 does not pull 3007, 3006 or 3005");
+      const fetchRoleId = Session.role ? Session.role.roleId : 7;
+      roleSockets[0].push(
+        encodeFrame(
+          WireCmd.battleReport,
+          concatBytes(fieldBytes(1, concatBytes(fieldVarint(3, fetchRoleId), fieldVarint(5, fetchRoleId))), fieldBytes(2, Uint8Array.from([0x31])))
+        )
+      );
+      assert(
+        WireSession.battleReport !== null &&
+          WireSession.battleReport.report !== null &&
+          WireSession.battleReport.type === "1" &&
+          resolveWireBattleWin(WireSession.battleReport.report, fetchRoleId) === true &&
+          WireSession.nowIdx === nowBeforeFetch &&
+          WireSession.maxIdx === maxBeforeFetch &&
+          Session.gold === goldBeforeFetch &&
+          roleSockets[0].sent.length === sentBeforeFetch + 1,
+        "3102 keeps the report, does not advance chapter idx, does not pull 3007, and does not write gold"
+      );
+      const fetchedBeforeOther = WireSession.battleReport.report.rounds.length;
+      roleSockets[0].push(encodeFrame(3006, encodeWireChapterReportBody(1, 1)));
+      roleSockets[0].push(encodeFrame(3005));
+      roleSockets[0].push(encodeFrame(3013, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
+      assert(
+        WireSession.battleReport !== null &&
+          WireSession.battleReport.report !== null &&
+          WireSession.battleReport.report.rounds.length === fetchedBeforeOther &&
+          WireSession.chapterReport !== null,
+        "3006, 3005, 3013 and mock 1201 do not replace the 3102 report"
+      );
+      assert(roleSockets[0].sent.length === sentBeforeFetch + 1, "a later 3006 frame on the socket does not make the client send 3102");
       roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
       assert(WireSession.battleMatch !== null && WireSession.battleMatch.empty, "mock 1201 does not replace the 3001 report");
       const sentBeforeBannedBattle = roleSockets[0].sent.length;
@@ -16521,6 +16770,12 @@ async function checkWs(): Promise<void> {
         if (idleHex.indexOf("be0b0000") >= 0) reportFramesInIdle += 1;
       }
       assert(reportFramesInIdle === 0, "pullIdle does not send c2s 3006");
+      let fetchFramesInIdle = 0;
+      for (let idleF = 0; idleF < 64; idleF++) {
+        const idleFetchHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + idleF] as ArrayBuffer));
+        if (idleFetchHex.indexOf("1e0c0000") >= 0) fetchFramesInIdle += 1;
+      }
+      assert(fetchFramesInIdle === 0, "pullIdle does not send c2s 3102");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 1] as ArrayBuffer)) === "04000000983a0000",
         "pullIdle sends empty c2s 15000 after 3004"
@@ -19619,7 +19874,6 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.3097");
       roleNet.send("wire.3098");
       roleNet.send("wire.3100");
-      roleNet.send("wire.3102");
       roleNet.send("wire.3103");
       roleNet.send("wire.3030");
       roleNet.send("wire.20011");
@@ -19627,19 +19881,22 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeFormationOther,
-        "3097 3098 3100 3102 3103 3030 20011 4601 and 29001 stay off the formation wire"
+        "3097 3098 3100 3103 3030 20011 4601 and 29001 stay off the formation wire"
       );
       assert(
         sawLog(lines, "未发送 wire.3097") &&
           sawLog(lines, "未发送 wire.3098") &&
           sawLog(lines, "未发送 wire.3100") &&
-          sawLog(lines, "未发送 wire.3102") &&
           sawLog(lines, "未发送 wire.3103") &&
           sawLog(lines, "未发送 wire.3030") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001"),
-        "formation writes 3097 3098 3100 3102 3103 3030 20011 4601 and 29001 are not encoded"
+        "formation writes 3097 3098 3100 3103 3030 20011 4601 and 29001 are not encoded"
+      );
+      assert(
+        bytesToHex(new Uint8Array(formationSent as ArrayBuffer)).indexOf("1e0c0000") < 0,
+        "3099 pull does not merge 3102"
       );
       roleNet.send(WIRE_FETTER_CONTRACT_CMD);
       assert(
@@ -19668,26 +19925,28 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.3098");
       roleNet.send("wire.3097");
       roleNet.send("wire.3030");
-      roleNet.send("wire.3102");
       roleNet.send("wire.3103");
       roleNet.send("wire.20011");
       roleNet.send("wire.4601");
       roleNet.send("wire.29001");
       assert(
         roleSockets[0].sent.length === sentBeforeLineUpOther,
-        "3100 3098 3097 3030 3102 3103 20011 4601 and 29001 stay off the lineup wire"
+        "3100 3098 3097 3030 3103 20011 4601 and 29001 stay off the lineup wire"
       );
       assert(
         sawLog(lines, "未发送 wire.3100") &&
           sawLog(lines, "未发送 wire.3098") &&
           sawLog(lines, "未发送 wire.3097") &&
           sawLog(lines, "未发送 wire.3030") &&
-          sawLog(lines, "未发送 wire.3102") &&
           sawLog(lines, "未发送 wire.3103") &&
           sawLog(lines, "未发送 wire.20011") &&
           sawLog(lines, "未发送 wire.4601") &&
           sawLog(lines, "未发送 wire.29001"),
-        "lineup writes 3100 3098 3097 3030 3102 3103 20011 4601 and 29001 are not encoded"
+        "lineup writes 3100 3098 3097 3030 3103 20011 4601 and 29001 are not encoded"
+      );
+      assert(
+        bytesToHex(new Uint8Array(lineUpSent as ArrayBuffer)).indexOf("1e0c0000") < 0,
+        "3101 pull does not merge 3102"
       );
       const sentAfterFormationAlone = roleSockets[0].sent.length;
       roleNet.send(WIRE_LINEUP_CMD);
