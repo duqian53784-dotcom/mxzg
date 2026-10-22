@@ -26,6 +26,7 @@
  * c2s 3006（wire.3006，GReqChapterReport）只在主线页点挂机战报时编，包体是 chapterIdx 和 firstPos，不是空帧。不进 pullIdle。
  * c2s 3102（wire.3102，GReqBattleReport）只在主线页点请求战报时编，包体是 battle_id 和 type 两个 string，不是空壳 040000001e0c0000。不进 pullIdle。不从 3001 或 3006 自动接。
  * c2s 3103（wire.3103，GReqPreComputeStrength）只在主线页点空壳探针或预计算时编。空壳整帧 040000001f0c0000。可带 hero_ids、type、line_up_type。不进 pullIdle。不从 3102 自动接。不播 spine。
+ * c2s 3030（wire.3030，GReqStudy）只在主线页点切磋且带上 opponent_id 时编。字段 1 type、字段 2 opponent_id、字段 3 server_id。不是空壳 04000000d60b0000。缺 opponent_id 不编码。不进 pullIdle。不从 3102 自动接，成功后也不自动发 3102。
  * c2s 4001 page=1（wire.4001，包体 `08 01`）、空的 c2s 17000（wire.17000）、空的 c2s 12010（wire.12010）、
  * 空的 c2s 18001（wire.18001，GReqPvpData）、空的 c2s 22000（wire.22000，GReqSevenDayLoginData）、
  * 空的 c2s 21010（wire.21010，GReqSevenDayTargetList）、
@@ -176,6 +177,7 @@ import { WIRE_QUICK_BATTLE_CMD } from "./wireQuickBattle";
 import { encodeWireChapterReportBody, readWireChapterReportQuery, WIRE_CHAPTER_REPORT_CMD } from "./wireChapterReport";
 import { encodeWireBattleReportBody, readWireBattleReportQuery, WIRE_BATTLE_REPORT_CMD } from "./wireBattleReport";
 import { encodeWirePreComputeBody, readWirePreComputeQuery, WIRE_PRECOMPUTE_CMD } from "./wirePreComputeStrength";
+import { encodeWireStudyBody, readWireStudyQuery, WIRE_STUDY_CMD } from "./wireStudy";
 import { WIRE_SPRING_OUTING_GRID_CMD } from "./wireSpringOutingGrid";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
@@ -338,7 +340,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.4102、wire.4103、wire.4104、wire.4105、wire.4106、wire.4107、wire.9001 不编码。
  * wire.4014 不编码。4014 是 s2c 推送。
  * wire.74101、wire.74102、wire.74103、wire.74105、wire.74106 不编码。74105、74106 是背包增减推送，勿当拉包。74104 只编码空体。28100 只编码空体，勿与 74104 合并。
- * wire.28101、wire.28102、wire.28103、wire.28104、wire.28105、wire.28106、wire.28108、wire.28109、wire.28002、wire.28003、wire.28004 不编码。wire.3097、wire.3098、wire.3100、wire.3030 不编码。wire.3103 另帧编码，空壳或带 hero_ids，不进 pullIdle，勿与 3102、3099、3101 合并。wire.3102 另帧编码非空体，不进 pullIdle，勿与 3099、3101 合并。wire.3101 编码空体，勿与 3099 合并。28100 只编码空体。wire.28200 编码空体，勿与 28100 合并。wire.28201、wire.28202、wire.28203、wire.28204、wire.28205 不编码。wire.75601 编码空体，勿与 28200 合并。wire.75602、wire.75603、wire.75604、wire.75605、wire.75607、wire.75608、wire.75609、wire.75619 不编码。wire.75606 编码空体，勿与 75601 合并。wire.75615 编码空体，勿与 75606 合并。wire.28107 编码空体，勿与 75615 合并。wire.3099 编码空体，勿与 28107 合并。75607 同为空体 GReqGetOccupationInfo，切勿编成 75607。
+ * wire.28101、wire.28102、wire.28103、wire.28104、wire.28105、wire.28106、wire.28108、wire.28109、wire.28002、wire.28003、wire.28004 不编码。wire.3097、wire.3098、wire.3100 不编码。wire.3030 另帧编码非空体，缺 opponent_id 不编空壳，不进 pullIdle，勿与 3102、3103、3099、3101 合并。wire.3103 另帧编码，空壳或带 hero_ids，不进 pullIdle，勿与 3102、3099、3101 合并。wire.3102 另帧编码非空体，不进 pullIdle，勿与 3099、3101 合并。wire.3101 编码空体，勿与 3099 合并。28100 只编码空体。wire.28200 编码空体，勿与 28100 合并。wire.28201、wire.28202、wire.28203、wire.28204、wire.28205 不编码。wire.75601 编码空体，勿与 28200 合并。wire.75602、wire.75603、wire.75604、wire.75605、wire.75607、wire.75608、wire.75609、wire.75619 不编码。wire.75606 编码空体，勿与 75601 合并。wire.75615 编码空体，勿与 75606 合并。wire.28107 编码空体，勿与 75615 合并。wire.3099 编码空体，勿与 28107 合并。75607 同为空体 GReqGetOccupationInfo，切勿编成 75607。
  * wire.20101 编码空体，勿与 3101 合并。不编 20102、20018、20013、20004、20010。51001 只编码空体。世界等级本模块无写操作号。
  * wire.3203 编码空体，勿与 20101 合并。不编 3202、3204、3205、3206、3220、3200、19001。3012、3010 另帧，不从 3203 发。12020 另帧编码空体，勿与 3203 合并。3200 本轮勿挂。5001、51001 已有，勿重复。
  * wire.4044 编码空体，勿与 3203 合并。不编 4043。13010 签到列表另帧编码空体，勿与 4044 合并。4043 是写号。5001、51001 已有，勿重复。3203、20101、3101、3099 勿再发。
@@ -353,7 +355,7 @@ export function encodeObservedCreateBody(name: string): Uint8Array | null {
  * wire.74301、wire.74302、wire.74303、wire.74304、wire.20011 不编码。74300 只编码空体。74304 是 s2c 推送，勿当拉包。不做 20011。
  * wire.68002、wire.68003、wire.68004、wire.68005、wire.68006、wire.20011 不编码。68001 只编码空体。68005 是更新星数常量，勿当拉包。不做 20011。
  * wire.75502、wire.75503、wire.75504、wire.75505、wire.75506、wire.20011 不编码。75501 只编码空体。75506 是等级推送，勿当拉包。34001 另帧，勿与本帧合并。不做 20011。
- * wire.59002、wire.59003、wire.59005、wire.59006、wire.59007、wire.59008、wire.59009、wire.59011、wire.59012、wire.59013、wire.20011 不编码。59001 只编码空体。59010 只编码空体，勿与 59001 合并。55001 只编码空体，勿与 59010 合并。34001 只编码空体，勿与 55001 合并。32001 只编码空体，勿与 34001 合并。4402 只编码空体，勿与 32001 合并。不编 34002。不编 34003。34003 是解锁推送，勿当拉包。不编 32002。不编 32003。32003 是服侧推送，勿当拉包。4401 只编码空体，勿与 4402 合并。不编 4403。不编 4404。不编 4405。不编 4406。不编 4601。4601 有 page，硬禁。4201 只编码空体，勿与 4401 合并。不编 4202。74104 只编码空体，勿与 4201 合并，也勿与 74100 合并。不编 74101、74102、74103。28100 只编码空体，勿与 74104 合并。28200 只编码空体，勿与 28100 合并。75601 只编码空体，勿与 28200 合并。75606 只编码空体，勿与 75601 合并。不编 28101、28102、28103、28104、28105、28106、28108、28109、28002、28003、28004、28201、28202、28203、28204、28205、3097、3098、3100、3030、75602、75603、75604、75605、75607、75608、75609、75619。3103 另帧编码，空壳或带 hero_ids，不进 pullIdle。3102 另帧编码非空体，不进 pullIdle。75615 另帧编码空体，勿与已合帧合并。28107 另帧编码空体，勿与 75615 合并。3099 另帧编码空体，勿与 28107 合并。3101 另帧编码空体，勿与 3099 合并。20101 另帧编码空体，勿与 3101 合并。不编 20102、20018、20013、20004、20010。75607 同为空体 GReqGetOccupationInfo，切勿编成 75607。4406 无实现，勿发。29001 有 page，硬禁。不做 20011。
+ * wire.59002、wire.59003、wire.59005、wire.59006、wire.59007、wire.59008、wire.59009、wire.59011、wire.59012、wire.59013、wire.20011 不编码。59001 只编码空体。59010 只编码空体，勿与 59001 合并。55001 只编码空体，勿与 59010 合并。34001 只编码空体，勿与 55001 合并。32001 只编码空体，勿与 34001 合并。4402 只编码空体，勿与 32001 合并。不编 34002。不编 34003。34003 是解锁推送，勿当拉包。不编 32002。不编 32003。32003 是服侧推送，勿当拉包。4401 只编码空体，勿与 4402 合并。不编 4403。不编 4404。不编 4405。不编 4406。不编 4601。4601 有 page，硬禁。4201 只编码空体，勿与 4401 合并。不编 4202。74104 只编码空体，勿与 4201 合并，也勿与 74100 合并。不编 74101、74102、74103。28100 只编码空体，勿与 74104 合并。28200 只编码空体，勿与 28100 合并。75601 只编码空体，勿与 28200 合并。75606 只编码空体，勿与 75601 合并。不编 28101、28102、28103、28104、28105、28106、28108、28109、28002、28003、28004、28201、28202、28203、28204、28205、3097、3098、3100、75602、75603、75604、75605、75607、75608、75609、75619。3030 另帧编码非空体，缺 opponent_id 不编空壳，不进 pullIdle。3103 另帧编码，空壳或带 hero_ids，不进 pullIdle。3102 另帧编码非空体，不进 pullIdle。75615 另帧编码空体，勿与已合帧合并。28107 另帧编码空体，勿与 75615 合并。3099 另帧编码空体，勿与 28107 合并。3101 另帧编码空体，勿与 3099 合并。20101 另帧编码空体，勿与 3101 合并。不编 20102、20018、20013、20004、20010。75607 同为空体 GReqGetOccupationInfo，切勿编成 75607。4406 无实现，勿发。29001 有 page，硬禁。不做 20011。
  */
 export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   const cmd = msg && msg.cmd ? msg.cmd : "";
@@ -455,6 +457,15 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
       cmdId: WireCmd.preComputeStrength,
       bytes: encodeFrame(WireCmd.preComputeStrength, body),
       note,
+    };
+  }
+  if (cmd === WIRE_STUDY_CMD) {
+    const query = readWireStudyQuery(msg.data);
+    if (!query) return null;
+    return {
+      cmdId: WireCmd.study,
+      bytes: encodeFrame(WireCmd.study, encodeWireStudyBody(query.type, query.opponentId, query.serverId)),
+      note: "type=" + query.type + " opponent_id=" + query.opponentId + " server_id=" + query.serverId,
     };
   }
   if (cmd === "wire.3004") {
