@@ -594,9 +594,10 @@ import { wireBody } from "./protocol/wireLogin";
  * s2c 3007 按 Battle.proto：字段 2 now_idx、字段 3 max_idx。缺的 idx 不写成 0。字段 1 res_reward_time 和字段 4 extra_reward_id 只在主线页探针展示，不写进按钮。
  * 不写 Session.stageId，主城按钮用 mainlineLabel()。
  * 至少有一个 idx 时点按钮打开只读代码页；两个都没有仍 Toast。
- * 不打开 Mock 关卡页，不发 3002。3010 是主线页只读已领首通，挂在已合 3001 之后，不进 pullIdle，不重发 3001。3012 是主线页只读快速战斗次数，挂在 3010 之后，不进 pullIdle，不重发 3010、3001。硬禁 3013。3006 是主线页挂机战报，挂在 3012 之后，点按钮才发，不进 pullIdle，不发 3005，胜了不回拉 3007。3102 是主线页请求战报，挂在 3006 之后，点按钮才发，不进 pullIdle，不从 3001 或 3006 自动接。纯读 getReport，无领奖，无扣费。3001/3006 的 battle_id 常回 BATTLE_REPORT_TIMEOUT。3103 是主线页预计算战斗力，挂在 3102 之后，点按钮才发，不进 pullIdle，不从 3102 自动接。只计算，不开战，不落库。空 hero_ids 回 fighting=0 仍是成功。不播 spine。3030 是主线页切磋，点按钮才发，不进 pullIdle。开战 STUDY 并落库。无领奖，无扣钻，不推进 chapterId。不从本帧自动发 3102。3007 空壳探针在主线页点「关卡数据」再发同一空帧，挂在已合 3001 / 3010 / 3012 之后、进战之前。只读 RoleMission。不落库，无扣费，不推进 chapterId。不进 pullIdle。3004 空壳探针在主线页点「挂机奖励」再发同一空帧，挂在已合 3006 之后。只读 GResChapterItemList 的 reward_time、max_reward_time。不领取，不落库，无扣费，不推进 chapterId。不从 3006 自动接。不进 pullIdle。3101 空壳探针在主线页点「获取阵容」再发同一空帧，挂在已合 3007 之后、进战之前，和 3102、3103、3030 探针并排。只读 GResLineUp 的 list、assistance_unlock。不落库，无扣费，不改阵容。不从 3001、3102、3103、3030 自动接。不进 pullIdle。不发 3100。不接 3020。
+ * 不打开 Mock 关卡页，不发 3002。3010 是主线页只读已领首通，挂在已合 3001 之后，不进 pullIdle，不重发 3001。3012 是主线页只读快速战斗次数，挂在 3010 之后，不进 pullIdle，不重发 3010、3001。硬禁 3013。3006 是主线页挂机战报，挂在 3012 之后，点按钮才发，不进 pullIdle，不发 3005，胜了不回拉 3007。3102 是主线页请求战报，挂在 3006 之后，点按钮才发，不进 pullIdle，不从 3001 或 3006 自动接。纯读 getReport，无领奖，无扣费。3001/3006 的 battle_id 常回 BATTLE_REPORT_TIMEOUT。3103 是主线页预计算战斗力，挂在 3102 之后，点按钮才发，不进 pullIdle，不从 3102 自动接。只计算，不开战，不落库。空 hero_ids 回 fighting=0 仍是成功。不播 spine。3030 是主线页切磋，点按钮才发，不进 pullIdle。开战 STUDY 并落库。无领奖，无扣钻，不推进 chapterId。不从本帧自动发 3102。3007 空壳探针在主线页点「关卡数据」再发同一空帧，挂在已合 3001 / 3010 / 3012 之后、进战之前。只读 RoleMission。不落库，无扣费，不推进 chapterId。不进 pullIdle。3004 空壳探针在主线页点「挂机奖励」再发同一空帧，挂在已合 3006 之后。只读 GResChapterItemList 的 reward_time、max_reward_time。不领取，不落库，无扣费，不推进 chapterId。不从 3006 自动接。不进 pullIdle。3101 空壳探针在主线页点「获取阵容」再发同一空帧，挂在已合 3007 之后、进战之前，和 3102、3103、3030 探针并排。只读 GResLineUp 的 list、assistance_unlock。不落库，无扣费，不改阵容。不从 3001、3102、3103、3030 自动接。不进 pullIdle。不发 3100。不接 3020。3099 空壳探针在主线页点「查询阵法」再发同一空帧，挂在已合 3101 旁边、已合 3007 之后、进战之前。只读 GResQueryFormation 的 unlockIds。不落库，无扣费，不改阵法。不从 3001、3101、3102、3103、3030 自动接。不进 pullIdle。不发 3098。不发 3100。不接 3020。
  * s2c 3004 按 Battle.proto：字段 1 reward_time、字段 2 max_reward_time。缺的不写成 0。主线页「挂机奖励」展示这两项。
  * s2c 3101 按 GResLineUp：字段 1 list、字段 2 assistance_unlock。缺的不写成 0。主线页「获取阵容」展示这两项。登录链里的空 3101 仍在。
+ * s2c 3099 按 GResQueryFormation：字段 1 unlockIds。缺的不写成 0。主线页「查询阵法」展示这一项。登录链里的空 3099 仍在。
  * 不写 Session.gold。挂机页用 rewardTime / maxRewardTime。没有这两项时主城挂机只 Toast。
  * s2c 3005 只改 reward_time。没有奖励清单，不改金币和钻石。
  * s2c 5001 按 GResBackPackList 替换本地背包。空包体是已同步的空背包。
@@ -948,6 +949,8 @@ export class WireSession {
    * 空包体是已同步，unlockIds 为空，不是未同步，也不写成 0。
    */
   static formation: WireFormationSnapshot | null = null;
+  /** 每记下一次 s2c 3099 加一。主线页「查询阵法」用来认领回包。3099 本身不落库，不改阵法。 */
+  static formationSerial = 0;
   /**
    * 收到的 s2c 3101。null 表示这次进主城还没收到 3101。
    * 空包体是已同步，list 为空，assistance_unlock 保持缺省，不是未同步，也不写成 0。
@@ -1539,6 +1542,7 @@ export class WireSession {
     this.roleShenBin = null;
     this.fetterContract = null;
     this.formation = null;
+    this.formationSerial = 0;
     this.lineUp = null;
     this.lineUpSerial = 0;
     this.runningPromotion = null;
@@ -1705,6 +1709,7 @@ export class WireSession {
     this.roleShenBin = null;
     this.fetterContract = null;
     this.formation = null;
+    this.formationSerial = 0;
     this.lineUp = null;
     this.lineUpSerial = 0;
     this.runningPromotion = null;
@@ -1871,6 +1876,7 @@ export class WireSession {
     this.roleShenBin = null;
     this.fetterContract = null;
     this.formation = null;
+    this.formationSerial = 0;
     this.lineUp = null;
     this.lineUpSerial = 0;
     this.runningPromotion = null;
@@ -2754,6 +2760,24 @@ export class WireSession {
   /** 收到过 s2c 3099（含空包体）才算同步。解不开的包不算。28107、75615、3097、3098、3100、3101、3102、3030、4601、29001、20011 单独到不算。 */
   static hasFormation(): boolean {
     return this.formation !== null;
+  }
+
+  /**
+   * 主线页「查询阵法」。再发一帧空的 c2s 3099，整帧 040000001b0c0000。
+   * GReqQueryFormation 没有字段。小端 1b 0c 00 00。
+   * 挂在已合 3101 旁边、已合 3007 之后、进战之前，和 3101、3102、3103、3030 探针并排。
+   * 不进 pullIdle，不重发 3101、3007、3001、3006、3004、3102、3103、3030。
+   * 不从 3001、3101、3102、3103、3030 自动接。登录链里的空 3099 仍在。
+   * 没连上或还没有 3007 idx 时返回 false。
+   * 只读。不落库，无扣费，不改阵法。不写金币，不写 Session.stageId。
+   * 不发 3098。不发 3100。不接 3020。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。
+   */
+  static pullFormationProbe(): boolean {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return false;
+    if (!this.hasChapter()) return false;
+    net.send(WIRE_FORMATION_CMD);
+    return true;
   }
 
   /** 空的 c2s 3101。GReqLineUp 没有包体，没有 page。只在 3099 之后发一次。整帧 040000001d0c0000。不发 3100 保存队列、3098 解锁阵法、3097 解锁第二契约、3030 切磋、3102 请求战报、3103 预计算战斗力。3099 勿再发。不做备选 5001。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 3099 分开发，勿合并。本刀不重复拉 3099。getHeroLineUps→fillLineUp 轻修复可接受（formationId==0 则置 1 并轻修站位后 update；本路径不走 add）。只读，无扣费、无领奖、不写养成。 */
@@ -5218,6 +5242,7 @@ export class WireSession {
     const next = copyFormation(snap);
     this.pendingFormation = null;
     this.formation = next;
+    this.formationSerial += 1;
     GameLog.shared.info("Wire", "s2c 3099 " + wireFormationNote(next));
     this.emit();
   }

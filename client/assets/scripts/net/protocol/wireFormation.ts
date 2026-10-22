@@ -7,6 +7,9 @@
  * 28107、75615 已合。本刀不重复拉 28107，也不重复拉 75615。与已合刀分开发，勿合并成一个请求。
  *
  * 由 WireSession.pullIdle 在空 c2s 28107 之后发出，只发一次。Boot.ts 不改。
+ * 主线页「查询阵法」再发同一空帧，挂在已合 3101 旁边、已合 3007 之后、进战之前。
+ * 不从 3001、3101、3102、3103、3030 自动接。不进 pullIdle 的加发。不发 3098。不发 3100。不接 3020。
+ * 这一帧只展示 unlockIds。客户端不改阵法，不落库，无扣费。
  * 不夹在 2001 和 3007 中间。
  * 不发 3097 解锁第二契约、3098 解锁阵法、3100 保存战斗队列。
  * 邻近勿发 3102 查战报、3030 切磋。
@@ -38,6 +41,33 @@ export const WIRE_FORMATION_SIDE_EFFECT =
   "轻懒建（getFormation：无记录则 add；未解锁阵法 id=1 则 unlock(1)+update）。只读，无扣费、无领奖、不写养成。空 c2s 一次，无 page，挂在 28107 之后。只发 cmd=3099，空帧 040000001b0c0000。不发 3097 解锁第二契约、3098 解锁阵法、3100 保存战斗队列。不发 3102 查战报、3030 切磋。3101 副本队列另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。与 28107、75615 分开发，勿合并。本刀不重复拉 28107，也不重复拉 75615";
 export const WIRE_FORMATION_FIELD_NOTE =
   "unlockIds。已解锁阵法 id。不保证顺序。没有的数不写成 0。出现的值如实展示。对不上的号按字段号写";
+
+/** GReqQueryFormation 没有字段。3099 = 0x0C1B，小端 1b 0c 00 00。整帧 040000001b0c0000。 */
+export const WIRE_FORMATION_FRAME = "040000001b0c0000";
+
+export const WIRE_FORMATION_PROBE_UNSYNCED = "真服未同步";
+export const WIRE_FORMATION_PROBE_UNSYNCED_TOAST = "真服未同步";
+
+export const WIRE_FORMATION_PROBE_NOTE =
+  "主线页「查询阵法」发空 c2s 3099（GReqQueryFormation 无字段，整帧 040000001b0c0000，小端 1b 0c 00 00）。挂在已合 3101 旁边、已合 3007 之后、进战之前，和 3101、3102、3103、3030 探针并排。登录链里的空 3099 仍在。本按钮不进 pullIdle，不重发 3101、3007、3001、3006、3004、3102、3103、3030。不从 3001、3101、3102、3103、3030 自动接。s2c GResQueryFormation 展示 unlockIds。缺字段不写成 0。出现的 0 仍写 0。只读。不落库，无扣费，不改阵法。不发 3098。不发 3100。不接 3020。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。不把 Mock 1201/1202 当真服。不写金币，不写钻石。不写 Session.stageId。不回落 Mock。不改 Boot。不从本探针自动发 3001 或 3101";
+
+export const WIRE_FORMATION_PROBE_SIDE_EFFECT =
+  "只读查询阵法。展示 unlockIds。不落库，无扣费，不改阵法。空壳 040000001b0c0000，主线页点「查询阵法」才再发，挂在已合 3101 旁边、已合 3007 之后、进战之前，和 3101、3102、3103、3030 探针并排。不从 3001、3101、3102、3103、3030 自动接。不进 pullIdle。不发 3098。不发 3100。不接 3020。不发 3002、3005、3008、3011。硬禁 3013、4601、29001。不重发 3101、3007、3001、3006、3004、3102、3103、3030。不写金币，不写钻石。不写 Session.stageId";
+
+/** 本刀不编码这些号。3099 自己的空帧已由登录链编码。3098、3100 有写，不能编成 3099。3020 不接。3013 硬禁。 */
+export const WIRE_FORMATION_PROBE_BANNED_CMDS = [
+  "wire.3098",
+  "wire.3100",
+  "wire.3020",
+  "wire.3002",
+  "wire.3008",
+  "wire.3011",
+  "wire.3013",
+  "wire.4601",
+  "wire.29001",
+  "wire.1201",
+  "wire.1202",
+] as const;
 
 export interface WireFormationMark {
   field: number;
@@ -85,6 +115,18 @@ export function decodeWireFormation(body: Uint8Array | null | undefined): WireFo
     if (mark) marks.push(mark);
   }
   return { unlockIds, marks };
+}
+
+/**
+ * 主线页「查询阵法」。null 是还没同步。
+ * 写出 unlockIds。没有这个字段时写「unlockIds 空」，不写成 0。出现的 0 仍写 0。不排序。
+ */
+export function formatWireFormationProbe(snap: WireFormationSnapshot | null): string {
+  if (!snap) return "查询阵法 " + WIRE_FORMATION_PROBE_UNSYNCED;
+  const list = snap.unlockIds.length === 0 ? "unlockIds 空" : "unlockIds=" + numList(snap.unlockIds);
+  let text = "查询阵法 " + list;
+  if (snap.marks.length > 0) text += " / " + marksText(snap.marks);
+  return text;
 }
 
 /** 页上写 unlockIds。没有时写「空阵法」。出现的 0 仍写 0。不排序。 */
