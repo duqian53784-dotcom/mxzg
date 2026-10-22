@@ -25,7 +25,7 @@ import zipfile
 
 from PIL import Image, ImageDraw, ImageFont
 
-from check_citychrome_shell_id import class_id, library_id
+from check_citychrome_shell_id import class_id
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RES = os.path.join(ROOT, "client", "assets", "resources")
@@ -140,11 +140,13 @@ def uuid_ref(value):
 
 
 def compress_uuid(value):
+    """compressUuid(uuid, false): reserved head 5, the 23-char class id."""
     hex_str = value.replace("-", "").lower()
     if len(hex_str) != 32 or any(ch not in HEX_CHARS for ch in hex_str):
         raise SystemExit("script uuid is not a canonical uuid: " + value)
-    chars = [hex_str[0], hex_str[1]]
-    i = 2
+    reserved = 5
+    chars = [hex_str[:reserved]]
+    i = reserved
     while i < 32:
         h1 = int(hex_str[i], 16)
         h2 = int(hex_str[i + 1], 16)
@@ -153,16 +155,16 @@ def compress_uuid(value):
         chars.append(BASE64_KEYS[((h2 & 3) << 4) | h3])
         i += 3
     compressed = "".join(chars)
-    if len(compressed) != 22 or decode_uuid(compressed) != value.lower():
+    if len(compressed) != 23 or decode_uuid(compressed) != value.lower():
         raise SystemExit("uuid compress did not round-trip: " + value)
     return compressed
 
 
 def decode_uuid(compressed):
-    if len(compressed) != 22:
-        raise SystemExit("compressed uuid is not 22 chars")
-    hex_chars = [compressed[0], compressed[1]]
-    for i in range(2, 22, 2):
+    if len(compressed) != 23:
+        raise SystemExit("compressed uuid is not 23 chars")
+    hex_chars = list(compressed[:5])
+    for i in range(5, 23, 2):
         lhs = BASE64_VALUES[ord(compressed[i])]
         rhs = BASE64_VALUES[ord(compressed[i + 1])]
         hex_chars.append(HEX_CHARS[lhs >> 2])
@@ -471,13 +473,9 @@ def load_shell():
     if meta.get("importer") != "typescript" or len(value) < 32:
         raise SystemExit("shell meta missing uuid")
     compressed = compress_uuid(value)
-    # class_id is the 22-char form. library_id is the 23-char filename form.
-    # Writing the filename into __type__ makes decodeUuid miss the class.
-    if compressed != class_id(value):
+    # Same string Creator 3.8.8 passes to _RF.push: compressUuid(uuid, false).
+    if compressed != class_id(value) or len(compressed) != 23:
         raise SystemExit("shell class id drifted: " + compressed)
-    banned = library_id(value)
-    if banned in text or banned == value:
-        raise SystemExit("shell stores the 23-char library id " + banned)
     return {"type": compressed, "uuid": value}
 
 
@@ -1057,9 +1055,9 @@ def main():
     attach_comp_helpers(builder, sprites)
     check(builder)
     text = json.dumps(builder.objs, ensure_ascii=False, indent=2) + "\n"
-    banned = library_id(shell["uuid"])
-    if banned in text or shell["type"] == banned or len(shell["type"]) != 22:
-        raise SystemExit("refusing to write 23-char library id into CityChrome.prefab")
+    type_needle = '"__type__": "%s"' % shell["type"]
+    if text.count(type_needle) != 1 or len(shell["type"]) != 23:
+        raise SystemExit("prefab is missing the 23-char shell __type__")
     with open(PREFAB_PATH, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(text)
     # Keep the existing prefab uuid. prefabLoad maps the path to it.

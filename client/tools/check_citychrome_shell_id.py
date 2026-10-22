@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Keep CityChromeShell's class id on the 22-char form the prefab already uses.
+"""Lock CityChromeShell's class id to the 23-char packer form.
 
-compressUuid(uuid, true)  -> 22 chars, prefab __type__ and _RF.push class id.
-compressUuid(uuid, false) -> 23 chars, library filename only.
-
-Engine decodeUuid returns any string that is not 22 chars unchanged, so a
-chunk that registers the 23-char form never matches the prefab. That shows
-up as Missing class, and the inspector copy says the script failed to compile.
+Creator 3.8.8 always _RF.push-es compressUuid(uuid, false): reserved head 5,
+23 characters. Prefab __type__ must be that same string. The old 22-char
+compressUuid(uuid, true) does not match the chunk, so the inspector reports
+MissingScript / 脚本编译失败.
 """
 import json
 import os
@@ -22,10 +20,12 @@ BASE64_KEYS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 HEX_CHARS = "0123456789abcdef"
 TEXT_EXT = {".ts", ".js", ".meta", ".prefab", ".scene", ".json"}
 
-# Locked pair. Do not retarget the prefab onto the 23-char library form.
+# Locked pair. Meta uuid stays the canonical 36-char form. Do not remint it.
 EXPECTED_UUID = "c4e8a1d2-7b63-4e90-8f15-6a2d9c0b47e3"
-EXPECTED_CLASS_ID = "c46KHSe2NOkI8Vai2cC0fj"
-EXPECTED_LIBRARY_ID = "c4e8aHSe2NOkI8Vai2cC0fj"
+# compressUuid(uuid, false). Prefab __type__ and _RF.push must both be this.
+EXPECTED_CLASS_ID = "c4e8aHSe2NOkI8Vai2cC0fj"
+# compressUuid(uuid, true). Not a class id. Prefab must not use it as __type__.
+OLD_PREFAB_TYPE = "c46KHSe2NOkI8Vai2cC0fj"
 
 
 def hex_of(value):
@@ -49,13 +49,13 @@ def compress_hex(hex_str, reserved):
 
 
 def class_id(value):
-    """22-char id. This is what prefab __type__ and _RF.push must share."""
-    return compress_hex(hex_of(value), 2)
-
-
-def library_id(value):
-    """23-char library filename. Not a class id."""
+    """23-char id. Prefab __type__ and _RF.push must share this."""
     return compress_hex(hex_of(value), 5)
+
+
+def legacy_min_id(value):
+    """22-char compressUuid(uuid, true). Reject this as a Prefab type."""
+    return compress_hex(hex_of(value), 2)
 
 
 def iter_asset_text():
@@ -68,10 +68,10 @@ def iter_asset_text():
 
 
 def main():
-    if class_id(EXPECTED_UUID) != EXPECTED_CLASS_ID or len(EXPECTED_CLASS_ID) != 22:
-        raise SystemExit("22-char class id drifted from " + EXPECTED_UUID)
-    if library_id(EXPECTED_UUID) != EXPECTED_LIBRARY_ID or len(EXPECTED_LIBRARY_ID) != 23:
-        raise SystemExit("23-char library id drifted from " + EXPECTED_UUID)
+    if class_id(EXPECTED_UUID) != EXPECTED_CLASS_ID or len(EXPECTED_CLASS_ID) != 23:
+        raise SystemExit("23-char class id drifted from " + EXPECTED_UUID)
+    if legacy_min_id(EXPECTED_UUID) != OLD_PREFAB_TYPE or len(OLD_PREFAB_TYPE) != 22:
+        raise SystemExit("22-char legacy id drifted from " + EXPECTED_UUID)
 
     with open(SHELL_META, encoding="utf-8") as handle:
         meta = json.load(handle)
@@ -87,35 +87,38 @@ def main():
 
     with open(SHELL_TS, encoding="utf-8") as handle:
         source = handle.read()
-    if EXPECTED_LIBRARY_ID in source or EXPECTED_CLASS_ID in source:
+    if EXPECTED_CLASS_ID in source or OLD_PREFAB_TYPE in source:
         raise SystemExit("CityChromeShell.ts must not embed a compressed id")
 
     with open(PREFAB, encoding="utf-8") as handle:
         prefab = handle.read()
-    if EXPECTED_LIBRARY_ID in prefab:
+    type_needle = '"__type__": "%s"' % EXPECTED_CLASS_ID
+    old_needle = '"__type__": "%s"' % OLD_PREFAB_TYPE
+    if prefab.count(type_needle) != 1 or prefab.count(EXPECTED_CLASS_ID) != 1:
         raise SystemExit(
-            "CityChrome.prefab contains library id %s. __type__ must stay %s"
-            % (EXPECTED_LIBRARY_ID, EXPECTED_CLASS_ID)
+            "CityChrome.prefab __type__ must be class id %s once" % EXPECTED_CLASS_ID
         )
-    needle = '"__type__": "%s"' % EXPECTED_CLASS_ID
-    if prefab.count(needle) != 1:
-        raise SystemExit("CityChrome.prefab must reference class id %s once" % EXPECTED_CLASS_ID)
+    if old_needle in prefab or OLD_PREFAB_TYPE in prefab:
+        raise SystemExit(
+            "CityChrome.prefab still uses 22-char type %s" % OLD_PREFAB_TYPE
+        )
 
     hits = []
     for path in iter_asset_text():
         with open(path, encoding="utf-8") as handle:
             text = handle.read()
-        if EXPECTED_LIBRARY_ID in text:
+        if old_needle in text:
             hits.append(os.path.relpath(path, ROOT))
     if hits:
         raise SystemExit(
-            "23-char library id %s is not a class id; found in:\n%s"
-            % (EXPECTED_LIBRARY_ID, "\n".join(hits))
+            "22-char %s is not a Prefab type; found in:\n%s"
+            % (OLD_PREFAB_TYPE, "\n".join(hits))
         )
 
     print("class id %s" % EXPECTED_CLASS_ID)
     print("meta uuid %s" % EXPECTED_UUID)
-    print("library filename %s must not be passed to _RF.push" % EXPECTED_LIBRARY_ID)
+    print("_RF.push and prefab __type__ must be %s" % EXPECTED_CLASS_ID)
+    print("rejected 22-char prefab type %s" % OLD_PREFAB_TYPE)
     return 0
 
 
