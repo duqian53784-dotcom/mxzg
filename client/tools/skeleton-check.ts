@@ -1230,6 +1230,20 @@ import {
   WIRE_MID_FOOD_UNSYNCED_TOAST,
   wireMidFoodNote,
 } from "../assets/scripts/net/protocol/wireMidFood";
+import {
+  decodeWireQiuShangMingYue,
+  formatWireQiuShangMingYueLine,
+  WIRE_QIU_SHANG_MING_YUE_BANNED_CMDS,
+  WIRE_QIU_SHANG_MING_YUE_CMD,
+  WIRE_QIU_SHANG_MING_YUE_EMPTY,
+  WIRE_QIU_SHANG_MING_YUE_FIELD_NOTE,
+  WIRE_QIU_SHANG_MING_YUE_FRAME,
+  WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE,
+  WIRE_QIU_SHANG_MING_YUE_READONLY_TITLE,
+  WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT,
+  WIRE_QIU_SHANG_MING_YUE_UNSYNCED_TOAST,
+  wireQiuShangMingYueNote,
+} from "../assets/scripts/net/protocol/wireQiuShangMingYue";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1988,6 +2002,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("qiShenQi") === "city", "qi shen qi stays on the city tab");
   assert(rootTabFor("zhuShenJiTan") === "city", "zhu shen ji tan stays on the city tab");
   assert(rootTabFor("midFood") === "city", "mid food stays on the city tab");
+  assert(rootTabFor("qiuShangMingYue") === "city", "qiu shang ming yue stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -12834,6 +12849,187 @@ async function checkWs(): Promise<void> {
       midFoodNote.indexOf("不写钻石") >= 0,
     "75131 note keeps the side effect and does not write gold or diamond"
   );
+
+  assert(
+    WireCmd.qiuShangMingYue === 75801 &&
+      WireCmd.qiuShangMingYue !== WireCmd.midFood &&
+      WireCmd.qiuShangMingYue !== 75802 &&
+      WireCmd.qiuShangMingYue !== 75803 &&
+      WireCmd.qiuShangMingYue !== 75804 &&
+      WireCmd.qiuShangMingYue !== 75901 &&
+      WireCmd.qiuShangMingYue !== 75131 &&
+      WireCmd.qiuShangMingYue !== 75121 &&
+      WireCmd.qiuShangMingYue !== 75001 &&
+      WireCmd.qiuShangMingYue !== 76501 &&
+      WireCmd.qiuShangMingYue !== 73002 &&
+      WireCmd.qiuShangMingYue !== 71001 &&
+      WireCmd.qiuShangMingYue !== 20011 &&
+      WireCmd.qiuShangMingYue !== 74121 &&
+      WireCmd.qiuShangMingYue !== 74122 &&
+      WireCmd.qiuShangMingYue !== 4601 &&
+      WireCmd.qiuShangMingYue !== 29001 &&
+      WireCmd.qiuShangMingYue !== 5001 &&
+      WireCmd.qiuShangMingYue !== 51001 &&
+      WireCmd.qiuShangMingYue !== 68001 &&
+      WireCmd.qiuShangMingYue !== 70001,
+    "online 75801 stays off the write cmds and the earlier idle pulls"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.qiuShangMingYue)) === WIRE_QIU_SHANG_MING_YUE_FRAME, "empty c2s 75801");
+  assert(bytesToHex(encodeFrame(75801)) === "0400000019280100", "empty c2s 75801 hex");
+  assert(WIRE_QIU_SHANG_MING_YUE_FRAME === "0400000019280100", "75801 frame constant");
+  assert(bytesToHex(encodeFrame(75801)) !== "040000007b250100", "75801 is not the 75131 frame");
+  assert(bytesToHex(encodeFrame(75802)) === "040000001a280100" && bytesToHex(encodeFrame(75802)) !== "0400000019280100", "75802 is not the 75801 frame");
+  assert(bytesToHex(encodeFrame(75803)) === "040000001b280100" && bytesToHex(encodeFrame(75803)) !== "0400000019280100", "75803 is not the 75801 frame");
+  assert(bytesToHex(encodeFrame(75804)) === "040000001c280100" && bytesToHex(encodeFrame(75804)) !== "0400000019280100", "75804 is not the 75801 frame");
+  assert(bytesToHex(encodeFrame(75901)) === "040000007d280100" && bytesToHex(encodeFrame(75901)) !== "0400000019280100", "75901 is not the 75801 frame");
+  for (let i = 0; i < WIRE_QIU_SHANG_MING_YUE_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_QIU_SHANG_MING_YUE_BANNED_CMDS[i] }) === null, WIRE_QIU_SHANG_MING_YUE_BANNED_CMDS[i] + " is not encoded");
+  }
+  const qiuOwn = encodeWireMessage({ cmd: WIRE_QIU_SHANG_MING_YUE_CMD });
+  assert(
+    qiuOwn !== null &&
+      bytesToHex(qiuOwn.bytes) === "0400000019280100" &&
+      bytesToHex(qiuOwn.bytes) !== "040000007b250100" &&
+      bytesToHex(qiuOwn.bytes) !== "040000001a280100" &&
+      bytesToHex(qiuOwn.bytes) !== "040000001b280100" &&
+      bytesToHex(qiuOwn.bytes) !== "040000001c280100" &&
+      bytesToHex(qiuOwn.bytes) !== "040000007d280100",
+    "wire.75801 encodes the empty 75801 frame and not 75131 or the banned cmds"
+  );
+  assert(WIRE_QIU_SHANG_MING_YUE_CMD === "wire.75801", "qiu shang ming yue wire cmd");
+  assert(WIRE_QIU_SHANG_MING_YUE_READONLY_TITLE === "秋赏明月（真服只读）", "readonly qiu shang ming yue title");
+  assert(WIRE_QIU_SHANG_MING_YUE_UNSYNCED_TOAST === "真服未同步", "unsynced qiu shang ming yue toast");
+  assert(WIRE_QIU_SHANG_MING_YUE_EMPTY === "已同步空表", "empty qiu shang ming yue label");
+  assert(
+    WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("select_info") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("lottery_reward") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("lottery_count") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("lottery_best_remaining_count") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("75802") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("75803") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("75804") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("75901") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("75131") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_READONLY_NOTE.indexOf("无 page") >= 0,
+    "75801 readonly note lists the four fields and the hard bans"
+  );
+  assert(
+    WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("getPromotionInfo") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("轮次清 select") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("非开启写空默认") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("无抽奖") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("0400000019280100") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("与 75131 分开发") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("不并入 75131") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("75802") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("75803") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT.indexOf("75804") >= 0,
+    "75801 side effect keeps the lazy create and does not draw or claim"
+  );
+  assert(
+    WIRE_QIU_SHANG_MING_YUE_FIELD_NOTE.indexOf("select_info") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_FIELD_NOTE.indexOf("lottery_count") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_QIU_SHANG_MING_YUE_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "75801 field note does not invent missing numbers"
+  );
+  const qiuEmpty = decodeWireQiuShangMingYue(new Uint8Array(0));
+  assert(
+    qiuEmpty !== null &&
+      qiuEmpty.selectInfo === null &&
+      qiuEmpty.lotteryReward === null &&
+      qiuEmpty.lotteryCount === null &&
+      qiuEmpty.lotteryBestRemainingCount === null &&
+      qiuEmpty.marks.length === 0 &&
+      formatWireQiuShangMingYueLine(qiuEmpty) === WIRE_QIU_SHANG_MING_YUE_EMPTY &&
+      formatWireQiuShangMingYueLine(qiuEmpty).indexOf("lottery_count=") < 0 &&
+      formatWireQiuShangMingYueLine(qiuEmpty).indexOf("select_info=") < 0 &&
+      formatWireQiuShangMingYueLine(qiuEmpty).indexOf("lottery_reward=") < 0 &&
+      formatWireQiuShangMingYueLine(qiuEmpty).indexOf("lottery_best_remaining_count=") < 0,
+    "empty 75801 body is 已同步空表 and does not invent zeros"
+  );
+  assert(decodeWireQiuShangMingYue(null) === null, "missing 75801 body stays unsynced");
+  assert(decodeWireQiuShangMingYue(Uint8Array.from([0x80])) === null, "bad 75801 varint returns null");
+  const qiuCountZero = decodeWireQiuShangMingYue(fieldVarint(3, 0));
+  assert(
+    qiuCountZero !== null &&
+      qiuCountZero.lotteryCount === 0 &&
+      qiuCountZero.selectInfo === null &&
+      qiuCountZero.lotteryReward === null &&
+      qiuCountZero.lotteryBestRemainingCount === null &&
+      formatWireQiuShangMingYueLine(qiuCountZero) === "lottery_count=0" &&
+      formatWireQiuShangMingYueLine(qiuCountZero).indexOf("select_info=") < 0 &&
+      formatWireQiuShangMingYueLine(qiuCountZero).indexOf("lottery_reward=") < 0 &&
+      formatWireQiuShangMingYueLine(qiuCountZero).indexOf("lottery_best_remaining_count=") < 0,
+    "present 75801 lottery_count zero stays zero and omits the other fields"
+  );
+  const qiuBestNeg = decodeWireQiuShangMingYue(fieldNeg1(4));
+  assert(
+    qiuBestNeg !== null &&
+      qiuBestNeg.lotteryBestRemainingCount === -1 &&
+      qiuBestNeg.lotteryCount === null &&
+      formatWireQiuShangMingYueLine(qiuBestNeg) === "lottery_best_remaining_count=-1" &&
+      formatWireQiuShangMingYueLine(qiuBestNeg).indexOf("lottery_count=") < 0,
+    "present 75801 lottery_best_remaining_count -1 stays -1"
+  );
+  const qiuInnerZero = decodeWireQiuShangMingYue(fieldBytes(1, fieldVarint(2, 0)));
+  assert(
+    qiuInnerZero !== null &&
+      qiuInnerZero.selectInfo !== null &&
+      qiuInnerZero.lotteryCount === null &&
+      formatWireQiuShangMingYueLine(qiuInnerZero) === "select_info=字段2=0" &&
+      formatWireQiuShangMingYueLine(qiuInnerZero).indexOf("lottery_count=") < 0,
+    "75801 select_info keeps an inner present zero by field number"
+  );
+  const qiuSelectZero = decodeWireQiuShangMingYue(fieldVarint(1, 0));
+  assert(
+    qiuSelectZero !== null &&
+      qiuSelectZero.selectInfo !== null &&
+      qiuSelectZero.selectInfo[0].kind === "num" &&
+      qiuSelectZero.selectInfo[0].value === 0 &&
+      formatWireQiuShangMingYueLine(qiuSelectZero) === "select_info=0",
+    "present 75801 select_info zero stays zero"
+  );
+  const qiuUnknown = decodeWireQiuShangMingYue(fieldVarint(5, 5));
+  assert(
+    qiuUnknown !== null &&
+      qiuUnknown.selectInfo === null &&
+      qiuUnknown.lotteryCount === null &&
+      formatWireQiuShangMingYueLine(qiuUnknown) === "字段5=5" &&
+      formatWireQiuShangMingYueLine(qiuUnknown).indexOf("select_info=") < 0 &&
+      formatWireQiuShangMingYueLine(qiuUnknown).indexOf("lottery_count=") < 0,
+    "75801 unknown field stays a mark and does not invent named zeros"
+  );
+  const qiuCountBytes = decodeWireQiuShangMingYue(fieldBytes(3, fieldVarint(1, 1)));
+  assert(
+    qiuCountBytes !== null &&
+      qiuCountBytes.lotteryCount === null &&
+      formatWireQiuShangMingYueLine(qiuCountBytes).indexOf("lottery_count=") < 0 &&
+      formatWireQiuShangMingYueLine(qiuCountBytes).indexOf("字段3=") >= 0,
+    "75801 field 3 bytes stay a mark and are not coerced to 0"
+  );
+  const qiuSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.qiuShangMingYue, fieldVarint(3, 0)), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    qiuSticky.frames.length === 2 &&
+      qiuSticky.frames[0].cmdId === 75801 &&
+      qiuSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireQiuShangMingYue(qiuSticky.frames[0].body)?.lotteryCount === 0,
+    "sticky 75801 frame stops at its length prefix"
+  );
+  const qiuNote = wireQiuShangMingYueNote(qiuEmpty || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] });
+  assert(
+    qiuNote.indexOf(WIRE_QIU_SHANG_MING_YUE_SIDE_EFFECT) >= 0 &&
+      qiuNote.indexOf("不写金币") >= 0 &&
+      qiuNote.indexOf("不写钻石") >= 0,
+    "75801 note keeps the side effect and does not write gold or diamond"
+  );
   assert(
     bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
@@ -13960,7 +14156,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 56, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once and does not resend 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75801");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 57, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once and does not resend 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -15140,6 +15336,28 @@ async function checkWs(): Promise<void> {
         }
         assert(midHex !== "0400000071250100", "pullIdle 75131 frame is not merged into the 75121 cmd");
       }
+
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 56] as ArrayBuffer)) === "0400000019280100",
+        "pullIdle sends empty c2s 75801 after 75131 at frame index 56"
+      );
+      {
+        const qiuHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 56] as ArrayBuffer));
+        const notFrames = [
+          "040000007b250100",
+          "0400000071250100",
+          "040000005d250100",
+          "04000000fe2a0100",
+          "040000001a280100",
+          "040000001b280100",
+          "040000001c280100",
+          "040000007d280100",
+        ];
+        for (let n = 0; n < notFrames.length; n++) {
+          assert(qiuHex !== notFrames[n], "pullIdle 75801 frame is not " + notFrames[n]);
+        }
+        assert(qiuHex !== "040000007b250100", "pullIdle 75801 frame is not merged into the 75131 cmd");
+      }
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -15207,7 +15425,10 @@ async function checkWs(): Promise<void> {
           "040000005e250100": true,
           "0400000072250100": true,
           "040000007c250100": true,
-          "0400000019280100": true,
+          "040000001a280100": true,
+          "040000001b280100": true,
+          "040000001c280100": true,
+          "040000007d280100": true,
         };
         let weekendFrames = 0;
         let godRelicFrames = 0;
@@ -15219,9 +15440,10 @@ async function checkWs(): Promise<void> {
         let qiShenQiFrames = 0;
         let zhuShenJiTanFrames = 0;
         let midFoodFrames = 0;
+        let qiuShangFrames = 0;
         let astrolabeFrames = 0;
         let reikiFrames = 0;
-        for (let i = 0; i < 56; i++) {
+        for (let i = 0; i < 57; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -15244,6 +15466,7 @@ async function checkWs(): Promise<void> {
           if (hex === "040000005d250100") qiShenQiFrames += 1;
           if (hex === "0400000071250100") zhuShenJiTanFrames += 1;
           if (hex === "040000007b250100") midFoodFrames += 1;
+          if (hex === "0400000019280100") qiuShangFrames += 1;
           if (hex === "04000000a1090100") astrolabeFrames += 1;
           if (hex === "0400000071110100") reikiFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
@@ -15271,11 +15494,12 @@ async function checkWs(): Promise<void> {
             qiShenQiFrames === 1 &&
             zhuShenJiTanFrames === 1 &&
             midFoodFrames === 1 &&
+            qiuShangFrames === 1 &&
             astrolabeFrames === 1 &&
             reikiFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once and 75131 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75801 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once, 75131 once and 75801 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75802 75803 75804 75901 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
         );
       }
       assert(
@@ -15437,8 +15661,14 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000072250100") === false &&
           sawLog(lines, "发送 c2s 75132") === false &&
           sawLog(lines, "040000007c250100") === false &&
-          sawLog(lines, "发送 c2s 75801") === false &&
-          sawLog(lines, "0400000019280100") === false &&
+          sawLog(lines, "发送 c2s 75801") &&
+          sawLog(lines, "0400000019280100") &&
+          sawLog(lines, "发送 c2s 75802") === false &&
+          sawLog(lines, "040000001a280100") === false &&
+          sawLog(lines, "发送 c2s 75803") === false &&
+          sawLog(lines, "040000001b280100") === false &&
+          sawLog(lines, "发送 c2s 75804") === false &&
+          sawLog(lines, "040000001c280100") === false &&
           sawLog(lines, "发送 c2s 74002") === false &&
           sawLog(lines, "0400000012210100") === false &&
           sawLog(lines, "发送 c2s 74003") === false &&
@@ -15679,6 +15909,9 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_MID_FOOD_CMD);
       const midFoodSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(midFoodSent as ArrayBuffer)) === "040000007b250100", "wire.75131 frame");
+      roleNet.send(WIRE_QIU_SHANG_MING_YUE_CMD);
+      const qiuSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(qiuSent as ArrayBuffer)) === "0400000019280100", "wire.75801 frame");
       const sentBeforeRechargeOther = roleSockets[0].sent.length;
       roleNet.send("wire.61002");
       roleNet.send("wire.62002");
@@ -15715,10 +15948,13 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.75102");
       roleNet.send("wire.75122");
       roleNet.send("wire.75132");
-      roleNet.send("wire.75801");
+      roleNet.send("wire.75802");
+      roleNet.send("wire.75803");
+      roleNet.send("wire.75804");
+      roleNet.send("wire.75901");
       roleNet.send("wire.75001");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75801 75001 and goal claim stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75802 75803 75804 75901 75001 and goal claim stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.61002") &&
           sawLog(lines, "未发送 wire.62002") &&
@@ -15755,7 +15991,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.75102") &&
           sawLog(lines, "未发送 wire.75122") &&
           sawLog(lines, "未发送 wire.75132") &&
-          sawLog(lines, "未发送 wire.75801") &&
+          sawLog(lines, "未发送 wire.75802") &&
+          sawLog(lines, "未发送 wire.75803") &&
+          sawLog(lines, "未发送 wire.75804") &&
+          sawLog(lines, "未发送 wire.75901") &&
           sawLog(lines, "未发送 wire.75001") &&
           sawLog(lines, "未发送 goal7.claim"),
         "qi shen qi banned cmds and goal claim are not encoded"
@@ -20521,6 +20760,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(75132, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75122, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75102, fieldVarint(1, 9)));
+      assert(WireSession.hasQiuShangMingYue() === false, "75801 is unsynced until its own s2c");
       roleSockets[0].push(encodeFrame(75801, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75001, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(76501, fieldVarint(1, 9)));
@@ -20539,6 +20779,12 @@ async function checkWs(): Promise<void> {
         formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === "buy=count=0" &&
           formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }) === zsjtBeforeMid,
         "75132 75122 75102 75801 75001 76501 73002 71001 20011 4601 29001 74121 74122 5001 51001 68001 and 70001 do not replace the 75131 snapshot"
+      );
+      assert(
+        WireSession.hasQiuShangMingYue() &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === "select_info=9" &&
+          formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === "buy=count=0",
+        "75801 select_info keeps the present value and does not replace the 75131 snapshot"
       );
       roleSockets[0].push(encodeFrame(75131));
       assert(
@@ -20562,6 +20808,56 @@ async function checkWs(): Promise<void> {
           formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }) === zsjtBeforeMid &&
           sawWire("75131 解不开"),
         "bad 75131 keeps the previous mid food and the 75121 snapshot"
+      );
+
+      const midBeforeQiuClear = formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] });
+      assert(
+        midBeforeQiuClear === "buy=idx=2" &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === "select_info=9",
+        "empty 75131 leaves the 75801 snapshot in place"
+      );
+      roleSockets[0].push(encodeFrame(75801));
+      assert(
+        WireSession.hasQiuShangMingYue() &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === WIRE_QIU_SHANG_MING_YUE_EMPTY &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }).indexOf("lottery_count=") < 0 &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }).indexOf("select_info=") < 0 &&
+          formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === midBeforeQiuClear,
+        "empty 75801 body is 已同步空表 and does not replace the 75131 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(75801, fieldVarint(3, 0)));
+      assert(
+        WireSession.qiuShangMingYue !== null &&
+          WireSession.qiuShangMingYue.lotteryCount === 0 &&
+          WireSession.qiuShangMingYue.selectInfo === null &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue) === "lottery_count=0" &&
+          formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === midBeforeQiuClear,
+        "75801 shows a present zero and omits the missing fields"
+      );
+      roleSockets[0].push(encodeFrame(75801, fieldNeg1(4)));
+      assert(
+        WireSession.qiuShangMingYue !== null &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue) === "lottery_best_remaining_count=-1" &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue).indexOf("lottery_count=") < 0,
+        "75801 keeps a present -1 and omits lottery_count"
+      );
+      roleSockets[0].push(encodeFrame(75801, fieldVarint(3, 0)));
+      roleSockets[0].push(encodeFrame(75801, Uint8Array.from([0x80])));
+      assert(
+        WireSession.qiuShangMingYue !== null &&
+          formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue) === "lottery_count=0" &&
+          formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === midBeforeQiuClear &&
+          sawWire("75801 解不开"),
+        "bad 75801 keeps the previous snapshot and the 75131 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(75802, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75803, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75804, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75901, fieldVarint(1, 9)));
+      assert(
+        formatWireQiuShangMingYueLine(WireSession.qiuShangMingYue || { selectInfo: null, lotteryReward: null, lotteryCount: null, lotteryBestRemainingCount: null, marks: [] }) === "lottery_count=0" &&
+          formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === midBeforeQiuClear,
+        "75802 75803 75804 and 75901 do not replace the 75801 snapshot"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
