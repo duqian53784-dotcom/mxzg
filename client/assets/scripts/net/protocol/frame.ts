@@ -77,6 +77,15 @@ export const WireCmd = {
    */
   preComputeStrength: 3103,
   /**
+   * c2s GReqStudy。不是空壳。字段 1 type（0 本服 / 1 跨服），字段 2 opponent_id，字段 3 server_id。
+   * 示例 type=0、opponent_id=2、server_id=1 的整帧是 `0a 00 00 00 d6 0b 00 00 08 00 10 02 18 01`。
+   * 3030 = 0x0BD6，小端 d6 0b 00 00。空壳 `04 00 00 00 d6 0b 00 00` 不够，也不预填 opponent_id。
+   * 主线页点「切磋」才发。服按 server_id 路由，本服必须填本机 server.id（文档默认 1）。
+   * 不进 pullIdle。s2c 是 GResStudy。开战 STUDY 并落库。无领奖，无扣钻，不推进 chapterId。
+   * 回包 battle_id 可再点 3102，不从本帧自动发。不是 18001，也不是占位 stage.enter（1201）。
+   */
+  study: 3030,
+  /**
    * c2s 空体。Battle.proto 的 GReqChapterItemList。进主城、空 c2s 3007 之后发。
    * s2c 回 reward_time / max_reward_time。不是占位 idle.query（1301）。
    */

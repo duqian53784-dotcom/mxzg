@@ -581,6 +581,21 @@ import {
   WIRE_PRECOMPUTE_UNSYNCED_TOAST,
 } from "../assets/scripts/net/protocol/wirePreComputeStrength";
 import {
+  decodeWireStudy,
+  encodeWireStudyBody,
+  formatWireStudy,
+  readWireStudyQuery,
+  wireStudyBattleIdText,
+  WIRE_STUDY_BANNED_CMDS,
+  WIRE_STUDY_CMD,
+  WIRE_STUDY_EMPTY,
+  WIRE_STUDY_EMPTY_SHELL,
+  WIRE_STUDY_FRAME,
+  WIRE_STUDY_NOTE,
+  WIRE_STUDY_SIDE_EFFECT,
+  WIRE_STUDY_UNSYNCED_TOAST,
+} from "../assets/scripts/net/protocol/wireStudy";
+import {
   decodeWireIdle,
   decodeWireIdleClaim,
   formatWireIdle,
@@ -15667,6 +15682,183 @@ async function checkWs(): Promise<void> {
       WIRE_PRECOMPUTE_SIDE_EFFECT.indexOf("硬禁 3013") >= 0,
     "3103 note names the empty shell, the echo, and the banned cmds"
   );
+  assert(
+    WireCmd.study === 3030 &&
+      WireCmd.study !== WireCmd.battleReport &&
+      WireCmd.study !== WireCmd.preComputeStrength &&
+      WireCmd.study !== WireCmd.battleMatch &&
+      WireCmd.study !== WireCmd.chapterReport &&
+      WireCmd.study !== WireCmd.pvpData &&
+      WireCmd.study !== WireCmd.formation &&
+      WireCmd.study !== WireCmd.lineUp &&
+      WireCmd.pvpData === 18001,
+    "3030 stays off 3102, 3103, 3001, 3006, 18001, 3099 and 3101"
+  );
+  assert(bytesToHex(encodeFrame(3030)) === WIRE_STUDY_EMPTY_SHELL, "empty 3030 shell is d6 0b and is not the probe");
+  assert(WIRE_STUDY_EMPTY_SHELL === "04000000d60b0000", "3030 empty shell constant");
+  assert(WIRE_STUDY_FRAME === "0a000000d60b0000080010021801" && WIRE_STUDY_FRAME !== WIRE_STUDY_EMPTY_SHELL, "3030 example frame is not the empty shell");
+  assert(
+    bytesToHex(encodeFrame(3030, encodeWireStudyBody(0, 2, 1))) === WIRE_STUDY_FRAME &&
+      bytesToHex(encodeWireStudyBody(0, 2, 1)) === "080010021801",
+    "type=0 opponent_id=2 server_id=1 body is 08 00 10 02 18 01"
+  );
+  assert(
+    bytesToHex(encodeFrame(3030, encodeWireStudyBody(1, 2, 1))) === "0a000000d60b0000080110021801",
+    "type=1 keeps the same opponent and server"
+  );
+  assert(
+    bytesToHex(encodeFrame(3030, encodeWireStudyBody(0, 300, 1))) === "0b000000d60b0000080010ac021801",
+    "opponent_id 300 uses a two-byte varint"
+  );
+  assert(encodeWireMessage({ cmd: WIRE_STUDY_CMD }) === null, "bare 3030 is not encoded");
+  assert(encodeWireMessage({ cmd: WIRE_STUDY_CMD, data: { type: 0, opponentId: 0, serverId: 1 } }) === null, "opponent 0 is not encoded");
+  assert(encodeWireMessage({ cmd: WIRE_STUDY_CMD, data: { type: 0, opponentId: "", serverId: 1 } }) === null, "blank opponent is not encoded");
+  assert(readWireStudyQuery({}) === null && readWireStudyQuery(undefined) === null, "missing opponent does not invent an id");
+  const studyProbe = encodeWireMessage({ cmd: WIRE_STUDY_CMD, data: { type: 0, opponentId: 2, serverId: 1 } });
+  assert(
+    studyProbe !== null &&
+      studyProbe.cmdId === WireCmd.study &&
+      studyProbe.note === "type=0 opponent_id=2 server_id=1" &&
+      bytesToHex(studyProbe.bytes) === WIRE_STUDY_FRAME,
+    "filled 3030 encodes the example frame"
+  );
+  const studyBlankServer = encodeWireMessage({ cmd: WIRE_STUDY_CMD, data: { type: 0, opponentId: 2, serverId: "" } });
+  assert(
+    studyBlankServer !== null && bytesToHex(studyBlankServer.bytes) === WIRE_STUDY_FRAME,
+    "blank server_id still writes server 1"
+  );
+  const studyCross = encodeWireMessage({ cmd: WIRE_STUDY_CMD, data: { type: "1", opponentId: "2", serverId: "1" } });
+  assert(
+    studyCross !== null && bytesToHex(studyCross.bytes) === "0a000000d60b0000080110021801",
+    "type string 1 is the cross-server flag"
+  );
+  const studyOtherType = encodeWireMessage({ cmd: WIRE_STUDY_CMD, data: { type: 7, opponentId: 2, serverId: 1 } });
+  assert(
+    studyOtherType !== null && bytesToHex(studyOtherType.bytes) === WIRE_STUDY_FRAME,
+    "a type other than 1 stays local"
+  );
+  for (let studyBan = 0; studyBan < WIRE_STUDY_BANNED_CMDS.length; studyBan++) {
+    assert(encodeWireMessage({ cmd: WIRE_STUDY_BANNED_CMDS[studyBan] }) === null, WIRE_STUDY_BANNED_CMDS[studyBan] + " stays off the 3030 encoder");
+  }
+  const arenaPacket = encodeWireMessage({ cmd: "wire.18001" });
+  const claimPacket = encodeWireMessage({ cmd: "wire.3005" });
+  const hangPacket = encodeWireMessage({ cmd: "wire.3006", data: { chapterIdx: 1, firstPos: 1 } });
+  const matchPacket = encodeWireMessage({ cmd: "wire.3001" });
+  const studyFetchPacket = encodeWireMessage({ cmd: "wire.3102", data: { battleId: "77", type: "1" } });
+  const strengthStill = encodeWireMessage({ cmd: "wire.3103" });
+  assert(
+    arenaPacket !== null &&
+      arenaPacket.cmdId === 18001 &&
+      arenaPacket.cmdId !== 3030 &&
+      claimPacket !== null &&
+      claimPacket.cmdId === 3005 &&
+      hangPacket !== null &&
+      hangPacket.cmdId === 3006 &&
+      matchPacket !== null &&
+      matchPacket.cmdId === 3001 &&
+      studyFetchPacket !== null &&
+      studyFetchPacket.cmdId === 3102 &&
+      bytesToHex(studyFetchPacket.bytes) === "0b0000001e0c00000a023737120131" &&
+      strengthStill !== null &&
+      strengthStill.cmdId === 3103,
+    "18001 3005 3006 3001 3102 and 3103 stay on their own cmds"
+  );
+  assert(decodeWireStudy(null) === null, "missing 3030 body stays unsynced");
+  assert(decodeWireStudy(new Uint8Array([0x80])) === null, "bad 3030 varint does not become a report");
+  const emptyStudy = decodeWireStudy(new Uint8Array(0));
+  assert(
+    emptyStudy !== null &&
+      emptyStudy.empty &&
+      emptyStudy.report === null &&
+      emptyStudy.type === null &&
+      formatWireStudy(emptyStudy) === "切磋 " + WIRE_STUDY_EMPTY &&
+      formatWireStudy(emptyStudy).indexOf("type=0") < 0,
+    "empty 3030 body is 已同步空表 and does not invent type 0"
+  );
+  assert(formatWireStudy(null) === "切磋 " + WIRE_STUDY_UNSYNCED_TOAST, "unsynced 3030 toast text");
+  const studyTypeOnly = decodeWireStudy(fieldVarint(2, 0));
+  assert(
+    studyTypeOnly !== null &&
+      !studyTypeOnly.empty &&
+      studyTypeOnly.report === null &&
+      studyTypeOnly.type === 0 &&
+      formatWireStudy(studyTypeOnly).indexOf("type=0") >= 0 &&
+      formatWireStudy(studyTypeOnly).indexOf("没有 report") >= 0,
+    "present 3030 type 0 stays 0 and does not invent a report"
+  );
+  const studyNeg = decodeWireStudy(fieldNeg1(2));
+  assert(studyNeg !== null && studyNeg.type === -1 && formatWireStudy(studyNeg).indexOf("type=-1") >= 0, "present 3030 type -1 stays -1");
+  const studyReportBody = concatBytes(fieldVarint(1, 77), roundBody);
+  const studyDecoded = decodeWireStudy(concatBytes(fieldBytes(1, studyReportBody), fieldVarint(2, 0)));
+  const studyVia3001 = decodeWireBattleMatch(fieldBytes(1, roundBody));
+  assert(
+    studyDecoded !== null &&
+      studyDecoded.report !== null &&
+      studyVia3001 !== null &&
+      studyVia3001.report !== null &&
+      studyDecoded.type === 0 &&
+      studyDecoded.report.battleId === 77 &&
+      wireStudyBattleIdText(studyDecoded) === "77" &&
+      studyDecoded.report.rounds.length === studyVia3001.report.rounds.length &&
+      studyDecoded.report.rounds[0].actions[0].skillId === 9 &&
+      studyDecoded.report.atkHeroes[0].heroId === 10105008,
+    "3030 report reuses the 3001 BattleReport decode, including rounds and battle_id 77"
+  );
+  const studyPlan = planWireSpineReplay(studyDecoded.report, null, 1);
+  const studyViaPlan = planWireSpineReplay(studyVia3001.report, null, 1);
+  assert(
+    studyPlan.stems.join(",") === studyViaPlan.stems.join(",") &&
+      studyPlan.beats.length === studyViaPlan.beats.length &&
+      studyPlan.beats[1].line === studyViaPlan.beats[1].line &&
+      studyPlan.stems.indexOf("bisha") < 0,
+    "3030 rounds reuse the 3001 spine plan"
+  );
+  assert(decodeWireStudy(fieldBytes(1, Uint8Array.from([0x80]))) === null, "a bad 3030 report blob does not replace the last snapshot");
+  const studyNoType = decodeWireStudy(fieldBytes(1, studyReportBody));
+  assert(
+    studyNoType !== null &&
+      studyNoType.report !== null &&
+      studyNoType.type === null &&
+      formatWireStudy(studyNoType).indexOf("type=") < 0 &&
+      wireStudyBattleIdText(studyNoType) === "77",
+    "a missing 3030 type is not written as 0"
+  );
+  assert(wireStudyBattleIdText(null) === null && wireStudyBattleIdText(emptyStudy) === null, "missing battle_id is not filled with 1 or 0");
+  assert(
+    WIRE_STUDY_NOTE.indexOf("0a000000d60b0000080010021801") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("04000000d60b0000") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("不进 pullIdle") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("不自动发 3102") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("STUDY") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("chapterId") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("3100") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("3097") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("3098") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("3013") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("3002") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("3005") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("3008") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("3011") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("1201") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("1202") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("18001") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("decodeWireBattleReport") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("planWireSpineReplay") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("不改 Boot") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("server.id") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("不预填") >= 0 &&
+      WIRE_STUDY_NOTE.indexOf("3001/3006") >= 0 &&
+      WIRE_STUDY_SIDE_EFFECT.indexOf("STUDY") >= 0 &&
+      WIRE_STUDY_SIDE_EFFECT.indexOf("落库") >= 0 &&
+      WIRE_STUDY_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_STUDY_SIDE_EFFECT.indexOf("无扣钻") >= 0 &&
+      WIRE_STUDY_SIDE_EFFECT.indexOf("不回拉 3007") >= 0 &&
+      WIRE_STUDY_SIDE_EFFECT.indexOf("不自动发 3102") >= 0 &&
+      WIRE_STUDY_SIDE_EFFECT.indexOf("不能是自己") >= 0,
+    "3030 note names the frame, the persist, and the banned cmds"
+  );
   const loginBody = encodeObservedLoginBody(960011, 1792466798);
   assert(
     bytesToHex(loginBody) === "2a0a31373932343636373938108bcc3a080718023a0d6d787a672d7765622d3130303132086c6f63616c646576",
@@ -16854,9 +17046,10 @@ async function checkWs(): Promise<void> {
       assert(!WireSession.pullChapterReport(1, 1), "3006 does not send without 3007 idx");
       assert(!WireSession.pullBattleReport("1", "1"), "3102 does not send without 3007 idx");
       assert(!WireSession.pullPreComputeStrength(), "3103 does not send without 3007 idx");
+      assert(!WireSession.pullStudy(0, 2, 1), "3030 does not send without 3007 idx");
       WireSession.nowIdx = savedNow;
       WireSession.maxIdx = savedMax;
-      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102 or 3103 on the wire");
+      assert(roleSockets[0].sent.length === sentBeforeNoChapter, "missing 3007 does not put 3010, 3012, 3006, 3102, 3103 or 3030 on the wire");
       const sentBeforeQuick = roleSockets[0].sent.length;
       const goldBeforeQuick = Session.gold;
       const quickSentBefore = roleSockets[0].sent.length;
@@ -17063,6 +17256,63 @@ async function checkWs(): Promise<void> {
         "3102 3100 3097 3098 3030 and 3013 do not replace the 3103 fighting"
       );
       assert(roleSockets[0].sent.length === sentBeforeStrength + 2, "a 3102 frame on the socket does not make the client send another 3103");
+      const sentBeforeStudy = roleSockets[0].sent.length;
+      const goldBeforeStudy = Session.gold;
+      const diamondBeforeStudy = Session.diamond;
+      const nowBeforeStudy = WireSession.nowIdx;
+      const maxBeforeStudy = WireSession.maxIdx;
+      const studySelf = Session.role ? Session.role.roleId : 0;
+      assert(!WireSession.pullStudy(0, studySelf, 1), "3030 does not spar with self");
+      assert(!WireSession.pullStudy(0, 0, 1), "3030 does not send without opponent_id");
+      assert(!WireSession.pullStudy(), "3030 does not send a bare frame");
+      assert(roleSockets[0].sent.length === sentBeforeStudy, "empty opponent and self stay off the wire");
+      const studyOther = studySelf === 2 ? 3 : 2;
+      assert(WireSession.pullStudy(0, studyOther, 1), "3030 pulls when the opponent is another role");
+      assert(roleSockets[0].sent.length === sentBeforeStudy + 1, "3030 is one frame and does not resend 3102 or 3103");
+      const studySent = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeStudy] as ArrayBuffer));
+      assert(
+        studySent === bytesToHex(encodeFrame(WireCmd.study, encodeWireStudyBody(0, studyOther, 1))) &&
+          studySent !== WIRE_STUDY_EMPTY_SHELL &&
+          studySent.indexOf("d60b0000") >= 0,
+        "3030 frame is type 0, the other role, server 1, and not the empty shell"
+      );
+      const studyWinBody = concatBytes(fieldBytes(1, concatBytes(fieldVarint(1, 77), roundBody)), fieldVarint(2, 0));
+      roleSockets[0].push(encodeFrame(WireCmd.study, studyWinBody));
+      assert(
+        WireSession.hasStudy() &&
+          WireSession.study !== null &&
+          WireSession.study.report !== null &&
+          WireSession.study.report.battleId === 77 &&
+          WireSession.study.report.rounds.length === 1 &&
+          WireSession.study.type === 0 &&
+          wireStudyBattleIdText(WireSession.study) === "77" &&
+          resolveWireBattleWin(WireSession.study.report, studySelf) === true &&
+          WireSession.nowIdx === nowBeforeStudy &&
+          WireSession.maxIdx === maxBeforeStudy &&
+          Session.gold === goldBeforeStudy &&
+          Session.diamond === diamondBeforeStudy &&
+          roleSockets[0].sent.length === sentBeforeStudy + 1,
+        "3030 keeps the persisted report, does not pull 3007 or 3102, and does not write gold or diamond"
+      );
+      const studyRounds = WireSession.study.report.rounds.length;
+      roleSockets[0].push(encodeFrame(3005));
+      roleSockets[0].push(encodeFrame(3013, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
+      assert(
+        WireSession.study !== null &&
+          WireSession.study.report !== null &&
+          WireSession.study.report.battleId === 77 &&
+          WireSession.study.report.rounds.length === studyRounds,
+        "3005, 3013 and mock 1201 do not replace the 3030 report"
+      );
+      assert(roleSockets[0].sent.length === sentBeforeStudy + 1, "3030 reply does not auto-send 3102");
+      assert(WireSession.pullBattleReport("77", "1"), "3102 can re-fetch the 3030 battle_id");
+      assert(roleSockets[0].sent.length === sentBeforeStudy + 2, "the 3102 follow-up is one extra frame");
+      const studyFollow = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeStudy + 1] as ArrayBuffer));
+      assert(
+        studyFollow === "0b0000001e0c00000a023737120131" && studyFollow.indexOf("d60b0000") < 0,
+        "3102 follow-up uses battle_id 77 type 1 and is not another 3030"
+      );
       roleSockets[0].push(encodeFrame(CmdId.stageEnter, fieldVarint(1, 1)));
       assert(WireSession.battleMatch !== null && WireSession.battleMatch.empty, "mock 1201 does not replace the 3001 report");
       const sentBeforeBannedBattle = roleSockets[0].sent.length;
@@ -17121,6 +17371,12 @@ async function checkWs(): Promise<void> {
         if (idleFetchHex.indexOf("1e0c0000") >= 0) fetchFramesInIdle += 1;
       }
       assert(fetchFramesInIdle === 0, "pullIdle does not send c2s 3102");
+      let studyFramesInIdle = 0;
+      for (let idleS = 0; idleS < 64; idleS++) {
+        const idleStudyHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + idleS] as ArrayBuffer));
+        if (idleStudyHex.indexOf("d60b0000") >= 0) studyFramesInIdle += 1;
+      }
+      assert(studyFramesInIdle === 0, "pullIdle does not send c2s 3030");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 1] as ArrayBuffer)) === "04000000983a0000",
         "pullIdle sends empty c2s 15000 after 3004"
