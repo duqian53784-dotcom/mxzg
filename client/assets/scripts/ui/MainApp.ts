@@ -168,6 +168,7 @@ import { buildWireIdlePage, WireIdlePage } from "./WireIdlePage";
 import { buildWireBagPage, WireBagPage } from "./WireBagPage";
 import { buildWireMailPage, WireMailPage } from "./WireMailPage";
 import { buildWireHeroPage, WireHeroPage } from "./WireHeroPage";
+import { WIRE_BATTLE_UNSYNCED_TOAST } from "../net/protocol/wireBattle";
 import { buildWireMainlinePage, WireMainlinePage } from "./WireMainlinePage";
 import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
 import { WIRE_HERO_UNSYNCED_TOAST } from "../net/protocol/wireHero";
@@ -1307,7 +1308,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 打开关卡列表。战斗和结算在 MainlinePage 里，不改场景。真服有 idx 时另开只读页，不发进关。 */
+  /** 打开关卡列表。Mock 战斗在 MainlinePage。真服有 idx 时打开主线页，挑战在页内发 3001。 */
   private openMainline(): void {
     GameLog.shared.info("MainApp", "click mainline");
     if (Session.source === "wire") {
@@ -1935,11 +1936,11 @@ export class MainApp extends Component {
     return true;
   }
 
-  /** 两个 idx 都没有就停在主城。有任意一个（含 max_idx=0）则放行，页面用 WireMainlinePage。 */
+  /** 两个 idx 都没有就 Toast「真服未同步」，不打开 Mock。有任意一个（含 max_idx=0）则放行。 */
   private blockWireMainline(): boolean {
     if (WireSession.hasChapter()) return false;
     GameLog.shared.info("MainApp", "wire mainline unsynced");
-    this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
+    this.shell?.showToast(WIRE_BATTLE_UNSYNCED_TOAST, 2200);
     return true;
   }
 
@@ -3925,6 +3926,9 @@ export class MainApp extends Component {
     const page = buildWireMainlinePage({
       alive: () => this.isValid,
       close: () => this.back(),
+      showToast: (text) => this.shell?.showToast(text, 2200),
+      roleName: () => Session.role?.name || "勇者",
+      connected: () => this.cityNet().state === "connected",
     });
     this.mainline = page;
     return page.node;

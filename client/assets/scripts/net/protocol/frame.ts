@@ -31,6 +31,12 @@ export const WireCmd = {
    */
   chapterData: 3007,
   /**
+   * c2s 空体。Battle.proto 的 GReqBattleMatch。主线页点「挑战」才发。
+   * 整帧 `04 00 00 00 b9 0b 00 00`。不进 pullIdle，不接活动链末。
+   * s2c 是 GResBattleMatch。不是占位 stage.enter（1201），也不是错误码 UNKNOWN_CMD。
+   */
+  battleMatch: 3001,
+  /**
    * c2s 空体。Battle.proto 的 GReqChapterItemList。进主城、空 c2s 3007 之后发。
    * s2c 回 reward_time / max_reward_time。不是占位 idle.query（1301）。
    */

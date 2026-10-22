@@ -10,6 +10,12 @@ import {
   WireChapterProgress,
 } from "./protocol/wireChapter";
 import {
+  decodeWireBattleMatch,
+  formatWireBattleMatch,
+  WIRE_BATTLE_MATCH_CMD,
+  WireBattleMatch,
+} from "./protocol/wireBattle";
+import {
   decodeWireIdle,
   decodeWireIdleClaim,
   WIRE_IDLE_CLAIM_CMD,
@@ -666,6 +672,10 @@ export class WireSession {
   static nowIdx: number | null = null;
   /** s2c 3007 字段 3。0 是服上的 0。没出现过是 null。 */
   static maxIdx: number | null = null;
+  /** 最近一帧能解开的 s2c 3001。null 表示还没收到。空包体是已同步空表。 */
+  static battleMatch: WireBattleMatch | null = null;
+  /** 每处理一帧能解开的 s2c 3001 加一。主线页用来认领回包。 */
+  static battleSerial = 0;
   /** s2c 3004 字段 1。0 是服上的 0。没出现过是 null。 */
   static rewardTime: number | null = null;
   /** s2c 3004 字段 2。0 是服上的 0。没出现过是 null。 */
@@ -1001,6 +1011,7 @@ export class WireSession {
   private static watched: NetClient | null = null;
   private static offProfile: (() => void) | null = null;
   private static offChapter: (() => void) | null = null;
+  private static offBattle: (() => void) | null = null;
   private static offIdle: (() => void) | null = null;
   private static offIdleClaim: (() => void) | null = null;
   private static offBag: (() => void) | null = null;
@@ -1216,6 +1227,7 @@ export class WireSession {
       this.watched === net &&
       this.offProfile &&
       this.offChapter &&
+      this.offBattle &&
       this.offIdle &&
       this.offIdleClaim &&
       this.offBag &&
@@ -1292,6 +1304,7 @@ export class WireSession {
     this.watched = net;
     this.offProfile = net.subscribe(WIRE_ROLE_CMD, (msg) => this.onRole(msg.data));
     this.offChapter = net.subscribe(WIRE_CHAPTER_CMD, (msg) => this.onChapter(msg.data));
+    this.offBattle = net.subscribe(WIRE_BATTLE_MATCH_CMD, (msg) => this.onBattleMatch(msg.data));
     this.offIdle = net.subscribe(WIRE_IDLE_CMD, (msg) => this.onIdle(msg.data));
     this.offIdleClaim = net.subscribe(WIRE_IDLE_CLAIM_CMD, (msg) => this.onIdleClaim(msg.data));
     this.offBag = net.subscribe(WIRE_BAG_CMD, (msg) => this.onBag(msg.data));
@@ -1376,6 +1389,8 @@ export class WireSession {
   static prepareCity(): void {
     this.nowIdx = null;
     this.maxIdx = null;
+    this.battleMatch = null;
+    this.battleSerial = 0;
     this.rewardTime = null;
     this.maxRewardTime = null;
     this.claimNote = "";
@@ -1525,6 +1540,8 @@ export class WireSession {
       this.resetHeroGather();
       this.nowIdx = null;
       this.maxIdx = null;
+      this.battleMatch = null;
+      this.battleSerial = 0;
       this.rewardTime = null;
       this.maxRewardTime = null;
       this.claimNote = "";
@@ -1674,6 +1691,8 @@ export class WireSession {
     this.resetHeroGather();
     this.nowIdx = null;
     this.maxIdx = null;
+    this.battleMatch = null;
+    this.battleSerial = 0;
     this.rewardTime = null;
     this.maxRewardTime = null;
     this.claimNote = "";
@@ -1869,6 +1888,22 @@ export class WireSession {
   /** 主城主线入口。两个 idx 都没出现过就不打开只读页。max_idx=0 算有。 */
   static hasChapter(): boolean {
     return wireChapterHasIdx({ nowIdx: this.nowIdx, maxIdx: this.maxIdx });
+  }
+
+  /**
+   * 主线页「挑战」。空 c2s 3001，GReqBattleMatch。
+   * 插在已合的 3007 之后；3101 若登录链已经拉过，这里不重发。
+   * 不进 pullIdle，不接活动链末，不夹活动号。
+   * 没连上或还没有 3007 idx 时返回 false。
+   * 不发 3002、3005、3008、3011、3013、3100、3097、3098、18002、18001、1201、1202。
+   * 不重发 3004、3099、3101、3203。硬禁 4601、29001。
+   */
+  static challengeMainline(): boolean {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return false;
+    if (!this.hasChapter()) return false;
+    net.send(WIRE_BATTLE_MATCH_CMD);
+    return true;
   }
 
   /**
@@ -2766,6 +2801,29 @@ export class WireSession {
       return;
     }
     this.commitChapter();
+  }
+
+  private static onBattleMatch(data: unknown): void {
+    let snap: WireBattleMatch | null = null;
+    try {
+      snap = decodeWireBattleMatch(wireBody(data));
+    } catch (err) {
+      GameLog.shared.error("Wire", "s2c 3001 解不开 " + (err instanceof Error ? err.message : "未知错误"));
+      return;
+    }
+    if (!snap) {
+      GameLog.shared.info("Wire", "s2c 3001 解不开，战报不改");
+      return;
+    }
+    this.battleMatch = snap;
+    this.battleSerial += 1;
+    const note = "s2c 3001 " + formatWireBattleMatch(snap);
+    GameLog.shared.info("Wire", note);
+    if (snap.report && snap.report.win === true) {
+      GameLog.shared.info("Wire", "s2c 3001 胜，再拉 3007");
+      this.pullChapter();
+    }
+    this.emit();
   }
 
   private static onIdle(data: unknown): void {
@@ -5020,6 +5078,10 @@ export class WireSession {
     if (this.offChapter) {
       this.offChapter();
       this.offChapter = null;
+    }
+    if (this.offBattle) {
+      this.offBattle();
+      this.offBattle = null;
     }
     if (this.offIdle) {
       this.offIdle();

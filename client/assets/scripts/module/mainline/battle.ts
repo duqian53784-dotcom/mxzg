@@ -89,7 +89,14 @@ export function challengeBlock(stageId: number, current: number): string | null 
   return null;
 }
 
-export function planBattle(input: { stageId: number; level: number; roleName: string; retreat?: boolean }): BattlePlan {
+export function planBattle(input: {
+  stageId: number;
+  level: number;
+  roleName: string;
+  retreat?: boolean;
+  /** 真服战报已有胜负时用。不传则仍按关卡和等级比较。 */
+  forced?: "win" | "lose";
+}): BattlePlan {
   const stageId = normalizeStageId(input.stageId);
   const level = normalizeLevel(input.level);
   const roleName = (input.roleName || "").trim() || "勇者";
@@ -102,7 +109,7 @@ export function planBattle(input: { stageId: number; level: number; roleName: st
       rounds: [frame(1, "主动撤退", "none", roleName, [1, 1, 1], [1, 1, 1])],
     };
   }
-  if (stageId > level) {
+  if (input.forced === "lose" || (input.forced !== "win" && stageId > level)) {
     return {
       stageId,
       level,

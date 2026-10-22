@@ -22,6 +22,7 @@
  *
  * 进主城后另外几帧也在这里编：空的 c2s 2001（wire.2001）、空的 c2s 5001（wire.5001）、
  * 空的 c2s 3007（wire.3007）、空的 c2s 3004（wire.3004）、空的 c2s 15000（wire.15000）、
+ * 空的 c2s 3001（wire.3001，GReqBattleMatch）只在主线页点挑战时编，不进 pullIdle，不接在活动链末。
  * c2s 4001 page=1（wire.4001，包体 `08 01`）、空的 c2s 17000（wire.17000）、空的 c2s 12010（wire.12010）、
  * 空的 c2s 18001（wire.18001，GReqPvpData）、空的 c2s 22000（wire.22000，GReqSevenDayLoginData）、
  * 空的 c2s 21010（wire.21010，GReqSevenDayTargetList）、
@@ -166,6 +167,7 @@ import { WIRE_CHRISTMAS_GIFT_CMD } from "./wireChristmasGift";
 import { WIRE_SPRING_OUTING_CMD } from "./wireSpringOuting";
 import { WIRE_CHRISTMAS_MISSION_CMD } from "./wireChristmasMission";
 import { WIRE_MAGIC_TOWER_LEVEL_RANK_CMD } from "./wireMagicTowerLevelRank";
+import { WIRE_BATTLE_MATCH_CMD } from "./wireBattle";
 import { WIRE_SPRING_OUTING_GRID_CMD } from "./wireSpringOutingGrid";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
@@ -395,6 +397,13 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     return {
       cmdId: WireCmd.chapterData,
       bytes: encodeFrame(WireCmd.chapterData),
+      note: "空体",
+    };
+  }
+  if (cmd === WIRE_BATTLE_MATCH_CMD) {
+    return {
+      cmdId: WireCmd.battleMatch,
+      bytes: encodeFrame(WireCmd.battleMatch),
       note: "空体",
     };
   }
