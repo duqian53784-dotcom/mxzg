@@ -1314,6 +1314,20 @@ import {
   WIRE_CHRISTMAS_MISSION_UNSYNCED_TOAST,
   wireChristmasMissionNote,
 } from "../assets/scripts/net/protocol/wireChristmasMission";
+import {
+  decodeWireMagicTowerLevelRank,
+  formatWireMagicTowerLevelRankLine,
+  WIRE_MAGIC_TOWER_LEVEL_RANK_BANNED_CMDS,
+  WIRE_MAGIC_TOWER_LEVEL_RANK_CMD,
+  WIRE_MAGIC_TOWER_LEVEL_RANK_EMPTY,
+  WIRE_MAGIC_TOWER_LEVEL_RANK_FIELD_NOTE,
+  WIRE_MAGIC_TOWER_LEVEL_RANK_FRAME,
+  WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE,
+  WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_TITLE,
+  WIRE_MAGIC_TOWER_LEVEL_RANK_SIDE_EFFECT,
+  WIRE_MAGIC_TOWER_LEVEL_RANK_UNSYNCED_TOAST,
+  wireMagicTowerLevelRankNote,
+} from "../assets/scripts/net/protocol/wireMagicTowerLevelRank";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -14115,6 +14129,195 @@ async function checkWs(): Promise<void> {
       linkNote.indexOf("不写钻石") >= 0,
     "76081 note keeps the side effect and does not write gold or diamond"
   );
+
+  assert(
+    WireCmd.magicTowerLevelRank === 76520 &&
+      WireCmd.magicTowerLevelRank !== 76081 &&
+      WireCmd.magicTowerLevelRank !== 76501 &&
+      WireCmd.magicTowerLevelRank !== 76502 &&
+      WireCmd.magicTowerLevelRank !== 76503 &&
+      WireCmd.magicTowerLevelRank !== 76504 &&
+      WireCmd.magicTowerLevelRank !== 76505 &&
+      WireCmd.magicTowerLevelRank !== 76506 &&
+      WireCmd.magicTowerLevelRank !== 76543 &&
+      WireCmd.magicTowerLevelRank !== 76544 &&
+      WireCmd.magicTowerLevelRank !== 76251 &&
+      WireCmd.magicTowerLevelRank !== 76542 &&
+      WireCmd.magicTowerLevelRank !== 75001 &&
+      WireCmd.magicTowerLevelRank !== 73002 &&
+      WireCmd.magicTowerLevelRank !== 71001 &&
+      WireCmd.magicTowerLevelRank !== 20011 &&
+      WireCmd.magicTowerLevelRank !== 74121 &&
+      WireCmd.magicTowerLevelRank !== 74122 &&
+      WireCmd.magicTowerLevelRank !== 4601 &&
+      WireCmd.magicTowerLevelRank !== 29001 &&
+      WireCmd.magicTowerLevelRank !== 5001 &&
+      WireCmd.magicTowerLevelRank !== 51001 &&
+      WireCmd.magicTowerLevelRank !== 68001 &&
+      WireCmd.magicTowerLevelRank !== 70001,
+    "online 76520 stays off the write cmds and the earlier idle pulls"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.magicTowerLevelRank)) === WIRE_MAGIC_TOWER_LEVEL_RANK_FRAME, "empty c2s 76520");
+  assert(bytesToHex(encodeFrame(76520)) === "04000000e82a0100", "empty c2s 76520 hex");
+  assert(WIRE_MAGIC_TOWER_LEVEL_RANK_FRAME === "04000000e82a0100", "76520 frame constant");
+  assert(bytesToHex(encodeFrame(76520)) !== "0400000031290100", "76520 is not the 76081 frame constant");
+  assert(bytesToHex(encodeFrame(76520)) !== "04000000fe2a0100", "76520 is not the 76542 frame");
+  assert(bytesToHex(encodeFrame(76251)) === "04000000db290100" && bytesToHex(encodeFrame(76251)) !== "04000000e82a0100", "76251 is not the 76520 frame");
+  for (let i = 0; i < WIRE_MAGIC_TOWER_LEVEL_RANK_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_MAGIC_TOWER_LEVEL_RANK_BANNED_CMDS[i] }) === null, WIRE_MAGIC_TOWER_LEVEL_RANK_BANNED_CMDS[i] + " is not encoded");
+  }
+  const rankOwn = encodeWireMessage({ cmd: WIRE_MAGIC_TOWER_LEVEL_RANK_CMD });
+  assert(
+    rankOwn !== null &&
+      bytesToHex(rankOwn.bytes) === "04000000e82a0100" &&
+      bytesToHex(rankOwn.bytes) !== "0400000031290100" &&
+      bytesToHex(rankOwn.bytes) !== "04000000fe2a0100" &&
+      bytesToHex(rankOwn.bytes) !== "04000000db290100",
+    "wire.76520 encodes the empty 76520 frame and not 76081 or the banned cmds"
+  );
+  assert(WIRE_MAGIC_TOWER_LEVEL_RANK_CMD === "wire.76520", "magic tower level rank wire cmd");
+  assert(WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_TITLE === "关卡榜（真服只读）", "readonly magic tower level rank title");
+  assert(WIRE_MAGIC_TOWER_LEVEL_RANK_UNSYNCED_TOAST === "真服未同步", "unsynced magic tower level rank toast");
+  assert(WIRE_MAGIC_TOWER_LEVEL_RANK_EMPTY === "已同步空表", "empty magic tower level rank label");
+  assert(
+    WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("self") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("list") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("rid") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("server_id") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("name") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("border_id") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("head_id") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("pass_level") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("pass_time") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("rank") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("76501") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("76251") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("76543") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("76081") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_READONLY_NOTE.indexOf("无 page") >= 0,
+    "76520 readonly note lists the fields and the hard bans"
+  );
+  assert(
+    WIRE_MAGIC_TOWER_LEVEL_RANK_SIDE_EFFECT.indexOf("纯读") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_SIDE_EFFECT.indexOf("无养成写") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_SIDE_EFFECT.indexOf("04000000e82a0100") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_SIDE_EFFECT.indexOf("与 76081 分开发") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_SIDE_EFFECT.indexOf("不并入 76081") >= 0,
+    "76520 side effect is a pure read and stays off 76081"
+  );
+  assert(
+    WIRE_MAGIC_TOWER_LEVEL_RANK_FIELD_NOTE.indexOf("self") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_FIELD_NOTE.indexOf("list") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_FIELD_NOTE.indexOf("rid") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_MAGIC_TOWER_LEVEL_RANK_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "76520 field note does not invent missing numbers"
+  );
+  const rankEmpty = decodeWireMagicTowerLevelRank(new Uint8Array(0));
+  assert(
+    rankEmpty !== null &&
+      rankEmpty.self === null &&
+      rankEmpty.list === null &&
+      rankEmpty.marks.length === 0 &&
+      formatWireMagicTowerLevelRankLine(rankEmpty) === WIRE_MAGIC_TOWER_LEVEL_RANK_EMPTY &&
+      formatWireMagicTowerLevelRankLine(rankEmpty).indexOf("self=") < 0 &&
+      formatWireMagicTowerLevelRankLine(rankEmpty).indexOf("list=") < 0,
+    "empty 76520 body is 已同步空表 and does not invent zeros"
+  );
+  assert(decodeWireMagicTowerLevelRank(null) === null, "missing 76520 body stays unsynced");
+  assert(decodeWireMagicTowerLevelRank(Uint8Array.from([0x80])) === null, "bad 76520 varint returns null");
+  const rankLevelZero = decodeWireMagicTowerLevelRank(fieldBytes(1, fieldVarint(6, 0)));
+  assert(
+    rankLevelZero !== null &&
+      rankLevelZero.self !== null &&
+      rankLevelZero.self.passLevel === 0 &&
+      rankLevelZero.self.rid === null &&
+      rankLevelZero.list === null &&
+      formatWireMagicTowerLevelRankLine(rankLevelZero) === "self=pass_level=0" &&
+      formatWireMagicTowerLevelRankLine(rankLevelZero).indexOf("rid=") < 0 &&
+      formatWireMagicTowerLevelRankLine(rankLevelZero).indexOf("list=") < 0,
+    "present 76520 pass_level zero stays zero and omits rid"
+  );
+  const rankNeg = decodeWireMagicTowerLevelRank(fieldBytes(1, fieldNeg1(8)));
+  assert(
+    rankNeg !== null &&
+      rankNeg.self !== null &&
+      rankNeg.self.rank === -1 &&
+      formatWireMagicTowerLevelRankLine(rankNeg) === "self=rank=-1" &&
+      formatWireMagicTowerLevelRankLine(rankNeg).indexOf("rid=") < 0,
+    "76520 rank -1 stays -1"
+  );
+  const rankList = decodeWireMagicTowerLevelRank(fieldBytes(2, concatBytes(fieldVarint(1, 0), fieldBytes(3, Uint8Array.from([0xe7, 0x94, 0xb2])))));
+  assert(
+    rankList !== null &&
+      rankList.self === null &&
+      rankList.list !== null &&
+      rankList.list.length === 1 &&
+      rankList.list[0].rid === 0 &&
+      rankList.list[0].name === "甲" &&
+      rankList.list[0].serverId === null &&
+      formatWireMagicTowerLevelRankLine(rankList) === "list=rid=0,name=甲" &&
+      formatWireMagicTowerLevelRankLine(rankList).indexOf("self=") < 0 &&
+      formatWireMagicTowerLevelRankLine(rankList).indexOf("server_id=") < 0,
+    "76520 list keeps rid zero and name and omits missing numbers"
+  );
+  const rankUnknown = decodeWireMagicTowerLevelRank(fieldVarint(9, 5));
+  assert(
+    rankUnknown !== null &&
+      rankUnknown.self === null &&
+      rankUnknown.list === null &&
+      formatWireMagicTowerLevelRankLine(rankUnknown) === "字段9=5" &&
+      formatWireMagicTowerLevelRankLine(rankUnknown).indexOf("self=") < 0 &&
+      formatWireMagicTowerLevelRankLine(rankUnknown).indexOf("list=") < 0,
+    "76520 unknown field stays a mark and does not invent named zeros"
+  );
+  const rankVarintSelf = decodeWireMagicTowerLevelRank(fieldVarint(1, 9));
+  assert(
+    rankVarintSelf !== null &&
+      rankVarintSelf.self === null &&
+      formatWireMagicTowerLevelRankLine(rankVarintSelf) === "字段1=9" &&
+      formatWireMagicTowerLevelRankLine(rankVarintSelf).indexOf("self=") < 0 &&
+      formatWireMagicTowerLevelRankLine(rankVarintSelf).indexOf("rid=") < 0,
+    "76520 field 1 varint stays a mark and is not a self row"
+  );
+  const rankBytesRid = decodeWireMagicTowerLevelRank(fieldBytes(1, fieldBytes(1, Uint8Array.from([0x61]))));
+  assert(
+    rankBytesRid !== null &&
+      rankBytesRid.self !== null &&
+      rankBytesRid.self.rid === null &&
+      formatWireMagicTowerLevelRankLine(rankBytesRid) === "self=字段1=a" &&
+      formatWireMagicTowerLevelRankLine(rankBytesRid).indexOf("rid=") < 0,
+    "76520 bytes on rid stay a mark and are not written as 0"
+  );
+  const rankEmptyRow = decodeWireMagicTowerLevelRank(fieldBytes(1, new Uint8Array(0)));
+  assert(
+    rankEmptyRow !== null &&
+      rankEmptyRow.self !== null &&
+      formatWireMagicTowerLevelRankLine(rankEmptyRow) === "self=空",
+    "76520 empty self row stays empty"
+  );
+  const rankSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.magicTowerLevelRank, fieldVarint(9, 0)), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    rankSticky.frames.length === 2 &&
+      rankSticky.frames[0].cmdId === 76520 &&
+      rankSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireMagicTowerLevelRank(rankSticky.frames[0].body)?.marks[0]?.text === "0",
+    "sticky 76520 frame stops at its length prefix"
+  );
+  const rankNote = wireMagicTowerLevelRankNote(rankEmpty || { self: null, list: null, marks: [] });
+  assert(
+    rankNote.indexOf(WIRE_MAGIC_TOWER_LEVEL_RANK_SIDE_EFFECT) >= 0 &&
+      rankNote.indexOf("不写金币") >= 0 &&
+      rankNote.indexOf("不写钻石") >= 0,
+    "76520 note keeps the side effect and does not write gold or diamond"
+  );
   assert(
     bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
@@ -15241,7 +15444,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 62, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once then 75901 once then 76001 once then 76101 once then 76301 once then 76081 once and does not resend 76301 or 76101 or 76001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 63, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once then 75901 once then 76001 once then 76101 once then 76301 once then 76081 once then 76520 once and does not resend 76081 or 76301 or 76101 or 76001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -16573,6 +16776,32 @@ async function checkWs(): Promise<void> {
         }
         assert(linkHex !== "040000000d2a0100", "pullIdle 76081 frame is not merged into the 76301 cmd");
       }
+
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 62] as ArrayBuffer)) === "04000000e82a0100",
+        "pullIdle sends empty c2s 76520 after 76081 at frame index 62"
+      );
+      {
+        const rankHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 62] as ArrayBuffer));
+        const notFrames = [
+          "0400000031290100",
+          "040000000d2a0100",
+          "04000000fe2a0100",
+          "04000000d52a0100",
+          "04000000d62a0100",
+          "04000000d72a0100",
+          "04000000d82a0100",
+          "04000000d92a0100",
+          "04000000da2a0100",
+          "04000000ff2a0100",
+          "04000000002b0100",
+          "04000000db290100",
+        ];
+        for (let n = 0; n < notFrames.length; n++) {
+          assert(rankHex !== notFrames[n], "pullIdle 76520 frame is not " + notFrames[n]);
+        }
+        assert(rankHex !== "0400000031290100", "pullIdle 76520 frame is not merged into the 76081 cmd");
+      }
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -16677,7 +16906,7 @@ async function checkWs(): Promise<void> {
           "04000000122a0100": true,
           "04000000132a0100": true,
           "04000000142a0100": true,
-          "04000000e82a0100": true,
+          "04000000db290100": true,
         };
         let weekendFrames = 0;
         let godRelicFrames = 0;
@@ -16695,9 +16924,10 @@ async function checkWs(): Promise<void> {
         let christmasFrames = 0;
         let springFrames = 0;
         let linkFrames = 0;
+        let rankFrames = 0;
         let astrolabeFrames = 0;
         let reikiFrames = 0;
-        for (let i = 0; i < 62; i++) {
+        for (let i = 0; i < 63; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -16726,6 +16956,7 @@ async function checkWs(): Promise<void> {
           if (hex === "0400000045290100") christmasFrames += 1;
           if (hex === "040000000d2a0100") springFrames += 1;
           if (hex === "0400000031290100") linkFrames += 1;
+          if (hex === "04000000e82a0100") rankFrames += 1;
           if (hex === "04000000a1090100") astrolabeFrames += 1;
           if (hex === "0400000071110100") reikiFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
@@ -16759,11 +16990,12 @@ async function checkWs(): Promise<void> {
             christmasFrames === 1 &&
             springFrames === 1 &&
             linkFrames === 1 &&
+            rankFrames === 1 &&
             astrolabeFrames === 1 &&
             reikiFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once, 75131 once and 75801 once and 75901 once and 76001 once and 76101 once and 76301 once and 76081 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 76101 or 76001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76002 76003 76004 76005 76021 76022 76102 76082 76083 76084 76121 76122 76141 76142 76143 76161 76162 76163 76302 76303 76304 76305 76306 76307 76308 76520 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once, 75131 once and 75801 once and 75901 once and 76001 once and 76101 once and 76301 once and 76081 once and 76520 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 76101 or 76001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76002 76003 76004 76005 76021 76022 76102 76082 76083 76084 76121 76122 76141 76142 76143 76161 76162 76163 76302 76303 76304 76305 76306 76307 76308 76251 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
         );
       }
       assert(
@@ -17011,8 +17243,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "04000000142a0100") === false &&
           sawLog(lines, "发送 c2s 76081") &&
           sawLog(lines, "0400000031290100") &&
-          sawLog(lines, "发送 c2s 76520") === false &&
-          sawLog(lines, "04000000e82a0100") === false &&
+          sawLog(lines, "发送 c2s 76520") &&
+          sawLog(lines, "04000000e82a0100") &&
+          sawLog(lines, "发送 c2s 76251") === false &&
+          sawLog(lines, "04000000db290100") === false &&
           sawLog(lines, "发送 c2s 74002") === false &&
           sawLog(lines, "0400000012210100") === false &&
           sawLog(lines, "发送 c2s 74003") === false &&
@@ -17344,10 +17578,17 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.76306");
       roleNet.send("wire.76307");
       roleNet.send("wire.76308");
-      roleNet.send("wire.76520");
+      roleNet.send("wire.76251");
+      roleNet.send("wire.76502");
+      roleNet.send("wire.76503");
+      roleNet.send("wire.76504");
+      roleNet.send("wire.76505");
+      roleNet.send("wire.76506");
+      roleNet.send("wire.76543");
+      roleNet.send("wire.76544");
       roleNet.send("wire.75001");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76002 76003 76004 76005 76021 76022 76102 76082 76083 76084 76121 76122 76141 76142 76143 76161 76162 76163 76302 76303 76304 76305 76306 76307 76308 76520 75001 and goal claim stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76002 76003 76004 76005 76021 76022 76102 76082 76083 76084 76121 76122 76141 76142 76143 76161 76162 76163 76302 76303 76304 76305 76306 76307 76308 76251 76502 76503 76504 76505 76506 76543 76544 75001 and goal claim stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.61002") &&
           sawLog(lines, "未发送 wire.62002") &&
@@ -17421,7 +17662,14 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.76306") &&
           sawLog(lines, "未发送 wire.76307") &&
           sawLog(lines, "未发送 wire.76308") &&
-          sawLog(lines, "未发送 wire.76520") &&
+          sawLog(lines, "未发送 wire.76251") &&
+          sawLog(lines, "未发送 wire.76502") &&
+          sawLog(lines, "未发送 wire.76503") &&
+          sawLog(lines, "未发送 wire.76504") &&
+          sawLog(lines, "未发送 wire.76505") &&
+          sawLog(lines, "未发送 wire.76506") &&
+          sawLog(lines, "未发送 wire.76543") &&
+          sawLog(lines, "未发送 wire.76544") &&
           sawLog(lines, "未发送 wire.75001") &&
           sawLog(lines, "未发送 goal7.claim"),
         "qi shen qi banned cmds and goal claim are not encoded"
@@ -22457,6 +22705,7 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(76306, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(76307, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(76308, fieldVarint(1, 9)));
+      assert(WireSession.hasMagicTowerLevelRank() === false, "76520 stays unsynced until its own s2c");
       roleSockets[0].push(encodeFrame(76520, fieldVarint(1, 9)));
       assert(
         WireSession.hasSpringOuting() === false &&
@@ -22563,6 +22812,48 @@ async function checkWs(): Promise<void> {
         formatWireChristmasMissionLine(WireSession.christmasMission || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }) === "open_day=0" &&
           formatWireSpringOutingLine(WireSession.springOuting || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }) === "open_day=0",
         "76082 76083 76084 76520 do not replace the 76081 snapshot"
+      );
+      assert(
+        WireSession.hasMagicTowerLevelRank() &&
+          formatWireMagicTowerLevelRankLine(WireSession.magicTowerLevelRank || { self: null, list: null, marks: [] }) === "字段1=9" &&
+          formatWireMagicTowerLevelRankLine(WireSession.magicTowerLevelRank || { self: null, list: null, marks: [] }).indexOf("self=") < 0 &&
+          formatWireChristmasMissionLine(WireSession.christmasMission || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }) === "open_day=0",
+        "76520 field 1 varint is a mark and does not replace the 76081 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(76520));
+      assert(
+        WireSession.hasMagicTowerLevelRank() &&
+          formatWireMagicTowerLevelRankLine(WireSession.magicTowerLevelRank || { self: null, list: null, marks: [] }) === WIRE_MAGIC_TOWER_LEVEL_RANK_EMPTY &&
+          formatWireMagicTowerLevelRankLine(WireSession.magicTowerLevelRank || { self: null, list: null, marks: [] }).indexOf("self=") < 0 &&
+          formatWireMagicTowerLevelRankLine(WireSession.magicTowerLevelRank || { self: null, list: null, marks: [] }).indexOf("list=") < 0 &&
+          formatWireChristmasMissionLine(WireSession.christmasMission || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }) === "open_day=0",
+        "empty 76520 body is 已同步空表 and does not replace the 76081 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(76520, fieldBytes(1, fieldVarint(6, 0))));
+      assert(
+        WireSession.magicTowerLevelRank !== null &&
+          formatWireMagicTowerLevelRankLine(WireSession.magicTowerLevelRank) === "self=pass_level=0" &&
+          formatWireMagicTowerLevelRankLine(WireSession.magicTowerLevelRank).indexOf("rid=") < 0 &&
+          formatWireChristmasMissionLine(WireSession.christmasMission || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }) === "open_day=0",
+        "76520 shows a present zero and omits the missing rid"
+      );
+      roleSockets[0].push(encodeFrame(76520, fieldBytes(1, fieldVarint(6, 0))));
+      roleSockets[0].push(encodeFrame(76520, Uint8Array.from([0x80])));
+      assert(
+        WireSession.magicTowerLevelRank !== null &&
+          formatWireMagicTowerLevelRankLine(WireSession.magicTowerLevelRank) === "self=pass_level=0" &&
+          formatWireChristmasMissionLine(WireSession.christmasMission || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }) === "open_day=0" &&
+          sawWire("76520 解不开"),
+        "bad 76520 keeps the previous snapshot and the 76081 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(76501, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76543, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76544, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76251, fieldVarint(1, 9)));
+      assert(
+        formatWireMagicTowerLevelRankLine(WireSession.magicTowerLevelRank || { self: null, list: null, marks: [] }) === "self=pass_level=0" &&
+          formatWireChristmasMissionLine(WireSession.christmasMission || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }) === "open_day=0",
+        "76501 76543 76544 76251 do not replace the 76520 snapshot"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
