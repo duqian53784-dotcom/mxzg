@@ -5,6 +5,7 @@
  * 单独预览 Main：把 MainApp 挂到 Main 场景的 Canvas 上。
  * 顶栏和底栏在 UIShell 的 chrome 层，不进页面栈。系统面板走 PanelNav。
  * 主城页中间是 CityMap：视差底图和建筑点。底栏仍是五项，不改 CityChrome。
+ * 主屏只留「活动」「更多」。只读入口的挂接约定在 cityHubEntries.ts。
  */
 import { _decorator, BlockInputEvents, Color, Component, Node, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
@@ -185,6 +186,20 @@ import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
 import { CityMapHandle, mountCityMap } from "./CityMap";
 import { cityAtomRoute } from "./cityMapLayout";
+import {
+  CITY_DRAG_HINT,
+  CITY_HUB_ACTIVITY_ID,
+  CITY_HUB_BACK_Y,
+  CITY_HUB_BUTTON_H,
+  CITY_HUB_BUTTON_W,
+  CITY_HUB_MORE_ID,
+  CITY_SCREEN_ACTIVITY,
+  CITY_SCREEN_MORE,
+  CityHubEntry,
+  CityHubSlot,
+  cityHubEntries,
+  cityHubSpots,
+} from "./cityHubEntries";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 /** 默认挂 CityChrome Prefab。false 时仍走 mountCityChrome，和接 Prefab 之前一样。 */
@@ -709,6 +724,8 @@ export class MainApp extends Component {
     if (id === "cafe") return this.mountCafe();
     if (id === "gift") return this.mountGift();
     if (id === "limited") return this.mountLimited();
+    if (id === CITY_HUB_ACTIVITY_ID) return this.buildCityHub("activity");
+    if (id === CITY_HUB_MORE_ID) return this.buildCityHub("more");
     if (id === "plays") return this.buildPlays();
     if (id === "log") return this.buildLog();
     const entry = findNavEntry(id);
@@ -721,7 +738,7 @@ export class MainApp extends Component {
     mapHost.parent = page;
     void this.mountCityMap(mapHost);
 
-    place(createLabel("左右拖动地图，点建筑进入", 16, { color: MUTED, width: 420 }), page, -120, 360);
+    place(createLabel(CITY_DRAG_HINT, 16, { color: MUTED, width: 420 }), page, -120, 360);
     this.gateNode = place(
       createLabel(this.gateText(), 16, { color: GATE_COLOR, width: 680, height: 28 }),
       page,
@@ -729,104 +746,27 @@ export class MainApp extends Component {
       328
     );
 
-    this.mainButton = place(
-      createButton(this.stageButtonText(), () => this.openMainline(), 168, 36, OPEN_FILL, 15),
-      page,
-      -246,
-      -380
+    // 只读/系统钮在 cityHubEntries。新只读刀用 attachReadonlyCityEntry，不要在主屏再放矩形。
+    const activityBtn = createButton(
+      CITY_SCREEN_ACTIVITY.title,
+      () => this.openChild(CITY_HUB_ACTIVITY_ID),
+      168,
+      48,
+      LIMITED_FILL,
+      20
     );
-    place(createButton("挂机", () => this.openIdle(), 88, 36, IDLE_FILL, 15), page, -100, -380);
-    place(createButton("背包", () => this.openBag(), 88, 36, BAG_FILL, 15), page, -4, -380);
-    place(createButton("邮件", () => this.openMail(), 88, 36, MAIL_FILL, 15), page, 92, -380);
-    place(createButton("日志", () => this.openChild("log"), 72, 36, undefined, 15), page, 172, -380);
-    place(
-      createButton("模拟断线", () => {
-        GameLog.shared.info("MainApp", "click net-drop");
-        if (Session.source === "wire") {
-          this.shell?.showToast("真服连接留着。这颗按钮只模拟 Mock 断线", 2200);
-          return;
-        }
-        this.cityNet().simulateDrop();
-        this.shell?.showToast("已模拟断线");
-      }, 104, 36, undefined, 14),
-      page,
-      268,
-      -380
+    activityBtn.name = "resident-" + CITY_HUB_ACTIVITY_ID;
+    place(activityBtn, page, CITY_SCREEN_ACTIVITY.x, CITY_SCREEN_ACTIVITY.y);
+    const moreBtn = createButton(
+      CITY_SCREEN_MORE.title,
+      () => this.openChild(CITY_HUB_MORE_ID),
+      168,
+      48,
+      OPEN_FILL,
+      20
     );
-
-    place(createButton("七日登录", () => this.openLogin7(), 108, 34, LOGIN7_FILL, 14), page, -285, -426);
-    place(createButton("七日目标", () => this.openGoal7(), 108, 34, GOAL7_FILL, 14), page, -171, -426);
-    place(createButton("商店", () => this.openShop(), 96, 34, SHOP_FILL, 14), page, -57, -426);
-    place(createButton("礼包", () => this.openGift(), 96, 34, GIFT_FILL, 14), page, 51, -426);
-    place(createButton("限时活动", () => this.openLimited(), 108, 34, LIMITED_FILL, 14), page, 165, -426);
-    place(
-      createButton("公告", () => {
-        GameLog.shared.info("MainApp", "click notice");
-        this.shell?.enqueuePopup("notice", this.buildPopup("公告", "弹窗队列 1/2"));
-        this.shell?.enqueuePopup("notice-next", this.buildPopup("后续", "关闭上一张后出现"));
-        this.shell?.showToast("公告已入队");
-      }, 84, 34, undefined, 14),
-      page,
-      276,
-      -426
-    );
-
-    place(createButton("成就记录", () => this.openAchievement(), 108, 34, ACHIEVE_FILL, 14), page, -285, -472);
-    place(createButton("点金", () => this.openBuyGold(), 84, 34, BUYGOLD_FILL, 14), page, -177, -472);
-    place(createButton("先知召唤", () => this.openProphet(), 108, 34, PROPHET_FILL, 14), page, -69, -472);
-    place(createButton("英雄宝石", () => this.openJewel(), 108, 34, JEWEL_FILL, 14), page, 51, -472);
-    place(createButton("英雄图鉴", () => this.openIllustrat(), 108, 34, ILLUSTRAT_FILL, 14), page, 171, -472);
-    place(createButton("宠物信息", () => this.openPet(), 108, 34, PET_FILL, 14), page, 291, -472);
-    place(createButton("世界等级", () => this.openWorld(), 180, 32, WORLD_FILL, 14), page, 0, -336);
-    place(createButton("基金列表", () => this.openPromotion(), 160, 32, PROMOTION_FILL, 14), page, 200, -336);
-    place(createButton("超值首充", () => this.openFirstRecharge(), 160, 32, FIRST_FILL, 14), page, -200, -336);
-    place(createButton("灵器数据", () => this.openReiki(), 160, 32, REIKI_FILL, 14), page, 0, -290);
-    place(createButton("浮空岛时间", () => this.openIslands(), 180, 32, ISLANDS_FILL, 14), page, 200, -290);
-    place(createButton("图腾信息", () => this.openTotems(), 160, 32, TOTEMS_FILL, 14), page, -200, -290);
-    place(createButton("星盘数据", () => this.openAstrolabe(), 160, 32, ASTROLABE_FILL, 14), page, 0, -244);
-    place(createButton("魔方数据", () => this.openTweakCube(), 160, 32, CUBE_FILL, 14), page, 200, -244);
-    place(createButton("圣龙数据", () => this.openDragon(), 160, 32, DRAGON_FILL, 14), page, -200, -244);
-    place(createButton("圣物图鉴", () => this.openDragonCollection(), 160, 32, DRAGON_COLLECTION_FILL, 14), page, -200, -198);
-    place(createButton("称号列表", () => this.openTitleList(), 160, 32, TITLE_LIST_FILL, 14), page, 0, -198);
-    place(createButton("头像列表", () => this.openHeadPortrait(), 160, 32, HEAD_PORTRAIT_FILL, 14), page, 200, -198);
-    place(createButton("头像框数据", () => this.openBorder(), 160, 32, BORDER_FILL, 14), page, -200, -152);
-    place(createButton("激活皮肤列表", () => this.openFashion(), 180, 32, FASHION_FILL, 14), page, 10, -152);
-    place(createButton("穿戴皮肤英雄列表", () => this.openWornFashion(), 220, 32, WORN_FASHION_FILL, 14), page, 0, -106);
-    place(createButton("英雄祈愿数据", () => this.openHeroPrayer(), 180, 32, HERO_PRAYER_FILL, 14), page, 0, -60);
-    place(createButton("宠物图鉴", () => this.openPetIllustrate(), 140, 32, PET_ILLUSTRATE_FILL, 14), page, 220, -60);
-    place(createButton("羁绊数据", () => this.openFetter(), 140, 32, FETTER_FILL, 14), page, -220, -60);
-    place(createButton("羁绊皮肤", () => this.openFetterFashion(), 140, 32, FETTER_FASHION_FILL, 14), page, -220, -14);
-    place(createButton("神兵数据", () => this.openShenBin(), 140, 32, SHENBIN_FILL, 14), page, 220, -14);
-    place(createButton("职级信息", () => this.openOccupation(), 140, 32, OCCUPATION_FILL, 14), page, 0, -14);
-    place(createButton("神兵道具", () => this.openRoleShenBin(), 140, 32, ROLE_SHENBIN_FILL, 14), page, 0, 32);
-    place(createButton("查看契约", () => this.openFetterContract(), 140, 32, FETTER_CONTRACT_FILL, 14), page, 220, 32);
-    place(createButton("查询阵法", () => this.openFormation(), 140, 32, FORMATION_FILL, 14), page, -220, 32);
-    place(createButton("副本队列", () => this.openLineUp(), 140, 32, LINEUP_FILL, 14), page, 0, 78);
-    place(createButton("进行中活动", () => this.openRunningPromotion(), 160, 32, RUNNING_PROMOTION_FILL, 14), page, 220, 78);
-    place(createButton("爬塔首通已领", () => this.openTowerReward(), 180, 32, TOWER_REWARD_FILL, 14), page, -220, 78);
-    place(createButton("英雄等级重生次数", () => this.openHeroLevelResetTimes(), 220, 32, HERO_LEVEL_RESET_TIMES_FILL, 14), page, 0, 124);
-    place(createButton("签到列表", () => this.openSignInList(), 160, 32, SIGN_IN_LIST_FILL, 14), page, 0, 170);
-    place(createButton("每日任务列表", () => this.openDailyTaskList(), 180, 32, DAILY_TASK_LIST_FILL, 14), page, 0, 216);
-    place(createButton("每日福利列表", () => this.openDailyWelfareList(), 180, 32, DAILY_WELFARE_LIST_FILL, 14), page, 0, 262);
-    place(createButton("每月福利列表", () => this.openMouthWelfareList(), 180, 32, MOUTH_WELFARE_LIST_FILL, 14), page, 0, 308);
-    place(createButton("周末礼包", () => this.openWeekendGift(), 160, 32, WEEKEND_GIFT_FILL, 14), page, 0, 354);
-    place(createButton("神迹遗物", () => this.openGodRelic(), 160, 32, GOD_RELIC_FILL, 14), page, -200, 354);
-    place(createButton("英雄殿堂", () => this.openHeroPalace(), 160, 32, HERO_PALACE_FILL, 14), page, 200, 308);
-    place(createButton("积天豪礼2", () => this.openRechargeDaysB(), 160, 32, RECHARGE_DAYS_B_FILL, 14), page, -200, 308);
-    place(createButton("时空魔塔", () => this.openTimeTower(), 160, 32, TIME_TOWER_FILL, 14), page, 200, 354);
-    place(createButton("时空冒险", () => this.openSpaceTimeAdventure(), 160, 32, SPACE_TIME_ADVENTURE_FILL, 14), page, 0, 400);
-    place(createButton("斩魔之路", () => this.openMagicTowerRoad(), 160, 32, MAGIC_TOWER_ROAD_FILL, 14), page, -200, 400);
-    place(createButton("七神器", () => this.openQiShenQi(), 160, 32, QI_SHEN_QI_FILL, 14), page, 200, 400);
-    place(createButton("诸神祭坛", () => this.openZhuShenJiTan(), 180, 32, ZHU_SHEN_JI_TAN_FILL, 14), page, 0, 446);
-    place(createButton("赏月佳肴", () => this.openMidFood(), 160, 32, MID_FOOD_FILL, 14), page, 200, 446);
-    place(createButton("秋赏明月", () => this.openQiuShangMingYue(), 160, 32, QIU_SHANG_MING_YUE_FILL, 14), page, -200, 446);
-    place(createButton("万圣抽奖", () => this.openWanShengLottery(), 160, 32, WAN_SHENG_LOTTERY_FILL, 14), page, 0, 492);
-    place(createButton("黑五", () => this.openHeiWuMission(), 160, 32, HEI_WU_MISSION_FILL, 14), page, -200, 492);
-    place(createButton("约惠圣诞", () => this.openChristmasGift(), 160, 32, CHRISTMAS_GIFT_FILL, 14), page, 200, 492);
-    place(createButton("出游寻春", () => this.openSpringOuting(), 160, 32, SPRING_OUTING_FILL, 14), page, 0, 538);
-    place(createButton("圣诞连线", () => this.openChristmasMission(), 160, 32, CHRISTMAS_MISSION_FILL, 14), page, 200, 538);
-    place(createButton("关卡榜", () => this.openMagicTowerLevelRank(), 160, 32, MAGIC_TOWER_LEVEL_RANK_FILL, 14), page, -200, 538);
-    place(createButton("春日踏青", () => this.openSpringOutingGrid(), 160, 32, SPRING_OUTING_GRID_FILL, 14), page, 0, 584);
+    moreBtn.name = "resident-" + CITY_HUB_MORE_ID;
+    place(moreBtn, page, CITY_SCREEN_MORE.x, CITY_SCREEN_MORE.y);
 
     const net = this.cityNet();
     this.netState = net.state;
@@ -846,6 +786,405 @@ export class MainApp extends Component {
       this.netState = state;
     });
     return page;
+  }
+
+  /**
+   * 「活动」或「更多」。按钮来自 cityHubEntries，不在主屏铺开。
+   * 点进去仍走原来的 open*，真服 Toast 和门槛不变。
+   */
+  private buildCityHub(slot: CityHubSlot): Node {
+    const page = this.pageRoot(slot === "activity" ? "CityActivityPage" : "CityMorePage");
+    const title = slot === "activity" ? "活动" : "更多";
+    place(createLabel(title, 36, { color: TITLE_COLOR }), page, 0, 470);
+    place(
+      createLabel(
+        slot === "activity"
+          ? "活动只读入口。新的只读活动挂这里，不铺主屏。"
+          : "系统和数据入口。拿不准的只读钮挂这里，不铺主屏。",
+        16,
+        { color: MUTED, width: 640 }
+      ),
+      page,
+      0,
+      428
+    );
+    const entries = cityHubEntries(slot);
+    const spots = cityHubSpots(entries.length);
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const spot = spots[i];
+      const text = entry.dynamic === "mainline" ? this.stageButtonText() : entry.title;
+      const button = createButton(
+        text,
+        () => this.openCityHubEntry(entry),
+        CITY_HUB_BUTTON_W,
+        CITY_HUB_BUTTON_H,
+        this.hubFill(entry.id),
+        14
+      );
+      button.name = "hub-" + entry.id;
+      place(button, page, spot.x, spot.y);
+      if (entry.dynamic === "mainline") this.mainButton = button;
+    }
+    place(createButton("返回", () => this.back(), 220, 48), page, 0, CITY_HUB_BACK_Y);
+    return page;
+  }
+
+  /** 面板里的入口。已有 open* 的走原来的；以后新登记的 id 默认 openChild。 */
+  private openCityHubEntry(entry: CityHubEntry): void {
+    if (entry.action === "notice") {
+      GameLog.shared.info("MainApp", "click notice");
+      this.shell?.enqueuePopup("notice", this.buildPopup("公告", "弹窗队列 1/2"));
+      this.shell?.enqueuePopup("notice-next", this.buildPopup("后续", "关闭上一张后出现"));
+      this.shell?.showToast("公告已入队");
+      return;
+    }
+    if (entry.action === "simulateDrop") {
+      GameLog.shared.info("MainApp", "click net-drop");
+      if (Session.source === "wire") {
+        this.shell?.showToast("真服连接留着。这颗按钮只模拟 Mock 断线", 2200);
+        return;
+      }
+      this.cityNet().simulateDrop();
+      this.shell?.showToast("已模拟断线");
+      return;
+    }
+    const id = entry.id;
+    if (id === "mainline") {
+      this.openMainline();
+      return;
+    }
+    if (id === "idle") {
+      this.openIdle();
+      return;
+    }
+    if (id === "bag") {
+      this.openBag();
+      return;
+    }
+    if (id === "mail") {
+      this.openMail();
+      return;
+    }
+    if (id === "log") {
+      this.openChild("log");
+      return;
+    }
+    if (id === "login7") {
+      this.openLogin7();
+      return;
+    }
+    if (id === "goal7") {
+      this.openGoal7();
+      return;
+    }
+    if (id === "shop") {
+      this.openShop();
+      return;
+    }
+    if (id === "gift") {
+      this.openGift();
+      return;
+    }
+    if (id === "limited") {
+      this.openLimited();
+      return;
+    }
+    if (id === "achieve") {
+      this.openAchievement();
+      return;
+    }
+    if (id === "buygold") {
+      this.openBuyGold();
+      return;
+    }
+    if (id === "prophet") {
+      this.openProphet();
+      return;
+    }
+    if (id === "jewel") {
+      this.openJewel();
+      return;
+    }
+    if (id === "illustrat") {
+      this.openIllustrat();
+      return;
+    }
+    if (id === "pet") {
+      this.openPet();
+      return;
+    }
+    if (id === "world") {
+      this.openWorld();
+      return;
+    }
+    if (id === "promotion") {
+      this.openPromotion();
+      return;
+    }
+    if (id === "firstRecharge") {
+      this.openFirstRecharge();
+      return;
+    }
+    if (id === "reiki") {
+      this.openReiki();
+      return;
+    }
+    if (id === "islands") {
+      this.openIslands();
+      return;
+    }
+    if (id === "totems") {
+      this.openTotems();
+      return;
+    }
+    if (id === "astrolabe") {
+      this.openAstrolabe();
+      return;
+    }
+    if (id === "tweakCube") {
+      this.openTweakCube();
+      return;
+    }
+    if (id === "dragon") {
+      this.openDragon();
+      return;
+    }
+    if (id === "dragonCollection") {
+      this.openDragonCollection();
+      return;
+    }
+    if (id === "titleList") {
+      this.openTitleList();
+      return;
+    }
+    if (id === "headPortrait") {
+      this.openHeadPortrait();
+      return;
+    }
+    if (id === "borderData") {
+      this.openBorder();
+      return;
+    }
+    if (id === "fashionList") {
+      this.openFashion();
+      return;
+    }
+    if (id === "wornFashion") {
+      this.openWornFashion();
+      return;
+    }
+    if (id === "heroPrayer") {
+      this.openHeroPrayer();
+      return;
+    }
+    if (id === "petIllustrate") {
+      this.openPetIllustrate();
+      return;
+    }
+    if (id === "fetterData") {
+      this.openFetter();
+      return;
+    }
+    if (id === "fetterFashion") {
+      this.openFetterFashion();
+      return;
+    }
+    if (id === "shenBin") {
+      this.openShenBin();
+      return;
+    }
+    if (id === "occupation") {
+      this.openOccupation();
+      return;
+    }
+    if (id === "roleShenBin") {
+      this.openRoleShenBin();
+      return;
+    }
+    if (id === "fetterContract") {
+      this.openFetterContract();
+      return;
+    }
+    if (id === "formation") {
+      this.openFormation();
+      return;
+    }
+    if (id === "lineUp") {
+      this.openLineUp();
+      return;
+    }
+    if (id === "runningPromotion") {
+      this.openRunningPromotion();
+      return;
+    }
+    if (id === "towerReward") {
+      this.openTowerReward();
+      return;
+    }
+    if (id === "heroLevelResetTimes") {
+      this.openHeroLevelResetTimes();
+      return;
+    }
+    if (id === "signInList") {
+      this.openSignInList();
+      return;
+    }
+    if (id === "dailyTaskList") {
+      this.openDailyTaskList();
+      return;
+    }
+    if (id === "dailyWelfareList") {
+      this.openDailyWelfareList();
+      return;
+    }
+    if (id === "mouthWelfareList") {
+      this.openMouthWelfareList();
+      return;
+    }
+    if (id === "weekendGift") {
+      this.openWeekendGift();
+      return;
+    }
+    if (id === "godRelic") {
+      this.openGodRelic();
+      return;
+    }
+    if (id === "heroPalace") {
+      this.openHeroPalace();
+      return;
+    }
+    if (id === "rechargeDaysB") {
+      this.openRechargeDaysB();
+      return;
+    }
+    if (id === "timeTower") {
+      this.openTimeTower();
+      return;
+    }
+    if (id === "spaceTimeAdventure") {
+      this.openSpaceTimeAdventure();
+      return;
+    }
+    if (id === "magicTowerRoad") {
+      this.openMagicTowerRoad();
+      return;
+    }
+    if (id === "qiShenQi") {
+      this.openQiShenQi();
+      return;
+    }
+    if (id === "zhuShenJiTan") {
+      this.openZhuShenJiTan();
+      return;
+    }
+    if (id === "midFood") {
+      this.openMidFood();
+      return;
+    }
+    if (id === "qiuShangMingYue") {
+      this.openQiuShangMingYue();
+      return;
+    }
+    if (id === "wanShengLottery") {
+      this.openWanShengLottery();
+      return;
+    }
+    if (id === "heiWuMission") {
+      this.openHeiWuMission();
+      return;
+    }
+    if (id === "christmasGift") {
+      this.openChristmasGift();
+      return;
+    }
+    if (id === "springOuting") {
+      this.openSpringOuting();
+      return;
+    }
+    if (id === "christmasMission") {
+      this.openChristmasMission();
+      return;
+    }
+    if (id === "magicTowerLevelRank") {
+      this.openMagicTowerLevelRank();
+      return;
+    }
+    if (id === "springOutingGrid") {
+      this.openSpringOutingGrid();
+      return;
+    }
+    this.openChild(id);
+  }
+
+  /** 面板按钮沿用原来的底色。没登记的用蓝色。 */
+  private hubFill(id: string): Color {
+    if (id === "mainline") return OPEN_FILL;
+    if (id === "idle") return IDLE_FILL;
+    if (id === "bag") return BAG_FILL;
+    if (id === "mail") return MAIL_FILL;
+    if (id === "login7") return LOGIN7_FILL;
+    if (id === "goal7") return GOAL7_FILL;
+    if (id === "shop") return SHOP_FILL;
+    if (id === "gift") return GIFT_FILL;
+    if (id === "limited") return LIMITED_FILL;
+    if (id === "achieve") return ACHIEVE_FILL;
+    if (id === "buygold") return BUYGOLD_FILL;
+    if (id === "prophet") return PROPHET_FILL;
+    if (id === "jewel") return JEWEL_FILL;
+    if (id === "illustrat") return ILLUSTRAT_FILL;
+    if (id === "pet") return PET_FILL;
+    if (id === "world") return WORLD_FILL;
+    if (id === "promotion") return PROMOTION_FILL;
+    if (id === "firstRecharge") return FIRST_FILL;
+    if (id === "reiki") return REIKI_FILL;
+    if (id === "islands") return ISLANDS_FILL;
+    if (id === "totems") return TOTEMS_FILL;
+    if (id === "astrolabe") return ASTROLABE_FILL;
+    if (id === "tweakCube") return CUBE_FILL;
+    if (id === "dragon") return DRAGON_FILL;
+    if (id === "dragonCollection") return DRAGON_COLLECTION_FILL;
+    if (id === "titleList") return TITLE_LIST_FILL;
+    if (id === "headPortrait") return HEAD_PORTRAIT_FILL;
+    if (id === "borderData") return BORDER_FILL;
+    if (id === "fashionList") return FASHION_FILL;
+    if (id === "wornFashion") return WORN_FASHION_FILL;
+    if (id === "heroPrayer") return HERO_PRAYER_FILL;
+    if (id === "petIllustrate") return PET_ILLUSTRATE_FILL;
+    if (id === "fetterData") return FETTER_FILL;
+    if (id === "fetterFashion") return FETTER_FASHION_FILL;
+    if (id === "shenBin") return SHENBIN_FILL;
+    if (id === "occupation") return OCCUPATION_FILL;
+    if (id === "roleShenBin") return ROLE_SHENBIN_FILL;
+    if (id === "fetterContract") return FETTER_CONTRACT_FILL;
+    if (id === "formation") return FORMATION_FILL;
+    if (id === "lineUp") return LINEUP_FILL;
+    if (id === "runningPromotion") return RUNNING_PROMOTION_FILL;
+    if (id === "towerReward") return TOWER_REWARD_FILL;
+    if (id === "heroLevelResetTimes") return HERO_LEVEL_RESET_TIMES_FILL;
+    if (id === "signInList") return SIGN_IN_LIST_FILL;
+    if (id === "dailyTaskList") return DAILY_TASK_LIST_FILL;
+    if (id === "dailyWelfareList") return DAILY_WELFARE_LIST_FILL;
+    if (id === "mouthWelfareList") return MOUTH_WELFARE_LIST_FILL;
+    if (id === "weekendGift") return WEEKEND_GIFT_FILL;
+    if (id === "godRelic") return GOD_RELIC_FILL;
+    if (id === "heroPalace") return HERO_PALACE_FILL;
+    if (id === "rechargeDaysB") return RECHARGE_DAYS_B_FILL;
+    if (id === "timeTower") return TIME_TOWER_FILL;
+    if (id === "spaceTimeAdventure") return SPACE_TIME_ADVENTURE_FILL;
+    if (id === "magicTowerRoad") return MAGIC_TOWER_ROAD_FILL;
+    if (id === "qiShenQi") return QI_SHEN_QI_FILL;
+    if (id === "zhuShenJiTan") return ZHU_SHEN_JI_TAN_FILL;
+    if (id === "midFood") return MID_FOOD_FILL;
+    if (id === "qiuShangMingYue") return QIU_SHANG_MING_YUE_FILL;
+    if (id === "wanShengLottery") return WAN_SHENG_LOTTERY_FILL;
+    if (id === "heiWuMission") return HEI_WU_MISSION_FILL;
+    if (id === "christmasGift") return CHRISTMAS_GIFT_FILL;
+    if (id === "springOuting") return SPRING_OUTING_FILL;
+    if (id === "christmasMission") return CHRISTMAS_MISSION_FILL;
+    if (id === "magicTowerLevelRank") return MAGIC_TOWER_LEVEL_RANK_FILL;
+    if (id === "springOutingGrid") return SPRING_OUTING_GRID_FILL;
+    return OPEN_FILL;
   }
 
   /** 地图加载失败时主城按钮还在，不挡住进页面。 */
@@ -1060,7 +1399,7 @@ export class MainApp extends Component {
     if (id === "magicTowerLevelRank") return this.blockWireMagicTowerLevelRank();
     if (id === "springOutingGrid") return this.blockWireSpringOutingGrid();
     if (Session.source !== "wire") return false;
-    if (id === "city" || id === "log") return false;
+    if (id === "city" || id === "log" || id === CITY_HUB_ACTIVITY_ID || id === CITY_HUB_MORE_ID) return false;
     if (id === "idle") return this.blockWireIdle();
     if (id === "mainline") return this.blockWireMainline();
     if (id === "bag") return this.blockWireBag();
@@ -3598,7 +3937,9 @@ export class MainApp extends Component {
   }
 
   private setMainButton(text: string): void {
-    const label = this.mainButton?.getChildByName("Label");
+    const button = this.mainButton;
+    if (!button || !button.isValid) return;
+    const label = button.getChildByName("Label");
     if (label) setText(label, text);
   }
 
@@ -3672,6 +4013,7 @@ export class MainApp extends Component {
   }
 
   private noteClose(id: string): void {
+    if (id === CITY_HUB_MORE_ID) this.mainButton = null;
     if (id === "log") this.detachLog();
     if (id === "mainline") {
       this.mainline?.dispose();

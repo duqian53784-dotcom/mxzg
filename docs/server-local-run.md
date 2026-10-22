@@ -1,7 +1,7 @@
 # 本机起服（D1）
 
 > **来源：** 本文按 2026-10-19《项目分析与启动指南》写成。端口、密码、路径和命令只取那份分析，不另补。  
-> **D1 已在倩本机验证（2026-10-21，Asia/Shanghai）。** 双击 `scripts\start-local-server.bat`：`netstat` 见 TCP `11122`、TCP `9902`、WS `13101` 均在听，脚本打出「[启动成功]」。`PROJECT_PLAN.md` 里 D1 已勾选。  
+> **D1 已在倩本机验证（2026-10-21，Asia/Shanghai）。** 双击 `scripts\start-local-server.bat`：`netstat` 见 TCP `11122`、TCP `9902`、WS `13101` 均在听，脚本打出「[启动成功]」。进度见本机 docs/mxzg-daily-progress.xlsx。  
 > **cross 默认不启。** 游戏服连 `127.0.0.1:11422` 失败、中心服「游戏服加载跨服失败」类日志是预期，不算启动失败。分析里 cross 曾因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败；单机只需 center + gameserver。  
 > **客户端默认仍走 Mock。** 预览加 `?transport=ws` 走本机桥 `ws://127.0.0.1:13111/game`（转到 TCP 9902），不直连 13101。日常双击一次 `scripts\start-local-all.bat`。只拉了客户端就刷新预览，不必重启服和桥。步骤见 `docs/h5-websocket.md`。D2 已在倩本机验证。
 
@@ -44,13 +44,13 @@
 - 编解码仍是明文对象。`?transport=ws` 不把 `encodeRequest` 的对象写到线上，只写旧桥日志里的长度前缀帧，经 `13111/game` 转到 TCP 9902。调用方继续用 `Proto.*` 走 Mock。
 - 细节见 `docs/protocol-stubs.md`、`docs/mock-replay.md`、`docs/h5-websocket.md`。
 
-D2 已在倩本机验证：`?transport=ws` 经桥 13111 看到 `收到 s2c 1001`。有角色会进主城壳。s2c 2001 的字段 9、6、2、1 同步角色名、等级、金币和钻石。缺字段仍是未同步，不当成 Mock 进度。开服天仍未同步。s2c 3007 的字段 2、3 只改主城「主线」按钮上的 idx，点进去仍不打开 Mock 关卡页。空 c2s 3004 在 3007 之后发，挂机页只展示这一包的时间；没有数据时 Toast「真服挂机未同步」。3005 不改金币。细节见 `docs/h5-websocket.md`。
+D2 已在倩本机验证：`?transport=ws` 经桥 13111 看到 `收到 s2c 1001`。有角色会进主城壳。s2c 2001 的字段 9、6、2、1 同步角色名、等级、金币和钻石。缺字段仍是未同步，不当成 Mock 进度。开服天仍未同步。s2c 3007 的字段 2、3 只改主城「更多」里「主线」按钮上的 idx，点进去仍不打开 Mock 关卡页。空 c2s 3004 在 3007 之后发，挂机页只展示这一包的时间；没有数据时 Toast「真服挂机未同步」。3005 不改金币。细节见 `docs/h5-websocket.md`。
 
 2026-10-19 另有一套旧 H5，目录是 `F:\FansGameX\mxzg-h5\客户端\web`。`serve.ps1` 听 `127.0.0.1:8080`，`dev-platform.ps1` 听 `127.0.0.1:18070`，页面上的 WebSocket `/game/9902` 由 `serve.ps1` 桥到游戏服 TCP `9902`。那是旧客户端。本仓库不启动那两个脚本，自己在 `scripts\start-ws-bridge.bat` 里做同样的字节转发，口改成 `13111/game`。
 
 ## 建议的联调顺序
 
-`PROJECT_PLAN.md` 第 8 节已经定了顺序。第 1 步的命令在后面几节；后面几步仍是接协议的顺序，D1 不做。
+进度见本机 docs/mxzg-daily-progress.xlsx。第 1 步的命令在后面几节；后面几步仍是接协议的顺序，D1 不做。
 
 1. 在本机把 `server` junction 指到的 Java 工程跑起来，确认进程在听端口。
 2. 登录。客户端现在的 `login` / `role.enter` / `role.create` 先对齐字段，再改占位 ID。

@@ -28,6 +28,20 @@ import {
   MainCityEffectFile,
   MainCityPosFile,
 } from "../assets/scripts/ui/cityMapLayout";
+import {
+  attachReadonlyCityEntry,
+  CITY_DRAG_HINT,
+  CITY_HUB_ACTIVITY_ID,
+  CITY_HUB_MORE_ID,
+  CITY_SCREEN_ACTIVITY,
+  CITY_SCREEN_MORE,
+  CITY_SCREEN_RESIDENT_IDS,
+  cityHubEntries,
+  cityHubFits,
+  cityHubSpots,
+  isCityScreenResident,
+  readonlyCitySlot,
+} from "../assets/scripts/ui/cityHubEntries";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
 import {
   applyBagUse,
@@ -23130,12 +23144,149 @@ async function checkWs(): Promise<void> {
   }
 }
 
+function checkCityHub(): void {
+  const activity = cityHubEntries("activity");
+  const more = cityHubEntries("more");
+  const actTitles = activity.map((entry) => entry.title);
+  const moreTitles = more.map((entry) => entry.title);
+  const mustAct = [
+    "黑五",
+    "万圣抽奖",
+    "约惠圣诞",
+    "秋赏明月",
+    "诸神祭坛",
+    "斩魔之路",
+    "时空冒险",
+    "周末礼包",
+    "每月福利列表",
+    "每日福利列表",
+    "每日任务列表",
+    "赏月佳肴",
+    "出游寻春",
+    "圣诞连线",
+    "春日踏青",
+    "关卡榜",
+    "七神器",
+    "签到列表",
+    "进行中活动",
+    "限时活动",
+    "七日登录",
+    "七日目标",
+    "礼包",
+    "积天豪礼2",
+    "超值首充",
+    "基金列表",
+  ];
+  for (let i = 0; i < mustAct.length; i++) {
+    assert(actTitles.indexOf(mustAct[i]) >= 0, "activity hub has " + mustAct[i]);
+    assert(moreTitles.indexOf(mustAct[i]) < 0, "activity hub title not also in more: " + mustAct[i]);
+  }
+  const mustMore = [
+    "主线",
+    "挂机",
+    "背包",
+    "邮件",
+    "日志",
+    "模拟断线",
+    "商店",
+    "公告",
+    "成就记录",
+    "点金",
+    "查询阵法",
+    "英雄祈愿数据",
+    "称号列表",
+    "头像列表",
+    "激活皮肤列表",
+    "穿戴皮肤英雄列表",
+    "神迹遗物",
+    "英雄殿堂",
+    "时空魔塔",
+  ];
+  for (let i = 0; i < mustMore.length; i++) {
+    assert(moreTitles.indexOf(mustMore[i]) >= 0, "more hub has " + mustMore[i]);
+    assert(actTitles.indexOf(mustMore[i]) < 0, "more hub title not also in activity: " + mustMore[i]);
+  }
+  const ids: { [id: string]: string } = {};
+  const all = activity.concat(more);
+  for (let i = 0; i < all.length; i++) {
+    assert(!ids[all[i].id], "hub id unique " + all[i].id);
+    ids[all[i].id] = all[i].slot;
+    assert(!isCityScreenResident(all[i].id), "hub entry is not a screen resident " + all[i].id);
+  }
+  assert(
+    CITY_SCREEN_RESIDENT_IDS.length === 2 &&
+      CITY_SCREEN_RESIDENT_IDS[0] === CITY_HUB_ACTIVITY_ID &&
+      CITY_SCREEN_RESIDENT_IDS[1] === CITY_HUB_MORE_ID &&
+      CITY_SCREEN_ACTIVITY.title === "活动" &&
+      CITY_SCREEN_MORE.title === "更多" &&
+      CITY_SCREEN_ACTIVITY.y < 0 &&
+      CITY_SCREEN_MORE.y < 0,
+    "city screen keeps only 活动 and 更多"
+  );
+  assert(cityHubFits(activity.length) && cityHubFits(more.length), "hub lists stay above the back button");
+  assert(cityHubSpots(more.length).length === more.length, "one spot per more entry");
+  assert(readonlyCitySlot("activity") === "activity", "activity kind stays on the activity panel");
+  assert(readonlyCitySlot("system") === "more" && readonlyCitySlot("more") === "more", "system kind goes to 更多");
+  const moreBefore = more.length;
+  const actBefore = activity.length;
+  try {
+    attachReadonlyCityEntry({ title: "探针", id: "__hub_probe__", slot: "more" });
+    assert(cityHubEntries("more").length === moreBefore + 1, "attach adds a system entry to 更多");
+    attachReadonlyCityEntry({ title: "探针", id: "__hub_probe__", slot: "more" });
+    assert(cityHubEntries("more").length === moreBefore + 1, "attach does not duplicate an id");
+    attachReadonlyCityEntry({ title: "活动探针", id: "__hub_probe_act__", slot: "activity" });
+    assert(cityHubEntries("activity").length === actBefore + 1, "attach adds an activity entry to 活动");
+    assert(cityHubEntries("more").length === moreBefore + 1, "activity attach does not land in 更多");
+  } finally {
+    const moreList = cityHubEntries("more");
+    const actList = cityHubEntries("activity");
+    for (let i = moreList.length - 1; i >= 0; i--) {
+      if (moreList[i].id === "__hub_probe__") moreList.splice(i, 1);
+    }
+    for (let i = actList.length - 1; i >= 0; i--) {
+      if (actList[i].id === "__hub_probe_act__") actList.splice(i, 1);
+    }
+  }
+  assert(cityHubEntries("more").length === moreBefore && cityHubEntries("activity").length === actBefore, "probe entries removed");
+
+  const mainApp = readFileSync(mainAppFile(), "utf8");
+  const start = mainApp.indexOf("private buildCity()");
+  const end = mainApp.indexOf("private buildCityHub(");
+  assert(start >= 0 && end > start, "buildCity is still in MainApp");
+  const body = mainApp.slice(start, end);
+  assert(body.indexOf("CITY_HUB_ACTIVITY_ID") >= 0 && body.indexOf("CITY_HUB_MORE_ID") >= 0, "city screen opens the two hubs");
+  assert(body.indexOf("mountCityMap") >= 0 && body.indexOf("CITY_DRAG_HINT") >= 0, "city map and drag hint stay");
+  assert(CITY_DRAG_HINT === "左右拖动地图，点建筑进入", "drag hint text stays");
+  assert(body.indexOf('createButton("黑五"') < 0, "黑五 is not a city-screen button");
+  assert(body.indexOf('createButton("查询阵法"') < 0, "查询阵法 is not a city-screen button");
+  assert(body.indexOf('createButton("主线') < 0 && body.indexOf("openMainline()") < 0, "主线 is not placed on the city screen");
+  assert(mainApp.indexOf("USE_CITY_CHROME_PREFAB") >= 0, "prefab chrome switch stays");
+  assert(mainApp.indexOf("mountCityChrome(") >= 0, "code chrome fallback stays");
+}
+
+function mainAppFile(): string {
+  const candidates = [
+    join(process.cwd(), "client", "assets", "scripts", "ui", "MainApp.ts"),
+    join(process.cwd(), "assets", "scripts", "ui", "MainApp.ts"),
+  ];
+  for (let i = 0; i < candidates.length; i++) {
+    try {
+      readFileSync(candidates[i], "utf8");
+      return candidates[i];
+    } catch (err) {
+      continue;
+    }
+  }
+  return candidates[0];
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
   checkGates();
   checkPanelNav();
   checkCityMap();
+  checkCityHub();
   checkSafeArea();
   checkLog();
   checkLoginPrefs();
