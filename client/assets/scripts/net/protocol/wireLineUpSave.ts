@@ -5,9 +5,9 @@
  *
  * 字段按声明顺序从 1 编号。
  * GReqLineUpSave：1 lineData（PSLineUpData）。
- * PSLineUpData：1 type，2 formation_id，3 goddess_type，4 hero_list（repeated PSLineUpHeroData）。
- * PSLineUpHeroData：1 hero_id（4030 的实例，不是类型号），2 position。
- * 探针写 type=0（MAIN）、formation_id=1、goddess_type=0、position=2。
+ * PSLineUpData：1 type，2 time（不写），3 goddess_type，4 hero_list（repeated PSLineUpHeroData），5 formation_id。
+ * PSLineUpHeroData：1 hero_id（4030 的实例，不是类型号），2 hp（不写），3 position。
+ * 探针写 type=0（MAIN）、goddess_type=0、formation_id=1、position=2。time 和 hp 留空。
  * 出现的 0 仍写 0。
  * 阵法 1 合法站位只有 2/3/5/6/7/8/9。1 和 4 不编码。
  *
@@ -24,8 +24,8 @@ export const WIRE_MAIN_POSITION = 2;
 /** 阵法 1。不要把 1 或 4 编出去。 */
 export const WIRE_LINEUP_SAVE_POSITIONS = [2, 3, 5, 6, 7, 8, 9] as const;
 
-/** hero_id=42、position=2 的整帧。用来对照，不是默认发出的实例。 */
-export const WIRE_LINEUP_SAVE_SAMPLE_FRAME = "120000001c0c00000a0c0800100118002204082a1002";
+/** hero_id=42、position=2 的整帧。formation_id 在字段 5，position 在字段 3。用来对照，不是默认发出的实例。 */
+export const WIRE_LINEUP_SAVE_SAMPLE_FRAME = "120000001c0c00000a0c080018002204082a18022801";
 
 export interface WireLineUpSaveQuery {
   heroId: number;
@@ -47,18 +47,18 @@ export function readWireLineUpSave(data: unknown): WireLineUpSaveQuery | null {
   return { heroId, position: Math.floor(position) };
 }
 
-/** 缺实例或站位非法时返回 null。type=0 和 goddess_type=0 照写。 */
+/** 缺实例或站位非法时返回 null。type=0、goddess_type=0、formation_id=1 照写。time 和 hp 不写。 */
 export function encodeWireLineUpSaveBody(query: WireLineUpSaveQuery): Uint8Array | null {
   if (!legalPosition(query.position)) return null;
   if (!Number.isSafeInteger(query.heroId) || query.heroId < 1) return null;
   const hero: number[] = [];
   pushVarintField(hero, 1, query.heroId);
-  pushVarintField(hero, 2, Math.floor(query.position));
+  pushVarintField(hero, 3, Math.floor(query.position));
   const line: number[] = [];
   pushVarintField(line, 1, WIRE_MAIN_LINE_TYPE);
-  pushVarintField(line, 2, WIRE_MAIN_FORMATION_ID);
   pushVarintField(line, 3, WIRE_MAIN_GODDESS_TYPE);
   pushBytes(line, 4, hero);
+  pushVarintField(line, 5, WIRE_MAIN_FORMATION_ID);
   const body: number[] = [];
   pushBytes(body, 1, line);
   return Uint8Array.from(body);

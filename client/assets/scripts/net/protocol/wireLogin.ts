@@ -28,7 +28,7 @@
  * c2s 3103（wire.3103，GReqPreComputeStrength）只在主线页点空壳探针或预计算时编。空壳整帧 040000001f0c0000。可带 hero_ids、type、line_up_type。不进 pullIdle。不从 3102 自动接。不播 spine。
  * c2s 3030（wire.3030，GReqStudy）只在主线页点切磋且带上 opponent_id 时编。字段 1 type、字段 2 opponent_id、字段 3 server_id。不是空壳 04000000d60b0000。缺 opponent_id 不编码。不进 pullIdle。不从 3102 自动接，成功后也不自动发 3102。
  * c2s 2015（wire.2015，GReqGMCommandNew）只在主线页点「GM 加英雄」且 command=ADD_HERO、类型号是正整数时编。字段 1 command，字段 2 param。缺这些不编码。不进 pullIdle。成功没有 2015 回包，实例在 s2c 4030。
- * c2s 3100（wire.3100，GReqLineUpSave）只在主线页点「GM 上 MAIN」且带上 4030 的 hero_id、站位在 2/3/5/6/7/8/9 时编。字段 1 lineData：type、formation_id、goddess_type、hero_list。空 cmd 不编。不进 pullIdle。不是 3101。成功是空的 s2c 3100。
+ * c2s 3100（wire.3100，GReqLineUpSave）只在主线页点「GM 上 MAIN」且带上 4030 的 hero_id、站位在 2/3/5/6/7/8/9 时编。字段 1 lineData：1 type、3 goddess_type、4 hero_list（1 hero_id、3 position）、5 formation_id。字段 2 time 和英雄字段 2 hp 不写。空 cmd 不编。不进 pullIdle。不是 3101。成功是空的 s2c 3100。
  * c2s 4001 page=1（wire.4001，包体 `08 01`）、空的 c2s 17000（wire.17000）、空的 c2s 12010（wire.12010）、
  * 空的 c2s 18001（wire.18001，GReqPvpData）、空的 c2s 22000（wire.22000，GReqSevenDayLoginData）、
  * 空的 c2s 21010（wire.21010，GReqSevenDayTargetList）、
