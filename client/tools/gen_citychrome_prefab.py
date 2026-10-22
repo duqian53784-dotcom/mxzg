@@ -139,12 +139,13 @@ def uuid_ref(value):
     return {"__uuid__": value}
 
 
-def compress_uuid(value):
-    """compressUuid(uuid, false): reserved head 5, the 23-char class id."""
+def compress_uuid(value, reserved=5):
+    """compressUuid. Default reserved head is 5 (false): the 23-char class id."""
     hex_str = value.replace("-", "").lower()
     if len(hex_str) != 32 or any(ch not in HEX_CHARS for ch in hex_str):
         raise SystemExit("script uuid is not a canonical uuid: " + value)
-    reserved = 5
+    if reserved != 5:
+        raise SystemExit("script __type__ reserved head must stay 5, got %s" % reserved)
     chars = [hex_str[:reserved]]
     i = reserved
     while i < 32:

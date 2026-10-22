@@ -4,7 +4,25 @@
 
 这些 Prefab **未接** Boot、`prefabLoad` 和任何 `USE_*`。运行时仍走原来的代码 UI。壳脚本只声明节点，不加载、不发协议。
 
-再生：`python3 client/tools/gen_common_prefab.py`。脚本只读 #66 那五份九宫格 `.meta`，不会改它们，也不会碰日文 `lbl` 位图。
+再生：`python3 client/tools/gen_common_prefab.py`。脚本只读 #66 那五份九宫格 `.meta`，不会改它们，也不会碰日文 `lbl` 位图。壳脚本 `.ts.meta` 的 uuid 也不重铸。
+
+## 脚本类 id
+
+Prefab `__type__` 与 Creator 3.8.8 `_RF.push` 必须是同一个 23 位字符串：壳脚本 uuid 走 `compressUuid(uuid, false)`，保留头 **5**。生成器 `compress_uuid` 的默认保留头就是 5。22 位 `compressUuid(uuid, true)`（保留头 2）对不上 chunk，检查器报 MissingScript。
+
+| Prefab | 旧 22 位 | 现 23 位 |
+|--------|----------|----------|
+| `CommonBtnPrimary` | `26ahNMcGFOLIUtdNI4X+Ea` | `266a1NMcGFOLIUtdNI4X+Ea` |
+| `CommonBtnSecondary` | `55JvyZLJ1IyYY2qlDC/aIj` | `5526fyZLJ1IyYY2qlDC/aIj` |
+| `CommonListRow` | `74pCSdF/tMRZCzJZgB6COf` | `74a42SdF/tMRZCzJZgB6COf` |
+| `CommonPanel` | `a3Yqy4t/9IUbZ5K1Y/9Dxu` | `a362ay4t/9IUbZ5K1Y/9Dxu` |
+| `CommonRedDot` | `51/S1ndAFCyaS1miF0bTsq` | `51fd21ndAFCyaS1miF0bTsq` |
+
+`CityChromeShell` 已在 #151 对齐到 `c4e8aHSe2NOkI8Vai2cC0fj`。`Boot.scene` 本来就是 23 位。不要把压缩串写回 `.meta`。
+
+改完后清一次 `client/library` 和 `client/temp`，再打开工程。通用 Prefab 不应再显示 MissingScript。
+
+自检：`python3 client/tools/check_script_type_ids.py`。
 
 设计基准与现有界面 Prefab 相同：**720×1280**，坐标相对父节点中心。除红点外，锚点都是 `(0.5, 0.5)`。
 

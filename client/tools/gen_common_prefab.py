@@ -16,6 +16,10 @@ Shell scripts under client/assets/scripts/ui/common/ are not generated here.
 This script only binds the @property node refs already declared on those shells.
 It does not touch Boot, prefabLoad, USE_* flags, or protocol scripts.
 
+Shell __type__ is compressUuid(meta uuid, false): reserved head defaults to 5,
+23 characters, the same string Creator 3.8.8 passes to _RF.push. The 22-char
+compressUuid(uuid, true) form is not a class id and is not written.
+
 File ids are hashed from node paths, so the prefab body is stable.
 An existing .meta uuid is kept, so a second run rewrites the same files.
 """
@@ -24,6 +28,8 @@ import hashlib
 import json
 import os
 import uuid
+
+from check_citychrome_shell_id import class_id, legacy_min_id
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 RES = os.path.join(ROOT, "client", "assets", "resources")
@@ -167,33 +173,32 @@ def uuid_ref(value):
     return {"__uuid__": value}
 
 
-def compress_uuid(value):
-    """Creator component __type__: 22-char compressed uuid (2 hex + 20 base64)."""
-    hex_str = value.replace("-", "").lower()
-    if len(hex_str) != 32 or any(ch not in HEX_CHARS for ch in hex_str):
-        raise SystemExit("script uuid is not a canonical uuid: " + value)
-    chars = [hex_str[0], hex_str[1]]
-    i = 2
-    while i < 32:
-        h1 = int(hex_str[i], 16)
-        h2 = int(hex_str[i + 1], 16)
-        h3 = int(hex_str[i + 2], 16)
-        chars.append(BASE64_KEYS[(h1 << 2) | (h2 >> 2)])
-        chars.append(BASE64_KEYS[((h2 & 3) << 4) | h3])
-        i += 3
-    compressed = "".join(chars)
-    if len(compressed) != 22:
-        raise SystemExit("compressed uuid length drifted: " + compressed)
+def compress_uuid(value, reserved=5):
+    """compressUuid. Default reserved head is 5: the 23-char packer class id.
+
+    reserved 2 is compressUuid(uuid, true), 22 characters. Prefab __type__
+    must not use that form. Creator 3.8.8 _RF.push uses reserved head 5.
+    """
+    if reserved == 5:
+        compressed = class_id(value)
+    elif reserved == 2:
+        compressed = legacy_min_id(value)
+    else:
+        raise SystemExit("reserved head must be 5 (class id) or 2 (legacy)")
     if decode_uuid(compressed) != value.lower():
         raise SystemExit("uuid compress did not round-trip: " + value)
     return compressed
 
 
 def decode_uuid(compressed):
-    if len(compressed) != 22:
-        raise SystemExit("compressed uuid is not 22 chars")
-    hex_chars = [compressed[0], compressed[1]]
-    for i in range(2, 22, 2):
+    if len(compressed) == 23:
+        reserved = 5
+    elif len(compressed) == 22:
+        reserved = 2
+    else:
+        raise SystemExit("compressed uuid is not 22 or 23 chars")
+    hex_chars = list(compressed[:reserved])
+    for i in range(reserved, len(compressed), 2):
         lhs = BASE64_VALUES[ord(compressed[i])]
         rhs = BASE64_VALUES[ord(compressed[i + 1])]
         hex_chars.append(HEX_CHARS[lhs >> 2])
@@ -289,7 +294,18 @@ def load_shell(prefab_name):
     value = meta.get("uuid") or ""
     if meta.get("importer") != "typescript" or len(value) < 32:
         raise SystemExit("shell meta missing uuid: " + meta_path)
-    return {"type": compress_uuid(value), "uuid": value, "props": spec["props"], "nodes": spec["nodes"]}
+    # Default reserved head 5. Same string as _RF.push / compressUuid(uuid, false).
+    compressed = compress_uuid(value)
+    legacy = compress_uuid(value, reserved=2)
+    if len(compressed) != 23 or compressed == legacy or len(legacy) != 22:
+        raise SystemExit("shell class id drifted: " + compressed)
+    return {
+        "type": compressed,
+        "legacy": legacy,
+        "uuid": value,
+        "props": spec["props"],
+        "nodes": spec["nodes"],
+    }
 
 
 SF = {key: load_sprite(rel) for key, rel in SPRITE_FILES.items()}
@@ -819,10 +835,34 @@ def existing_uuid(meta_path):
     return value
 
 
-def write_prefab(builder):
+def assert_script_types(builder, legacy):
+    found = 0
+    for obj in builder.objs:
+        type_name = obj.get("__type__")
+        if not isinstance(type_name, str) or type_name.startswith("cc."):
+            continue
+        found += 1
+        if type_name == legacy or len(type_name) == 22:
+            raise SystemExit(
+                "%s still uses 22-char script type %s" % (builder.prefab_name, type_name)
+            )
+        if len(type_name) != 23:
+            raise SystemExit(
+                "%s script __type__ must be 23 chars, got %s" % (builder.prefab_name, type_name)
+            )
+    if found != 1:
+        raise SystemExit("%s must contain one shell __type__" % builder.prefab_name)
+
+
+def write_prefab(builder, shell):
     path = os.path.join(OUT_DIR, builder.prefab_name + ".prefab")
     meta_path = path + ".meta"
+    assert_script_types(builder, shell["legacy"])
     text = json.dumps(builder.objs, ensure_ascii=False, indent=2) + "\n"
+    type_needle = '"__type__": "%s"' % shell["type"]
+    legacy_needle = '"__type__": "%s"' % shell["legacy"]
+    if text.count(type_needle) != 1 or legacy_needle in text:
+        raise SystemExit("refusing to write 22-char script type into " + path)
     for banned in (".png", "resources/", "USE_", "lbl-"):
         if banned in text:
             raise SystemExit("prefab embedded %s" % banned)
@@ -878,7 +918,7 @@ def main():
         build_dot(shells["CommonRedDot"]),
     ]
     for page in pages:
-        write_prefab(page)
+        write_prefab(page, shells[page.prefab_name])
     pngs = [name for name in os.listdir(OUT_DIR) if name.lower().endswith(".png")]
     if pngs:
         raise SystemExit("png landed in prefabs/ui/common: %s" % pngs)
