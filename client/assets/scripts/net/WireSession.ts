@@ -12,6 +12,7 @@ import {
 import {
   decodeWireBattleMatch,
   formatWireBattleMatch,
+  resolveWireBattleWin,
   WIRE_BATTLE_MATCH_CMD,
   WireBattleMatch,
 } from "./protocol/wireBattle";
@@ -2889,9 +2890,10 @@ export class WireSession {
     }
     this.battleMatch = snap;
     this.battleSerial += 1;
-    const note = "s2c 3001 " + formatWireBattleMatch(snap);
+    const roleId = Session.role ? Session.role.roleId : null;
+    const note = "s2c 3001 " + formatWireBattleMatch(snap, roleId);
     GameLog.shared.info("Wire", note);
-    if (snap.report && snap.report.win === true) {
+    if (snap.report && resolveWireBattleWin(snap.report, roleId) === true) {
       GameLog.shared.info("Wire", "s2c 3001 胜，再拉 3007");
       this.pullChapter();
     }

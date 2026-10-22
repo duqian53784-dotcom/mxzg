@@ -9,21 +9,24 @@
  * 主线页「挑战」才发。Boot.ts 不改。
  * 胜则服写 receiveReward / chapterId / missionRankTime，并记战斗日志。
  * 已有未领通关奖时服可能另走 3002 发 first_reward。本端不发 3002。
- * Handler 内未见扣体力。胜（战报字段 2 = 1）后再拉一次已有的空 c2s 3007 刷新，不是登录链加发。
+ * Handler 内未见扣体力。win_id 对上 atk_id 或当前角色 id 之后，再拉一次已有的空 c2s 3007。
+ * battle_type 单独不回拉。不是登录链加发。
  *
- * 不发领奖写 3002、3005、3008、3011、3013。
+ * 不发领奖写 3002、3005、3008、3011、3013。不接 3102、3006。
  * 不发 3100、3097、3098、18002、18001。
  * 不重发已挂的 3007（登录链）、3004、3099、3101、3203。
  * 硬禁 4601、29001。
- * 不把 Mock 1201 / 1202 当这帧战报。不写金币，不写钻石。不回落 Mock。不接 spine。
+ * 不把 Mock 1201 / 1202 当这帧战报。不写金币，不写钻石。不回落 Mock。
  *
  * s2c 是 GResBattleMatch。report 是字段 1，length-delimited 的 BattleReport。
- * 仓库没有 BattleReport 的字段表。字段 2 出现 0 或 1 时当作胜负：1 胜，0 负。
- * 没有字段 2 不写成 0，不判胜，不回拉 3007。其它号按字段号留在 marks。
- * 空包体是已同步空表，report 保持缺省。有 report 才用 planBattle 色块回放。
+ * 仓库没有 Battle.proto 全文。字段 2 已确认是 battle_type，不是胜负。出现的 0 仍是 0。
+ * 其余号按声明顺序锁在本文件：3 atk_id，4 def_id，5 win_id，6 repeated rounds，
+ * 7 攻方英雄，8 守方英雄。回合 1 序号、2 行动；行动 1 atk_pos、2 skill_id、3 hits、4 camp；
+ * 命中 1 def_pos、2 hurt、3 hp；英雄 1 pos、2 hero_id、3 hp、4 max_hp。
+ * camp 只有 1（我方）和 2（敌方）参与对位。其它值（含出现的 0）不当阵营。
+ * 没有的数保持 null，不写成 0。有 report 才在主线页播 resources/spine 首批套的站场和回合动作。
+ * 不播 bisha，不播受击。技能受击留到后面的刀。
  */
-import { BattlePlan, planBattle } from "../../module/mainline/battle";
-
 const MAX_BODY = 65536;
 
 /** 和 WsTransport 入站分发、encodeWireMessage 用同一个字符串。数字号是 WireCmd.battleMatch。 */
@@ -34,31 +37,83 @@ export const WIRE_BATTLE_MATCH_FRAME = "04000000b90b0000";
 /** GResBattleMatch.report。声明顺序第 1 个字段。 */
 export const WIRE_BATTLE_REPORT_FIELD = 1;
 
-/**
- * BattleReport 里用来判胜负的 bool。
- * 没有 Battle.proto 全文时只认这一个号：出现的 0 仍是负，出现的 1 仍是胜。
- * 没出现不写成 0。
- */
-export const WIRE_BATTLE_WIN_FIELD = 2;
+/** BattleReport.battle_type。不是胜负。出现的 0 仍是 0。 */
+export const WIRE_BATTLE_TYPE_FIELD = 2;
+
+export const WIRE_BATTLE_ATK_FIELD = 3;
+export const WIRE_BATTLE_DEF_FIELD = 4;
+export const WIRE_BATTLE_WIN_ID_FIELD = 5;
+export const WIRE_BATTLE_ROUNDS_FIELD = 6;
+export const WIRE_BATTLE_ATK_HERO_FIELD = 7;
+export const WIRE_BATTLE_DEF_HERO_FIELD = 8;
+
+/** 行动字段 4。1 我方，2 敌方。 */
+export const WIRE_BATTLE_CAMP_ALLY = 1;
+export const WIRE_BATTLE_CAMP_ENEMY = 2;
 
 export const WIRE_BATTLE_EMPTY = "已同步空表";
 export const WIRE_BATTLE_UNSYNCED_TOAST = "真服未同步";
 export const WIRE_BATTLE_NO_REPORT = "没有 report";
+export const WIRE_SPINE_LOAD_FAIL = "spine 未加载";
+
+/** 能播 attack 的我方默认套。英雄号对上已知套时不用这组。 */
+export const WIRE_SPINE_ALLY_STEMS = ["10105008", "10405005", "10505005"];
+/** 能播 attack 的敌方默认套。 */
+export const WIRE_SPINE_ENEMY_STEMS = ["10405006", "10405007", "10505010"];
+export const WIRE_SPINE_FLAG = "zhandoujijian";
+export const WIRE_SPINE_SWORD = "battle-sword";
+export const WIRE_SPINE_BOSS = "crusade_boss_die";
 
 export const WIRE_BATTLE_MATCH_NOTE =
-  "挑战发空 c2s 3001（GReqBattleMatch，整帧 04000000b90b0000）。须已有 3007 的 idx。3101 已有则不重发。有 report 用 planBattle 色块回放，不接 spine。不发 3002、3005、3008、3011、3013、3100、3097、3098、18002、18001。不重发 3004、3099、3203。硬禁 4601、29001。不把 Mock 1201/1202 当战报。缺字段不写成 0。空包体是已同步空表。未同步 Toast「真服未同步」。不回落 Mock。不写金币，不写钻石。不夹活动号。不进 pullIdle。不改 Boot";
+  "挑战发空 c2s 3001（GReqBattleMatch，整帧 04000000b90b0000）。须已有 3007 的 idx。3101 已有则不重发。字段 2 是 battle_type，不是胜负。胜负看 win_id，对照 atk_id 或角色 id。rounds 驱动 spine 站场和回合动作，技能受击后续再接。不接 3102、3006。不发 3002、3005、3008、3011、3013、3100、3097、3098、18002、18001。不重发 3004、3099、3203。硬禁 4601、29001。不把 Mock 1201/1202 当战报。缺字段不写成 0。空包体是已同步空表。未同步 Toast「真服未同步」。不回落 Mock。不写金币，不写钻石。不夹活动号。不进 pullIdle。不改 Boot";
 
 export const WIRE_BATTLE_MATCH_SIDE_EFFECT =
-  "服侧胜则写 receiveReward、chapterId、missionRankTime 和战斗日志。已有未领通关奖可能另推 3002 first_reward，本端不发 3002。Handler 内未见扣体力。胜后只再拉已有的空 c2s 3007。不进活动链";
+  "服侧胜则写 receiveReward、chapterId、missionRankTime 和战斗日志。已有未领通关奖可能另推 3002 first_reward，本端不发 3002。Handler 内未见扣体力。win_id 对上 atk_id 或角色 id 才再拉已有的空 c2s 3007。battle_type 单独不回拉。不进活动链";
 
 export interface WireBattleMark {
   field: number;
   text: string;
 }
 
+export interface WireBattleHero {
+  pos: number | null;
+  heroId: number | null;
+  hp: number | null;
+  maxHp: number | null;
+  marks: WireBattleMark[];
+}
+
+export interface WireBattleHit {
+  defPos: number | null;
+  hurt: number | null;
+  hp: number | null;
+  marks: WireBattleMark[];
+}
+
+export interface WireBattleAction {
+  atkPos: number | null;
+  skillId: number | null;
+  /** 1 我方，2 敌方。没有或不是这两个数时是原值或 null，不参与对位。 */
+  camp: number | null;
+  hits: WireBattleHit[];
+  marks: WireBattleMark[];
+}
+
+export interface WireBattleRound {
+  index: number | null;
+  actions: WireBattleAction[];
+  marks: WireBattleMark[];
+}
+
 export interface WireBattleReport {
-  /** 字段 2。没有时是 null，不写成 false。 */
-  win: boolean | null;
+  battleId: number | null;
+  battleType: number | null;
+  atkId: number | null;
+  defId: number | null;
+  winId: number | null;
+  rounds: WireBattleRound[];
+  atkHeroes: WireBattleHero[];
+  defHeroes: WireBattleHero[];
   marks: WireBattleMark[];
 }
 
@@ -71,9 +126,60 @@ export interface WireBattleMatch {
   marks: WireBattleMark[];
 }
 
+export type WireSpineClip = "stand" | "attack" | "die" | "idle";
+export type WireSpineSide = "ally" | "enemy" | "sword" | "flag";
+
+export interface WireSpineSlot {
+  side: WireSpineSide;
+  stem: string;
+  pos: number | null;
+  hp: number | null;
+  maxHp: number | null;
+  label: string;
+}
+
+export interface WireSpineCue {
+  slot: number;
+  clip: WireSpineClip;
+}
+
+export interface WireSpineBeat {
+  line: string;
+  cues: WireSpineCue[];
+  /** 与 slots 对齐。null 表示这一拍不改这条血。缺血不写成 0。 */
+  hp: (number | null)[];
+}
+
+export interface WireSpineReplay {
+  stageId: number;
+  win: boolean | null;
+  slots: WireSpineSlot[];
+  beats: WireSpineBeat[];
+  stems: string[];
+}
+
+const STEM_CLIPS: { [stem: string]: WireSpineClip[] } = {
+  "10101": ["stand"],
+  "10201": ["stand"],
+  "10301": ["stand"],
+  "10401": ["stand"],
+  "10501": ["stand"],
+  "10701": ["stand"],
+  "battle-sword": ["stand"],
+  "10405005": ["stand", "attack"],
+  "10405006": ["stand", "attack"],
+  "10405007": ["stand", "attack"],
+  "10505005": ["stand", "attack"],
+  "10505010": ["stand", "attack"],
+  "10105008": ["stand", "attack"],
+  zhandoujijian: ["idle"],
+  crusade_boss_die: ["stand", "die"],
+};
+
 /**
  * 解 s2c 3001。空包体返回已同步空表。
- * 超长、坏 varint、report 有包但解不开时返回 null，调用方保持上一次。
+ * 超长、坏 varint、report 有包但整段解不开时返回 null，调用方保持上一次。
+ * 某一条 round / hero 解不开时留在 marks，不把整份 report 丢掉。
  */
 export function decodeWireBattleMatch(body: Uint8Array | null | undefined): WireBattleMatch | null {
   if (!body) return null;
@@ -100,6 +206,23 @@ export function decodeWireBattleMatch(body: Uint8Array | null | undefined): Wire
   return { empty: false, report, marks };
 }
 
+/**
+ * 没有 win_id 时是 null，不判负，也不回拉 3007。
+ * win_id 对上 atk_id 或 roleId 才是胜。对上的 0 仍是 0，不算缺字段。
+ * 有 win_id 但对不上任何己方 id 时是负。只有 win_id、没有 atk_id 也没有角色 id 时仍是 null。
+ */
+export function resolveWireBattleWin(report: WireBattleReport, roleId: number | null): boolean | null {
+  if (report.winId === null) return null;
+  const ours: number[] = [];
+  if (typeof roleId === "number" && isFinite(roleId)) ours.push(roleId);
+  if (report.atkId !== null) ours.push(report.atkId);
+  if (ours.length === 0) return null;
+  for (let i = 0; i < ours.length; i++) {
+    if (ours[i] === report.winId) return true;
+  }
+  return false;
+}
+
 /** 3007 max_idx 是 chapterId，进战是 chapterId+1。没有 max 时才看 now，不把缺的 max 写成 0。 */
 export function wireMainlineFightStage(nowIdx: number | null, maxIdx: number | null): number | null {
   if (typeof maxIdx === "number" && isFinite(maxIdx) && maxIdx >= 0) return Math.floor(maxIdx) + 1;
@@ -114,52 +237,443 @@ export function formatWireFightLine(nowIdx: number | null, maxIdx: number | null
   return "进战 idx " + stage;
 }
 
-export function formatWireBattleMatch(snap: WireBattleMatch): string {
+export function formatWireBattleMatch(snap: WireBattleMatch, roleId?: number | null): string {
   if (snap.empty) return WIRE_BATTLE_EMPTY;
   if (!snap.report) return joinMarks(WIRE_BATTLE_NO_REPORT, snap.marks);
-  const win = snap.report.win === null ? "胜负未带" : snap.report.win ? "胜" : "负";
-  return joinMarks("report " + win, snap.report.marks.concat(snap.marks));
+  const win = resolveWireBattleWin(snap.report, roleId ?? null);
+  const winText = win === null ? "胜负未带" : win ? "胜" : "负";
+  const typeText = snap.report.battleType === null ? "battle_type 未带" : "battle_type " + snap.report.battleType;
+  const line = "report " + winText + " / " + typeText + " / rounds " + snap.report.rounds.length;
+  return joinMarks(line, snap.report.marks.concat(snap.marks));
+}
+
+export function wireSpineHasClip(stem: string, clip: WireSpineClip): boolean {
+  const list = STEM_CLIPS[stem];
+  if (!list) return false;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] === clip) return true;
+  }
+  return false;
 }
 
 /**
- * 有 report 才播。胜负未带时只播 planBattle 的第 1 回合，不把缺的胜负播成胜利。
- * 已知胜负时走现有四回合色块，不读 spine。
+ * 有 report 才编这份回放。不走 planBattle，不造四回合色块。
+ * 没有 rounds 时先站场；胜负已经能判时再补一拍攻击。胜且没有守方英雄时敌方用 crusade_boss_die。
+ * 有行动就按行动播 attack 或 stand。技能号只写进行，不播 bisha，不播 hit。
  */
-export function planWireReportReplay(stageId: number, win: boolean | null, roleName: string): BattlePlan {
-  if (win === true) return planBattle({ stageId, level: stageId, roleName, forced: "win" });
-  if (win === false) return planBattle({ stageId, level: stageId, roleName, forced: "lose" });
-  const pending = planBattle({ stageId, level: stageId, roleName, forced: "win" });
+export function planWireSpineReplay(report: WireBattleReport, roleId: number | null, stageId: number): WireSpineReplay {
+  const win = resolveWireBattleWin(report, roleId);
+  const slots = buildSlots(report, win);
+  const beats = buildBeats(report, slots, win);
+  const stems: string[] = [];
+  for (let i = 0; i < slots.length; i++) pushUnique(stems, slots[i].stem);
+  return { stageId, win, slots, beats, stems };
+}
+
+function buildSlots(report: WireBattleReport, win: boolean | null): WireSpineSlot[] {
+  const allies = heroSlots(report.atkHeroes, "ally");
+  const enemies = heroSlots(report.defHeroes, "enemy");
+  if (allies.length === 0) allies.push(fillerSlot("ally", win));
+  if (enemies.length === 0) enemies.push(fillerSlot("enemy", win));
+  const slots = allies.slice(0, 3).concat(enemies.slice(0, 3));
+  slots.push({
+    side: "sword",
+    stem: WIRE_SPINE_SWORD,
+    pos: null,
+    hp: null,
+    maxHp: null,
+    label: "战剑",
+  });
+  slots.push({
+    side: "flag",
+    stem: WIRE_SPINE_FLAG,
+    pos: null,
+    hp: null,
+    maxHp: null,
+    label: "战旗",
+  });
+  return slots;
+}
+
+function heroSlots(heroes: WireBattleHero[], side: "ally" | "enemy"): WireSpineSlot[] {
+  const slots: WireSpineSlot[] = [];
+  const pool = side === "ally" ? WIRE_SPINE_ALLY_STEMS : WIRE_SPINE_ENEMY_STEMS;
+  for (let i = 0; i < heroes.length && slots.length < 3; i++) {
+    const hero = heroes[i];
+    const named = hero.heroId !== null ? String(hero.heroId) : "";
+    const stem = STEM_CLIPS[named] ? named : pool[slots.length % pool.length];
+    slots.push({
+      side,
+      stem,
+      pos: hero.pos,
+      hp: hero.hp,
+      maxHp: hero.maxHp,
+      label: heroLabel(side, hero.pos, hero.hp, hero.maxHp, stem),
+    });
+  }
+  return slots;
+}
+
+function fillerSlot(side: "ally" | "enemy", win: boolean | null): WireSpineSlot {
+  const stem = side === "enemy" && win === true ? WIRE_SPINE_BOSS : side === "ally" ? WIRE_SPINE_ALLY_STEMS[0] : WIRE_SPINE_ENEMY_STEMS[0];
   return {
-    stageId: pending.stageId,
-    level: pending.level,
-    win: false,
-    reason: "clear",
-    rounds: [pending.rounds[0]],
+    side,
+    stem,
+    pos: null,
+    hp: null,
+    maxHp: null,
+    label: heroLabel(side, null, null, null, stem),
   };
 }
 
+function heroLabel(side: "ally" | "enemy", pos: number | null, hp: number | null, maxHp: number | null, stem: string): string {
+  const who = side === "ally" ? "我方" : "敌方";
+  const posText = pos === null ? "位置未带" : "位置 " + pos;
+  let hpText = "";
+  if (hp !== null && maxHp !== null) hpText = " " + hp + "/" + maxHp;
+  else if (hp !== null) hpText = " hp " + hp;
+  else if (maxHp !== null) hpText = " max " + maxHp;
+  return who + " " + posText + hpText + " " + stem;
+}
+
+function buildBeats(report: WireBattleReport, slots: WireSpineSlot[], win: boolean | null): WireSpineBeat[] {
+  const beats: WireSpineBeat[] = [standBeat(slots, "站场")];
+  let actionCount = 0;
+  for (let r = 0; r < report.rounds.length; r++) actionCount += report.rounds[r].actions.length;
+  if (actionCount === 0) {
+    for (let r = 0; r < report.rounds.length; r++) {
+      beats.push(standBeat(slots, roundPrefix(report.rounds[r]) + " · 无行动"));
+    }
+    if (win === true) beats.push(outcomeBeat(slots, "ally", win));
+    else if (win === false) beats.push(outcomeBeat(slots, "enemy", win));
+    return beats;
+  }
+  for (let r = 0; r < report.rounds.length; r++) {
+    const round = report.rounds[r];
+    if (round.actions.length === 0) {
+      beats.push(standBeat(slots, roundPrefix(round) + " · 无行动"));
+      continue;
+    }
+    for (let a = 0; a < round.actions.length; a++) {
+      const last = r === report.rounds.length - 1 && a === round.actions.length - 1;
+      beats.push(actionBeat(slots, round, round.actions[a], win, last));
+    }
+  }
+  return beats;
+}
+
+function standBeat(slots: WireSpineSlot[], line: string): WireSpineBeat {
+  return { line, cues: baseCues(slots), hp: emptyHp(slots) };
+}
+
+function outcomeBeat(slots: WireSpineSlot[], side: "ally" | "enemy", win: boolean | null): WireSpineBeat {
+  const cues = baseCues(slots);
+  const actor = firstSide(slots, side);
+  let verb = "站立";
+  if (actor >= 0 && wireSpineHasClip(slots[actor].stem, "attack")) {
+    setCue(cues, actor, "attack");
+    verb = "攻击";
+  }
+  const hp = emptyHp(slots);
+  if (win === true) applyBossDie(slots, cues, hp, true);
+  const line = (win === true ? "胜" : "负") + " · " + verb;
+  return { line, cues, hp };
+}
+
+function actionBeat(
+  slots: WireSpineSlot[],
+  round: WireBattleRound,
+  action: WireBattleAction,
+  win: boolean | null,
+  last: boolean
+): WireSpineBeat {
+  const cues = baseCues(slots);
+  const hp = emptyHp(slots);
+  let line = roundPrefix(round);
+  if (action.atkPos === null) {
+    line += " · 行动者未带";
+  } else {
+    const found = matchSlot(slots, action.atkPos, action.camp);
+    if (found === "ambiguous") line += " · 位置 " + action.atkPos + " 阵营未带";
+    else if (found === "missing") line += " · 位置 " + action.atkPos + " 未在场";
+    else {
+      const attack = wireSpineHasClip(slots[found].stem, "attack");
+      setCue(cues, found, attack ? "attack" : "stand");
+      line += " · 位置 " + action.atkPos + (attack ? " 攻击" : " 站立");
+    }
+  }
+  if (action.skillId !== null) line += " · 技能 " + action.skillId + " 未播";
+  for (let i = 0; i < action.hits.length; i++) {
+    const hit = action.hits[i];
+    if (hit.hurt !== null) line += " · 伤害 " + hit.hurt;
+    if (hit.defPos === null || hit.hp === null) continue;
+    const target = matchSlot(slots, hit.defPos, null);
+    if (typeof target !== "number") {
+      line += " · 受击位置 " + hit.defPos + (target === "ambiguous" ? " 阵营未带" : " 未在场");
+      continue;
+    }
+    hp[target] = hit.hp;
+  }
+  applyBossDie(slots, cues, hp, win === true && last);
+  return { line, cues, hp };
+}
+
+function applyBossDie(slots: WireSpineSlot[], cues: WireSpineCue[], hp: (number | null)[], finish: boolean): void {
+  for (let i = 0; i < slots.length; i++) {
+    if (slots[i].stem !== WIRE_SPINE_BOSS) continue;
+    if (hp[i] === 0 || (finish && slots[i].side === "enemy")) setCue(cues, i, "die");
+  }
+}
+
+function baseCues(slots: WireSpineSlot[]): WireSpineCue[] {
+  const cues: WireSpineCue[] = [];
+  for (let i = 0; i < slots.length; i++) {
+    const clip: WireSpineClip = slots[i].side === "flag" ? "idle" : "stand";
+    cues.push({ slot: i, clip: fallbackClip(slots[i].stem, clip) });
+  }
+  return cues;
+}
+
+function fallbackClip(stem: string, want: WireSpineClip): WireSpineClip {
+  if (wireSpineHasClip(stem, want)) return want;
+  if (wireSpineHasClip(stem, "stand")) return "stand";
+  if (wireSpineHasClip(stem, "idle")) return "idle";
+  return "stand";
+}
+
+function setCue(cues: WireSpineCue[], slot: number, clip: WireSpineClip): void {
+  for (let i = 0; i < cues.length; i++) {
+    if (cues[i].slot === slot) {
+      cues[i] = { slot, clip };
+      return;
+    }
+  }
+  cues.push({ slot, clip });
+}
+
+function matchSlot(slots: WireSpineSlot[], pos: number, camp: number | null): number | "ambiguous" | "missing" {
+  const hits: number[] = [];
+  for (let i = 0; i < slots.length; i++) {
+    const slot = slots[i];
+    if (slot.side !== "ally" && slot.side !== "enemy") continue;
+    if (slot.pos !== pos) continue;
+    if (camp === WIRE_BATTLE_CAMP_ALLY && slot.side !== "ally") continue;
+    if (camp === WIRE_BATTLE_CAMP_ENEMY && slot.side !== "enemy") continue;
+    hits.push(i);
+  }
+  if (hits.length === 1) return hits[0];
+  if (hits.length === 0) return "missing";
+  return "ambiguous";
+}
+
+function firstSide(slots: WireSpineSlot[], side: "ally" | "enemy"): number {
+  for (let i = 0; i < slots.length; i++) {
+    if (slots[i].side === side) return i;
+  }
+  return -1;
+}
+
+function emptyHp(slots: WireSpineSlot[]): (number | null)[] {
+  const hp: (number | null)[] = [];
+  for (let i = 0; i < slots.length; i++) hp.push(null);
+  return hp;
+}
+
+function roundPrefix(round: WireBattleRound): string {
+  return round.index === null ? "回合未带" : "回合 " + round.index;
+}
+
+function pushUnique(list: string[], stem: string): void {
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] === stem) return;
+  }
+  list.push(stem);
+}
+
 function decodeReport(body: Uint8Array): WireBattleReport | null {
-  if (body.length === 0) return { win: null, marks: [] };
+  const report = emptyReport();
+  if (body.length === 0) return report;
   const fields = readRawFields(body);
   if (!fields) return null;
-  const marks: WireBattleMark[] = [];
-  let win: boolean | null = null;
   for (let i = 0; i < fields.length; i++) {
     const row = fields[i];
-    if (row.field === WIRE_BATTLE_WIN_FIELD && row.kind === "varint") {
-      if (row.varint === 1) {
-        win = true;
+    if (row.kind === "varint" && typeof row.varint === "number") {
+      if (row.field === 1) {
+        report.battleId = row.varint;
         continue;
       }
-      if (row.varint === 0) {
-        win = false;
+      if (row.field === WIRE_BATTLE_TYPE_FIELD) {
+        report.battleType = row.varint;
+        continue;
+      }
+      if (row.field === WIRE_BATTLE_ATK_FIELD) {
+        report.atkId = row.varint;
+        continue;
+      }
+      if (row.field === WIRE_BATTLE_DEF_FIELD) {
+        report.defId = row.varint;
+        continue;
+      }
+      if (row.field === WIRE_BATTLE_WIN_ID_FIELD) {
+        report.winId = row.varint;
+        continue;
+      }
+    }
+    if (row.kind === "bytes" && row.bytes) {
+      if (row.field === WIRE_BATTLE_ROUNDS_FIELD) {
+        const round = decodeRound(row.bytes);
+        if (round) {
+          report.rounds.push(round);
+          continue;
+        }
+      } else if (row.field === WIRE_BATTLE_ATK_HERO_FIELD) {
+        const hero = decodeHero(row.bytes);
+        if (hero) {
+          report.atkHeroes.push(hero);
+          continue;
+        }
+      } else if (row.field === WIRE_BATTLE_DEF_HERO_FIELD) {
+        const hero = decodeHero(row.bytes);
+        if (hero) {
+          report.defHeroes.push(hero);
+          continue;
+        }
+      }
+    }
+    const mark = markOf(row);
+    if (mark) report.marks.push(mark);
+  }
+  return report;
+}
+
+function decodeRound(body: Uint8Array): WireBattleRound | null {
+  const round: WireBattleRound = { index: null, actions: [], marks: [] };
+  if (body.length === 0) return round;
+  const fields = readRawFields(body);
+  if (!fields) return null;
+  for (let i = 0; i < fields.length; i++) {
+    const row = fields[i];
+    if (row.field === 1 && row.kind === "varint" && typeof row.varint === "number") {
+      round.index = row.varint;
+      continue;
+    }
+    if (row.field === 2 && row.kind === "bytes" && row.bytes) {
+      const action = decodeAction(row.bytes);
+      if (action) {
+        round.actions.push(action);
         continue;
       }
     }
     const mark = markOf(row);
-    if (mark) marks.push(mark);
+    if (mark) round.marks.push(mark);
   }
-  return { win, marks };
+  return round;
+}
+
+function decodeAction(body: Uint8Array): WireBattleAction | null {
+  const action: WireBattleAction = { atkPos: null, skillId: null, camp: null, hits: [], marks: [] };
+  if (body.length === 0) return action;
+  const fields = readRawFields(body);
+  if (!fields) return null;
+  for (let i = 0; i < fields.length; i++) {
+    const row = fields[i];
+    if (row.kind === "varint" && typeof row.varint === "number") {
+      if (row.field === 1) {
+        action.atkPos = row.varint;
+        continue;
+      }
+      if (row.field === 2) {
+        action.skillId = row.varint;
+        continue;
+      }
+      if (row.field === 4) {
+        action.camp = row.varint;
+        continue;
+      }
+    }
+    if (row.field === 3 && row.kind === "bytes" && row.bytes) {
+      const hit = decodeHit(row.bytes);
+      if (hit) {
+        action.hits.push(hit);
+        continue;
+      }
+    }
+    const mark = markOf(row);
+    if (mark) action.marks.push(mark);
+  }
+  return action;
+}
+
+function decodeHit(body: Uint8Array): WireBattleHit | null {
+  const hit: WireBattleHit = { defPos: null, hurt: null, hp: null, marks: [] };
+  if (body.length === 0) return hit;
+  const fields = readRawFields(body);
+  if (!fields) return null;
+  for (let i = 0; i < fields.length; i++) {
+    const row = fields[i];
+    if (row.kind === "varint" && typeof row.varint === "number") {
+      if (row.field === 1) {
+        hit.defPos = row.varint;
+        continue;
+      }
+      if (row.field === 2) {
+        hit.hurt = row.varint;
+        continue;
+      }
+      if (row.field === 3) {
+        hit.hp = row.varint;
+        continue;
+      }
+    }
+    const mark = markOf(row);
+    if (mark) hit.marks.push(mark);
+  }
+  return hit;
+}
+
+function decodeHero(body: Uint8Array): WireBattleHero | null {
+  const hero: WireBattleHero = { pos: null, heroId: null, hp: null, maxHp: null, marks: [] };
+  if (body.length === 0) return hero;
+  const fields = readRawFields(body);
+  if (!fields) return null;
+  for (let i = 0; i < fields.length; i++) {
+    const row = fields[i];
+    if (row.kind === "varint" && typeof row.varint === "number") {
+      if (row.field === 1) {
+        hero.pos = row.varint;
+        continue;
+      }
+      if (row.field === 2) {
+        hero.heroId = row.varint;
+        continue;
+      }
+      if (row.field === 3) {
+        hero.hp = row.varint;
+        continue;
+      }
+      if (row.field === 4) {
+        hero.maxHp = row.varint;
+        continue;
+      }
+    }
+    const mark = markOf(row);
+    if (mark) hero.marks.push(mark);
+  }
+  return hero;
+}
+
+function emptyReport(): WireBattleReport {
+  return {
+    battleId: null,
+    battleType: null,
+    atkId: null,
+    defId: null,
+    winId: null,
+    rounds: [],
+    atkHeroes: [],
+    defHeroes: [],
+    marks: [],
+  };
 }
 
 function joinMarks(line: string, marks: WireBattleMark[]): string {
