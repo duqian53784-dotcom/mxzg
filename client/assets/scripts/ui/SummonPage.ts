@@ -3,6 +3,7 @@
  * 不改 .scene。底栏「召唤」打开本页，结果留在页面上。返回走页面栈。
  */
 import { Color, Node } from "cc";
+import { SUMMON_PREFAB_PATH, bindClick, loadPrefab, requireNode, spawnPrefab } from "./prefabLoad";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import {
@@ -39,8 +40,25 @@ export interface SummonPage {
   dispose(): void;
 }
 
+/**
+ * Mock 召唤页默认挂 SummonPage.prefab。
+ * false，或加载 / 绑节点失败时，仍走代码页。真服只读页不挂这份 Prefab。
+ */
+export const USE_SUMMON_PREFAB = true;
+
 export function buildSummonPage(host: SummonHost): SummonPage {
   return new SummonController(host);
+}
+
+export async function mountSummonPrefab(parent: Node, host: SummonHost): Promise<SummonPage> {
+  const prefab = await loadPrefab(SUMMON_PREFAB_PATH);
+  const root = spawnPrefab(prefab, parent);
+  try {
+    return new SummonController(host, root);
+  } catch (err) {
+    root.destroy();
+    throw err;
+  }
 }
 
 class SummonController implements SummonPage {
@@ -51,7 +69,26 @@ class SummonController implements SummonPage {
   private diamondLabel: Node | null = null;
   private resultLabel: Node | null = null;
 
-  constructor(private readonly host: SummonHost) {
+  constructor(private readonly host: SummonHost, existing?: Node) {
+    if (existing) {
+      this.node = existing;
+      this.body = existing;
+      this.diamondLabel = requireNode(existing, "Diamond");
+      this.resultLabel = requireNode(existing, "Result");
+      const single = requireNode(existing, "BtnSingle");
+      const ten = requireNode(existing, "BtnTen");
+      const singleLabel = single.getChildByName("Label");
+      const tenLabel = ten.getChildByName("Label");
+      if (singleLabel) setText(singleLabel, singleButtonText());
+      if (tenLabel) setText(tenLabel, tenButtonText());
+      this.write(this.diamondLabel, ownedDiamondText(this.host.diamond()));
+      this.write(this.resultLabel, summonResultText([]));
+      bindClick(single, () => void this.pull(1));
+      bindClick(ten, () => void this.pull(10));
+      bindClick(requireNode(existing, "BtnBack"), () => this.host.close());
+      GameLog.shared.info("Summon", "open prefab");
+      return;
+    }
     this.node = uiNode("SummonPage");
     place(createRect("bg", 720, 1280, PAGE_BG), this.node, 0, 0);
     this.body = uiNode("body");
