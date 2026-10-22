@@ -1,8 +1,8 @@
 /**
  * 主城只读 / 系统入口的挂接约定。
  *
- * 主屏只留常驻壳：一颗「活动」、一颗「更多」，加上拖动提示、门槛说明、网络状态。
- * 底栏五项在 CityChrome / BOTTOM_TABS，不在这里。
+ * 主屏不再画红「活动」、蓝「更多」矩形。入口在 CityChrome Prefab 的 ActGroup 和 UtilityRow/BtnMore。
+ * 点开仍是下面这两个列表。底栏五项在 CityChrome / BOTTOM_TABS，不在这里。
  * CityMap 上跟随拖动的建筑入口不在这里，不要改 CityMap 的拖动和建筑点。
  *
  * 后续只读协议新入口：

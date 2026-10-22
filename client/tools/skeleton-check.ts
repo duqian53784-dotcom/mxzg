@@ -2327,6 +2327,10 @@ function checkCityMap(): void {
   }
   assert(layout.effects.length === 7 && still === 5 && spine === 2, "effect table");
 
+  const cityMapSrc = readFileSync(uiSource("CityMap.ts"), "utf8");
+  assert(cityMapSrc.indexOf("placeActivity") < 0 && cityMapSrc.indexOf('uiNode("act-') < 0, "city map does not stack the activity strip");
+  assert(cityMapSrc.indexOf("TOUCH_MOVE") >= 0 && cityMapSrc.indexOf("placeBuilding") >= 0, "building drag stays");
+
   const gates = {
     opencondition: [
       { id: "main_smith_shop", name: "铁匠铺", condition_type: 1, level: 5, open_server_day: 0 },
@@ -23706,14 +23710,82 @@ function checkCityHub(): void {
   const end = mainApp.indexOf("private buildCityHub(");
   assert(start >= 0 && end > start, "buildCity is still in MainApp");
   const body = mainApp.slice(start, end);
-  assert(body.indexOf("CITY_HUB_ACTIVITY_ID") >= 0 && body.indexOf("CITY_HUB_MORE_ID") >= 0, "city screen opens the two hubs");
+  assert(body.indexOf("CITY_HUB_ACTIVITY_ID") < 0 && body.indexOf("CITY_HUB_MORE_ID") < 0, "city screen no longer draws the hub rectangles");
+  assert(body.indexOf("createButton") < 0, "buildCity does not create rectangular buttons");
   assert(body.indexOf("mountCityMap") >= 0 && body.indexOf("CITY_DRAG_HINT") >= 0, "city map and drag hint stay");
   assert(CITY_DRAG_HINT === "左右拖动地图，点建筑进入", "drag hint text stays");
   assert(body.indexOf('createButton("黑五"') < 0, "黑五 is not a city-screen button");
   assert(body.indexOf('createButton("查询阵法"') < 0, "查询阵法 is not a city-screen button");
   assert(body.indexOf('createButton("主线') < 0 && body.indexOf("openMainline()") < 0, "主线 is not placed on the city screen");
-  assert(mainApp.indexOf("USE_CITY_CHROME_PREFAB") >= 0, "prefab chrome switch stays");
+  assert(
+    mainApp.indexOf("openChild(CITY_HUB_ACTIVITY_ID)") >= 0 && mainApp.indexOf("openChild(CITY_HUB_MORE_ID)") >= 0,
+    "prefab entries still open the two hubs"
+  );
+  assert(mainApp.indexOf("export const USE_CITY_CHROME_PREFAB = true") >= 0, "prefab chrome default stays");
   assert(mainApp.indexOf("mountCityChrome(") >= 0, "code chrome fallback stays");
+  assert(mainApp.indexOf("setCityExtras") >= 0, "activity row hides off the city page");
+  const chrome = readFileSync(uiSource("CityChrome.ts"), "utf8");
+  const chromePaths = [
+    "ActGroup/ActRecommend",
+    "ActGroup/ActSevenDay",
+    "ActGroup/ActHeroArrive",
+    "ActGroup/ActPrivilege",
+    "ActGroup/ActWelfare",
+    "ActGroup/BtnActExpand",
+    "ActGroup/ActLimitGift",
+    "ActGroup/ActLimitTime",
+    "UtilityRow/BtnReplay",
+    "UtilityRow/BtnFriend",
+    "UtilityRow/BtnMail",
+    "UtilityRow/BtnRank",
+    "UtilityRow/BtnMore",
+    "BottomBar/TabCity",
+    "BottomBar/TabHero",
+    "BottomBar/TabSummon",
+    "BottomBar/TabForge",
+    "BottomBar/TabPlay",
+  ];
+  for (let i = 0; i < chromePaths.length; i++) {
+    assert(chrome.indexOf(chromePaths[i]) >= 0, "chrome binds " + chromePaths[i]);
+  }
+  assert(
+    chrome.indexOf("openActivity") >= 0 && chrome.indexOf("openMore") >= 0 && chrome.indexOf("openMail") >= 0,
+    "hub clicks stay on the prefab"
+  );
+  const boot = readFileSync(bootSource(), "utf8");
+  assert(boot.indexOf("USE_CITY_CHROME") < 0, "Boot does not grow a city chrome switch");
+}
+
+function uiSource(name: string): string {
+  const candidates = [
+    join(process.cwd(), "client", "assets", "scripts", "ui", name),
+    join(process.cwd(), "assets", "scripts", "ui", name),
+  ];
+  for (let i = 0; i < candidates.length; i++) {
+    try {
+      readFileSync(candidates[i], "utf8");
+      return candidates[i];
+    } catch (err) {
+      continue;
+    }
+  }
+  return candidates[0];
+}
+
+function bootSource(): string {
+  const candidates = [
+    join(process.cwd(), "client", "assets", "scripts", "core", "Boot.ts"),
+    join(process.cwd(), "assets", "scripts", "core", "Boot.ts"),
+  ];
+  for (let i = 0; i < candidates.length; i++) {
+    try {
+      readFileSync(candidates[i], "utf8");
+      return candidates[i];
+    } catch (err) {
+      continue;
+    }
+  }
+  return candidates[0];
 }
 
 function mainAppFile(): string {

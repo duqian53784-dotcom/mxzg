@@ -3,6 +3,7 @@ import { BOTTOM_TABS } from "../config/nav";
 import {
   bindClick,
   CITY_CHROME_PREFAB_PATH,
+  findNode,
   loadPrefab,
   requireNode,
   spawnPrefab,
@@ -23,7 +24,36 @@ export interface CityChrome {
   setIdentity(nameLine: string, subLine: string): void;
   setCurrencies(goldLine: string, diamondLine: string): void;
   setTabs(tabs: TabState[]): void;
+  /** 只在主城页显示 ActGroup / UtilityRow。代码壳没有这两块。 */
+  setCityExtras(visible: boolean): void;
 }
+
+/** Prefab 壳上的活动列表、更多列表和邮件。底栏五项仍走 onTab。 */
+export interface CityChromeActions {
+  openActivity(): void;
+  openMore(): void;
+  openMail(): void;
+}
+
+/** 右上活动组。点开都进原来的活动列表，不另开导航。 */
+const ACTIVITY_HUB_PATHS = [
+  "ActGroup/ActRecommend",
+  "ActGroup/ActSevenDay",
+  "ActGroup/ActHeroArrive",
+  "ActGroup/ActPrivilege",
+  "ActGroup/ActWelfare",
+  "ActGroup/BtnActExpand",
+  "ActGroup/ActLimitGift",
+  "ActGroup/ActLimitTime",
+];
+
+/** 底栏上方工具圆。更多进更多列表。录像、好友、排行没有单独页，也进更多列表。 */
+const MORE_HUB_PATHS = [
+  "UtilityRow/BtnReplay",
+  "UtilityRow/BtnFriend",
+  "UtilityRow/BtnRank",
+  "UtilityRow/BtnMore",
+];
 
 const TAB_SELECTED = new Color(186, 122, 42, 255);
 const TAB_OPEN = new Color(46, 110, 190, 255);
@@ -103,6 +133,7 @@ export function mountCityChrome(parent: Node, onTab: (id: string) => void): City
         if (bg) paintRect(bg, fillOf(tab.state));
       }
     },
+    setCityExtras(): void {},
   };
 }
 
@@ -130,20 +161,27 @@ const BOTTOM_PAD_COLOR = new Color(46, 26, 22, 255);
  * TopBar 下是 LblName、LblSub、CurrencyGold/Value、CurrencyGem/Value。
  * BottomBar 下是 TabCity、TabHero、TabSummon、TabForge、TabPlay，子节点 Label、Lock。
  * 路径相对 assets：prefabs/ui/city/CityChrome。不走 resources.load。
- * 不改加载开关。活动 / 更多入口仍由页面代码绘制，Prefab 里只留未激活桩。
+ * 不改 USE_CITY_CHROME_PREFAB，也不改 Boot。
+ * ActGroup 打开活动列表，UtilityRow/BtnMore 打开更多列表，BtnMail 打开原来的邮件页。
+ * BtnActivity / BtnMorePanel 保持 Prefab 里的未激活，避免再盖一层矩形。
+ * 底栏五个钮仍把 id 交给 onTab。
  */
-export async function mountCityChromePrefab(parent: Node, onTab: (id: string) => void): Promise<CityChrome> {
+export async function mountCityChromePrefab(
+  parent: Node,
+  onTab: (id: string) => void,
+  actions: CityChromeActions
+): Promise<CityChrome> {
   const prefab = await loadPrefab(CITY_CHROME_PREFAB_PATH);
   const root = spawnPrefab(prefab, parent);
   try {
-    return bindCityChromePrefab(root, onTab);
+    return bindCityChromePrefab(root, onTab, actions);
   } catch (err) {
     root.destroy();
     throw err;
   }
 }
 
-function bindCityChromePrefab(root: Node, onTab: (id: string) => void): CityChrome {
+function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: CityChromeActions): CityChrome {
   sealBottomBg(root);
   const nameNode = requireNode(root, "TopBar/LblName");
   const subNode = requireNode(root, "TopBar/LblSub");
@@ -165,6 +203,13 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void): CityChro
     bindClick(button, () => onTab(entry.id));
     buttons[entry.id] = button;
   }
+  for (let i = 0; i < ACTIVITY_HUB_PATHS.length; i++) {
+    bindClick(requireNode(root, ACTIVITY_HUB_PATHS[i]), () => actions.openActivity());
+  }
+  for (let i = 0; i < MORE_HUB_PATHS.length; i++) {
+    bindClick(requireNode(root, MORE_HUB_PATHS[i]), () => actions.openMore());
+  }
+  bindClick(requireNode(root, "UtilityRow/BtnMail"), () => actions.openMail());
 
   return {
     root,
@@ -187,6 +232,12 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void): CityChro
         const lock = button.getChildByName("Lock");
         if (lock) lock.active = tab.state === "locked";
       }
+    },
+    setCityExtras(visible: boolean): void {
+      const act = findNode(root, "ActGroup");
+      const utility = findNode(root, "UtilityRow");
+      if (act) act.active = visible;
+      if (utility) utility.active = visible;
     },
   };
 }
