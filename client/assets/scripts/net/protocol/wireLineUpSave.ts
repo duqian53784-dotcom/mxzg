@@ -1,0 +1,115 @@
+/**
+ * 主线探针把上一只 4030 的实例放上 MAIN。c2s 3100 是 GReqLineUpSave。
+ * 3100 = 0x0C1C，小端 1c 0c 00 00。空 cmd 不编，和只读 3101 不是一帧。
+ * 不进 pullIdle。登录链仍不发 3100。
+ *
+ * 字段按声明顺序从 1 编号。
+ * GReqLineUpSave：1 lineData（PSLineUpData）。
+ * PSLineUpData：1 type，2 formation_id，3 goddess_type，4 hero_list（repeated PSLineUpHeroData）。
+ * PSLineUpHeroData：1 hero_id（4030 的实例，不是类型号），2 position。
+ * 探针写 type=0（MAIN）、formation_id=1、goddess_type=0、position=2。
+ * 出现的 0 仍写 0。
+ * 阵法 1 合法站位只有 2/3/5/6/7/8/9。1 和 4 不编码。
+ *
+ * 成功是空的 s2c 3100。有包体不算这次成功。
+ */
+/** 和 encodeWireMessage 用同一个字符串。数字号是 WireCmd.lineUpSave。 */
+export const WIRE_LINEUP_SAVE_CMD = "wire.3100";
+
+export const WIRE_MAIN_LINE_TYPE = 0;
+export const WIRE_MAIN_FORMATION_ID = 1;
+export const WIRE_MAIN_GODDESS_TYPE = 0;
+export const WIRE_MAIN_POSITION = 2;
+
+/** 阵法 1。不要把 1 或 4 编出去。 */
+export const WIRE_LINEUP_SAVE_POSITIONS = [2, 3, 5, 6, 7, 8, 9] as const;
+
+/** hero_id=42、position=2 的整帧。用来对照，不是默认发出的实例。 */
+export const WIRE_LINEUP_SAVE_SAMPLE_FRAME = "120000001c0c00000a0c0800100118002204082a1002";
+
+export interface WireLineUpSaveQuery {
+  heroId: number;
+  position: number;
+}
+
+export interface WireLineUpSaveAck {
+  empty: true;
+}
+
+/** 没有 hero_id，或站位不在 2/3/5/6/7/8/9 时返回 null。空 data 返回 null。 */
+export function readWireLineUpSave(data: unknown): WireLineUpSaveQuery | null {
+  if (!data || typeof data !== "object") return null;
+  const raw = data as { heroId?: unknown; position?: unknown };
+  const heroId = positiveId(raw.heroId);
+  if (heroId === null) return null;
+  const position = typeof raw.position === "number" ? raw.position : WIRE_MAIN_POSITION;
+  if (!legalPosition(position)) return null;
+  return { heroId, position: Math.floor(position) };
+}
+
+/** 缺实例或站位非法时返回 null。type=0 和 goddess_type=0 照写。 */
+export function encodeWireLineUpSaveBody(query: WireLineUpSaveQuery): Uint8Array | null {
+  if (!legalPosition(query.position)) return null;
+  if (!Number.isSafeInteger(query.heroId) || query.heroId < 1) return null;
+  const hero: number[] = [];
+  pushVarintField(hero, 1, query.heroId);
+  pushVarintField(hero, 2, Math.floor(query.position));
+  const line: number[] = [];
+  pushVarintField(line, 1, WIRE_MAIN_LINE_TYPE);
+  pushVarintField(line, 2, WIRE_MAIN_FORMATION_ID);
+  pushVarintField(line, 3, WIRE_MAIN_GODDESS_TYPE);
+  pushBytes(line, 4, hero);
+  const body: number[] = [];
+  pushBytes(body, 1, line);
+  return Uint8Array.from(body);
+}
+
+/** 空包体是成功。有字节、或缺包，都不是这次成功。 */
+export function decodeWireLineUpSave(body: Uint8Array | null | undefined): WireLineUpSaveAck | null {
+  if (!body) return null;
+  if (body.length !== 0) return null;
+  return { empty: true };
+}
+
+export function legalLineUpPosition(position: number): boolean {
+  return legalPosition(position);
+}
+
+function legalPosition(position: number): boolean {
+  if (!Number.isFinite(position)) return false;
+  const n = Math.floor(position);
+  for (let i = 0; i < WIRE_LINEUP_SAVE_POSITIONS.length; i++) {
+    if (WIRE_LINEUP_SAVE_POSITIONS[i] === n) return true;
+  }
+  return false;
+}
+
+function positiveId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 1) return value;
+  if (typeof value === "string" && /^[1-9]\d{0,15}$/.test(value)) {
+    const n = Number(value);
+    if (Number.isSafeInteger(n) && n >= 1) return n;
+  }
+  return null;
+}
+
+function pushVarintField(parts: number[], field: number, value: number): void {
+  pushVarint(parts, (field << 3) | 0);
+  pushVarint(parts, value);
+}
+
+function pushBytes(parts: number[], field: number, bytes: number[]): void {
+  pushVarint(parts, (field << 3) | 2);
+  pushVarint(parts, bytes.length);
+  for (let i = 0; i < bytes.length; i++) parts.push(bytes[i]);
+}
+
+function pushVarint(parts: number[], value: number): void {
+  let n = Math.floor(value);
+  if (n < 0) n = 0;
+  while (n > 127) {
+    parts.push((n & 0x7f) | 0x80);
+    n = Math.floor(n / 128);
+  }
+  parts.push(n);
+}

@@ -58,6 +58,22 @@ import {
   WireStudySnapshot,
 } from "./protocol/wireStudy";
 import {
+  decodeWireHeroAdd,
+  decodeWireServerError,
+  formatWireGmHero,
+  readWireGmAddHero,
+  WIRE_GM_CMD,
+  WIRE_GM_COMMAND,
+  WIRE_HERO_ADD_CMD,
+  WIRE_SERVER_ERROR_CMD,
+} from "./protocol/wireGmCommand";
+import {
+  decodeWireLineUpSave,
+  readWireLineUpSave,
+  WIRE_LINEUP_SAVE_CMD,
+  WIRE_MAIN_POSITION,
+} from "./protocol/wireLineUpSave";
+import {
   decodeWireIdle,
   decodeWireIdleClaim,
   WIRE_IDLE_CLAIM_CMD,
@@ -744,6 +760,18 @@ export class WireSession {
   static study: WireStudySnapshot | null = null;
   /** 每处理一帧能解开的 s2c 3030 加一。主线页用来认领回包。胜了不回拉 3007。不自动发 3102。 */
   static studySerial = 0;
+  /** 最近一帧 s2c 4030 里最后一只英雄的实例 id。null 表示还没有。不是类型号。 */
+  static gmHeroId: number | null = null;
+  /** 最近一帧 s2c 4030 里收到的实例。空数组表示还没有。 */
+  static gmHeroIds: number[] = [];
+  /** 每记下一次带实例的 s2c 4030 加一。主线页用来认领。坏包不加。 */
+  static gmHeroSerial = 0;
+  /** 每收到一帧空的 s2c 3100 加一。有包体不加，也不改 3101。 */
+  static lineUpSaveSerial = 0;
+  /** 最近一帧 s2c 1005 的说明。空字符串表示还没收到。 */
+  static wireErrorText = "";
+  /** 每收到一帧 s2c 1005 加一。主线页等 2015 / 3100 时用来 Toast。 */
+  static wireErrorSerial = 0;
   /** s2c 3004 字段 1。0 是服上的 0。没出现过是 null。 */
   static rewardTime: number | null = null;
   /** 最近一帧解开的 s2c 3004，给主线页「挂机奖励」。null 表示还没收到。不写金币。 */
@@ -1163,6 +1191,9 @@ export class WireSession {
   private static offChristmasMission: (() => void) | null = null;
   private static offMagicTowerLevelRank: (() => void) | null = null;
   private static offSpringOutingGrid: (() => void) | null = null;
+  private static offHeroAdd: (() => void) | null = null;
+  private static offLineUpSave: (() => void) | null = null;
+  private static offServerError: (() => void) | null = null;
   private static pending: WireRoleProfile | null = null;
   private static pendingChapter: WireChapterProgress | null = null;
   private static pendingIdle: WireIdleSnapshot | null = null;
@@ -1384,7 +1415,10 @@ export class WireSession {
       this.offSpringOuting &&
       this.offChristmasMission &&
       this.offMagicTowerLevelRank &&
-      this.offSpringOutingGrid
+      this.offSpringOutingGrid &&
+      this.offHeroAdd &&
+      this.offLineUpSave &&
+      this.offServerError
     ) {
       return;
     }
@@ -1468,6 +1502,9 @@ export class WireSession {
     this.offChristmasMission = net.subscribe(WIRE_CHRISTMAS_MISSION_CMD, (msg) => this.onChristmasMission(msg.data));
     this.offMagicTowerLevelRank = net.subscribe(WIRE_MAGIC_TOWER_LEVEL_RANK_CMD, (msg) => this.onMagicTowerLevelRank(msg.data));
     this.offSpringOutingGrid = net.subscribe(WIRE_SPRING_OUTING_GRID_CMD, (msg) => this.onSpringOutingGrid(msg.data));
+    this.offHeroAdd = net.subscribe(WIRE_HERO_ADD_CMD, (msg) => this.onHeroAdd(msg.data));
+    this.offLineUpSave = net.subscribe(WIRE_LINEUP_SAVE_CMD, (msg) => this.onLineUpSave(msg.data));
+    this.offServerError = net.subscribe(WIRE_SERVER_ERROR_CMD, (msg) => this.onServerError(msg.data));
   }
 
   static hold(net: NetClient): void {
@@ -1497,6 +1534,7 @@ export class WireSession {
     this.preComputeSerial = 0;
     this.study = null;
     this.studySerial = 0;
+    this.resetGmProbe();
     this.rewardTime = null;
     this.maxRewardTime = null;
     this.idleProbe = null;
@@ -1664,6 +1702,7 @@ export class WireSession {
       this.preComputeSerial = 0;
       this.study = null;
       this.studySerial = 0;
+      this.resetGmProbe();
       this.rewardTime = null;
       this.maxRewardTime = null;
       this.idleProbe = null;
@@ -1831,6 +1870,7 @@ export class WireSession {
     this.preComputeSerial = 0;
     this.study = null;
     this.studySerial = 0;
+    this.resetGmProbe();
     this.rewardTime = null;
     this.maxRewardTime = null;
     this.idleProbe = null;
@@ -2220,6 +2260,49 @@ export class WireSession {
   /** 收到过 s2c 3030（含空包体）才算同步。解不开的包不算。3001、3006、3102、3103、3007 单独到不算。 */
   static hasStudy(): boolean {
     return this.study !== null;
+  }
+
+  /**
+   * 主线页「GM 加英雄」。c2s 2015，GReqGMCommandNew。
+   * command=ADD_HERO，param 是类型号和 "9"。类型号空白时用 10505010。不是正整数不发。
+   * 不进 pullIdle。成功没有 2015 回包。实例在 s2c 4030。
+   * 没连上或还没有 3007 idx 时返回 false。
+   */
+  static pullGmAddHero(typeId: string): boolean {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return false;
+    if (!this.hasChapter()) return false;
+    const query = readWireGmAddHero({ command: WIRE_GM_COMMAND, typeId });
+    if (!query) return false;
+    net.send(WIRE_GM_CMD, query);
+    return true;
+  }
+
+  /**
+   * 主线页「GM 上 MAIN」。c2s 3100，GReqLineUpSave。
+   * type=0，formation_id=1，goddess_type=0，position=2。hero_id 用最近一次 4030 的实例。
+   * 没有实例不发。站位不在 2/3/5/6/7/8/9 不发。
+   * 不进 pullIdle。不改 3101 的只读快照。成功是空的 s2c 3100。
+   * 没连上或还没有 3007 idx 时返回 false。
+   */
+  static pullMainLineUp(): boolean {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return false;
+    if (!this.hasChapter()) return false;
+    if (this.gmHeroId === null) return false;
+    const query = readWireLineUpSave({ heroId: this.gmHeroId, position: WIRE_MAIN_POSITION });
+    if (!query) return false;
+    net.send(WIRE_LINEUP_SAVE_CMD, query);
+    return true;
+  }
+
+  private static resetGmProbe(): void {
+    this.gmHeroId = null;
+    this.gmHeroIds = [];
+    this.gmHeroSerial = 0;
+    this.lineUpSaveSerial = 0;
+    this.wireErrorText = "";
+    this.wireErrorSerial = 0;
   }
 
   /**
@@ -3303,6 +3386,41 @@ export class WireSession {
     this.study = snap;
     this.studySerial += 1;
     GameLog.shared.info("Wire", "s2c 3030 " + formatWireStudy(snap));
+    this.emit();
+  }
+
+  private static onHeroAdd(data: unknown): void {
+    let snap: { heroIds: number[] } | null = null;
+    try {
+      snap = decodeWireHeroAdd(wireBody(data));
+    } catch (err) {
+      GameLog.shared.error("Wire", "s2c 4030 解不开 " + (err instanceof Error ? err.message : "未知错误"));
+      return;
+    }
+    if (!snap || snap.heroIds.length === 0) {
+      GameLog.shared.info("Wire", "s2c 4030 没有实例，英雄不改");
+      return;
+    }
+    this.gmHeroIds = snap.heroIds.slice();
+    this.gmHeroId = snap.heroIds[snap.heroIds.length - 1];
+    this.gmHeroSerial += 1;
+    GameLog.shared.info("Wire", "s2c 4030 " + formatWireGmHero(this.gmHeroId));
+    this.emit();
+  }
+
+  private static onLineUpSave(data: unknown): void {
+    const ack = decodeWireLineUpSave(wireBody(data));
+    if (!ack) return;
+    this.lineUpSaveSerial += 1;
+    GameLog.shared.info("Wire", "s2c 3100 空包，MAIN 已保存");
+    this.emit();
+  }
+
+  private static onServerError(data: unknown): void {
+    const err = decodeWireServerError(wireBody(data));
+    this.wireErrorText = err.text;
+    this.wireErrorSerial += 1;
+    GameLog.shared.info("Wire", "s2c 1005 " + err.text);
     this.emit();
   }
 
@@ -5875,6 +5993,18 @@ export class WireSession {
     if (this.offSpringOutingGrid) {
       this.offSpringOutingGrid();
       this.offSpringOutingGrid = null;
+    }
+    if (this.offHeroAdd) {
+      this.offHeroAdd();
+      this.offHeroAdd = null;
+    }
+    if (this.offLineUpSave) {
+      this.offLineUpSave();
+      this.offLineUpSave = null;
+    }
+    if (this.offServerError) {
+      this.offServerError();
+      this.offServerError = null;
     }
   }
 }

@@ -1174,6 +1174,16 @@ import {
   wireLineUpNote,
 } from "../assets/scripts/net/protocol/wireLineUp";
 import {
+  decodeWireHeroAdd,
+  decodeWireServerError,
+  WIRE_GM_ADD_HERO_FRAME,
+  WIRE_GM_CLOSED_TOAST,
+} from "../assets/scripts/net/protocol/wireGmCommand";
+import {
+  decodeWireLineUpSave,
+  WIRE_LINEUP_SAVE_SAMPLE_FRAME,
+} from "../assets/scripts/net/protocol/wireLineUpSave";
+import {
   decodeWireRunningPromotion,
   formatWireRunningPromotionHead,
   formatWireRunningPromotionLine,
@@ -9463,6 +9473,37 @@ async function checkWs(): Promise<void> {
       lineupPageSrc.indexOf("3099 不走") >= 0 &&
       lineupPageSrc.indexOf('createButton("查询阵法"') >= 0,
     "mainline page probes empty 3099 beside 3101 and does not play it as a report"
+  );
+  assert(encodeWireMessage({ cmd: "wire.3100" }) === null, "bare wire.3100 stays unencoded");
+  assert(encodeWireMessage({ cmd: "wire.2015" }) === null, "bare wire.2015 stays unencoded");
+  const gmAdd = encodeWireMessage({ cmd: "wire.2015", data: { command: "ADD_HERO", typeId: "10505010" } });
+  assert(
+    gmAdd !== null && gmAdd.cmdId === 2015 && bytesToHex(gmAdd.bytes) === WIRE_GM_ADD_HERO_FRAME,
+    "default ADD_HERO frame is command plus type and star"
+  );
+  assert(encodeWireMessage({ cmd: "wire.3100", data: { heroId: 42, position: 1 } }) === null, "formation 1 position 1 is not encoded");
+  assert(encodeWireMessage({ cmd: "wire.3100", data: { heroId: 42, position: 4 } }) === null, "formation 1 position 4 is not encoded");
+  const lineSave = encodeWireMessage({ cmd: "wire.3100", data: { heroId: 42, position: 2 } });
+  assert(
+    lineSave !== null && lineSave.cmdId === 3100 && bytesToHex(lineSave.bytes) === WIRE_LINEUP_SAVE_SAMPLE_FRAME,
+    "hero 42 position 2 is the MAIN save frame and is not 3101"
+  );
+  const heroAdded = decodeWireHeroAdd(hexToBytes("0a04082a1009"));
+  assert(heroAdded !== null && heroAdded.heroIds.length === 1 && heroAdded.heroIds[0] === 42, "4030 stores instance 42 and not the type");
+  const emptySave = decodeWireLineUpSave(new Uint8Array(0));
+  assert(emptySave !== null && emptySave.empty === true, "empty s2c 3100 is the save ack");
+  assert(decodeWireLineUpSave(fieldVarint(1, 1)) === null, "non-empty s2c 3100 is not a save ack");
+  assert(decodeWireServerError(hexToBytes("08c58d02")).text.indexOf("34501") >= 0, "1005 field 1 is the error code");
+  assert(
+    lineupPageSrc.indexOf('createButton("GM 加英雄"') >= 0 &&
+      lineupPageSrc.indexOf('createButton("GM 上 MAIN"') >= 0 &&
+      lineupPageSrc.indexOf(WIRE_GM_CLOSED_TOAST) >= 0 &&
+      lineupPageSrc.indexOf(", 0, -22)") >= 0 &&
+      lineupPageSrc.indexOf("probe-scroll") >= 0 &&
+      lineupPageSrc.indexOf("cameraPriority") >= 0 &&
+      lineupPageSrc.indexOf("UITransform") >= 0 &&
+      lineupPageSrc.indexOf("this.node.on(Node.EventType.TOUCH_START") < 0,
+    "gm buttons stay under the challenge row and gestures stay on probe-scroll"
   );
   assert(decodeWireLineUp(null) === null, "null 3101 body is not a snapshot");
   assert(decodeWireLineUp(new Uint8Array([0x80])) === null, "bad 3101 ignored");
@@ -17799,6 +17840,43 @@ async function checkWs(): Promise<void> {
           WireSession.lineUpSerial === serialBeforeLineUpProbe + 1 &&
           roleSockets[0].sent.length === sentBeforeLineUpProbe + 1,
         "3100, 3020, 3002, 3005, 3008, 3011, 3013, 4601 and 29001 do not replace the 3101 probe or send another frame"
+      );
+      const sentBeforeGmHero = roleSockets[0].sent.length;
+      const lineUpBeforeGm = WireSession.lineUp;
+      const lineUpSerialBeforeGm = WireSession.lineUpSerial;
+      assert(WireSession.pullGmAddHero("10505010"), "2015 probe sends ADD_HERO when idx is present");
+      assert(roleSockets[0].sent.length === sentBeforeGmHero + 1, "2015 is one frame and does not resend 3101");
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeGmHero] as ArrayBuffer)) === WIRE_GM_ADD_HERO_FRAME,
+        "2015 probe is ADD_HERO with the default type and star"
+      );
+      roleSockets[0].push(encodeFrame(4030, fieldBytes(1, concatBytes(fieldVarint(1, 42), fieldVarint(2, 9)))));
+      assert(
+        WireSession.gmHeroId === 42 &&
+          WireSession.lineUp === lineUpBeforeGm &&
+          WireSession.lineUpSerial === lineUpSerialBeforeGm,
+        "4030 stores the hero instance and does not replace the 3101 probe"
+      );
+      const saveSerialBefore = WireSession.lineUpSaveSerial;
+      assert(WireSession.pullMainLineUp(), "3100 save uses the 4030 instance");
+      assert(roleSockets[0].sent.length === sentBeforeGmHero + 2, "3100 save is one more frame");
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeGmHero + 1] as ArrayBuffer)) === WIRE_LINEUP_SAVE_SAMPLE_FRAME,
+        "3100 save puts hero 42 at position 2"
+      );
+      roleSockets[0].push(encodeFrame(3100));
+      assert(
+        WireSession.lineUpSaveSerial === saveSerialBefore + 1 &&
+          WireSession.lineUp === lineUpBeforeGm &&
+          WireSession.lineUpSerial === lineUpSerialBeforeGm,
+        "empty s2c 3100 counts as save success and does not replace the 3101 probe"
+      );
+      roleSockets[0].push(encodeFrame(3100, fieldVarint(1, 6)));
+      assert(
+        WireSession.lineUpSaveSerial === saveSerialBefore + 1 &&
+          WireSession.lineUp === lineUpBeforeGm &&
+          WireSession.lineUpSerial === lineUpSerialBeforeGm,
+        "non-empty s2c 3100 does not count as save success or replace the 3101 probe"
       );
       const sentBeforeFormationProbe = roleSockets[0].sent.length;
       const goldBeforeFormationProbe = Session.gold;
