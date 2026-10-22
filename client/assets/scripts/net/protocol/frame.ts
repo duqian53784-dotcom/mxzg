@@ -37,6 +37,12 @@ export const WireCmd = {
    */
   battleMatch: 3001,
   /**
+   * c2s 空体。Battle.proto 的 GReqChapterRewardList。主线页打开时只读拉。
+   * 整帧 `04 00 00 00 c2 0b 00 00`。挂在已合 3001 之后，不进 pullIdle。
+   * s2c 是 GResChapterRewardList.list，已领首通 idx。不是占位 stage.enter（1201）。
+   */
+  chapterRewardList: 3010,
+  /**
    * c2s 空体。Battle.proto 的 GReqChapterItemList。进主城、空 c2s 3007 之后发。
    * s2c 回 reward_time / max_reward_time。不是占位 idle.query（1301）。
    */
