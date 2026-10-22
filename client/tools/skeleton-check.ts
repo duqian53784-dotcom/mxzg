@@ -43,8 +43,19 @@ import {
   readonlyCitySlot,
 } from "../assets/scripts/ui/cityHubEntries";
 import {
+  BATTLE_FLOAT_CRIT_PATH,
+  BATTLE_FLOAT_LAYER_PATH,
+  BATTLE_FLOAT_ROOT_PATH,
+  BATTLE_FLOAT_SLOT_COUNT,
   BATTLE_PREFAB_PATH,
+  BATTLE_SKILL_NAME_BANNER_PATH,
+  BATTLE_SKILL_NAME_LABEL_PATH,
+  battleBuffIconPath,
+  battleBuffRowPath,
+  battleFloatDmgPath,
+  battleHeadPath,
   battleHpPath,
+  battleLevelLabelPath,
   battlePrefabRequiredPaths,
   battleSlotPath,
   battleVfxPath,
@@ -53,6 +64,19 @@ import {
   HP_FILL_FULL_X,
   vfxLocal,
 } from "../assets/scripts/ui/battlePrefabLayout";
+import {
+  BATTLE_BUFF_SLOT_COUNT,
+  BATTLE_CRIT_BUBBLE,
+  battleSkillTitle,
+  beatShowsCrit,
+  overheadLevelText,
+  planBattlePresentation,
+  readHeroBuffIds,
+  readHeroLevel,
+  readHitCrit,
+  visibleBuffCount,
+  visibleFloats,
+} from "../assets/scripts/ui/battlePresentation";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
 import {
   applyBagUse,
@@ -15084,6 +15108,45 @@ async function checkWs(): Promise<void> {
       roundPlan.stems.indexOf("bisha") < 0,
     "rounds drive an attack cue, keep the hit hp, and mount batch2 skill and yanwu instead of hero hit or bisha"
   );
+  const roundPresent = planBattlePresentation(roundReport.report as NonNullable<typeof roundReport.report>, roundPlan);
+  assert(
+    roundPresent.beats.length === roundPlan.beats.length &&
+      roundPresent.beats[0].floats.length === 0 &&
+      roundPresent.beats[0].skillName === null &&
+      roundPresent.beats[1].skillId === 9 &&
+      roundPresent.beats[1].skillName === "act" &&
+      roundPresent.beats[1].skillName !== "圣光打击" &&
+      roundPresent.beats[1].floats.length === 1 &&
+      roundPresent.beats[1].floats[0].hurt === 15 &&
+      roundPresent.beats[1].floats[0].crit === false &&
+      roundPresent.beats[1].floats[0].anchor === 1 &&
+      !beatShowsCrit(roundPresent.beats[1].floats) &&
+      roundPresent.overhead.length === 2 &&
+      roundPresent.overhead[0].level === null &&
+      roundPresent.overhead[0].buffIds === null &&
+      overheadLevelText(roundPresent.overhead[0].level) === null &&
+      visibleBuffCount(roundPresent.overhead[0].buffIds) === null,
+    "3001 replay feeds hurt and the skill stem, and does not invent crit, level, or buffs"
+  );
+  const critHit = roundReport.report.rounds[0].actions[0].hits[0] as { crit?: number };
+  const critHero = roundReport.report.atkHeroes[0] as { level?: number; buffs?: number[] };
+  critHit.crit = 1;
+  critHero.level = 0;
+  critHero.buffs = [4, 8];
+  const critPresent = planBattlePresentation(roundReport.report as NonNullable<typeof roundReport.report>, roundPlan);
+  assert(
+    critPresent.beats[1].floats[0].crit === true &&
+      beatShowsCrit(critPresent.beats[1].floats) &&
+      critPresent.overhead[0].level === 0 &&
+      overheadLevelText(0) === "Lv.0" &&
+      critPresent.overhead[0].buffIds !== null &&
+      critPresent.overhead[0].buffIds.length === 2 &&
+      visibleBuffCount(critPresent.overhead[0].buffIds) === 2,
+    "present crit, level 0, and buff ids stay on the replay"
+  );
+  delete critHit.crit;
+  delete critHero.level;
+  delete critHero.buffs;
   assert(
     wireSpineSkillStem(null) === null &&
       wireSpineSkillStem(9, []) === null &&
@@ -15491,7 +15554,8 @@ async function checkWs(): Promise<void> {
       hangPlan.beats.length >= 2 &&
       hangPlan.beats[0].line.indexOf("站场") >= 0 &&
       hangPlan.beats[1].line === hangViaPlan.beats[1].line &&
-      hangPlan.stems.indexOf("bisha") < 0,
+      hangPlan.stems.indexOf("bisha") < 0 &&
+      planBattlePresentation(hangReport.report, hangPlan).beats.length === hangPlan.beats.length,
     "3006 rounds drive the same planWireSpineReplay path as 3001"
   );
   const hangAbsent = decodeWireChapterReport(fieldVarint(7, 9));
@@ -15657,7 +15721,8 @@ async function checkWs(): Promise<void> {
       fetchedPlan.beats.length >= 2 &&
       fetchedPlan.beats[0].line.indexOf("站场") >= 0 &&
       fetchedPlan.beats[1].line === fetchedViaPlan.beats[1].line &&
-      fetchedPlan.stems.indexOf("bisha") < 0,
+      fetchedPlan.stems.indexOf("bisha") < 0 &&
+      planBattlePresentation(fetched.report, fetchedPlan).beats.length === fetchedPlan.beats.length,
     "3102 rounds drive the same planWireSpineReplay path as 3001"
   );
   const fetchAbsent = decodeWireGetBattleReport(fieldVarint(7, 9));
@@ -16016,7 +16081,8 @@ async function checkWs(): Promise<void> {
     studyPlan.stems.join(",") === studyViaPlan.stems.join(",") &&
       studyPlan.beats.length === studyViaPlan.beats.length &&
       studyPlan.beats[1].line === studyViaPlan.beats[1].line &&
-      studyPlan.stems.indexOf("bisha") < 0,
+      studyPlan.stems.indexOf("bisha") < 0 &&
+      planBattlePresentation(studyDecoded.report, studyPlan).beats.length === studyPlan.beats.length,
     "3030 rounds reuse the 3001 spine plan"
   );
   assert(decodeWireStudy(fieldBytes(1, Uint8Array.from([0x80]))) === null, "a bad 3030 report blob does not replace the last snapshot");
@@ -25688,8 +25754,75 @@ function checkCityHub(): void {
       battleDoc.indexOf("3030") >= 0 &&
       battleDoc.indexOf("3102") >= 0 &&
       battleDoc.indexOf("WireBattlePage") >= 0 &&
-      battleDoc.indexOf("不改 `Boot.ts`") >= 0,
-    "battle prefab doc names the flag, the existing cmds, and the untouched boot"
+      battleDoc.indexOf("不改 `Boot.ts`") >= 0 &&
+      battleDoc.indexOf("FloatDmg_0") >= 0 &&
+      battleDoc.indexOf("FloatCrit") >= 0 &&
+      battleDoc.indexOf("SkillNameBanner") >= 0 &&
+      battleDoc.indexOf("HeadAnchor") >= 0 &&
+      battleDoc.indexOf("不另建同名代码节点") >= 0,
+    "battle prefab doc names the flag, the existing cmds, and the in-battle mounts"
+  );
+  assert(battleFloatDmgPath(0) === "LayerFloat/FloatDamageRoot/FloatDmg_0" && battleFloatDmgPath(3) === "LayerFloat/FloatDamageRoot/FloatDmg_3" && battleFloatDmgPath(4) === null, "float damage slots are the four prefab labels");
+  assert(BATTLE_FLOAT_LAYER_PATH === "LayerFloat" && BATTLE_FLOAT_ROOT_PATH === "LayerFloat/FloatDamageRoot" && BATTLE_FLOAT_CRIT_PATH === "LayerFloat/FloatCrit", "float layer paths");
+  assert(BATTLE_SKILL_NAME_BANNER_PATH === "SkillNameBanner" && BATTLE_SKILL_NAME_LABEL_PATH === "SkillNameBanner/SkillNameLabel", "skill name banner path");
+  assert(
+    battleHeadPath("enemy", 0) === "LayerField/EnemySlots/Slot_E0/HeadAnchor" &&
+      battleLevelLabelPath("ally", 2) === "LayerField/AllySlots/Slot_A2/HeadAnchor/LevelLabel" &&
+      battleBuffRowPath("enemy", 1) === "LayerField/EnemySlots/Slot_E1/HeadAnchor/BuffRow" &&
+      battleBuffIconPath("ally", 0, 2) === "LayerField/AllySlots/Slot_A0/HeadAnchor/BuffRow/Buff_2" &&
+      battleHeadPath("enemy", 3) === null &&
+      battleLevelLabelPath("ally", 5) === null,
+    "front-row head anchors exist and the back row does not grow one"
+  );
+  assert(BATTLE_FLOAT_SLOT_COUNT === 4 && BATTLE_BUFF_SLOT_COUNT === 3, "presentation uses the prefab slot counts");
+  assert(
+    readHitCrit({}) === null &&
+      readHitCrit({ marks: [{ field: 4, text: "1" }] }) === null &&
+      readHitCrit({ crit: 0 }) === false &&
+      readHitCrit({ crit: false }) === false &&
+      readHitCrit({ crit: true }) === true &&
+      readHitCrit({ crit: 2 }) === true &&
+      readHitCrit({ crit: "1" }) === null &&
+      readHeroLevel({ marks: [{ field: 5, text: "9" }] }) === null &&
+      readHeroLevel({ level: 0 }) === 0 &&
+      readHeroLevel({ level: 12 }) === 12 &&
+      readHeroBuffIds({}) === null &&
+      readHeroBuffIds({ buffs: [] }) !== null &&
+      (readHeroBuffIds({ buffs: [] }) || []).length === 0 &&
+      (readHeroBuffIds({ buffs: [3, "x", 5] }) || []).join(",") === "3,5" &&
+      overheadLevelText(null) === null &&
+      overheadLevelText(0) === "Lv.0" &&
+      visibleBuffCount(null) === null &&
+      visibleBuffCount([]) === 0 &&
+      visibleBuffCount([1, 2, 3, 4]) === 3 &&
+      battleSkillTitle(null) === null &&
+      battleSkillTitle(9) === "act" &&
+      battleSkillTitle(9, []) === "技能 9" &&
+      battleSkillTitle(3.8, []) === "技能 3" &&
+      visibleFloats([{ anchor: 0, hurt: 1, crit: false }, { anchor: 1, hurt: 2, crit: true }, { anchor: null, hurt: 3, crit: false }, { anchor: null, hurt: 4, crit: false }, { anchor: null, hurt: 5, crit: true }]).length === 4 &&
+      beatShowsCrit([{ anchor: null, hurt: 5, crit: true }]) === true &&
+      beatShowsCrit([{ anchor: null, hurt: 5, crit: false }]) === false &&
+      BATTLE_CRIT_BUBBLE === "暴击",
+    "missing crit, level, and buffs stay hidden, and skill names stay on the stem table"
+  );
+  const presentSrc = readFileSync(uiSource("battlePresentation.ts"), "utf8");
+  const presentViewSrc = readFileSync(uiSource("battlePresentView.ts"), "utf8");
+  assert(
+    presentSrc.indexOf("encodeFrame") < 0 &&
+      presentSrc.indexOf("wireSpineSkillStem") >= 0 &&
+      presentSrc.indexOf("hurt") >= 0 &&
+      presentViewSrc.indexOf("FloatDmg_") >= 0 &&
+      presentViewSrc.indexOf("FloatCrit") >= 0 &&
+      presentViewSrc.indexOf("SkillNameBanner") >= 0 &&
+      presentViewSrc.indexOf("HeadAnchor") >= 0 &&
+      presentViewSrc.indexOf("LevelLabel") >= 0 &&
+      presentViewSrc.indexOf("BuffRow") >= 0 &&
+      presentViewSrc.indexOf("uiNode") < 0 &&
+      presentViewSrc.indexOf("encodeFrame") < 0 &&
+      wireBattlePageSrc.indexOf("planBattlePresentation") >= 0 &&
+      wireBattlePageSrc.indexOf("mountCodeBattle") >= 0 &&
+      wireBattlePageSrc.indexOf("不另建这些挂点") >= 0,
+    "presentation binds the prefab mounts and does not grow a protocol or a code stub"
   );
 }
 
