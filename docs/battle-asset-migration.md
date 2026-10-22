@@ -29,7 +29,7 @@
 - `battle-scene_prog-frame-1.png`
 - `battle-scene_spr-bg-1.png`（原图 112×64，裁切 111×63）
 
-`BattlePage.prefab` 和 `WireBattlePage.prefab` 的 `Bg` 引用 `b117e1f3-0253-4616-95db-bed6a5007adb@f9941`，拉到 720×1280。`LayerFloat`、`SkillNameBanner`、`HeadAnchor` 不动。关闭钮、加速钮、进度条帧在目录里，壳上仍用通用 `BtnClose` 和染色 `win-bg_num-bg`，没有 `BtnSpeed`。`VfxSkill` / `VfxHit` / `VfxScreen` 仍是空挂点，不引用下面的帧。
+`BattlePage.prefab` 和 `WireBattlePage.prefab` 的 `Bg` 引用 `b117e1f3-0253-4616-95db-bed6a5007adb@f9941`，拉到 720×1280。`LayerFloat`、`SkillNameBanner`、`HeadAnchor` 不动。随后的表现接线挂上 `BtnSpeed`，血条和技能条改用 `battle-scene_prog-bg-1` / `battle-scene_prog-1`，回放把帧序列挂到 `VfxHit` / `VfxSkill`。`BtnClose` 仍用通用关闭钮，不用 `battle-scene_btn-close-1`。Prefab 上这三个特效挂点仍不写 sprite uuid。
 
 ### hero-beattack（26）
 

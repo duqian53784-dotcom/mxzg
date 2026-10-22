@@ -64,7 +64,7 @@
 - 有 `skill_id`：绝对值取整后对技能套取模。顺序是 `zadan`、`zadan_tx`、`heidong`、`guangzhu`、`jiban`、`Dragon-1`、`Dragon-2`、`Dragon-3`、`Dragon-4`、`act`、`chaihong`、`ZDKS`、`hytx`、`lizi`、`dx`、`lijijihuo`、`zhihuanfazhen`、`prophet-tree-effect-1`、`prophet-tree-effect-2`。`yanwu` 不在这张表里。
 - 有 `hits`：受击位挂 `yanwu`。没有 hits 不挂。
 - 技能号缺失，或表是空的：不挂特效。站场和攻击照旧。
-- 不播 `bisha`，不播英雄 `hit`。不接 `hd/skill`、`hd/skill-effect`、`hero-beattack` 的 PVR。
+- 不播 `bisha`。英雄套里有 `hit` 才播受击，没有就留 `stand`。不接 `hd/skill`、`hd/skill-effect`、`hero-beattack` 的 PVR。
 
 不是旧技能表，只让真服回放能看出不同技能号。
 

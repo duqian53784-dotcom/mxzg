@@ -29,10 +29,14 @@
  * 可带 hero_ids、type、line_up_type。hero_ids 可从已同步的 3101 字段 2 填入。
  * 不从 3102 自动接。fighting=0 是成功，不 Toast。不播 spine。
  * 主线入口已在「更多」，不往主屏再放矩形。
- * 收到 report 在本页播 spine 站场、回合攻击，以及 batch2 技能/受击特效。3001、3006、3102 和 3030 都走 planWireSpineReplay。3103 不走。3101 不走。3099 不走。
+ * 收到 report 在本页播 spine 站场、回合攻击、有 hit 的受击，以及 batch2 技能/受击特效。3001、3006、3102 和 3030 都走 planWireSpineReplay。3103 不走。3101 不走。3099 不走。
+ * 有拍时 VfxHit 再播 hero-beattack，VfxSkill 再播 skill 和 skill-effect。mountFrameReel 挂在已有锚点上，不另建 Vfx 节点。帧没加载到就留 batch2。
+ * 站位是左敌右我，挂在已有的 Slot_E* / Slot_A* 上。报告没有英雄时仍补一格站场，页不空。
  * USE_BATTLE_PREFAB 默认开。上述回放进战时挂 BattlePage.prefab：站位、血条、回合、战报，技能挂 VfxSkill，受击挂 VfxHit。WireBattlePage 仍不挂。
+ * 底图优先 resources 的 ui/battle/battle-scene_spr-bg-*。还没入库就用 Prefab 上的沙地，不把主线关卡图当最终底。
  * 同一份回放再写 Prefab 的 FloatDmg、FloatCrit、SkillNameBanner、前排 HeadAnchor。没有的 crit / level / buffs 藏起，不写成 0，也不编名字。
  * 开关关掉或 Prefab 加载失败时，仍用本页代码 UI，不另建这些挂点。跳过、撤退、关闭不发新 c2s。不改 Boot。
+ * 加速只把每一拍的等待收成 2 倍或 3 倍，最短 80ms，不跳过拍子，也不拆页。跳过仍停在最后一拍。
  * 回放结束不拆 BattlePage。play 播完不再 showDone / clearBody。没有行动时只有站场，最后一拍只等 260ms，播完立刻拆页就是闪一下关掉。跳过停在最后一拍。撤退才进结算。关闭仍关掉主线页。没有恭喜获得层，不拿 3002 当自动关。
  * 不发 18001，不把 Mock 1201/1202 当战报。
  * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。3103 的 fighting=0 不 Toast。
@@ -120,8 +124,10 @@ import {
   WIRE_GM_SILENT_MS,
   WIRE_GM_UNSYNCED_TOAST,
 } from "../net/protocol/wireGmCommand";
-import { BattlePrefabShell, mountBattlePrefab, USE_BATTLE_PREFAB } from "./BattlePage";
-import { BattlePresentation, planBattlePresentation } from "./battlePresentation";
+import { BattlePrefabShell, mountBattleBackdrop, mountBattlePrefab, paintBattleScene, paintSpeedIcon, USE_BATTLE_PREFAB } from "./BattlePage";
+import { FrameReel, mountFrameReel } from "./battleFramePlay";
+import { effectFramePaths, hitFramePaths, skillFramePaths } from "./battleFrames";
+import { battleBeatWait, BattlePresentation, nextBattleSpeed, planBattlePresentation } from "./battlePresentation";
 import {
   BattlePresentMount,
   clearBattleOverhead,
@@ -129,7 +135,9 @@ import {
   paintBattleOverhead,
   paintBattleSkillName,
 } from "./battlePresentView";
+import { battleSlotPage } from "./battlePrefabLayout";
 import { mountBattleSpine, SpineActor } from "./battleSpine";
+import { bindClick } from "./prefabLoad";
 import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
 const PAGE_BG = new Color(8, 16, 32, 255);
@@ -141,9 +149,6 @@ const WIN = new Color(255, 214, 120, 255);
 const LOSE = new Color(230, 120, 110, 255);
 const ALLY_BAR = new Color(88, 196, 120, 255);
 const LOG_COLOR = new Color(214, 224, 236, 255);
-const ENEMY_Y = 300;
-const ALLY_Y = 20;
-const BEAT_MS = 700;
 const PAGE_W = 720;
 const PAGE_H = 1280;
 /**
@@ -247,11 +252,18 @@ class WireMainlineController implements WireMainlinePage {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private sleepResolve: ((cont: boolean) => void) | null = null;
   private skipped = false;
+  /** 1、2、3。只缩短拍子，跳过和撤退不看这个数。 */
+  private playSpeed = 1;
+  private speedButton: Node | null = null;
   /** 用户点了撤退。回放自己结束时不拆页，只有这个标记才进结算。 */
   private wantResult = false;
   private spineWarned = false;
   private actors: SpineActor[] = [];
   private vfxNodes: { stem: string; node: Node; actor: SpineActor }[] = [];
+  private skillReel: FrameReel | null = null;
+  private effectReel: FrameReel | null = null;
+  private hitReel: FrameReel | null = null;
+  private frameGen = 0;
   private nameLabels: Node[] = [];
   private hpLabels: Node[] = [];
   private hpNow: (number | null)[] = [];
@@ -301,6 +313,7 @@ class WireMainlineController implements WireMainlinePage {
     if (this.disposed) return;
     this.disposed = true;
     this.waiting = false;
+    this.stopFrameReels();
     this.clearProbeTimer("all");
     this.unbindProbeScroll();
     this.wake(false);
@@ -1001,11 +1014,13 @@ class WireMainlineController implements WireMainlinePage {
   }
 
   private mountCodeBattle(plan: WireSpineReplay): void {
+    mountBattleBackdrop(this.body);
     place(createLabel("进战 idx " + plan.stageId, 40, { color: TITLE }), this.body, 0, 500);
     this.roundLabel = place(createLabel("站场", 22, { color: MUTED, width: 640 }), this.body, 0, 450);
-    place(createLabel("敌方", 18, { color: LOSE }), this.body, 0, 400);
-    place(createLabel("我方", 18, { color: ALLY_BAR }), this.body, 0, 120);
+    place(createLabel("敌方", 18, { color: LOSE }), this.body, -220, 400);
+    place(createLabel("我方", 18, { color: ALLY_BAR }), this.body, 220, 400);
     this.mountSlots(plan);
+    this.mountSpeed(this.body, 250, 560);
     place(createRect("log-bg", 660, 110, new Color(10, 18, 32, 230)), this.body, 0, -150);
     this.logLabel = place(
       createLabel("", 18, { color: LOG_COLOR, width: 620, height: 96, align: "left" }),
@@ -1030,6 +1045,10 @@ class WireMainlineController implements WireMainlinePage {
       if (!this.disposed) this.host.close();
     });
     this.presentMount = shell.present;
+    paintBattleScene(shell.root);
+    this.parkPrefabSlots(shell);
+    const top = shell.roundLabel.parent;
+    if (top) this.mountSpeed(top, -308, 0, top.getChildByName("BtnSpeed"));
     this.actors = [];
     this.slotRoots = [];
     this.nameLabels = [];
@@ -1044,16 +1063,22 @@ class WireMainlineController implements WireMainlinePage {
       const slotIndex = i;
       if (slot.side === "ally" || slot.side === "enemy") {
         const root = shell.slot(slot.side, index);
+        root.active = true;
+        quietSlot(root);
         const name = root.getChildByName("Label");
         if (name) setText(name, slot.stem);
         const hp = shell.hpLabel(slot.side, index);
-        if (hp) setText(hp, hpText(slot, slot.hp));
+        if (hp) {
+          if (hp.parent) hp.parent.active = true;
+          setText(hp, hpText(slot, slot.hp));
+        }
         shell.setHpFill(slot.side, index, slot.hp, slot.maxHp);
         this.nameLabels.push(name || root);
         this.hpLabels.push(hp || root);
         this.hpNow.push(slot.hp);
         this.slotRoots.push(root);
-        this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex)));
+        const face: -1 | 1 = slot.side === "ally" ? -1 : 1;
+        this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex), { face }));
         continue;
       }
       const xy = slotXY(slot.side, index, totals[slot.side]);
@@ -1064,7 +1089,7 @@ class WireMainlineController implements WireMainlinePage {
       this.hpLabels.push(hp);
       this.hpNow.push(slot.hp);
       this.slotRoots.push(root);
-      this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex)));
+      this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex), { face: 1 }));
     }
     this.mountPrefabVfx(plan, shell);
     this.paintOverhead(plan);
@@ -1093,6 +1118,7 @@ class WireMainlineController implements WireMainlinePage {
       const actor = mountBattleSpine(holder, stem, () => this.failVfx(), { effect: true });
       this.vfxNodes.push({ stem, node: holder, actor });
     }
+    this.mountFrameReels(shell.vfxAnchor("skill"), shell.vfxAnchor("hit"));
   }
 
   private mountSlots(plan: WireSpineReplay): void {
@@ -1116,7 +1142,8 @@ class WireMainlineController implements WireMainlinePage {
       this.hpNow.push(slot.hp);
       this.slotRoots.push(root);
       const slotIndex = i;
-      this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex)));
+      const face: -1 | 1 = slot.side === "ally" ? -1 : 1;
+      this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex), { face }));
     }
     this.mountVfx(plan);
   }
@@ -1142,12 +1169,21 @@ class WireMainlineController implements WireMainlinePage {
       const actor = mountBattleSpine(holder, stem, () => this.failVfx(), { effect: true });
       this.vfxNodes.push({ stem, node: holder, actor });
     }
+    this.mountFrameReels(this.body, this.body);
   }
 
   private failSlot(index: number): void {
     if (this.disposed) return;
+    const root = this.slotRoots[index];
+    if (root && root.isValid) {
+      const placeholder = root.getChildByName("Placeholder");
+      if (placeholder) placeholder.active = true;
+    }
     const slotLabel = this.nameLabels[index];
-    if (slotLabel && slotLabel.isValid) setText(slotLabel, WIRE_SPINE_LOAD_FAIL);
+    if (slotLabel && slotLabel.isValid) {
+      slotLabel.active = true;
+      setText(slotLabel, WIRE_SPINE_LOAD_FAIL);
+    }
     if (this.spineWarned) return;
     this.spineWarned = true;
     GameLog.shared.info("Mainline", WIRE_SPINE_LOAD_FAIL);
@@ -1170,7 +1206,7 @@ class WireMainlineController implements WireMainlinePage {
       }
       this.renderBeat(plan, plan.beats[i]);
       const last = i === plan.beats.length - 1;
-      const cont = await this.sleep(last ? 260 : BEAT_MS);
+      const cont = await this.sleep(battleBeatWait(this.playSpeed, last));
       if (!cont || this.disposed) return false;
       if (this.skipped) {
         this.renderBeat(plan, plan.beats[plan.beats.length - 1]);
@@ -1339,6 +1375,7 @@ class WireMainlineController implements WireMainlinePage {
       row.node.active = true;
       row.actor.burst(wireSpineVfxClip(cue.stem));
     }
+    this.playFrameVfx(plan, beat);
     for (let i = 0; i < beat.hp.length; i++) {
       if (beat.hp[i] !== null) this.hpNow[i] = beat.hp[i];
     }
@@ -1455,7 +1492,135 @@ class WireMainlineController implements WireMainlinePage {
     if (index < 0 || index >= present.beats.length) return;
     const row = present.beats[index];
     paintBattleSkillName(mount, row.skillName);
-    paintBattleFloats(mount, row.floats);
+    paintBattleFloats(mount, row.floats, floatPages(plan, row.floats));
+  }
+
+  /** 空着的前排后排先藏起来。点到的人才打开，沙地上不留一排色块。 */
+  private parkPrefabSlots(shell: BattlePrefabShell): void {
+    for (let i = 0; i < 6; i++) {
+      const enemy = shell.slot("enemy", i);
+      const ally = shell.slot("ally", i);
+      enemy.active = false;
+      ally.active = false;
+      clearBattleOverhead(enemy);
+      clearBattleOverhead(ally);
+      if (i > 2) continue;
+      const enemyHp = shell.hpLabel("enemy", i);
+      const allyHp = shell.hpLabel("ally", i);
+      if (enemyHp && enemyHp.parent) enemyHp.parent.active = false;
+      if (allyHp && allyHp.parent) allyHp.parent.active = false;
+    }
+  }
+
+  /**
+   * 已有 BtnSpeed 就用它，并按当前倍率换 speed-1 / 2 / 3。
+   * 没有这颗钮时在顶栏左侧放一枚 ×1。点一下换成 ×2、×3，再点回到 ×1。不把跳过变成加速。
+   */
+  private mountSpeed(parent: Node, x: number, y: number, existing?: Node | null): void {
+    if (existing && existing.isValid) {
+      this.speedButton = existing;
+      bindClick(existing, () => this.cycleSpeed());
+      paintSpeedIcon(existing, this.playSpeed);
+      return;
+    }
+    this.speedButton = place(createButton(this.speedText(), () => this.cycleSpeed(), 88, 44, OPEN_FILL, 22), parent, x, y);
+  }
+
+  private cycleSpeed(): void {
+    if (this.disposed || this.phase !== "battle") return;
+    this.playSpeed = nextBattleSpeed(this.playSpeed);
+    const node = this.speedButton;
+    if (node && node.isValid) {
+      const label = node.getChildByName("Label");
+      if (label) setText(label, this.speedText());
+      else paintSpeedIcon(node, this.playSpeed);
+    }
+    GameLog.shared.info("Mainline", "加速 " + this.speedText() + "，跳过仍停在最后一拍");
+  }
+
+  /** 技能帧在前，effect 帧较小、先挂所以在后面。受击帧挂 VfxHit。 */
+  private mountFrameReels(skillParent: Node, hitParent: Node): void {
+    this.stopFrameReels();
+    this.effectReel = mountFrameReel(skillParent, 240, "EffectReel");
+    this.skillReel = mountFrameReel(skillParent, 300, "SkillReel");
+    this.hitReel = mountFrameReel(hitParent, 220, "HitReel");
+  }
+
+  private stopFrameReels(): void {
+    const reels = [this.skillReel, this.effectReel, this.hitReel];
+    this.skillReel = null;
+    this.effectReel = null;
+    this.hitReel = null;
+    for (let i = 0; i < reels.length; i++) {
+      if (reels[i]) reels[i].stop();
+    }
+  }
+
+  private playFrameVfx(plan: WireSpineReplay, beat: WireSpineReplay["beats"][number]): void {
+    this.frameGen += 1;
+    const gen = this.frameGen;
+    let wantSkill = false;
+    let wantHit = false;
+    let skillXY = { x: 0, y: 180 };
+    let hitXY = { x: 0, y: 120 };
+    for (let i = 0; i < beat.vfx.length; i++) {
+      const cue = beat.vfx[i];
+      const xy = anchorXY(plan.slots, cue.anchor, cue.role);
+      if (cue.role === "skill") {
+        wantSkill = true;
+        skillXY = xy;
+      } else if (cue.role === "hit") {
+        wantHit = true;
+        hitXY = xy;
+      }
+    }
+    const skillId = this.beatSkillId(plan, beat);
+    this.driveReel(this.effectReel, wantSkill, effectFramePaths(skillId), "skill", skillXY, gen, beat);
+    this.driveReel(this.skillReel, wantSkill, skillFramePaths(skillId), "skill", skillXY, gen, beat);
+    this.driveReel(this.hitReel, wantHit, hitFramePaths(skillId), "hit", hitXY, gen, beat);
+  }
+
+  private driveReel(
+    reel: FrameReel | null,
+    want: boolean,
+    paths: string[],
+    role: "skill" | "hit",
+    xy: { x: number; y: number },
+    gen: number,
+    beat: WireSpineReplay["beats"][number]
+  ): void {
+    if (!reel) return;
+    if (!want) {
+      reel.stop();
+      return;
+    }
+    if (this.battleShell && this.battleShell.root.isValid) this.battleShell.placeVfx(reel.node, role, xy.x, xy.y);
+    else reel.node.setPosition(xy.x, xy.y, 0);
+    reel.play(paths, (ok) => {
+      if (!ok || this.disposed || gen !== this.frameGen) return;
+      this.hideSpineRole(role, beat);
+    });
+  }
+
+  private hideSpineRole(role: "skill" | "hit", beat: WireSpineReplay["beats"][number]): void {
+    for (let i = 0; i < beat.vfx.length; i++) {
+      if (beat.vfx[i].role !== role) continue;
+      for (let n = 0; n < this.vfxNodes.length; n++) {
+        if (this.vfxNodes[n].stem === beat.vfx[i].stem) this.vfxNodes[n].node.active = false;
+      }
+    }
+  }
+
+  private beatSkillId(plan: WireSpineReplay, beat: WireSpineReplay["beats"][number]): number | null {
+    const present = this.present;
+    if (!present) return null;
+    const index = plan.beats.indexOf(beat);
+    if (index < 0 || index >= present.beats.length) return null;
+    return present.beats[index].skillId;
+  }
+
+  private speedText(): string {
+    return "×" + String(this.playSpeed);
   }
 
   /**
@@ -1554,8 +1719,10 @@ class WireMainlineController implements WireMainlinePage {
   }
 
   private clearBody(): void {
+    this.stopFrameReels();
     this.detachInfoScroll();
     this.battleShell = null;
+    this.speedButton = null;
     this.present = null;
     this.presentMount = null;
     this.slotRoots = [];
@@ -1642,19 +1809,38 @@ function anchorXY(slots: WireSpineSlot[], anchor: number | null, role: "skill" |
   return { x: xy.x, y: xy.y + lift };
 }
 
-function slotXY(side: WireSpineSlot["side"], index: number, total: number): { x: number; y: number } {
-  if (side === "enemy") return { x: rowX(index, total), y: ENEMY_Y };
-  if (side === "ally") return { x: rowX(index, total), y: ALLY_Y };
-  if (side === "sword") return { x: 260, y: -30 };
-  return { x: 0, y: 180 };
+function slotXY(side: WireSpineSlot["side"], index: number, _total: number): { x: number; y: number } {
+  if (side === "enemy" || side === "ally") {
+    const page = battleSlotPage(side, index);
+    if (page) return page;
+  }
+  if (side === "sword") return { x: 0, y: -80 };
+  return { x: 0, y: 40 };
 }
 
-function rowX(index: number, total: number): number {
-  if (total <= 1) return 0;
-  if (total === 2) return index === 0 ? -160 : 160;
-  if (index === 0) return -200;
-  if (index === 1) return 0;
-  return 200;
+function floatPages(plan: WireSpineReplay, floats: { anchor: number | null }[]): ({ x: number; y: number } | null)[] {
+  const pages: ({ x: number; y: number } | null)[] = [];
+  for (let i = 0; i < floats.length; i++) {
+    const anchor = floats[i].anchor;
+    if (anchor === null || anchor < 0 || anchor >= plan.slots.length) {
+      pages.push(null);
+      continue;
+    }
+    const slot = plan.slots[anchor];
+    if (slot.side !== "ally" && slot.side !== "enemy") {
+      pages.push(null);
+      continue;
+    }
+    pages.push(battleSlotPage(slot.side, sideIndexAt(plan.slots, anchor)));
+  }
+  return pages;
+}
+
+function quietSlot(root: Node): void {
+  const placeholder = root.getChildByName("Placeholder");
+  if (placeholder) placeholder.active = false;
+  const label = root.getChildByName("Label");
+  if (label) label.active = false;
 }
 
 function hpText(slot: WireSpineSlot, hp: number | null): string {

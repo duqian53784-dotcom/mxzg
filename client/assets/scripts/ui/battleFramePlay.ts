@@ -1,0 +1,103 @@
+/**
+ * 在已有挂点上播一串 spriteFrame。最后一帧停住，下一拍重新 play 或 stop。
+ * 路径是 resources 里的 spriteFrame，不带扩展名。
+ */
+import { Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { uiNode } from "./UiKit";
+
+export const FRAME_STEP_MS = 70;
+
+const frameLoads = new Map<string, Promise<SpriteFrame | null>>();
+
+export interface FrameReel {
+  node: Node;
+  play(paths: string[], onResult?: (ok: boolean) => void): void;
+  stop(): void;
+}
+
+export function mountFrameReel(parent: Node, size: number, name = "FrameReel"): FrameReel {
+  const node = uiNode(name);
+  const ui = node.addComponent(UITransform);
+  ui.setContentSize(size, size);
+  const sprite = node.addComponent(Sprite);
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  sprite.type = Sprite.Type.SIMPLE;
+  node.active = false;
+  node.parent = parent;
+
+  let token = 0;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearTimer = () => {
+    if (!timer) return;
+    clearTimeout(timer);
+    timer = null;
+  };
+
+  const stop = () => {
+    token += 1;
+    clearTimer();
+    if (node.isValid) node.active = false;
+  };
+
+  const play = (paths: string[], onResult?: (ok: boolean) => void) => {
+    token += 1;
+    const mine = token;
+    clearTimer();
+    if (!paths || paths.length === 0) {
+      if (node.isValid) node.active = false;
+      if (onResult) onResult(false);
+      return;
+    }
+    const pending: Promise<SpriteFrame | null>[] = [];
+    for (let i = 0; i < paths.length; i++) pending.push(loadFrame(paths[i]));
+    Promise.all(pending).then((frames) => {
+      if (mine !== token || !node.isValid) return;
+      const ready: SpriteFrame[] = [];
+      for (let i = 0; i < frames.length; i++) {
+        const frame = frames[i];
+        if (frame) ready.push(frame);
+      }
+      if (ready.length === 0) {
+        node.active = false;
+        if (onResult) onResult(false);
+        return;
+      }
+      let index = 0;
+      const tick = () => {
+        if (mine !== token || !node.isValid) return;
+        sprite.spriteFrame = ready[index];
+        node.active = true;
+        if (index >= ready.length - 1) return;
+        index += 1;
+        timer = setTimeout(tick, FRAME_STEP_MS);
+        const maybe = timer as { unref?: () => void };
+        if (typeof maybe.unref === "function") maybe.unref();
+      };
+      tick();
+      if (onResult) onResult(true);
+    });
+  };
+
+  return { node, play, stop };
+}
+
+function loadFrame(path: string): Promise<SpriteFrame | null> {
+  const cached = frameLoads.get(path);
+  if (cached) return cached;
+  const pending = new Promise<SpriteFrame | null>((resolve) => {
+    try {
+      resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
+        if (err || !asset) {
+          resolve(null);
+          return;
+        }
+        resolve(asset);
+      });
+    } catch (err) {
+      resolve(null);
+    }
+  });
+  frameLoads.set(path, pending);
+  return pending;
+}

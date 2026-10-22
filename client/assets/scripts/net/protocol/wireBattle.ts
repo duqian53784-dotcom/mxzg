@@ -26,7 +26,7 @@
  * camp 只有 1（我方）和 2（敌方）参与对位。其它值（含出现的 0）不当阵营。
  * 没有的数保持 null，不写成 0。有 report 才在主线页播 resources/spine 首批套的站场和回合动作。
  * 回合 skill_id 对 batch2 技能套取模，挂一个命名特效；hits 挂 yanwu。没有技能号、没有 hits，或表是空的，就不挂，站场和攻击照旧。
- * 不播 bisha，不播英雄 hit。不是旧技能表，不接 hd/skill、skill-effect、beattack 的 PVR。
+ * 受击者的套里有 hit 才播英雄受击。没有这个动作就留 stand。不播 bisha。不是旧技能表，不接 hd/skill、skill-effect、beattack 图集。
  * batch2 仍是 Spine 3.7.94。Creator 3.8.8 用 spine-3.8，曲线、约束、裁剪可能播不出。播不出就跳过该特效。
  */
 const MAX_BODY = 65536;
@@ -92,7 +92,7 @@ export const WIRE_SPINE_SKILL_STEMS = [
   "prophet-tree-effect-2",
 ];
 
-/** 烟尘。有 hits 才挂。不播英雄 hit，不播 bisha。 */
+/** 烟尘。有 hits 才挂。英雄受击另看套里有没有 hit。不播 bisha。 */
 export const WIRE_SPINE_HIT_STEM = "yanwu";
 
 export const WIRE_BATTLE_MATCH_NOTE =
@@ -157,7 +157,7 @@ export interface WireBattleMatch {
   marks: WireBattleMark[];
 }
 
-export type WireSpineClip = "stand" | "attack" | "die" | "idle";
+export type WireSpineClip = "stand" | "attack" | "hit" | "die" | "idle";
 export type WireSpineSide = "ally" | "enemy" | "sword" | "flag";
 
 export interface WireSpineSlot {
@@ -206,12 +206,12 @@ const STEM_CLIPS: { [stem: string]: WireSpineClip[] } = {
   "10501": ["stand"],
   "10701": ["stand"],
   "battle-sword": ["stand"],
-  "10405005": ["stand", "attack"],
-  "10405006": ["stand", "attack"],
-  "10405007": ["stand", "attack"],
-  "10505005": ["stand", "attack"],
-  "10505010": ["stand", "attack"],
-  "10105008": ["stand", "attack"],
+  "10405005": ["stand", "attack", "hit"],
+  "10405006": ["stand", "attack", "hit"],
+  "10405007": ["stand", "attack", "hit"],
+  "10505005": ["stand", "attack", "hit"],
+  "10505010": ["stand", "attack", "hit"],
+  "10105008": ["stand", "attack", "hit"],
   zhandoujijian: ["idle"],
   crusade_boss_die: ["stand", "die"],
 };
@@ -341,7 +341,7 @@ export function wireSpineVfxClip(stem: string): string {
 /**
  * 有 report 才编这份回放。不走 planBattle，不造四回合色块。
  * 没有 rounds 时先站场；胜负已经能判时再补一拍攻击。胜且没有守方英雄时敌方用 crusade_boss_die。
- * 有行动就按行动播 attack 或 stand。技能号和 hits 另挂 batch2 特效，不播 bisha，不播英雄 hit。
+ * 有行动就按行动播 attack 或 stand。受击者套里有 hit 才改成受击。技能号和 hits 另挂 batch2 特效。不播 bisha。
  */
 export function planWireSpineReplay(report: WireBattleReport, roleId: number | null, stageId: number): WireSpineReplay {
   const win = resolveWireBattleWin(report, roleId);
@@ -477,6 +477,7 @@ function actionBeat(
   const hp = emptyHp(slots);
   const vfx = actionVfx(slots, action);
   let line = roundPrefix(round);
+  let attacker = -1;
   if (action.atkPos === null) {
     line += " · 行动者未带";
   } else {
@@ -484,11 +485,13 @@ function actionBeat(
     if (found === "ambiguous") line += " · 位置 " + action.atkPos + " 阵营未带";
     else if (found === "missing") line += " · 位置 " + action.atkPos + " 未在场";
     else {
+      attacker = found;
       const attack = wireSpineHasClip(slots[found].stem, "attack");
       setCue(cues, found, attack ? "attack" : "stand");
       line += " · 位置 " + action.atkPos + (attack ? " 攻击" : " 站立");
     }
   }
+  applyDefenderHit(slots, cues, action, attacker);
   if (action.skillId !== null) {
     const skillStem = wireSpineSkillStem(action.skillId);
     line += skillStem ? " · 技能 " + action.skillId + " " + skillStem : " · 技能 " + action.skillId + " 未播";
@@ -509,6 +512,18 @@ function actionBeat(
   }
   applyBossDie(slots, cues, hp, win === true && last);
   return { line, cues, hp, vfx };
+}
+
+/** 受击者套里有 hit 才改这一拍。攻击者自己被打到时仍留攻击，不改成受击。 */
+function applyDefenderHit(slots: WireSpineSlot[], cues: WireSpineCue[], action: WireBattleAction, attacker: number): void {
+  for (let i = 0; i < action.hits.length; i++) {
+    const hit = action.hits[i];
+    if (hit.defPos === null) continue;
+    const target = matchSlot(slots, hit.defPos, null);
+    if (typeof target !== "number" || target === attacker) continue;
+    if (!wireSpineHasClip(slots[target].stem, "hit")) continue;
+    setCue(cues, target, "hit");
+  }
 }
 
 function actionVfx(slots: WireSpineSlot[], action: WireBattleAction): WireSpineVfxCue[] {
