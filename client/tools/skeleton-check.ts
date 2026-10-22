@@ -1286,6 +1286,20 @@ import {
   WIRE_CHRISTMAS_GIFT_UNSYNCED_TOAST,
   wireChristmasGiftNote,
 } from "../assets/scripts/net/protocol/wireChristmasGift";
+import {
+  decodeWireSpringOuting,
+  formatWireSpringOutingLine,
+  WIRE_SPRING_OUTING_BANNED_CMDS,
+  WIRE_SPRING_OUTING_CMD,
+  WIRE_SPRING_OUTING_EMPTY,
+  WIRE_SPRING_OUTING_FIELD_NOTE,
+  WIRE_SPRING_OUTING_FRAME,
+  WIRE_SPRING_OUTING_READONLY_NOTE,
+  WIRE_SPRING_OUTING_READONLY_TITLE,
+  WIRE_SPRING_OUTING_SIDE_EFFECT,
+  WIRE_SPRING_OUTING_UNSYNCED_TOAST,
+  wireSpringOutingNote,
+} from "../assets/scripts/net/protocol/wireSpringOuting";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -2048,6 +2062,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("wanShengLottery") === "city", "wan sheng lottery stays on the city tab");
   assert(rootTabFor("heiWuMission") === "city", "hei wu mission stays on the city tab");
   assert(rootTabFor("christmasGift") === "city", "christmas gift stays on the city tab");
+  assert(rootTabFor("springOuting") === "city", "spring outing stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -13728,6 +13743,183 @@ async function checkWs(): Promise<void> {
     "76101 note keeps the side effect and does not write gold or diamond"
   );
   assert(
+    WireCmd.springOuting === 76301 &&
+      WireCmd.springOuting !== 76101 &&
+      WireCmd.springOuting !== 76302 &&
+      WireCmd.springOuting !== 76303 &&
+      WireCmd.springOuting !== 76304 &&
+      WireCmd.springOuting !== 76305 &&
+      WireCmd.springOuting !== 76306 &&
+      WireCmd.springOuting !== 76307 &&
+      WireCmd.springOuting !== 76308 &&
+      WireCmd.springOuting !== 76081 &&
+      WireCmd.springOuting !== 76001 &&
+      WireCmd.springOuting !== 75901 &&
+      WireCmd.springOuting !== 75001 &&
+      WireCmd.springOuting !== 76501 &&
+      WireCmd.springOuting !== 73002 &&
+      WireCmd.springOuting !== 71001 &&
+      WireCmd.springOuting !== 20011 &&
+      WireCmd.springOuting !== 74121 &&
+      WireCmd.springOuting !== 74122 &&
+      WireCmd.springOuting !== 4601 &&
+      WireCmd.springOuting !== 29001 &&
+      WireCmd.springOuting !== 5001 &&
+      WireCmd.springOuting !== 51001 &&
+      WireCmd.springOuting !== 68001 &&
+      WireCmd.springOuting !== 70001,
+    "online 76301 stays off the write cmds and the earlier idle pulls"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.springOuting)) === WIRE_SPRING_OUTING_FRAME, "empty c2s 76301");
+  assert(bytesToHex(encodeFrame(76301)) === "040000000d2a0100", "empty c2s 76301 hex");
+  assert(WIRE_SPRING_OUTING_FRAME === "040000000d2a0100", "76301 frame constant");
+  assert(bytesToHex(encodeFrame(76301)) !== "0400000045290100", "76301 is not the 76101 frame");
+  assert(bytesToHex(encodeFrame(76302)) === "040000000e2a0100" && bytesToHex(encodeFrame(76302)) !== "040000000d2a0100", "76302 is not the 76301 frame");
+  assert(bytesToHex(encodeFrame(76303)) === "040000000f2a0100" && bytesToHex(encodeFrame(76303)) !== "040000000d2a0100", "76303 is not the 76301 frame");
+  assert(bytesToHex(encodeFrame(76304)) === "04000000102a0100" && bytesToHex(encodeFrame(76304)) !== "040000000d2a0100", "76304 is not the 76301 frame");
+  assert(bytesToHex(encodeFrame(76305)) === "04000000112a0100" && bytesToHex(encodeFrame(76305)) !== "040000000d2a0100", "76305 is not the 76301 frame");
+  assert(bytesToHex(encodeFrame(76306)) === "04000000122a0100" && bytesToHex(encodeFrame(76306)) !== "040000000d2a0100", "76306 is not the 76301 frame");
+  assert(bytesToHex(encodeFrame(76307)) === "04000000132a0100" && bytesToHex(encodeFrame(76307)) !== "040000000d2a0100", "76307 is not the 76301 frame");
+  assert(bytesToHex(encodeFrame(76308)) === "04000000142a0100" && bytesToHex(encodeFrame(76308)) !== "040000000d2a0100", "76308 is not the 76301 frame");
+  assert(bytesToHex(encodeFrame(76081)) === "0400000031290100" && bytesToHex(encodeFrame(76081)) !== "040000000d2a0100", "76081 is not the 76301 frame");
+  for (let i = 0; i < WIRE_SPRING_OUTING_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_SPRING_OUTING_BANNED_CMDS[i] }) === null, WIRE_SPRING_OUTING_BANNED_CMDS[i] + " is not encoded");
+  }
+  const springOwn = encodeWireMessage({ cmd: WIRE_SPRING_OUTING_CMD });
+  assert(
+    springOwn !== null &&
+      bytesToHex(springOwn.bytes) === "040000000d2a0100" &&
+      bytesToHex(springOwn.bytes) !== "0400000045290100" &&
+      bytesToHex(springOwn.bytes) !== "040000000e2a0100" &&
+      bytesToHex(springOwn.bytes) !== "0400000031290100" &&
+      bytesToHex(springOwn.bytes) !== "04000000e1280100",
+    "wire.76301 encodes the empty 76301 frame and not 76101 or the banned cmds"
+  );
+  assert(WIRE_SPRING_OUTING_CMD === "wire.76301", "spring outing wire cmd");
+  assert(WIRE_SPRING_OUTING_READONLY_TITLE === "出游寻春（真服只读）", "readonly spring outing title");
+  assert(WIRE_SPRING_OUTING_UNSYNCED_TOAST === "真服未同步", "unsynced spring outing toast");
+  assert(WIRE_SPRING_OUTING_EMPTY === "已同步空表", "empty spring outing label");
+  assert(
+    WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("mission") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("mission_box_reward_record") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("open_day") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("76302") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("76303") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("76304") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("76305") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("76081") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("76101") >= 0 &&
+      WIRE_SPRING_OUTING_READONLY_NOTE.indexOf("无 page") >= 0,
+    "76301 readonly note lists the fields and the hard bans"
+  );
+  assert(
+    WIRE_SPRING_OUTING_SIDE_EFFECT.indexOf("轻懒建") >= 0 &&
+      WIRE_SPRING_OUTING_SIDE_EFFECT.indexOf("轻日刷") >= 0 &&
+      WIRE_SPRING_OUTING_SIDE_EFFECT.indexOf("跨日清 mission/box") >= 0 &&
+      WIRE_SPRING_OUTING_SIDE_EFFECT.indexOf("未开活动") >= 0 &&
+      WIRE_SPRING_OUTING_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_SPRING_OUTING_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_SPRING_OUTING_SIDE_EFFECT.indexOf("040000000d2a0100") >= 0 &&
+      WIRE_SPRING_OUTING_SIDE_EFFECT.indexOf("与 76101 分开发") >= 0 &&
+      WIRE_SPRING_OUTING_SIDE_EFFECT.indexOf("不并入 76101") >= 0,
+    "76301 side effect keeps the lazy create and the daily clear and does not claim"
+  );
+  assert(
+    WIRE_SPRING_OUTING_FIELD_NOTE.indexOf("mission") >= 0 &&
+      WIRE_SPRING_OUTING_FIELD_NOTE.indexOf("mission_box_reward_record") >= 0 &&
+      WIRE_SPRING_OUTING_FIELD_NOTE.indexOf("open_day") >= 0 &&
+      WIRE_SPRING_OUTING_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_SPRING_OUTING_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "76301 field note does not invent missing numbers"
+  );
+  const springEmpty = decodeWireSpringOuting(new Uint8Array(0));
+  assert(
+    springEmpty !== null &&
+      springEmpty.mission === null &&
+      springEmpty.missionBoxRewardRecord === null &&
+      springEmpty.openDay === null &&
+      springEmpty.marks.length === 0 &&
+      formatWireSpringOutingLine(springEmpty) === WIRE_SPRING_OUTING_EMPTY &&
+      formatWireSpringOutingLine(springEmpty).indexOf("mission=") < 0 &&
+      formatWireSpringOutingLine(springEmpty).indexOf("open_day=") < 0,
+    "empty 76301 body is 已同步空表 and does not invent zeros"
+  );
+  assert(decodeWireSpringOuting(null) === null, "missing 76301 body stays unsynced");
+  assert(decodeWireSpringOuting(Uint8Array.from([0x80])) === null, "bad 76301 varint returns null");
+  const springDayZero = decodeWireSpringOuting(fieldVarint(3, 0));
+  assert(
+    springDayZero !== null &&
+      springDayZero.openDay === 0 &&
+      springDayZero.mission === null &&
+      springDayZero.missionBoxRewardRecord === null &&
+      formatWireSpringOutingLine(springDayZero) === "open_day=0" &&
+      formatWireSpringOutingLine(springDayZero).indexOf("mission=") < 0,
+    "present 76301 open_day zero stays zero and omits mission"
+  );
+  const springDayNeg = decodeWireSpringOuting(fieldNeg1(3));
+  assert(
+    springDayNeg !== null &&
+      springDayNeg.openDay === -1 &&
+      formatWireSpringOutingLine(springDayNeg) === "open_day=-1",
+    "76301 open_day -1 stays -1"
+  );
+  const springMissionZero = decodeWireSpringOuting(fieldVarint(1, 0));
+  assert(
+    springMissionZero !== null &&
+      springMissionZero.mission !== null &&
+      springMissionZero.openDay === null &&
+      formatWireSpringOutingLine(springMissionZero) === "mission=0" &&
+      formatWireSpringOutingLine(springMissionZero).indexOf("open_day=") < 0,
+    "present 76301 mission zero stays zero and omits open_day"
+  );
+  const springUnknown = decodeWireSpringOuting(fieldVarint(4, 5));
+  assert(
+    springUnknown !== null &&
+      springUnknown.mission === null &&
+      springUnknown.openDay === null &&
+      formatWireSpringOutingLine(springUnknown) === "字段4=5" &&
+      formatWireSpringOutingLine(springUnknown).indexOf("mission=") < 0 &&
+      formatWireSpringOutingLine(springUnknown).indexOf("open_day=") < 0,
+    "76301 unknown field stays a mark and does not invent named zeros"
+  );
+  const springBytesDay = decodeWireSpringOuting(fieldBytes(3, Uint8Array.from([0x61])));
+  assert(
+    springBytesDay !== null &&
+      springBytesDay.openDay === null &&
+      formatWireSpringOutingLine(springBytesDay) === "字段3=a" &&
+      formatWireSpringOutingLine(springBytesDay).indexOf("open_day=") < 0,
+    "76301 bytes on open_day stay a mark and are not written as 0"
+  );
+  const springRow = decodeWireSpringOuting(fieldBytes(1, fieldVarint(1, 2)));
+  assert(
+    springRow !== null &&
+      springRow.mission !== null &&
+      springRow.openDay === null &&
+      formatWireSpringOutingLine(springRow) === "mission=字段1=2" &&
+      formatWireSpringOutingLine(springRow).indexOf("open_day=") < 0,
+    "76301 mission row keeps the inner field and omits open_day"
+  );
+  const springSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.springOuting, fieldVarint(3, 0)), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    springSticky.frames.length === 2 &&
+      springSticky.frames[0].cmdId === 76301 &&
+      springSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireSpringOuting(springSticky.frames[0].body)?.openDay === 0,
+    "sticky 76301 frame stops at its length prefix"
+  );
+  const springNote = wireSpringOutingNote(springEmpty || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] });
+  assert(
+    springNote.indexOf(WIRE_SPRING_OUTING_SIDE_EFFECT) >= 0 &&
+      springNote.indexOf("不写金币") >= 0 &&
+      springNote.indexOf("不写钻石") >= 0,
+    "76301 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
     bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("f52e0000") < 0 &&
@@ -14853,7 +15045,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 60, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once then 75901 once then 76001 once then 76101 once and does not resend 76001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 61, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once then 75801 once then 75901 once then 76001 once then 76101 once then 76301 once and does not resend 76101 or 76001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75802 or 75803 or 75804");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -16133,6 +16325,30 @@ async function checkWs(): Promise<void> {
         }
         assert(xmasHex !== "04000000e1280100", "pullIdle 76101 frame is not merged into the 76001 cmd");
       }
+
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 60] as ArrayBuffer)) === "040000000d2a0100",
+        "pullIdle sends empty c2s 76301 after 76101 at frame index 60"
+      );
+      {
+        const springHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 60] as ArrayBuffer));
+        const notFrames = [
+          "0400000045290100",
+          "04000000e1280100",
+          "040000000e2a0100",
+          "040000000f2a0100",
+          "04000000102a0100",
+          "04000000112a0100",
+          "04000000122a0100",
+          "04000000132a0100",
+          "04000000142a0100",
+          "0400000031290100",
+        ];
+        for (let n = 0; n < notFrames.length; n++) {
+          assert(springHex !== notFrames[n], "pullIdle 76301 frame is not " + notFrames[n]);
+        }
+        assert(springHex !== "0400000045290100", "pullIdle 76301 frame is not merged into the 76101 cmd");
+      }
       {
         let formationFrames = 0;
         let lineUpFrames = 0;
@@ -16230,7 +16446,14 @@ async function checkWs(): Promise<void> {
           "0400000081290100": true,
           "0400000082290100": true,
           "0400000083290100": true,
-          "040000000d2a0100": true,
+          "040000000e2a0100": true,
+          "040000000f2a0100": true,
+          "04000000102a0100": true,
+          "04000000112a0100": true,
+          "04000000122a0100": true,
+          "04000000132a0100": true,
+          "04000000142a0100": true,
+          "0400000031290100": true,
         };
         let weekendFrames = 0;
         let godRelicFrames = 0;
@@ -16246,9 +16469,10 @@ async function checkWs(): Promise<void> {
         let wanShengFrames = 0;
         let blackFiveFrames = 0;
         let christmasFrames = 0;
+        let springFrames = 0;
         let astrolabeFrames = 0;
         let reikiFrames = 0;
-        for (let i = 0; i < 60; i++) {
+        for (let i = 0; i < 61; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -16275,6 +16499,7 @@ async function checkWs(): Promise<void> {
           if (hex === "040000007d280100") wanShengFrames += 1;
           if (hex === "04000000e1280100") blackFiveFrames += 1;
           if (hex === "0400000045290100") christmasFrames += 1;
+          if (hex === "040000000d2a0100") springFrames += 1;
           if (hex === "04000000a1090100") astrolabeFrames += 1;
           if (hex === "0400000071110100") reikiFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
@@ -16306,11 +16531,12 @@ async function checkWs(): Promise<void> {
             wanShengFrames === 1 &&
             blackFiveFrames === 1 &&
             christmasFrames === 1 &&
+            springFrames === 1 &&
             astrolabeFrames === 1 &&
             reikiFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once, 75131 once and 75801 once and 75901 once and 76001 once and 76101 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 76001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76002 76003 76004 76005 76021 76022 76102 76082 76083 76084 76121 76122 76141 76142 76143 76161 76162 76163 76301 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once, 75131 once and 75801 once and 75901 once and 76001 once and 76101 once and 76301 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 76101 or 76001 or 75901 or 75801 or 75131 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76002 76003 76004 76005 76021 76022 76102 76082 76083 76084 76121 76122 76141 76142 76143 76161 76162 76163 76302 76303 76304 76305 76306 76307 76308 76081 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
         );
       }
       assert(
@@ -16540,8 +16766,24 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "0400000082290100") === false &&
           sawLog(lines, "发送 c2s 76163") === false &&
           sawLog(lines, "0400000083290100") === false &&
-          sawLog(lines, "发送 c2s 76301") === false &&
-          sawLog(lines, "040000000d2a0100") === false &&
+          sawLog(lines, "发送 c2s 76301") &&
+          sawLog(lines, "040000000d2a0100") &&
+          sawLog(lines, "发送 c2s 76302") === false &&
+          sawLog(lines, "040000000e2a0100") === false &&
+          sawLog(lines, "发送 c2s 76303") === false &&
+          sawLog(lines, "040000000f2a0100") === false &&
+          sawLog(lines, "发送 c2s 76304") === false &&
+          sawLog(lines, "04000000102a0100") === false &&
+          sawLog(lines, "发送 c2s 76305") === false &&
+          sawLog(lines, "04000000112a0100") === false &&
+          sawLog(lines, "发送 c2s 76306") === false &&
+          sawLog(lines, "04000000122a0100") === false &&
+          sawLog(lines, "发送 c2s 76307") === false &&
+          sawLog(lines, "04000000132a0100") === false &&
+          sawLog(lines, "发送 c2s 76308") === false &&
+          sawLog(lines, "04000000142a0100") === false &&
+          sawLog(lines, "发送 c2s 76081") === false &&
+          sawLog(lines, "0400000031290100") === false &&
           sawLog(lines, "发送 c2s 74002") === false &&
           sawLog(lines, "0400000012210100") === false &&
           sawLog(lines, "发送 c2s 74003") === false &&
@@ -16791,6 +17033,12 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_HEI_WU_MISSION_CMD);
       const heiSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(heiSent as ArrayBuffer)) === "04000000e1280100", "wire.76001 frame");
+      roleNet.send(WIRE_CHRISTMAS_GIFT_CMD);
+      const xmasSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(xmasSent as ArrayBuffer)) === "0400000045290100", "wire.76101 frame");
+      roleNet.send(WIRE_SPRING_OUTING_CMD);
+      const springSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(springSent as ArrayBuffer)) === "040000000d2a0100", "wire.76301 frame");
       const sentBeforeRechargeOther = roleSockets[0].sent.length;
       roleNet.send("wire.61002");
       roleNet.send("wire.62002");
@@ -16857,10 +17105,17 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.76161");
       roleNet.send("wire.76162");
       roleNet.send("wire.76163");
-      roleNet.send("wire.76301");
+      roleNet.send("wire.76302");
+      roleNet.send("wire.76303");
+      roleNet.send("wire.76304");
+      roleNet.send("wire.76305");
+      roleNet.send("wire.76306");
+      roleNet.send("wire.76307");
+      roleNet.send("wire.76308");
+      roleNet.send("wire.76081");
       roleNet.send("wire.75001");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76002 76003 76004 76005 76021 76022 76102 76082 76083 76084 76121 76122 76141 76142 76143 76161 76162 76163 76301 75001 and goal claim stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75802 75803 75804 75902 75903 75904 75931 75932 75941 75942 75943 75944 76002 76003 76004 76005 76021 76022 76102 76082 76083 76084 76121 76122 76141 76142 76143 76161 76162 76163 76302 76303 76304 76305 76306 76307 76308 76081 75001 and goal claim stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.61002") &&
           sawLog(lines, "未发送 wire.62002") &&
@@ -16927,7 +17182,14 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.76161") &&
           sawLog(lines, "未发送 wire.76162") &&
           sawLog(lines, "未发送 wire.76163") &&
-          sawLog(lines, "未发送 wire.76301") &&
+          sawLog(lines, "未发送 wire.76302") &&
+          sawLog(lines, "未发送 wire.76303") &&
+          sawLog(lines, "未发送 wire.76304") &&
+          sawLog(lines, "未发送 wire.76305") &&
+          sawLog(lines, "未发送 wire.76306") &&
+          sawLog(lines, "未发送 wire.76307") &&
+          sawLog(lines, "未发送 wire.76308") &&
+          sawLog(lines, "未发送 wire.76081") &&
           sawLog(lines, "未发送 wire.75001") &&
           sawLog(lines, "未发送 goal7.claim"),
         "qi shen qi banned cmds and goal claim are not encoded"
@@ -21956,11 +22218,64 @@ async function checkWs(): Promise<void> {
       roleSockets[0].push(encodeFrame(76161, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(76162, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(76163, fieldVarint(1, 9)));
-      roleSockets[0].push(encodeFrame(76301, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76302, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76303, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76304, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76305, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76306, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76307, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76308, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76081, fieldVarint(1, 9)));
       assert(
-        formatWireChristmasGiftLine(WireSession.christmasGift || { buy: null, marks: [] }) === "buy=count=0" &&
+        WireSession.hasSpringOuting() === false &&
+          formatWireChristmasGiftLine(WireSession.christmasGift || { buy: null, marks: [] }) === "buy=count=0" &&
           formatWireHeiWuMissionLine(WireSession.heiWuMission || { mission: null, missionBoxRewardRecord: null, missionRewardCount: null, buy: null, marks: [] }) === "mission_reward_count=0",
-        "76102 76082 76083 76084 76121 76122 76141 76142 76143 76161 76162 76163 76301 do not replace the 76101 snapshot"
+        "76102 76082 76083 76084 76121 76122 76141 76142 76143 76161 76162 76163 76302 76303 76304 76305 76306 76307 76308 76081 do not replace the 76101 snapshot and 76301 stays unsynced"
+      );
+      assert(WireSession.hasSpringOuting() === false, "76301 stays unsynced until its own s2c");
+      roleSockets[0].push(encodeFrame(76301, fieldVarint(1, 0)));
+      assert(
+        WireSession.hasSpringOuting() &&
+          formatWireSpringOutingLine(WireSession.springOuting || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }) === "mission=0" &&
+          formatWireSpringOutingLine(WireSession.springOuting || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }).indexOf("open_day=") < 0 &&
+          formatWireChristmasGiftLine(WireSession.christmasGift || { buy: null, marks: [] }) === "buy=count=0" &&
+          formatWireHeiWuMissionLine(WireSession.heiWuMission || { mission: null, missionBoxRewardRecord: null, missionRewardCount: null, buy: null, marks: [] }) === "mission_reward_count=0",
+        "76301 mission zero does not replace the 76101 snapshot and omits open_day"
+      );
+      roleSockets[0].push(encodeFrame(76301));
+      assert(
+        WireSession.hasSpringOuting() &&
+          formatWireSpringOutingLine(WireSession.springOuting || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }) === WIRE_SPRING_OUTING_EMPTY &&
+          formatWireSpringOutingLine(WireSession.springOuting || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }).indexOf("mission=") < 0 &&
+          formatWireSpringOutingLine(WireSession.springOuting || { mission: null, missionBoxRewardRecord: null, openDay: null, marks: [] }).indexOf("open_day=") < 0 &&
+          formatWireChristmasGiftLine(WireSession.christmasGift || { buy: null, marks: [] }) === "buy=count=0",
+        "empty 76301 body is 已同步空表 and does not replace the 76101 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(76301, fieldVarint(3, 0)));
+      assert(
+        WireSession.springOuting !== null &&
+          WireSession.springOuting.openDay === 0 &&
+          WireSession.springOuting.mission === null &&
+          formatWireSpringOutingLine(WireSession.springOuting) === "open_day=0" &&
+          formatWireSpringOutingLine(WireSession.springOuting).indexOf("mission=") < 0,
+        "76301 shows a present zero open_day and omits mission"
+      );
+      roleSockets[0].push(encodeFrame(76301, fieldNeg1(3)));
+      assert(
+        WireSession.springOuting !== null &&
+          formatWireSpringOutingLine(WireSession.springOuting) === "open_day=-1" &&
+          formatWireSpringOutingLine(WireSession.springOuting).indexOf("mission=") < 0,
+        "76301 keeps a present -1 and omits mission"
+      );
+      roleSockets[0].push(encodeFrame(76301, fieldVarint(3, 0)));
+      roleSockets[0].push(encodeFrame(76301, Uint8Array.from([0x80])));
+      assert(
+        WireSession.springOuting !== null &&
+          formatWireSpringOutingLine(WireSession.springOuting) === "open_day=0" &&
+          formatWireChristmasGiftLine(WireSession.christmasGift || { buy: null, marks: [] }) === "buy=count=0" &&
+          formatWireHeiWuMissionLine(WireSession.heiWuMission || { mission: null, missionBoxRewardRecord: null, missionRewardCount: null, buy: null, marks: [] }) === "mission_reward_count=0" &&
+          sawWire("76301 解不开"),
+        "bad 76301 keeps the previous snapshot and the 76101 snapshot"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
