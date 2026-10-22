@@ -1,4 +1,5 @@
 import { assetManager, Button, Color, EditBox, instantiate, Node, Prefab, Sprite } from "cc";
+import { BATTLE_PREFAB_PATH } from "./battlePrefabLayout";
 
 /**
  * 界面 Prefab 在 assets/prefabs，不在 resources。
@@ -12,12 +13,14 @@ import { assetManager, Button, Color, EditBox, instantiate, Node, Prefab, Sprite
 export const LOGIN_PREFAB_PATH = "prefabs/ui/login/LoginPanel";
 export const CREATE_ROLE_PREFAB_PATH = "prefabs/ui/login/CreateRolePanel";
 export const CITY_CHROME_PREFAB_PATH = "prefabs/ui/city/CityChrome";
+export { BATTLE_PREFAB_PATH };
 
 /** 与 .prefab.meta 的 uuid 一致。只给 loadAny 兜底，不拿去 resources.load。 */
 const PREFAB_UUID: { [path: string]: string } = {
   "prefabs/ui/login/LoginPanel": "196fd024-dd83-4ee7-9783-1617ce3279a8",
   "prefabs/ui/login/CreateRolePanel": "d2eb0e48-bc58-4e09-b95f-ce45350461b1",
   "prefabs/ui/city/CityChrome": "c97efb56-db67-4c93-84d5-e29436794e86",
+  [BATTLE_PREFAB_PATH]: "733c8611-a124-4c16-bb79-6b3011dfb408",
 };
 
 export function loadPrefab(assetPath: string): Promise<Prefab> {

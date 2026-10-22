@@ -42,6 +42,17 @@ import {
   isCityScreenResident,
   readonlyCitySlot,
 } from "../assets/scripts/ui/cityHubEntries";
+import {
+  BATTLE_PREFAB_PATH,
+  battleHpPath,
+  battlePrefabRequiredPaths,
+  battleSlotPath,
+  battleVfxPath,
+  hpFillLayout,
+  HP_FILL_FULL,
+  HP_FILL_FULL_X,
+  vfxLocal,
+} from "../assets/scripts/ui/battlePrefabLayout";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
 import {
   applyBagUse,
@@ -25629,6 +25640,80 @@ function checkCityHub(): void {
   );
   const boot = readFileSync(bootSource(), "utf8");
   assert(boot.indexOf("USE_CITY_CHROME") < 0, "Boot does not grow a city chrome switch");
+  assert(boot.indexOf("USE_BATTLE_PREFAB") < 0, "Boot does not grow a battle prefab switch");
+  const battlePageSrc = readFileSync(uiSource("BattlePage.ts"), "utf8");
+  const battleLayoutSrc = readFileSync(uiSource("battlePrefabLayout.ts"), "utf8");
+  const wireBattlePageSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
+  assert(battlePageSrc.indexOf("export const USE_BATTLE_PREFAB = true") >= 0, "battle prefab default stays on");
+  assert(mainApp.indexOf("USE_BATTLE_PREFAB") < 0, "MainApp does not grow a battle prefab switch");
+  assert(chrome.indexOf("USE_BATTLE_PREFAB") < 0 && chrome.indexOf("BattlePage") < 0, "city chrome is not part of the battle prefab switch");
+  assert(
+    wireBattlePageSrc.indexOf("USE_BATTLE_PREFAB") >= 0 &&
+      wireBattlePageSrc.indexOf("mountBattlePrefab") >= 0 &&
+      wireBattlePageSrc.indexOf("mountVfx") >= 0 &&
+      wireBattlePageSrc.indexOf("mountCodeBattle") >= 0 &&
+      wireBattlePageSrc.indexOf("VfxSkill") >= 0 &&
+      wireBattlePageSrc.indexOf("WireBattlePage 仍不挂") >= 0 &&
+      wireBattlePageSrc.indexOf("不发新 c2s") >= 0 &&
+      wireBattlePageSrc.indexOf("3103 不走") >= 0 &&
+      wireBattlePageSrc.indexOf(".pvr") < 0 &&
+      wireBattlePageSrc.indexOf("encodeFrame") < 0,
+    "wire battle mounts BattlePage on the existing replay and keeps the code page"
+  );
+  assert(BATTLE_PREFAB_PATH === "prefabs/ui/battle/BattlePage", "battle prefab path");
+  assert(battleSlotPath("enemy", 0) === "LayerField/EnemySlots/Slot_E0", "enemy front slot");
+  assert(battleSlotPath("ally", 5) === "LayerField/AllySlots/Slot_A5", "ally back slot");
+  assert(battleSlotPath("ally", 6) === null && battleHpPath("enemy", 3) === null, "back row has slots and no hp bar");
+  assert(battleHpPath("ally", 0) === "LayerHud/HpBars/AllyHp_0", "ally hp bar");
+  assert(battleVfxPath("skill") === "LayerVfx/VfxSkill" && battleVfxPath("hit") === "LayerVfx/VfxHit" && battleVfxPath("screen") === "LayerVfx/VfxScreen", "vfx attach points");
+  const fullHp = hpFillLayout(1);
+  const halfHp = hpFillLayout(0.5);
+  const emptyHpFill = hpFillLayout(0);
+  assert(
+    fullHp.visible && fullHp.width === HP_FILL_FULL && fullHp.x === HP_FILL_FULL_X && halfHp.width === 56 && halfHp.x === -52 && !emptyHpFill.visible && !hpFillLayout(Number.NaN).visible,
+    "hp fill keeps the prefab left edge"
+  );
+  assert(vfxLocal("skill", 0, 180).x === 0 && vfxLocal("skill", 0, 180).y === 0 && vfxLocal("hit", 0, 120).y === 0 && vfxLocal("skill", -200, 340).x === -200 && vfxLocal("skill", -200, 340).y === 160, "vfx local origin matches the prefab attach point");
+  const battlePrefabFile = join(process.cwd(), "client", "assets", "prefabs", "ui", "battle", "BattlePage.prefab");
+  const battlePrefabPaths = prefabChildPaths(battlePrefabFile);
+  const requiredBattlePaths = battlePrefabRequiredPaths();
+  for (let bi = 0; bi < requiredBattlePaths.length; bi++) {
+    assert(battlePrefabPaths.indexOf(requiredBattlePaths[bi]) >= 0, "BattlePage has " + requiredBattlePaths[bi]);
+  }
+  assert(battleLayoutSrc.indexOf("不发协议") >= 0, "battle layout helper does not own a protocol");
+  const battleDoc = readFileSync(join(process.cwd(), "docs", "battle-prefab-layout.md"), "utf8");
+  assert(
+    battleDoc.indexOf("USE_BATTLE_PREFAB") >= 0 &&
+      battleDoc.indexOf("3001") >= 0 &&
+      battleDoc.indexOf("3030") >= 0 &&
+      battleDoc.indexOf("3102") >= 0 &&
+      battleDoc.indexOf("WireBattlePage") >= 0 &&
+      battleDoc.indexOf("不改 `Boot.ts`") >= 0,
+    "battle prefab doc names the flag, the existing cmds, and the untouched boot"
+  );
+}
+
+function prefabChildPaths(file: string): string[] {
+  const data = JSON.parse(readFileSync(file, "utf8")) as Array<{
+    __type__?: string;
+    _name?: string;
+    _children?: { __id__?: number }[];
+  }>;
+  const paths: string[] = [];
+  const walk = (id: number, path: string): void => {
+    if (path) paths.push(path);
+    const node = data[id];
+    const children = node && node._children ? node._children : [];
+    for (let i = 0; i < children.length; i++) {
+      const childId = children[i].__id__;
+      if (typeof childId !== "number") continue;
+      const child = data[childId];
+      if (!child || child.__type__ !== "cc.Node" || !child._name) continue;
+      walk(childId, path ? path + "/" + child._name : child._name);
+    }
+  };
+  walk(1, "");
+  return paths;
 }
 
 function uiSource(name: string): string {
