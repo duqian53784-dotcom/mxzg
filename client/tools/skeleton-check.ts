@@ -1216,6 +1216,20 @@ import {
   WIRE_ZHU_SHEN_JI_TAN_UNSYNCED_TOAST,
   wireZhuShenJiTanNote,
 } from "../assets/scripts/net/protocol/wireZhuShenJiTan";
+import {
+  decodeWireMidFood,
+  formatWireMidFoodLine,
+  WIRE_MID_FOOD_BANNED_CMDS,
+  WIRE_MID_FOOD_CMD,
+  WIRE_MID_FOOD_EMPTY,
+  WIRE_MID_FOOD_FIELD_NOTE,
+  WIRE_MID_FOOD_FRAME,
+  WIRE_MID_FOOD_READONLY_NOTE,
+  WIRE_MID_FOOD_READONLY_TITLE,
+  WIRE_MID_FOOD_SIDE_EFFECT,
+  WIRE_MID_FOOD_UNSYNCED_TOAST,
+  wireMidFoodNote,
+} from "../assets/scripts/net/protocol/wireMidFood";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
   DEFAULT_WS_URL,
@@ -1973,6 +1987,7 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(rootTabFor("magicTowerRoad") === "city", "magic tower road stays on the city tab");
   assert(rootTabFor("qiShenQi") === "city", "qi shen qi stays on the city tab");
   assert(rootTabFor("zhuShenJiTan") === "city", "zhu shen ji tan stays on the city tab");
+  assert(rootTabFor("midFood") === "city", "mid food stays on the city tab");
   const heroEntry = findNavEntry("hero");
   assert(heroEntry !== null && entryAccess(heroEntry, 1, 1, db).open, "hero open at lv1");
   assert(rootTabFor("hero") === "hero" && rootTabFor("hero-detail") === "hero", "hero detail highlights hero");
@@ -12629,6 +12644,197 @@ async function checkWs(): Promise<void> {
     "75121 note keeps the side effect and does not write gold or diamond"
   );
   assert(
+    WireCmd.midFood === 75131 &&
+      WireCmd.midFood !== WireCmd.zhuShenJiTan &&
+      WireCmd.midFood !== WireCmd.qiShenQi &&
+      WireCmd.midFood !== 75121 &&
+      WireCmd.midFood !== 75101 &&
+      WireCmd.midFood !== 75132 &&
+      WireCmd.midFood !== 75122 &&
+      WireCmd.midFood !== 75102 &&
+      WireCmd.midFood !== 75801 &&
+      WireCmd.midFood !== 75001 &&
+      WireCmd.midFood !== 76501 &&
+      WireCmd.midFood !== 73002 &&
+      WireCmd.midFood !== 71001 &&
+      WireCmd.midFood !== 20011 &&
+      WireCmd.midFood !== 74121 &&
+      WireCmd.midFood !== 74122 &&
+      WireCmd.midFood !== 4601 &&
+      WireCmd.midFood !== 29001 &&
+      WireCmd.midFood !== 5001 &&
+      WireCmd.midFood !== 51001 &&
+      WireCmd.midFood !== 68001 &&
+      WireCmd.midFood !== 70001 &&
+      WireCmd.midFood !== 76542 &&
+      WireCmd.midFood !== 74120 &&
+      WireCmd.midFood !== 74001,
+    "online 75131 stays off the write cmds and the earlier idle pulls"
+  );
+  assert(bytesToHex(encodeFrame(WireCmd.midFood)) === WIRE_MID_FOOD_FRAME, "empty c2s 75131");
+  assert(bytesToHex(encodeFrame(75131)) === "040000007b250100", "empty c2s 75131 hex");
+  assert(WIRE_MID_FOOD_FRAME === "040000007b250100", "75131 frame constant");
+  assert(bytesToHex(encodeFrame(75131)) !== "0400000071250100", "75131 is not the 75121 frame");
+  assert(bytesToHex(encodeFrame(75132)) === "040000007c250100" && bytesToHex(encodeFrame(75132)) !== "040000007b250100", "75132 is not the 75131 frame");
+  assert(bytesToHex(encodeFrame(75122)) === "0400000072250100" && bytesToHex(encodeFrame(75122)) !== "040000007b250100", "75122 is not the 75131 frame");
+  assert(bytesToHex(encodeFrame(75102)) === "040000005e250100" && bytesToHex(encodeFrame(75102)) !== "040000007b250100", "75102 is not the 75131 frame");
+  assert(bytesToHex(encodeFrame(75801)) === "0400000019280100" && bytesToHex(encodeFrame(75801)) !== "040000007b250100", "75801 is not the 75131 frame");
+  for (let i = 0; i < WIRE_MID_FOOD_BANNED_CMDS.length; i++) {
+    assert(encodeWireMessage({ cmd: WIRE_MID_FOOD_BANNED_CMDS[i] }) === null, WIRE_MID_FOOD_BANNED_CMDS[i] + " is not encoded");
+  }
+  const midFoodOwn = encodeWireMessage({ cmd: WIRE_MID_FOOD_CMD });
+  assert(
+    midFoodOwn !== null &&
+      bytesToHex(midFoodOwn.bytes) === "040000007b250100" &&
+      bytesToHex(midFoodOwn.bytes) !== "0400000071250100" &&
+      bytesToHex(midFoodOwn.bytes) !== "040000007c250100" &&
+      bytesToHex(midFoodOwn.bytes) !== "0400000072250100" &&
+      bytesToHex(midFoodOwn.bytes) !== "040000005e250100" &&
+      bytesToHex(midFoodOwn.bytes) !== "0400000019280100",
+    "wire.75131 encodes the empty 75131 frame and not 75121 or the banned cmds"
+  );
+  assert(WIRE_MID_FOOD_CMD === "wire.75131", "mid food wire cmd");
+  assert(WIRE_MID_FOOD_READONLY_TITLE === "赏月佳肴（真服只读）", "readonly mid food title");
+  assert(WIRE_MID_FOOD_UNSYNCED_TOAST === "真服未同步", "unsynced mid food toast");
+  assert(WIRE_MID_FOOD_EMPTY === "已同步空表", "empty mid food label");
+  assert(
+    WIRE_MID_FOOD_READONLY_NOTE.indexOf("buy") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("idx") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("已购次数") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("如实展示") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("不回落 Mock") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("不写金币") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("不写钻石") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("75132") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("75122") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("75102") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("75801") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("75001") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("76501") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("73002") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("71001") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("20011") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("74121") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("74122") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("75121") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("5001") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("51001") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("68001") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("70001") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("4601") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("29001") >= 0 &&
+      WIRE_MID_FOOD_READONLY_NOTE.indexOf("无 page") >= 0,
+    "75131 readonly note lists buy and the hard bans"
+  );
+  assert(
+    WIRE_MID_FOOD_SIDE_EFFECT.indexOf("getPromotionInfo") >= 0 &&
+      WIRE_MID_FOOD_SIDE_EFFECT.indexOf("buyList.clear") >= 0 &&
+      WIRE_MID_FOOD_SIDE_EFFECT.indexOf("75132") >= 0 &&
+      WIRE_MID_FOOD_SIDE_EFFECT.indexOf("无扣费") >= 0 &&
+      WIRE_MID_FOOD_SIDE_EFFECT.indexOf("无领奖") >= 0 &&
+      WIRE_MID_FOOD_SIDE_EFFECT.indexOf("无养成写") >= 0 &&
+      WIRE_MID_FOOD_SIDE_EFFECT.indexOf("040000007b250100") >= 0 &&
+      WIRE_MID_FOOD_SIDE_EFFECT.indexOf("与 75121 分开发") >= 0,
+    "75131 side effect keeps the lazy create and the round reset and does not buy"
+  );
+  assert(
+    WIRE_MID_FOOD_FIELD_NOTE.indexOf("buy") >= 0 &&
+      WIRE_MID_FOOD_FIELD_NOTE.indexOf("idx") >= 0 &&
+      WIRE_MID_FOOD_FIELD_NOTE.indexOf("已购次数") >= 0 &&
+      WIRE_MID_FOOD_FIELD_NOTE.indexOf("不写成 0") >= 0 &&
+      WIRE_MID_FOOD_FIELD_NOTE.indexOf("如实展示") >= 0,
+    "75131 field note does not invent missing numbers"
+  );
+  const midFoodEmpty = decodeWireMidFood(new Uint8Array(0));
+  assert(
+    midFoodEmpty !== null &&
+      midFoodEmpty.buy === null &&
+      midFoodEmpty.marks.length === 0 &&
+      formatWireMidFoodLine(midFoodEmpty) === WIRE_MID_FOOD_EMPTY &&
+      formatWireMidFoodLine(midFoodEmpty).indexOf("idx=0") < 0 &&
+      formatWireMidFoodLine(midFoodEmpty).indexOf("buy=") < 0,
+    "empty 75131 body is 已同步空表 and does not invent zeros"
+  );
+  assert(decodeWireMidFood(null) === null, "missing 75131 body stays unsynced");
+  assert(decodeWireMidFood(Uint8Array.from([0x80])) === null, "bad 75131 varint returns null");
+  const midFoodCountZero = decodeWireMidFood(fieldBytes(1, fieldVarint(2, 0)));
+  assert(
+    midFoodCountZero !== null &&
+      midFoodCountZero.buy !== null &&
+      midFoodCountZero.buy[0].count === 0 &&
+      midFoodCountZero.buy[0].idx === null &&
+      formatWireMidFoodLine(midFoodCountZero) === "buy=count=0" &&
+      formatWireMidFoodLine(midFoodCountZero).indexOf("idx=") < 0,
+    "present 75131 count zero stays zero and omits idx"
+  );
+  const midFoodIdxZero = decodeWireMidFood(fieldBytes(1, fieldVarint(1, 0)));
+  assert(
+    midFoodIdxZero !== null &&
+      midFoodIdxZero.buy !== null &&
+      midFoodIdxZero.buy[0].idx === 0 &&
+      midFoodIdxZero.buy[0].count === null &&
+      formatWireMidFoodLine(midFoodIdxZero) === "buy=idx=0" &&
+      formatWireMidFoodLine(midFoodIdxZero).indexOf("count=") < 0,
+    "present 75131 idx zero stays zero and omits count"
+  );
+  const midFoodIdxNeg = decodeWireMidFood(fieldBytes(1, fieldNeg1(1)));
+  assert(
+    midFoodIdxNeg !== null &&
+      midFoodIdxNeg.buy !== null &&
+      midFoodIdxNeg.buy[0].idx === -1 &&
+      formatWireMidFoodLine(midFoodIdxNeg) === "buy=idx=-1",
+    "75131 idx -1 stays -1"
+  );
+  const midFoodOmitCount = decodeWireMidFood(fieldBytes(1, fieldVarint(1, 2)));
+  assert(
+    midFoodOmitCount !== null &&
+      midFoodOmitCount.buy !== null &&
+      midFoodOmitCount.buy[0].count === null &&
+      formatWireMidFoodLine(midFoodOmitCount) === "buy=idx=2" &&
+      formatWireMidFoodLine(midFoodOmitCount).indexOf("count=") < 0,
+    "75131 omitted count stays omitted"
+  );
+  const midFoodUnknown = decodeWireMidFood(fieldVarint(4, 5));
+  assert(
+    midFoodUnknown !== null &&
+      midFoodUnknown.buy === null &&
+      formatWireMidFoodLine(midFoodUnknown) === "字段4=5" &&
+      formatWireMidFoodLine(midFoodUnknown).indexOf("buy=") < 0,
+    "75131 unknown field stays a mark and does not invent named zeros"
+  );
+  const midFoodMark = decodeWireMidFood(fieldVarint(1, 3));
+  assert(
+    midFoodMark !== null &&
+      midFoodMark.buy === null &&
+      formatWireMidFoodLine(midFoodMark) === "字段1=3",
+    "75131 field 1 varint is a mark and not a buy row"
+  );
+  const midFoodBoth = decodeWireMidFood(fieldBytes(1, concatBytes(fieldVarint(1, 2), fieldVarint(2, 0))));
+  assert(
+    midFoodBoth !== null &&
+      midFoodBoth.buy !== null &&
+      midFoodBoth.buy[0].idx === 2 &&
+      midFoodBoth.buy[0].count === 0 &&
+      formatWireMidFoodLine(midFoodBoth) === "buy=idx=2,count=0",
+    "75131 buy row keeps idx and a present zero count"
+  );
+  const midFoodSticky = decodeFrames(concatBytes(encodeFrame(WireCmd.midFood, fieldBytes(1, fieldVarint(2, 0))), encodeFrame(WireCmd.heartbeat)));
+  assert(
+    midFoodSticky.frames.length === 2 &&
+      midFoodSticky.frames[0].cmdId === 75131 &&
+      midFoodSticky.frames[1].cmdId === WireCmd.heartbeat &&
+      decodeWireMidFood(midFoodSticky.frames[0].body)?.buy?.[0].count === 0,
+    "sticky 75131 frame stops at its length prefix"
+  );
+  const midFoodNote = wireMidFoodNote(midFoodEmpty || { buy: null, marks: [] });
+  assert(
+    midFoodNote.indexOf(WIRE_MID_FOOD_SIDE_EFFECT) >= 0 &&
+      midFoodNote.indexOf("不写金币") >= 0 &&
+      midFoodNote.indexOf("不写钻石") >= 0,
+    "75131 note keeps the side effect and does not write gold or diamond"
+  );
+  assert(
     bytesToHex(encodeFrame(12020)).indexOf("f42e0000") >= 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("ea2e0000") < 0 &&
       bytesToHex(encodeFrame(12020)).indexOf("f52e0000") < 0 &&
@@ -13754,7 +13960,7 @@ async function checkWs(): Promise<void> {
       assert(sawLog(lines, "未发送 wire.3002") && sawLog(lines, "未发送 wire.3010"), "other battle cmds are not encoded");
       const sentBeforeMailPull = roleSockets[0].sent.length;
       WireSession.pullIdle();
-      assert(roleSockets[0].sent.length === sentBeforeMailPull + 55, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once and does not resend 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75102 or 75122");
+      assert(roleSockets[0].sent.length === sentBeforeMailPull + 56, "idle pull sends 3004 then 15000 then 4001 then 17000 then 12010 then 18001 then 22000 then 21010 then 27001 then 4004 then 13044 then 4101 then 4013 then 74100 then 51001 then 20001 then 20012 then 70001 then 73001 then 74300 then 68001 then 75501 then 59001 then 59010 then 55001 then 34001 then 32001 then 4402 then 4401 then 4201 then 74104 then 28100 then 28200 then 75601 then 75606 then 75615 then 28107 then 3099 then 3101 then 20101 then 3203 then 4044 then 13010 then 12020 then 26002 then 26001 then 61001 then 62001 then 63001 then 69001 then 74001 once then 74120 once then 76542 once then 75101 once then 75121 once then 75131 once and does not resend 75121 or 75101 or 76542 or 74120 or 74001 or send another 5001 or 69001 or 69002 or 71001 or 74002 or 74003 or 73002 or 75132 or 75102 or 75122 or 75801");
       assert(
         bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull] as ArrayBuffer)) === "04000000bc0b0000",
         "pullIdle still sends empty c2s 3004 first"
@@ -14897,6 +15103,42 @@ async function checkWs(): Promise<void> {
           assert(zsjtHex !== notFrames[n], "pullIdle 75121 frame is not " + notFrames[n]);
         }
         assert(zsjtHex !== "040000005d250100", "pullIdle 75121 frame is not merged into the 75101 cmd");
+        assert(zsjtHex !== "040000007b250100", "pullIdle 75121 frame is not merged into the 75131 cmd");
+      }
+      assert(
+        bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 55] as ArrayBuffer)) === "040000007b250100",
+        "pullIdle sends empty c2s 75131 after 75121 at frame index 55"
+      );
+      {
+        const midHex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + 55] as ArrayBuffer));
+        const notFrames = [
+          "0400000071250100",
+          "040000005d250100",
+          "04000000fe2a0100",
+          "0400000088210100",
+          "0400000011210100",
+          "040000007c250100",
+          "0400000072250100",
+          "040000005e250100",
+          "0400000019280100",
+          "04000000f9240100",
+          "04000000d52a0100",
+          "040000002a1d0100",
+          "0400000059150100",
+          "040000002b4e0000",
+          "0400000089210100",
+          "040000008a210100",
+          "04000000f9110000",
+          "0400000049710000",
+          "0400000089130000",
+          "0400000039c70000",
+          "04000000a1090100",
+          "0400000071110100",
+        ];
+        for (let n = 0; n < notFrames.length; n++) {
+          assert(midHex !== notFrames[n], "pullIdle 75131 frame is not " + notFrames[n]);
+        }
+        assert(midHex !== "0400000071250100", "pullIdle 75131 frame is not merged into the 75121 cmd");
       }
       {
         let formationFrames = 0;
@@ -14964,7 +15206,8 @@ async function checkWs(): Promise<void> {
           "04000000f9240100": true,
           "040000005e250100": true,
           "0400000072250100": true,
-          "040000007b250100": true,
+          "040000007c250100": true,
+          "0400000019280100": true,
         };
         let weekendFrames = 0;
         let godRelicFrames = 0;
@@ -14975,9 +15218,10 @@ async function checkWs(): Promise<void> {
         let magicTowerFrames = 0;
         let qiShenQiFrames = 0;
         let zhuShenJiTanFrames = 0;
+        let midFoodFrames = 0;
         let astrolabeFrames = 0;
         let reikiFrames = 0;
-        for (let i = 0; i < 55; i++) {
+        for (let i = 0; i < 56; i++) {
           const hex = bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeMailPull + i] as ArrayBuffer));
           if (hex === "040000001b0c0000") formationFrames += 1;
           if (hex === "040000001d0c0000") lineUpFrames += 1;
@@ -14999,6 +15243,7 @@ async function checkWs(): Promise<void> {
           if (hex === "04000000fe2a0100") magicTowerFrames += 1;
           if (hex === "040000005d250100") qiShenQiFrames += 1;
           if (hex === "0400000071250100") zhuShenJiTanFrames += 1;
+          if (hex === "040000007b250100") midFoodFrames += 1;
           if (hex === "04000000a1090100") astrolabeFrames += 1;
           if (hex === "0400000071110100") reikiFrames += 1;
           if (hex === "04000000ea2e0000") bootAchieveFrames += 1;
@@ -15025,11 +15270,12 @@ async function checkWs(): Promise<void> {
             magicTowerFrames === 1 &&
             qiShenQiFrames === 1 &&
             zhuShenJiTanFrames === 1 &&
+            midFoodFrames === 1 &&
             astrolabeFrames === 1 &&
             reikiFrames === 1 &&
             bootAchieveFrames === 1 &&
             bannedFrames === 0,
-          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once and 75121 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75102 75122 75131 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
+          "pullIdle sends 3099 once, 3101 once, 20101 once, 3203 once, 4044 once, 13010 once, 12020 once, 26002 once, 26001 once, 61001 once, 62001 once, 63001 once, 69001 once, 74001 once, 74120 once, 76542 once, 75101 once, 75121 once and 75131 once, keeps 12010 once, 51001 once, 68001 once and 70001 once, and does not repeat 5001 or 75121 or 75101 or 76542 or 74120 or 74001 or 69001 or 63001 or 62001 or 61001 or 26001 or 26002 or encode 75132 75122 75102 75801 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76543 76544 76502 76503 76504 76505 76506 76541 76501 75001 74002 74003 73002 71001 20011 4601 29001"
         );
       }
       assert(
@@ -15135,6 +15381,8 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "040000005d250100") &&
           sawLog(lines, "发送 c2s 75121") &&
           sawLog(lines, "0400000071250100") &&
+          sawLog(lines, "发送 c2s 75131") &&
+          sawLog(lines, "040000007b250100") &&
           sawLog(lines, "发送 c2s 74121") === false &&
           sawLog(lines, "0400000089210100") === false &&
           sawLog(lines, "发送 c2s 74122") === false &&
@@ -15187,8 +15435,10 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "040000005e250100") === false &&
           sawLog(lines, "发送 c2s 75122") === false &&
           sawLog(lines, "0400000072250100") === false &&
-          sawLog(lines, "发送 c2s 75131") === false &&
-          sawLog(lines, "040000007b250100") === false &&
+          sawLog(lines, "发送 c2s 75132") === false &&
+          sawLog(lines, "040000007c250100") === false &&
+          sawLog(lines, "发送 c2s 75801") === false &&
+          sawLog(lines, "0400000019280100") === false &&
           sawLog(lines, "发送 c2s 74002") === false &&
           sawLog(lines, "0400000012210100") === false &&
           sawLog(lines, "发送 c2s 74003") === false &&
@@ -15426,6 +15676,9 @@ async function checkWs(): Promise<void> {
       roleNet.send(WIRE_ZHU_SHEN_JI_TAN_CMD);
       const zhuShenJiTanSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
       assert(bytesToHex(new Uint8Array(zhuShenJiTanSent as ArrayBuffer)) === "0400000071250100", "wire.75121 frame");
+      roleNet.send(WIRE_MID_FOOD_CMD);
+      const midFoodSent = roleSockets[0].sent[roleSockets[0].sent.length - 1];
+      assert(bytesToHex(new Uint8Array(midFoodSent as ArrayBuffer)) === "040000007b250100", "wire.75131 frame");
       const sentBeforeRechargeOther = roleSockets[0].sent.length;
       roleNet.send("wire.61002");
       roleNet.send("wire.62002");
@@ -15461,10 +15714,11 @@ async function checkWs(): Promise<void> {
       roleNet.send("wire.76501");
       roleNet.send("wire.75102");
       roleNet.send("wire.75122");
-      roleNet.send("wire.75131");
+      roleNet.send("wire.75132");
+      roleNet.send("wire.75801");
       roleNet.send("wire.75001");
       roleNet.send(Cmd.goal7Claim);
-      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75131 75001 and goal claim stay off the wire");
+      assert(roleSockets[0].sent.length === sentBeforeRechargeOther, "61002 62002 62003 62004 62005 63002 63003 69002 74002 74003 73002 71001 12021 12022 20011 4601 29001 74121 74122 74123 74124 74125 74126 74127 74128 74129 74131 74142 74147 74148 74149 76501 75102 75122 75132 75801 75001 and goal claim stay off the wire");
       assert(
         sawLog(lines, "未发送 wire.61002") &&
           sawLog(lines, "未发送 wire.62002") &&
@@ -15500,7 +15754,8 @@ async function checkWs(): Promise<void> {
           sawLog(lines, "未发送 wire.76501") &&
           sawLog(lines, "未发送 wire.75102") &&
           sawLog(lines, "未发送 wire.75122") &&
-          sawLog(lines, "未发送 wire.75131") &&
+          sawLog(lines, "未发送 wire.75132") &&
+          sawLog(lines, "未发送 wire.75801") &&
           sawLog(lines, "未发送 wire.75001") &&
           sawLog(lines, "未发送 goal7.claim"),
         "qi shen qi banned cmds and goal claim are not encoded"
@@ -20131,7 +20386,7 @@ async function checkWs(): Promise<void> {
       );
       roleSockets[0].push(encodeFrame(75102, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75122, fieldVarint(1, 9)));
-      roleSockets[0].push(encodeFrame(75131, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75132, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75001, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(76501, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(73002, fieldVarint(1, 9)));
@@ -20153,7 +20408,7 @@ async function checkWs(): Promise<void> {
             state: null,
             marks: [],
           }) === towerRoadBeforeQi,
-        "75102 75122 75131 75001 76501 73002 71001 20011 4601 29001 74121 74122 5001 51001 68001 and 70001 do not replace the 75101 snapshot"
+        "75102 75122 75132 75001 76501 73002 71001 20011 4601 29001 74121 74122 5001 51001 68001 and 70001 do not replace the 75101 snapshot"
       );
       roleSockets[0].push(encodeFrame(75101));
       assert(
@@ -20206,7 +20461,7 @@ async function checkWs(): Promise<void> {
         "75121 floor zero does not replace the 75101 snapshot and does not invent moneyDrawNum"
       );
       roleSockets[0].push(encodeFrame(75122, fieldVarint(1, 9)));
-      roleSockets[0].push(encodeFrame(75131, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75132, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(75001, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(76501, fieldVarint(1, 9)));
       roleSockets[0].push(encodeFrame(73002, fieldVarint(1, 9)));
@@ -20223,7 +20478,7 @@ async function checkWs(): Promise<void> {
       assert(
         formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }) === "info.floor=0" &&
           formatWireQiShenQiLine(WireSession.qiShenQi || { buy: null, marks: [] }) === qiBeforeZsjt,
-        "75122 75131 75001 76501 73002 71001 20011 4601 29001 74121 74122 5001 51001 68001 and 70001 do not replace the 75121 snapshot"
+        "75122 75132 75001 76501 73002 71001 20011 4601 29001 74121 74122 5001 51001 68001 and 70001 do not replace the 75121 snapshot"
       );
       roleSockets[0].push(encodeFrame(75121));
       assert(
@@ -20249,6 +20504,64 @@ async function checkWs(): Promise<void> {
           formatWireQiShenQiLine(WireSession.qiShenQi || { buy: null, marks: [] }) === qiBeforeZsjt &&
           sawWire("75121 解不开"),
         "bad 75121 keeps the previous zhu shen ji tan and the 75101 snapshot"
+      );
+      assert(WireSession.hasMidFood() === false, "75131 is unsynced until its own s2c");
+      const zsjtBeforeMid = formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] });
+      roleSockets[0].push(encodeFrame(75131, fieldBytes(1, fieldVarint(2, 0))));
+      assert(
+        WireSession.hasMidFood() &&
+          WireSession.midFood !== null &&
+          WireSession.midFood.buy !== null &&
+          WireSession.midFood.buy[0].count === 0 &&
+          WireSession.midFood.buy[0].idx === null &&
+          formatWireMidFoodLine(WireSession.midFood) === "buy=count=0" &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }) === zsjtBeforeMid,
+        "75131 count zero does not replace the 75121 snapshot and does not invent idx"
+      );
+      roleSockets[0].push(encodeFrame(75132, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75122, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75102, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75801, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(75001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(76501, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(73002, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(71001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(20011, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(4601, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(29001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74121, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(74122, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(5001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(51001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(68001, fieldVarint(1, 9)));
+      roleSockets[0].push(encodeFrame(70001, fieldVarint(1, 9)));
+      assert(
+        formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === "buy=count=0" &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }) === zsjtBeforeMid,
+        "75132 75122 75102 75801 75001 76501 73002 71001 20011 4601 29001 74121 74122 5001 51001 68001 and 70001 do not replace the 75131 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(75131));
+      assert(
+        WireSession.hasMidFood() &&
+          formatWireMidFoodLine(WireSession.midFood || { buy: null, marks: [] }) === WIRE_MID_FOOD_EMPTY &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }) === zsjtBeforeMid,
+        "empty 75131 clears to 已同步空表 and does not replace the 75121 snapshot"
+      );
+      roleSockets[0].push(encodeFrame(75131, fieldBytes(1, fieldVarint(1, 2))));
+      assert(
+        WireSession.midFood !== null &&
+          formatWireMidFoodLine(WireSession.midFood) === "buy=idx=2" &&
+          formatWireMidFoodLine(WireSession.midFood).indexOf("count=") < 0 &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }) === zsjtBeforeMid,
+        "75131 shows only the fields that arrived"
+      );
+      roleSockets[0].push(encodeFrame(75131, Uint8Array.from([0x80])));
+      assert(
+        WireSession.midFood !== null &&
+          formatWireMidFoodLine(WireSession.midFood) === "buy=idx=2" &&
+          formatWireZhuShenJiTanLine(WireSession.zhuShenJiTan || { floor: null, moneyDrawNum: null, marks: [] }) === zsjtBeforeMid &&
+          sawWire("75131 解不开"),
+        "bad 75131 keeps the previous mid food and the 75121 snapshot"
       );
       if (roleNet) roleNet.close();
       WireSession.close();
