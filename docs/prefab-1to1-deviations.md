@@ -1,0 +1,244 @@
+# Prefab 1:1 九宫格偏差清单（P1 + P2 + P3）
+
+Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本就有）而某些节点按 ccbi insets 换算出的值不同时，**保留现有 .meta 值**，不改。这些节点会按现值 SLICED 显示，与老版可能有几像素的差别，统一在这里列出。P3 内部同一张图要两套值时，取用得多的那套，其余节点也列在这里。
+
+基线 main@c3e81f83（P1 #199、P2 #201/#200/#202 已合）。T/B/L/R = top/bottom/left/right。
+
+## 汇总
+
+| meta | .meta 现值/采用值 T/B/L/R | 节点要求值 → 节点数（按批次） |
+|---|---|---|
+| `ui/common/win-bg_win-bg-11.png` | [59, 59, 59, 59] | [74, 74, 74, 74]→1 (P3B2); [79, 79, 79, 79]→1 (P1); [79, 79, 79, 79]→3 (P2A); [79, 79, 79, 79]→4 (P2B); [79, 79, 79, 79]→5 (P2C); [79, 79, 79, 79]→12 (P3A); [79, 79, 79, 79]→12 (P3B1); [79, 79, 79, 79]→6 (P3B2); [79, 79, 79, 79]→10 (P3C); [79, 79, 79, 79]→3 (P3D1); [79, 79, 79, 79]→7 (P3D2); [79, 79, 79, 79]→1 (P3E1); [79, 79, 79, 79]→2 (P3E2); [79, 79, 79, 79]→9 (P3F); [79, 79, 79, 79]→6 (P3G); [79, 79, 79, 79]→4 (P3H) |
+| `ui/common/win-bg_block-bg-5.png` | [11, 11, 11, 11] | [7, 7, 7, 7]→1 (P3A); [7, 7, 7, 7]→1 (P3B1); [7, 7, 7, 7]→1 (P3B2); [9, 9, 9, 9]→4 (P1); [9, 9, 9, 9]→13 (P2A); [9, 9, 9, 9]→3 (P2C); [9, 9, 9, 9]→11 (P3A); [9, 9, 9, 9]→11 (P3B1); [9, 9, 9, 9]→3 (P3B2); [9, 9, 9, 9]→6 (P3C); [9, 9, 9, 9]→2 (P3D2); [9, 9, 9, 9]→5 (P3E1); [9, 9, 9, 9]→3 (P3E2); [9, 9, 9, 9]→7 (P3G); [9, 9, 9, 9]→9 (P3H); [19, 19, 19, 19]→3 (P3B2) |
+| `ui/maps/map-bg-result-1.png` | [150, 150, 10, 10] | [50, 50, 50, 50]→1 (P3H); [80, 80, 100, 100]→1 (P3A); [100, 100, 0, 0]→1 (P3C); [130, 130, 0, 0]→2 (P3B2); [130, 130, 0, 0]→1 (P3D1); [150, 150, 0, 0]→1 (P3A); [150, 150, 0, 0]→1 (P3F) |
+| `ui/common/win-bg_win-bg-12.png` | [20, 20, 15, 18] | [9, 9, 9, 9]→1 (P2C); [14, 14, 14, 14]→1 (P1); [14, 14, 14, 14]→1 (P2C); [21, 21, 21, 21]→2 (P2C); [21, 21, 21, 21]→1 (P3B1) |
+| `ui/common/rank_spr-cell-bg-1.png` | [30, 30, 30, 30] | [40, 40, 40, 40]→1 (P2C); [40, 40, 40, 40]→1 (P3B2); [40, 40, 40, 40]→2 (P3C); [40, 40, 40, 40]→2 (P3D2) |
+| `ui/common/win-bg_block-bg-10.png` | [9, 9, 9, 9] | [39, 9, 9, 9]→1 (P3F); [39, 11, 11, 11]→1 (P3F); [49, 9, 9, 9]→1 (P3G) |
+| `ui/battle/battle-end_spr-title.png` | [4, 4, 0, 0] | [10, 10, 0, 0]→2 (P3A) |
+| `ui/common/win-bg_cell-bg-6.png` | [29, 28, 29, 29] | [39, 38, 39, 39]→1 (P3A); [39, 38, 39, 39]→1 (P3B1) |
+| `ui/misc/fantasy-land_spr-cell-bg.png` | [10, 10, 10, 10] | [0, 0, 10, 10]→1 (P3C); [0, 0, 10, 10]→1 (P3D2) |
+| `ui/common/win-bg_block-bg-24.png` | [12, 12, 12, 12] | [14, 14, 14, 14]→2 (P3H) |
+| `ui/common/win-bg_block-bg-15.png` | [0, 0, 29, 29] | [9, 9, 29, 29]→2 (P2A) |
+| `ui/hero/hero-info_spr-hero-image-3.png` | [60, 20, 20, 20] | [80, 50, 20, 20]→1 (P3B1) |
+| `ui/common/win-bg_win-bg-3.png` | [19, 19, 19, 19] | [14, 14, 14, 14]→1 (P3A) |
+| `ui/common/win-bg_win-bg-14.png` | [14, 14, 14, 14] | [9, 9, 9, 9]→1 (P3A) |
+| `ui/misc/super-stage_block-3.png` | [15, 15, 15, 15] | [12, 12, 12, 12]→1 (P3B1) |
+| `ui/common/win-bg_line-2.png` | [0, 0, 9, 9] | [0, 0, 2, 2]→1 (P3B2) |
+| `ui/common/win-bg_block-bg-40.png` | [12, 12, 12, 12] | [9, 9, 9, 9]→1 (P3G) |
+| `ui/common/win-bg_block-bg-20.png` | [9, 9, 9, 9] | [11, 11, 11, 11]→1 (P2A) |
+
+重点：`win-bg_win-bg-11`（P1 设 59，P2/P3 很多节点要 79）、`win-bg_block-bg-5`（P1 设 11，多处要 9）、`win-bg_win-bg-12`（原有 20/20/15/18，节点要 14 或 9）、`win-bg_block-bg-15`（P1 设 0/0/29/29，P2 节点要 9/9/29/29）。
+
+## 逐节点
+
+| 批次 | meta | 采用值 | 节点要求值 | 节点 |
+|---|---|---|---|---|
+| P1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChooseServerLayer:/layer/spr_scroll_bg` |
+| P1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChooseServerLayer:/layer/spr_tab_bg` |
+| P1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `NoticeLayer:/layer/spr_gray_bg` |
+| P1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `NoticeLayer:/layer/spr_gray_bg` |
+| P1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `NoticeLayer:/layer/spr_bg` |
+| P1 | `win-bg_win-bg-12.png` | [20, 20, 15, 18] | [14, 14, 14, 14] | `UserLoginLayer:/layer/spr_bg` |
+| P2A | `win-bg_block-bg-15.png` | [0, 0, 29, 29] | [9, 9, 29, 29] | `RoleUpgradeLayer:/RoleUpgradeLayer/CCScale9Sprite_1` |
+| P2A | `win-bg_block-bg-15.png` | [0, 0, 29, 29] | [9, 9, 29, 29] | `RoleUpgradeLayer:/RoleUpgradeLayer/CCScale9Sprite_2` |
+| P2A | `win-bg_block-bg-20.png` | [9, 9, 9, 9] | [11, 11, 11, 11] | `ChangeNickLayer:/ChangeNickLayer/spr_input_bg` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GMLayer:/GMLayer/CCSprite_1/spr_cite1` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GMLayer:/GMLayer/CCSprite_1/spr_cite2` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GMLayer:/GMLayer/CCSprite_1/spr_cite3` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GMLayer:/GMLayer/CCSprite_1/spr_cite4` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GMLayer:/GMLayer/CCSprite_1/spr_send1` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GMLayer:/GMLayer/CCSprite_1/spr_send2` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GMLayer:/GMLayer/CCSprite_1/spr_send3` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GMLayer:/GMLayer/spr_bg_battle` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GMLayer:/GMLayer/spr_gm_f` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GMLayer:/GMLayer/spr_search` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ListLayer:/ListLayer/spr_panel_bg` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `RoleInfoLayer:/RoleInfoLayer/node_pannel/spr_pannel_bg` |
+| P2A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `SettingChooseLayer:/SettingChooseLayer/spr_bg` |
+| P2A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `GMLayer:/GMLayer/spr_bg` |
+| P2A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ListLayer:/ListLayer/spr_bg` |
+| P2A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SettingChooseLayer:/SettingChooseLayer/spr_bg` |
+| P2B | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `FriendLayer:/FriendLayer/spr_bg` |
+| P2B | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `FriendSearchLayer:/FriendSearchLayer/spr_bg` |
+| P2B | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `MailInfoLayer:/MailInfoLayer/spr_bg` |
+| P2B | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `MailLayer:/MailLayer/spr_bg` |
+| P2C | `rank_spr-cell-bg-1.png` | [30, 30, 30, 30] | [40, 40, 40, 40] | `RankTopThreeCell:/RankTopThreeCell/CCScale9Sprite_1` |
+| P2C | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ItemSelectLayer:/ItemSelectLayer/spr_scroll_bg` |
+| P2C | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `RankLayer:/RankLayer/spr_my_bg` |
+| P2C | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `RankSingleLayer:/RankSingleLayer/spr_panel_bg` |
+| P2C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `AchievementLayer:/AchievementLayer/spr_bg` |
+| P2C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `RankLayer:/RankLayer/spr_bg` |
+| P2C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `RankListLayer:/RankListLayer/spr_bg` |
+| P2C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `RankSingleLayer:/RankSingleLayer/spr_bg` |
+| P2C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `RankTopThreeLayer:/RankTopThreeLayer/spr_bg` |
+| P2C | `win-bg_win-bg-12.png` | [20, 20, 15, 18] | [9, 9, 9, 9] | `ItemBuyLayer:/ItemBuyLayer/CCScale9Sprite_1` |
+| P2C | `win-bg_win-bg-12.png` | [20, 20, 15, 18] | [14, 14, 14, 14] | `ItemExhibitionLayer:/ItemExhibitionLayer/spr_bg` |
+| P2C | `win-bg_win-bg-12.png` | [20, 20, 15, 18] | [21, 21, 21, 21] | `UpStarSuccessLayer:/UpStarSuccessLayer/spr_bg` |
+| P2C | `win-bg_win-bg-12.png` | [20, 20, 15, 18] | [21, 21, 21, 21] | `UpgradeSuccessLayer:/UpgradeSuccessLayer/spr_bg` |
+| P3A | `battle-end_spr-title.png` | [4, 4, 0, 0] | [10, 10, 0, 0] | `BattleEndLayer:/BattleEndLayer/CCScale9Sprite_1` |
+| P3A | `battle-end_spr-title.png` | [4, 4, 0, 0] | [10, 10, 0, 0] | `QuickBattleEndLayer:/QuickBattleEndLayer/node_role/CCScale9Sprite_1` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `BattleEditLayer:/BattleEditLayer/CCSprite_1/spr_send1` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChapterPreviewLayer:/ChapterPreviewLayer/spr_bg` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChapterRewardLayer:/ChapterRewardLayer/spr_box` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `IdleHeroSelectLayer:/IdleHeroSelectLayer/spr_bg_battle` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `MainTaskChooseHeroLayer:/MainTaskChooseHeroLayer/CCNode_1/spr_list_bg` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `MainTaskChooseHeroLayer:/MainTaskChooseHeroLayer/CCNode_1/spr_list_bg` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `MainTaskLayer:/MainTaskLayer/spr_list_bg` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `MainTaskLayer:/MainTaskLayer/spr_select_bg` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [7, 7, 7, 7] | `MissionLayer:/MissionLayer/node_content/scroll_view_bg` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `MissionRewardInfoLayer:/MissionRewardInfoLayer/spr_scroll_bg` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `MissionRewardLayer:/MissionRewardLayer/spr_box` |
+| P3A | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `QuickBattleLayer:/QuickBattleLayer/CCScale9Sprite_3` |
+| P3A | `win-bg_cell-bg-6.png` | [29, 28, 29, 29] | [39, 38, 39, 39] | `MissionCell:/MissionCell/CCScale9Sprite_1` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `BattleDetailLayer:/BattleDetailLayer/spr_bg` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `BattleEditLayer:/BattleEditLayer/spr_bg` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ChapterPreviewLayer:/ChapterPreviewLayer/CCScale9Sprite_1` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ChapterRewardLayer:/ChapterRewardLayer/spr_bg` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `HardSelectLayer:/HardSelectLayer/spr_bg` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `IdleHeroSelectLayer:/IdleHeroSelectLayer/spr_bg` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `MainTaskChooseHeroLayer:/MainTaskChooseHeroLayer/spr_bg` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `MainTaskLayer:/MainTaskLayer/spr_bg` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `MissionLayer:/MissionLayer/node_content/content_bg` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `MissionRewardInfoLayer:/MissionRewardInfoLayer/spr_bg` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `MissionRewardLayer:/MissionRewardLayer/spr_bg` |
+| P3A | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `QuickBattleLayer:/QuickBattleLayer/CCScale9Sprite_1` |
+| P3A | `win-bg_win-bg-14.png` | [14, 14, 14, 14] | [9, 9, 9, 9] | `QuickBattleTipLayer:/QuickBattleTipLayer/spr_bg` |
+| P3A | `win-bg_win-bg-3.png` | [19, 19, 19, 19] | [14, 14, 14, 14] | `MainTaskPowerLayer:/MainTaskPowerLayer/spr_bg` |
+| P3A | `map-bg-result-1.png` | [150, 150, 10, 10] | [150, 150, 0, 0] | `ChapterEndLayer:/ChapterEndLayer/spr_bg` |
+| P3A | `map-bg-result-1.png` | [150, 150, 10, 10] | [80, 80, 100, 100] | `QuickBattleEndLayer:/QuickBattleEndLayer/spr_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `DungeonHeroSelectLayer:/DungeonHeroSelectLayer/spr_lineup_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `DungeonKillRewardLayer:/DungeonKillRewardLayer/spr_scroll_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `DungeonShopLayer:/DungeonShopLayer/spr_reward_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `DungeonShopListLayer:/DungeonShopListLayer/spr_scroll_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `FantasyTowerLogLayer:/FantasyTowerLogLayer/spr_scroll_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `FloatingIslandsBossLayer:/FloatingIslandsBossLayer/node_bottom/node_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `FloatingIslandsDamageLayer:/FloatingIslandsDamageLayer/spr_panel_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `FloatingIslandsRewardLayer:/FloatingIslandsRewardLayer/spr_my_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [7, 7, 7, 7] | `PlaneWarMissionLayer:/PlaneWarMissionLayer/node_mission/scroll_view_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `PlaneWarRankLayer:/PlaneWarRankLayer/rank/rank_scroll_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `PlaneWarRankLayer:/PlaneWarRankLayer/rank/spr_self_bg` |
+| P3B1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `PlaneWarRankLayer:/PlaneWarRankLayer/reward/reward_scroll_bg` |
+| P3B1 | `win-bg_cell-bg-6.png` | [29, 28, 29, 29] | [39, 38, 39, 39] | `PlaneWarMissionCell:/PlaneWarMissionCell/spr_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DungeonBoxUseLayer:/DungeonBoxUseLayer/spr_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DungeonHeroAttackLayer:/DungeonHeroAttackLayer/spr_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DungeonHeroSelectLayer:/DungeonHeroSelectLayer/spr_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DungeonKillRewardLayer:/DungeonKillRewardLayer/spr_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DungeonLayer:/DungeonLayer/spr_hero_list_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DungeonShopLayer:/DungeonShopLayer/spr_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DungeonShopListLayer:/DungeonShopListLayer/spr_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `FantasyTowerPreviewLayer:/FantasyTowerPreviewLayer/spr_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `FloatingIslandsDamageLayer:/FloatingIslandsDamageLayer/spr_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `FloatingIslandsRewardLayer:/FloatingIslandsRewardLayer/spr_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `PlaneWarMissionLayer:/PlaneWarMissionLayer/node_mission/spr_mission_bg` |
+| P3B1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `PlaneWarRankLayer:/PlaneWarRankLayer/spr_bg` |
+| P3B1 | `win-bg_win-bg-12.png` | [20, 20, 15, 18] | [21, 21, 21, 21] | `FloatingIslandsBossLayer:/FloatingIslandsBossLayer/node_center/CCNode_1/spr_bg2` |
+| P3B1 | `hero-info_spr-hero-image-3.png` | [60, 20, 20, 20] | [80, 50, 20, 20] | `DungeonHeroSelectLayer:/DungeonHeroSelectLayer/spr_hero_bg` |
+| P3B1 | `super-stage_block-3.png` | [15, 15, 15, 15] | [12, 12, 12, 12] | `FloatingIslandsRewardLayer:/FloatingIslandsRewardLayer/spr_rank_title_bg` |
+| P3B2 | `rank_spr-cell-bg-1.png` | [30, 30, 30, 30] | [40, 40, 40, 40] | `STMagicTowerRankRewardCell:/STMagicTowerRankRewardCell/CCScale9Sprite_1` |
+| P3B2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [7, 7, 7, 7] | `RainbowHistoryCell:/RainbowHistoryCell/node_item/item_bg` |
+| P3B2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `RainbowHistoryLayer:/RainbowHistoryLayer/CCNode_1/spr_scroll_bg` |
+| P3B2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [19, 19, 19, 19] | `STMagicTowerMissionRewardCell:/STMagicTowerMissionRewardCell/spr_cell_bg` |
+| P3B2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [19, 19, 19, 19] | `STMagicTowerRankLayer:/STMagicTowerRankLayer/node_rank/spr_rank_scroll_view_bg` |
+| P3B2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [19, 19, 19, 19] | `STMagicTowerRankRewardLayer:/STMagicTowerRankRewardLayer/spr_reward_scroll_view_bg` |
+| P3B2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `TrialInfoLayer:/TrialInfoLayer/node_pannel/spr_pannel_bg` |
+| P3B2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `UnderworldPagodaBossLayer:/UnderworldPagodaBossLayer/node_bottom/node_bg` |
+| P3B2 | `win-bg_line-2.png` | [0, 0, 9, 9] | [0, 0, 2, 2] | `RainbowChallengeLayer:/RainbowChallengeLayer/CCNode_2/CCScale9Sprite_2` |
+| P3B2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `RainbowChallengeLayer:/RainbowChallengeLayer/CCScale9Sprite_1` |
+| P3B2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `RainbowHistoryLayer:/RainbowHistoryLayer/spr_bg` |
+| P3B2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `STMagicTowerRankLayer:/STMagicTowerRankLayer/node_rank/spr__rank_bg` |
+| P3B2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [74, 74, 74, 74] | `STMagicTowerRankRewardLayer:/STMagicTowerRankRewardLayer/CCScale9Sprite_1` |
+| P3B2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TrialHelpLayer:/TrialHelpLayer/spr_bg` |
+| P3B2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TrialInfoLayer:/TrialInfoLayer/spr_bg` |
+| P3B2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `UnderworldPagodaRankLayer:/UnderworldPagodaRankLayer/spr_bg` |
+| P3B2 | `map-bg-result-1.png` | [150, 150, 10, 10] | [130, 130, 0, 0] | `STMagicTowerBattleEndLayer:/STMagicTowerBattleEndLayer/spr_bg` |
+| P3B2 | `map-bg-result-1.png` | [150, 150, 10, 10] | [130, 130, 0, 0] | `STMagicTowerJumpLayer:/STMagicTowerJumpLayer/spr_bg` |
+| P3C | `rank_spr-cell-bg-1.png` | [30, 30, 30, 30] | [40, 40, 40, 40] | `PvpRankCell:/PvpRankCell/CCScale9Sprite_1` |
+| P3C | `rank_spr-cell-bg-1.png` | [30, 30, 30, 30] | [40, 40, 40, 40] | `PvpRewardCell:/PvpRewardCell/CCScale9Sprite_1` |
+| P3C | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `BetLayer:/BetLayer/spr_scroll_bg` |
+| P3C | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `BetListLayer:/BetListLayer/spr_panel_bg` |
+| P3C | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `LadderChallengeLayer:/LadderChallengeLayer/CCNode_2/spr_bg_battle` |
+| P3C | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `LadderHistoryLayer:/LadderHistoryLayer/spr_scroll_bg` |
+| P3C | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `LadderRewardLayer:/LadderRewardLayer/spr_my_bg` |
+| P3C | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `PvpLayer:/PvpLayer/layer_rank/spr_my_bg` |
+| P3C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `BetListLayer:/BetListLayer/spr_bg` |
+| P3C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `LadderChallengeLayer:/LadderChallengeLayer/CCScale9Sprite_1` |
+| P3C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `LadderHeroTempleLayer:/LadderHeroTempleLayer/spr_bg` |
+| P3C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `LadderHistoryLayer:/LadderHistoryLayer/spr_bg` |
+| P3C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `LadderRewardLayer:/LadderRewardLayer/spr_bg` |
+| P3C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `PvpHistoryLayer:/PvpHistoryLayer/spr_bg` |
+| P3C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `PvpLayer:/PvpLayer/spr_bg` |
+| P3C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `VideoStudioLayer:/VideoStudioLayer/CCScale9Sprite_1` |
+| P3C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `VideoStudioRecordLayer:/VideoStudioRecordLayer/CCScale9Sprite_1` |
+| P3C | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `VideoStudioSaveLayer:/VideoStudioSaveLayer/CCScale9Sprite_1` |
+| P3C | `map-bg-result-1.png` | [150, 150, 10, 10] | [100, 100, 0, 0] | `PvpEndLayer:/PvpEndLayer/spr_bg` |
+| P3C | `fantasy-land_spr-cell-bg.png` | [10, 10, 10, 10] | [0, 0, 10, 10] | `LadderHistoryHighCell:/LadderHistoryHighCell/spr_cell_bg` |
+| P3D1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SuperStageAccountLayer:/SuperStageAccountLayer/spr_bg` |
+| P3D1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SuperStageHistoryLayer:/SuperStageHistoryLayer/CCScale9Sprite_1` |
+| P3D1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SuperStageHistoryVideoLayer:/SuperStageHistoryVideoLayer/CCScale9Sprite_1` |
+| P3D1 | `map-bg-result-1.png` | [150, 150, 10, 10] | [130, 130, 0, 0] | `SuperStageBattleEndLayer:/SuperStageBattleEndLayer/CCScale9Sprite_1` |
+| P3D2 | `rank_spr-cell-bg-1.png` | [30, 30, 30, 30] | [40, 40, 40, 40] | `SuperStageRewardCell:/SuperStageRewardCell/CCScale9Sprite_1` |
+| P3D2 | `rank_spr-cell-bg-1.png` | [30, 30, 30, 30] | [40, 40, 40, 40] | `SuperStageTokenCell:/SuperStageTokenCell/CCScale9Sprite_1` |
+| P3D2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `SuperStageTop2HistoryLayer:/SuperStageTop2HistoryLayer/spr_panel_bg` |
+| P3D2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `SuperStageTopChallengeLayer:/SuperStageTopChallengeLayer/CCNode_2/spr_bg_battle` |
+| P3D2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SuperStageRankLayer:/SuperStageRankLayer/spr_bg` |
+| P3D2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SuperStageRewardLayer:/SuperStageRewardLayer/spr_bg` |
+| P3D2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SuperStageTop2HistoryLayer:/SuperStageTop2HistoryLayer/spr_bg` |
+| P3D2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SuperStageTopChallengeLayer:/SuperStageTopChallengeLayer/CCScale9Sprite_1` |
+| P3D2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SuperStageTopHistoryLayer:/SuperStageTopHistoryLayer/CCScale9Sprite_1` |
+| P3D2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SuperStageTopLegendLayer:/SuperStageTopLegendLayer/spr_bg` |
+| P3D2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `SuperStageTopRankLayer:/SuperStageTopRankLayer/spr_bg` |
+| P3D2 | `fantasy-land_spr-cell-bg.png` | [10, 10, 10, 10] | [0, 0, 10, 10] | `SuperStageTopHistoryHighCell:/SuperStageTopHistoryHighCell/spr_cell_bg` |
+| P3E1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChampionBetLayer:/ChampionBetLayer/spr_scroll_bg` |
+| P3E1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChampionCrossBetLayer:/ChampionCrossBetLayer/spr_scroll_bg` |
+| P3E1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChampionCrossListLayer:/ChampionCrossListLayer/spr_panel_bg` |
+| P3E1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChampionCrossRankLayer:/ChampionCrossRankLayer/node_bottom/CCScale9Sprite_1` |
+| P3E1 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChampionCrossRankLayer:/ChampionCrossRankLayer/node_top/spr_rank_bg` |
+| P3E1 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ChampionCrossListLayer:/ChampionCrossListLayer/spr_bg` |
+| P3E2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChampionListLayer:/ChampionListLayer/spr_panel_bg` |
+| P3E2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChampionRankLayer:/ChampionRankLayer/node_bottom/CCScale9Sprite_1` |
+| P3E2 | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ChampionRankLayer:/ChampionRankLayer/node_top/spr_rank_bg` |
+| P3E2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ChampionListLayer:/ChampionListLayer/spr_bg` |
+| P3E2 | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ChampionShopLayer:/ChampionShopLayer/CCScale9Sprite_1` |
+| P3F | `win-bg_block-bg-10.png` | [9, 9, 9, 9] | [39, 9, 9, 9] | `TeamArenaBattleLogCell:/TeamArenaBattleLogCell/node/CCScale9Sprite_1` |
+| P3F | `win-bg_block-bg-10.png` | [9, 9, 9, 9] | [39, 11, 11, 11] | `TeamArenaLineupCell:/TeamArenaLineupCell/spr_bg` |
+| P3F | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TeamArenaBattleLayer:/TeamArenaBattleLayer/panel/spr_bg` |
+| P3F | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TeamArenaBattleLogLayer:/TeamArenaBattleLogLayer/CCScale9Sprite_1` |
+| P3F | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TeamArenaLayer:/TeamArenaLayer/panel/spr_bg` |
+| P3F | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TeamArenaLineupLayer:/TeamArenaLineupLayer/spr_bg` |
+| P3F | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TeamArenaNewTeam:/TeamArenaNewTeam/spr_bg` |
+| P3F | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TeamArenaRewardLayer:/TeamArenaRewardLayer/spr_bg` |
+| P3F | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TeamArenaTeamAddMainLayer:/TeamArenaTeamAddMainLayer/spr_bg` |
+| P3F | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TeamArenaTeamMainLayer:/TeamArenaTeamMainLayer/spr_bg` |
+| P3F | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `TeamArenaVideoLayer:/TeamArenaVideoLayer/CCScale9Sprite_1` |
+| P3F | `map-bg-result-1.png` | [150, 150, 10, 10] | [150, 150, 0, 0] | `TeamArenaEndLayer:/TeamArenaEndLayer/spr_bg` |
+| P3G | `win-bg_block-bg-10.png` | [9, 9, 9, 9] | [49, 9, 9, 9] | `GRMissionStarRewardCell:/GRMissionStarRewardCell/CCScale9Sprite_1` |
+| P3G | `win-bg_block-bg-40.png` | [12, 12, 12, 12] | [9, 9, 9, 9] | `GRMissionCastleCell:/GRMissionCastleCell/spr_chapter_bg` |
+| P3G | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `DreamFirstLayer:/DreamFirstLayer/show/item_bg` |
+| P3G | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `DreamRankLayer:/DreamRankLayer/rank/rank_scroll_bg` |
+| P3G | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `DreamRankLayer:/DreamRankLayer/rank/spr_self_bg` |
+| P3G | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `DreamRankLayer:/DreamRankLayer/reward/reward_scroll_bg` |
+| P3G | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `DreamRewardLayer:/DreamRewardLayer/spr_scroll_bg` |
+| P3G | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `DreamSelectLayer:/DreamSelectLayer/buff_list` |
+| P3G | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `GRMissionStarRewardLayer:/GRMissionStarRewardLayer/spr_bg` |
+| P3G | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DreamFriendLayer:/DreamFriendLayer/spr_bg` |
+| P3G | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DreamLayer:/DreamLayer/message/spr_bg` |
+| P3G | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DreamRankLayer:/DreamRankLayer/spr_bg` |
+| P3G | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DreamRewardLayer:/DreamRewardLayer/spr_bg` |
+| P3G | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `DreamSelectLayer:/DreamSelectLayer/spr_bg` |
+| P3G | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `GRMissionStarRewardLayer:/GRMissionStarRewardLayer/spr_bg` |
+| P3H | `win-bg_block-bg-24.png` | [12, 12, 12, 12] | [14, 14, 14, 14] | `ExoticAdventureBackpackInfoLayer:/ExoticAdventureBackpackInfoLayer/spr_bg` |
+| P3H | `win-bg_block-bg-24.png` | [12, 12, 12, 12] | [14, 14, 14, 14] | `ExoticAdventureUpgradeLayer:/ExoticAdventureUpgradeLayer/spr_bg` |
+| P3H | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ExoticAdventureBackpackLayer:/ExoticAdventureBackpackLayer/spr_box` |
+| P3H | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ExoticAdventureGetItemsLayer:/ExoticAdventureGetItemsLayer/spr_box` |
+| P3H | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ExoticAdventureIllustratedBooksLayer:/ExoticAdventureIllustratedBooksLayer/spr_box` |
+| P3H | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ExoticAdventureReportLayer:/ExoticAdventureReportLayer/CCNode_2/CCScale9Sprite_1` |
+| P3H | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ExoticAdventureReportLayer:/ExoticAdventureReportLayer/CCNode_2/CCScale9Sprite_2` |
+| P3H | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ExoticAdventureShioInfoCtr:/ExoticAdventureShioInfoCtr/node_title/spr_content` |
+| P3H | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ExoticAdventureShioInfoLayer:/ExoticAdventureShioInfoLayer/node_bg/spr_content` |
+| P3H | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ExoticAdventureTeamLayer:/ExoticAdventureTeamLayer/spr_box` |
+| P3H | `win-bg_block-bg-5.png` | [11, 11, 11, 11] | [9, 9, 9, 9] | `ExoticAdventureTeamLayer:/ExoticAdventureTeamLayer/spr_box` |
+| P3H | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ExoticAdventureBackpackLayer:/ExoticAdventureBackpackLayer/spr_bg` |
+| P3H | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ExoticAdventureIllustratedBooksLayer:/ExoticAdventureIllustratedBooksLayer/spr_bg` |
+| P3H | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ExoticAdventureReportLayer:/ExoticAdventureReportLayer/spr_bg` |
+| P3H | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ExoticAdventureShioInfoCtr:/ExoticAdventureShioInfoCtr/spr_bg` |
+| P3H | `map-bg-result-1.png` | [150, 150, 10, 10] | [50, 50, 50, 50] | `ExoticAdventureRandomEventsLayer:/ExoticAdventureRandomEventsLayer/spr_bg` |
