@@ -36,6 +36,12 @@ export interface BattleUnit {
   maxHp: number;
 }
 
+/** 可选出场。不传时我方仍用角色名、护卫、术士，敌方仍是前锋、守卫、术士。 */
+export interface BattleCast {
+  name: string;
+  maxHp?: number;
+}
+
 export interface BattleRound {
   round: number;
   line: string;
@@ -99,6 +105,10 @@ export function planBattle(input: {
   retreat?: boolean;
   /** 真服战报已有胜负时用。不传则仍按关卡和等级比较。 */
   forced?: "win" | "lose";
+  /** Mock 名册。不传则第一格仍是角色名。 */
+  allies?: BattleCast[];
+  /** chapter 守方。不传则仍是前锋、守卫、术士。 */
+  enemies?: BattleCast[];
 }): BattlePlan {
   const stageId = normalizeStageId(input.stageId);
   const level = normalizeLevel(input.level);
@@ -109,7 +119,7 @@ export function planBattle(input: {
       level,
       win: false,
       reason: "retreat",
-      rounds: [frame(1, "主动撤退", "none", roleName, [1, 1, 1], [1, 1, 1])],
+      rounds: [frame(1, "主动撤退", "none", roleName, [1, 1, 1], [1, 1, 1], input.allies, input.enemies)],
     };
   }
   if (input.forced === "lose" || (input.forced !== "win" && stageId > level)) {
@@ -119,10 +129,10 @@ export function planBattle(input: {
       win: false,
       reason: "overreach",
       rounds: [
-        frame(1, "遭遇强敌", "enemy", roleName, [0.85, 1, 1], [1, 1, 1]),
-        frame(2, "我方受挫", "enemy", roleName, [0.4, 0.7, 0.9], [0.95, 1, 1]),
-        frame(3, "阵线崩溃", "enemy", roleName, [0, 0.25, 0.4], [0.9, 1, 1]),
-        frame(4, "战斗失败", "enemy", roleName, [0, 0, 0], [0.85, 1, 1]),
+        frame(1, "遭遇强敌", "enemy", roleName, [0.85, 1, 1], [1, 1, 1], input.allies, input.enemies),
+        frame(2, "我方受挫", "enemy", roleName, [0.4, 0.7, 0.9], [0.95, 1, 1], input.allies, input.enemies),
+        frame(3, "阵线崩溃", "enemy", roleName, [0, 0.25, 0.4], [0.9, 1, 1], input.allies, input.enemies),
+        frame(4, "战斗失败", "enemy", roleName, [0, 0, 0], [0.85, 1, 1], input.allies, input.enemies),
       ],
     };
   }
@@ -132,10 +142,10 @@ export function planBattle(input: {
     win: true,
     reason: "clear",
     rounds: [
-      frame(1, "我方突进", "ally", roleName, [1, 1, 1], [0.72, 1, 1]),
-      frame(2, "集火前排", "ally", roleName, [0.86, 0.94, 1], [0.28, 0.8, 1]),
-      frame(3, "敌方反击", "enemy", roleName, [0.7, 0.82, 0.96], [0, 0.46, 0.74]),
-      frame(4, "敌方溃败", "ally", roleName, [0.7, 0.82, 0.9], [0, 0, 0]),
+      frame(1, "我方突进", "ally", roleName, [1, 1, 1], [0.72, 1, 1], input.allies, input.enemies),
+      frame(2, "集火前排", "ally", roleName, [0.86, 0.94, 1], [0.28, 0.8, 1], input.allies, input.enemies),
+      frame(3, "敌方反击", "enemy", roleName, [0.7, 0.82, 0.96], [0, 0.46, 0.74], input.allies, input.enemies),
+      frame(4, "敌方溃败", "ally", roleName, [0.7, 0.82, 0.9], [0, 0, 0], input.allies, input.enemies),
     ],
   };
 }
@@ -224,16 +234,26 @@ function frame(
   actor: BattleActor,
   roleName: string,
   allyRatio: number[],
-  enemyRatio: number[]
+  enemyRatio: number[],
+  allyCast?: BattleCast[],
+  enemyCast?: BattleCast[]
 ): BattleRound {
   const allyNames = [roleName, "护卫", "术士"];
   const enemyNames = ["前锋", "守卫", "术士"];
   const allies: BattleUnit[] = [];
   const enemies: BattleUnit[] = [];
   const allyHp = heroBaseHp(10101001, 1) ?? ALLY_HP;
+  const useAllies = !!allyCast && allyCast.length > 0;
+  const useEnemies = !!enemyCast && enemyCast.length > 0;
   for (let i = 0; i < allyNames.length; i++) {
-    allies.push(unit(allyNames[i], allyHp, allyRatio[i]));
-    enemies.push(unit(enemyNames[i], ENEMY_HP, enemyRatio[i]));
+    const ally = useAllies ? allyCast[i] : undefined;
+    const enemy = useEnemies ? enemyCast[i] : undefined;
+    const allyName = ally && ally.name ? ally.name : allyNames[i];
+    const enemyName = enemy && enemy.name ? enemy.name : enemyNames[i];
+    const allyMax = ally && typeof ally.maxHp === "number" && ally.maxHp > 0 ? Math.floor(ally.maxHp) : allyHp;
+    const enemyMax = enemy && typeof enemy.maxHp === "number" && enemy.maxHp > 0 ? Math.floor(enemy.maxHp) : ENEMY_HP;
+    allies.push(unit(allyName, allyMax, allyRatio[i]));
+    enemies.push(unit(enemyName, enemyMax, enemyRatio[i]));
   }
   return { round, line: "第" + round + "回合 · " + line, actor, allies, enemies };
 }

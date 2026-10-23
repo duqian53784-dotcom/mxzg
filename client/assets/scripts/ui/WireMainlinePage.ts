@@ -31,7 +31,7 @@
  * 可带 hero_ids、type、line_up_type。hero_ids 可从已同步的 3101 字段 2 填入。
  * 不从 3102 自动接。fighting=0 是成功，不 Toast。不播 spine。
  * 主线入口已在「更多」，不往主屏再放矩形。
- * 收到 report 在本页播 spine 站场、回合攻击、有 hit 的受击，以及 batch2 技能/受击特效。3001、3006、3102 和 3030 都走 planWireSpineReplay。3103 不走。3101 不走。3099 不走。
+ * 收到 report 在本页播 spine 站场、回合攻击、有 hit 的受击，以及 batch2 技能/受击特效。3001、3006、3102 和 3030 都走 replayFromStore（里面仍是 planWireSpineReplay）。战报没有我方英雄时用 GameStore 的 MAIN。守方空时 chapter.idx 对上且有 stand 才换表内怪。3103 不走。3101 不走。3099 不走。
  * 有拍时 VfxHit 再播 hero-beattack，VfxSkill 再播 skill 和 skill-effect。mountFrameReel 挂在已有锚点上，不另建 Vfx 节点。帧没加载到就留 batch2。
  * skill_id 对得上 resources 里的套时播那套帧，并再播下一层。对不上仍用 49 套和 skill-effect 取模。
  * 有 skill_id 才开技能条并播技能帧。没有 skill_id 不编造，条和帧都关。英雄套没有 Skill 剪辑，不播缺的剪辑。帧按原图尺寸播，不压成 300 方块。进战先预热帧。
@@ -56,7 +56,6 @@ import { WireSession } from "../net/WireSession";
 import {
   formatWireBattleMatch,
   formatWireFightLine,
-  planWireSpineReplay,
   resolveWireBattleWin,
   WIRE_BATTLE_UNSYNCED_TOAST,
   WIRE_SPINE_LOAD_FAIL,
@@ -133,7 +132,9 @@ import {
   WIRE_GM_UNSYNCED_TOAST,
 } from "../net/protocol/wireGmCommand";
 import { planStarterChallenge, STARTER_LINEUP_NOTE } from "../net/protocol/starterLineup";
+import { chapterPlaceLabel, mainlevelExpLabel } from "../config/gameCatalog";
 import { GameStore } from "../core/GameStore";
+import { replayFromStore } from "../module/mainline/battleFromStore";
 import { Session } from "../core/Session";
 import {
   battleFrameStepMs,
@@ -1107,7 +1108,7 @@ class WireMainlineController implements WireMainlinePage {
       this.showInfo();
       return;
     }
-    const plan = planWireSpineReplay(snap.report, this.host.roleId(), stage);
+    const plan = replayFromStore(snap.report, this.host.roleId(), stage);
     const present = planBattlePresentation(snap.report, plan);
     if (present.beats.length !== plan.beats.length) {
       GameLog.shared.warn("Mainline", "battle present beats " + present.beats.length + " / plan " + plan.beats.length);
@@ -1510,12 +1511,24 @@ class WireMainlineController implements WireMainlinePage {
 
   private nowText(): string {
     const chapter = GameStore.chapter();
-    return formatWireChapterIdx("now", chapter.fromStore ? chapter.nowIdx : WireSession.nowIdx);
+    const idx = chapter.fromStore ? chapter.nowIdx : WireSession.nowIdx;
+    return this.withPlace(formatWireChapterIdx("now", idx), idx, true);
   }
 
   private maxText(): string {
     const chapter = GameStore.chapter();
-    return formatWireChapterIdx("max", chapter.fromStore ? chapter.maxIdx : WireSession.maxIdx);
+    const idx = chapter.fromStore ? chapter.maxIdx : WireSession.maxIdx;
+    return this.withPlace(formatWireChapterIdx("max", idx), idx, false);
+  }
+
+  /** chapter.idx 对上时补章节名。当前行再补 mainlevel 的等级经验。对不上就不写。 */
+  private withPlace(base: string, idx: number | null, withLevel: boolean): string {
+    const place = chapterPlaceLabel(idx);
+    let text = place ? base + " · " + place : base;
+    if (!withLevel) return text;
+    const exp = mainlevelExpLabel(this.host.level ? this.host.level() : null);
+    if (exp) text += " · " + exp;
+    return text;
   }
 
   private fightText(): string {

@@ -5,6 +5,7 @@
 import { Color, Node } from "cc";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
+import { bagIconFor, mockBagItems } from "../module/bag/bagView";
 import {
   applyBagUse,
   bagFailToast,
@@ -13,6 +14,7 @@ import {
   emptyBagToast,
   useButtonText,
 } from "../module/bag/items";
+import { mountItemIcon } from "./itemIcon";
 import { BagItem, BagListResp, BagUseResp } from "../net/protocol/types";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
@@ -94,7 +96,8 @@ class BagController implements BagPage {
         return;
       }
       this.toldError = false;
-      this.items = view.items || [];
+      const listed = mockBagItems(view.items || []);
+      this.items = listed !== null ? listed : view.items || [];
       this.keepSelection();
       this.render();
     } catch (err) {
@@ -132,6 +135,7 @@ class BagController implements BagPage {
         20
       );
       place(button, rows, 0, top - i * step);
+      mountItemIcon(button, bagIconFor(item.id), -290, 0);
     }
   }
 

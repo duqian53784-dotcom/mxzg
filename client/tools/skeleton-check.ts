@@ -478,6 +478,19 @@ import {
 } from "../assets/scripts/module/summon/pull";
 import { GameLog } from "../assets/scripts/core/GameLog";
 import { GameStore, saveRoleCache } from "../assets/scripts/core/GameStore";
+import {
+  bindGameCatalog,
+  chapterPlaceLabel,
+  clearGameCatalog,
+  heroBaseStats,
+  heroProfile,
+  itemDisplayName,
+  itemIconResource,
+  mainlevelExpLabel,
+} from "../assets/scripts/config/gameCatalog";
+import { formatStoreBagLine } from "../assets/scripts/module/bag/bagView";
+import { formatStoreHeroLine } from "../assets/scripts/module/hero/rosterView";
+import { replayFromStore } from "../assets/scripts/module/mainline/battleFromStore";
 import { loadLoginPrefs, LoginPrefs, PrefStore, resolveAccount, saveLoginPrefs } from "../assets/scripts/core/LoginPrefs";
 import {
   formatDiamondLine,
@@ -2221,6 +2234,125 @@ function checkGameStore(): void {
   for (let i = 0; i < bag.length; i++) if (bag[i].id === 101) stone = bag[i].count;
   assert(stone === 6, "restore replaces starter items");
   GameStore.reset();
+}
+
+function checkStoreScreens(): void {
+  GameStore.reset();
+  clearGameCatalog();
+  assert(chapterPlaceLabel(1) === null, "chapter label stays empty before config");
+  assert(itemDisplayName(900001, null, "原名") === "原名", "item name stays the fallback before config");
+  const root = configDir();
+  const names = ["herotype", "herobase", "heroskill", "language", "item", "chapter", "mainlevel"];
+  const tables = new Map<string, { table: string; rows: Record<string, unknown>[] }>();
+  for (let i = 0; i < names.length; i++) {
+    tables.set(names[i], JSON.parse(readFileSync(join(root, names[i] + ".json"), "utf8")));
+  }
+  bindGameCatalog(tables);
+  const profile = heroProfile(10101001);
+  assert(profile !== null && profile.name === "独眼梦魇", "herotype note is the hero name");
+  assert(
+    profile !== null && profile.skills.some((skill) => skill.id === 101010011 && skill.name === "烈焰之锤"),
+    "herotype skills resolve through heroskill and language"
+  );
+  const stats = heroBaseStats(10101001, 1);
+  assert(stats !== null && stats.hp === 238 && stats.atk === 56, "herobase stats for type and star");
+  assert(itemDisplayName(900001, null, "原名") === "金币", "item_type matches item.idx");
+  assert(itemIconResource(900001, null) === "ui/bag/backpack_900001", "item icon uses the bag png");
+  assert(chapterPlaceLabel(1) === "第1章 · 第1关", "chapter idx labels the stage");
+  assert(mainlevelExpLabel(1) === "等级经验 120", "mainlevel exp for the role level");
+  const bare = {
+    battleId: null,
+    battleType: 1,
+    atkId: null,
+    defId: null,
+    winId: null,
+    rounds: [],
+    atkHeroes: [],
+    defHeroes: [],
+    marks: [],
+  };
+  const before = replayFromStore(bare, null, 1);
+  const direct = planWireSpineReplay(bare, null, 1);
+  assert(before.stems.join(",") !== direct.stems.join(","), "a loaded chapter replaces an empty defender when the spine exists");
+  assert(before.stems.indexOf("10101001") >= 0, "chapter idx 1 stands 独眼梦魇");
+  let beforeAlly = "";
+  for (let i = 0; i < before.slots.length; i++) {
+    if (before.slots[i].side === "ally" && !beforeAlly) beforeAlly = before.slots[i].stem;
+  }
+  assert(beforeAlly === "10105008", "without MAIN the ally filler stays");
+  GameStore.noteWire({
+    enabled: true,
+    account: "screen",
+    serverId: 1,
+    roleId: 1,
+    name: "屏",
+    nameSynced: true,
+    level: 1,
+    gold: 1,
+    diamond: 1,
+    nowIdx: 1,
+    maxIdx: 1,
+    heroes: [
+      {
+        heroId: 8,
+        heroType: 10405005,
+        level: 1,
+        stage: null,
+        star: 1,
+        elem: null,
+        occupation: null,
+        isLock: null,
+        fighting: 1,
+      },
+    ],
+    bag: [{ itemId: 1, itemType: 900001, num: 3 }],
+    lineUp: {
+      rows: [
+        {
+          marks: [
+            { field: 1, text: "0" },
+            { field: 4, text: "字段1=8,字段3=1" },
+          ],
+        },
+      ],
+    },
+    unlockIds: [],
+    rewardTime: null,
+    maxRewardTime: null,
+    battle: null,
+  });
+  const formed = replayFromStore(bare, null, 1);
+  let formedAlly = "";
+  for (let i = 0; i < formed.slots.length; i++) {
+    if (formed.slots[i].side === "ally" && !formedAlly) formedAlly = formed.slots[i].stem;
+  }
+  assert(formedAlly === "10405005", "empty report uses the MAIN hero spine from the store");
+  assert(formed.stems.indexOf("10101001") >= 0, "the chapter defender stays beside the formation");
+  assert(formed.stems.indexOf(WIRE_SPINE_FLAG) >= 0 && formed.stems.indexOf(WIRE_SPINE_SWORD) >= 0, "flag and sword stay on the store replay");
+  const named = formatStoreBagLine({ itemId: 1, itemType: 900001, num: 3 });
+  assert(
+    named.indexOf("金币") >= 0 && named.indexOf("×3") >= 0 && named.indexOf("item_type=900001") >= 0,
+    "bag line keeps the fields and adds the config name"
+  );
+  const heroLine = formatStoreHeroLine({
+    heroId: 8,
+    heroType: 10101001,
+    name: "",
+    level: 2,
+    star: 5,
+    fighting: 10,
+  });
+  assert(heroLine.indexOf("独眼梦魇") === 0 && heroLine.indexOf("5星") >= 0 && heroLine.indexOf("烈焰之锤") >= 0, "hero line uses the table name, store star, and skills");
+  const castPlan = planBattle({ stageId: 1, level: 1, roleName: "MockHero", allies: [{ name: "光耀骑士" }] });
+  assert(
+    castPlan.rounds[0].allies[0].name === "光耀骑士" && castPlan.rounds[0].allies[1].name === "护卫",
+    "optional allies replace only the provided names"
+  );
+  const still = planBattle({ stageId: 1, level: 1, roleName: "MockHero" });
+  assert(still.rounds[0].allies[0].name === "MockHero", "default battle cast stays the role name");
+  clearGameCatalog();
+  GameStore.reset();
+  assert(chapterPlaceLabel(1) === null, "clearing the catalog drops chapter labels");
 }
 
 function checkLoginPrefs(): void {
@@ -26807,6 +26939,7 @@ async function main(): Promise<void> {
   checkLog();
   checkLoginPrefs();
   checkGameStore();
+  checkStoreScreens();
   checkMainline();
   checkIdleMath();
   await checkNet();

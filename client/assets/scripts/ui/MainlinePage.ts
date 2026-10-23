@@ -26,6 +26,8 @@ import {
   rewardLines,
   winToast,
 } from "../module/mainline/battle";
+import { mockBattleCast } from "../module/mainline/battleFromStore";
+import { chapterPlaceLabel, mainlevelExpLabel } from "../config/gameCatalog";
 import { battleCastWait } from "./battlePresentation";
 import { PAGE_SHELL_FIGHT, setPagePrefabShellVisible } from "./pagePrefabShell";
 import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
@@ -117,6 +119,22 @@ class MainlineController implements MainlinePage {
     this.wake(false);
   }
 
+  private progressLine(current: number, level: number): string {
+    const place = chapterPlaceLabel(current);
+    const exp = mainlevelExpLabel(level);
+    let text = "已通关 " + (current - 1) + " 关 · 当前第 " + current + " 关";
+    if (place) text += " · " + place;
+    text += " · Lv" + level;
+    if (exp) text += " · " + exp;
+    return text;
+  }
+
+  private stageButton(stageId: number, suffix: string): string {
+    const place = chapterPlaceLabel(stageId);
+    const head = "第" + stageId + "关";
+    return (place ? head + " " + place : head) + "    " + suffix;
+  }
+
   private showList(): void {
     this.phase = "list";
     setPagePrefabShellVisible(this.node, true);
@@ -125,7 +143,7 @@ class MainlineController implements MainlinePage {
     const level = this.host.level();
     place(createLabel("主线关卡", 40, { color: TITLE }), this.body, 0, 470);
     place(
-      createLabel("已通关 " + (current - 1) + " 关 · 当前第 " + current + " 关 · Lv" + level, 20, {
+      createLabel(this.progressLine(current, level), 20, {
         color: MUTED,
         width: 640,
       }),
@@ -139,7 +157,7 @@ class MainlineController implements MainlinePage {
       const open = row.state === "current";
       const suffix = open ? "挑战" : row.state === "cleared" ? "已通关" : "未开启";
       const button = createButton(
-        "第" + row.stageId + "关    " + suffix,
+        this.stageButton(row.stageId, suffix),
         () => this.onRow(row.stageId),
         560,
         52,
@@ -222,10 +240,13 @@ class MainlineController implements MainlinePage {
       GameLog.shared.info("Mainline", "stage enter " + entered.stageId + " " + entered.battleId);
       // 当前关按可胜来播。等级暂时落后时也不会把进度卡死；撤退仍改判负。
       const level = this.host.level();
+      const cast = mockBattleCast(entered.stageId);
       const plan = planBattle({
         stageId: entered.stageId,
         level: level >= entered.stageId ? level : entered.stageId,
         roleName: this.host.roleName(),
+        allies: cast.allies,
+        enemies: cast.enemies,
       });
       this.showBattle(plan);
       const action = await this.playback(plan);
@@ -233,11 +254,14 @@ class MainlineController implements MainlinePage {
       const win = action === "retreat" ? false : plan.win;
       const reason: BattleReason = action === "retreat" ? "retreat" : plan.reason;
       if (action === "retreat") {
+        const fledCast = mockBattleCast(entered.stageId);
         const fled = planBattle({
           stageId: entered.stageId,
           level: this.host.level(),
           roleName: this.host.roleName(),
           retreat: true,
+          allies: fledCast.allies,
+          enemies: fledCast.enemies,
         });
         this.renderRound(fled.rounds[0]);
       }

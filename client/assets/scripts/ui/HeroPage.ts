@@ -15,6 +15,7 @@ import {
   upgradeFailToast,
   upgradeToast,
 } from "../module/hero/growth";
+import { heroSkillSuffix, mockHeroCards } from "../module/hero/rosterView";
 import { weaponLineText } from "../module/smith/forge";
 import { HeroCard, HeroListResp, HeroUpgradeResp } from "../net/protocol/types";
 import { HERO_PREFAB_PATH, bindClick, loadPrefab, requireNode, spawnPrefab } from "./prefabLoad";
@@ -156,7 +157,8 @@ class HeroListController implements HeroListPage {
         return;
       }
       this.toldError = false;
-      this.render(view.heroes || []);
+      const roster = mockHeroCards(view.heroes || []);
+      this.render(roster !== null ? roster : view.heroes || []);
     } catch (err) {
       if (this.disposed || ticket !== this.ticket || !this.host.alive()) return;
       this.noteError(messageOf(err));
@@ -182,7 +184,7 @@ class HeroListController implements HeroListPage {
     for (let i = 0; i < heroes.length; i++) {
       const hero = heroes[i];
       const button = createButton(
-        heroRowText(hero.name, hero.level, hero.star) + " · 武器Lv" + (hero.weaponLevel || 1),
+        heroRowText(hero.name, hero.level, hero.star) + " · 武器Lv" + (hero.weaponLevel || 1) + heroSkillSuffix(hero.id),
         () => {
           if (this.disposed) return;
           GameLog.shared.info("Hero", "open detail " + hero.id);
@@ -221,7 +223,7 @@ class HeroListController implements HeroListPage {
       row.setPosition(0, 300 - i * 100, 0);
       const label = row.getChildByName("Label");
       if (label) {
-        setText(label, heroRowText(hero.name, hero.level, hero.star) + " · 武器Lv" + (hero.weaponLevel || 1));
+        setText(label, heroRowText(hero.name, hero.level, hero.star) + " · 武器Lv" + (hero.weaponLevel || 1) + heroSkillSuffix(hero.id));
       }
       this.bindPrefabRow(row, i);
     }
@@ -349,7 +351,8 @@ class HeroDetailController implements HeroDetailPage {
         this.noteError(errorText(view.code ?? ErrorCode.UNKNOWN_CMD));
         return;
       }
-      const hero = findHero(view.heroes || [], heroId);
+      const roster = mockHeroCards(view.heroes || []);
+      const hero = findHero(roster !== null ? roster : view.heroes || [], heroId);
       if (!hero) {
         this.hero = null;
         this.noteError(missingHeroToast());
@@ -368,7 +371,7 @@ class HeroDetailController implements HeroDetailPage {
   private render(hero: HeroCard, gold: number): void {
     this.hero = hero;
     this.write(this.nameLabel, hero.name);
-    this.write(this.levelLabel, heroLevelText(hero.level, hero.star));
+    this.write(this.levelLabel, heroLevelText(hero.level, hero.star) + heroSkillSuffix(hero.id));
     this.write(this.atkLabel, "攻击 " + hero.atk);
     this.write(this.hpLabel, "生命 " + hero.hp);
     this.write(this.defLabel, "防御 " + hero.def);

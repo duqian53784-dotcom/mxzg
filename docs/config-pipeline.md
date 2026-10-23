@@ -43,6 +43,13 @@ Boot 登记这些表，没读到时仍用原来的常量：
 | `effect2` | `eff_battle_start` 的 `speed` 单位是 0.01 秒，乘 10 成为帧步。没读到仍是 70ms |
 | `system` | `battle_speed_level`、`battle_skip_level` 只拦真服回放的加速和跳过。`time_diff` 不是拍间隔 |
 | `battletype` | `round_max` 只写日志。主线 type 1 是 15 回合上限，不是毫秒。不裁服已下发的回合 |
+| `herotype` + `heroskill` + `language` | 英雄页名字和技能。`note` 是名字。`skill_1`…`skill_5` 对 `heroskill.type`，再用 `lan_name` 对语言。对不上仍写「类型 N」或「技能 id」 |
+| `herobase` | 英雄详情按类型和星级写生命、攻击、防御、速度。Mock 战报血量仍只在调用方传入时改，缺省路径不变 |
+| `item` + `language` | 背包。`item_type` 或 `item_id` 对上 `item.idx` 时用语言名。图标是 `ui/bag/backpack_<idx>`。对不上仍写三个字段 |
+| `chapter` | `idx` 对上 3007 的 idx 或 Mock 关卡号时写「第 chapter_id 章 · 第 mission_id 关」。`hero_type` 大于 0 且有 stand 时，空守方战报用这只怪 |
+| `mainlevel` | 角色等级对上 `level` 时，主线页写「等级经验 exp」。不是关卡号 |
+
+哪一屏读哪一格，见 `docs/store-screens.md`。
 
 `battletype` / `battleroundaddition` 不是播放毫秒。`battleroundaddition` 是每回合属性加成。
 

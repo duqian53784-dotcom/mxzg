@@ -1,6 +1,7 @@
 import { setWireHeroTypeNote } from "../net/protocol/wireHero";
 import { setBattleFrameStepMs, setBattleRoundMax, setBattleUnlockLevels } from "./battleTiming";
 import { ConfigTableFile } from "./types";
+import { bindGameCatalog } from "./gameCatalog";
 import { clearConfigLookups, setHeroBaseHp, setSkillCastDelay, setSkillDisplayName } from "./lookups";
 
 type Row = Record<string, unknown>;
@@ -18,6 +19,7 @@ export function bindConfigTables(tables: Map<string, ConfigTableFile<Row>>): voi
   bindFrameStep(tables.get("effect2"));
   bindSystemUnlocks(tables.get("system"));
   bindRoundCaps(tables.get("battletype"));
+  bindGameCatalog(tables);
 }
 
 function bindHeroTypes(table: Table): void {
