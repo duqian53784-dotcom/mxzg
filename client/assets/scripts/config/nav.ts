@@ -16,6 +16,10 @@ export interface NavEntry {
 
 export const CITY_TAB = "city";
 
+/**
+ * 导航根。召唤、铁匠铺、玩法仍算根页，方便从建筑和「玩法」列表进。
+ * 画在底栏上的是 CITY_BAR，不是这一组。
+ */
 export const BOTTOM_TABS: NavEntry[] = [
   { id: "city", title: "主城", blurb: "主城" },
   { id: "hero", title: "英雄", gateId: "main_hero", blurb: "英雄列表、详情与升级" },
@@ -23,6 +27,29 @@ export const BOTTOM_TABS: NavEntry[] = [
   { id: "smith", title: "铁匠铺", gateId: "main_smith_shop", blurb: "强化新手短剑，消耗金币和强化石" },
   { id: "plays", title: "玩法", blurb: "按主线等级或开服天开启" },
 ];
+
+/**
+ * 国服主城底栏，对照 main-scene-lang 的七张字：
+ * 主城、英雄、背包、战斗、副本、公会、羁绊。
+ * 「副本」的图文件名仍是 skin（lbl-skin / spr-skin），字是副本。
+ * 战斗在正中，略大、略高。不使用日文文案。
+ */
+export const CITY_BAR: NavEntry[] = [
+  { id: "city", title: "主城", blurb: "主城" },
+  { id: "hero", title: "英雄", gateId: "main_hero", blurb: "英雄列表、详情与升级" },
+  { id: "bag", title: "背包", gateId: "bag", blurb: "强化石、英雄碎片，以及可使用的金币袋和经验药水" },
+  { id: "battle", title: "战斗", blurb: "主线战斗" },
+  { id: "dungeon", title: "副本", gateId: "main_mission", blurb: "日常副本" },
+  { id: "clan", title: "公会", blurb: "公会占位。老主城底栏入口，公会系统还没接。" },
+  { id: "fetter", title: "羁绊", gateId: "main_fetter", blurb: "羁绊占位" },
+];
+
+/** 底栏七格在 720 宽画面上的位置。下标 3 是战斗。y 是画面中心系。 */
+export function cityBarSlot(index: number): { x: number; y: number; size: number } {
+  const xs = [-300, -200, -100, 0, 100, 200, 300];
+  const hot = index === 3;
+  return { x: xs[index] || 0, y: hot ? -548 : -562, size: hot ? 96 : 78 };
+}
 
 /** 不放底栏的系统。背包在这里，避免底栏塞不下。 */
 export const PLAY_ENTRIES: NavEntry[] = [
@@ -88,6 +115,9 @@ export function findNavEntry(id: string): NavEntry | null {
   }
   for (let i = 0; i < PLAY_ENTRIES.length; i++) {
     if (PLAY_ENTRIES[i].id === id) return PLAY_ENTRIES[i];
+  }
+  for (let i = 0; i < CITY_BAR.length; i++) {
+    if (CITY_BAR[i].id === id) return CITY_BAR[i];
   }
   return null;
 }

@@ -75,13 +75,19 @@ export class CityChromeShell extends Component {
   tabHero: Node | null = null;
 
   @property(Node)
-  tabSummon: Node | null = null;
+  tabBag: Node | null = null;
 
   @property(Node)
-  tabForge: Node | null = null;
+  tabBattle: Node | null = null;
 
   @property(Node)
-  tabPlay: Node | null = null;
+  tabDungeon: Node | null = null;
+
+  @property(Node)
+  tabClan: Node | null = null;
+
+  @property(Node)
+  tabFetter: Node | null = null;
 
   @property(Node)
   btnActivity: Node | null = null;

@@ -4,6 +4,7 @@
  * 加载失败留原来的页面，不留空画面。
  */
 import { BlockInputEvents, Button, Color, Node, UITransform } from "cc";
+import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
@@ -51,6 +52,7 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     place(createRect("dim", 720, 1280, new Color(8, 16, 32, 255)), root, 0, 0);
     const view = spawnPrefab(prefab, root);
     centerInParent(view);
+    seatAboveChrome(view);
     if (spec.fight) {
       const battle = findDescendant(view, "btn_battle");
       if (battle) {
@@ -65,9 +67,9 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
       liftNode(close, view);
       bindTap(close, () => setPagePrefabShellVisible(page, false));
     }
-    const probe = createButton("功能页", () => setPagePrefabShellVisible(page, false), 140, 40);
+    const probe = createButton("功能页", () => setPagePrefabShellVisible(page, false), 96, 32);
     probe.name = "BtnShellProbe";
-    place(probe, root, 250, 430);
+    place(probe, root, -300, 600);
     const raise = () => {
       if (root.isValid && root.parent === page) root.setSiblingIndex(Math.max(0, page.children.length - 1));
     };
@@ -94,6 +96,18 @@ export function centerInParent(node: Node): void {
   const width = ui.contentSize.width;
   const height = ui.contentSize.height;
   node.setPosition(-(0.5 - ui.anchorX) * width, -(0.5 - ui.anchorY) * height, 0);
+}
+
+/** 底边落到 720×1280 底栏下面时，整页上移。短弹窗本来就在安全区里则不动。 */
+export function seatAboveChrome(node: Node): void {
+  const ui = node.getComponent(UITransform);
+  if (!ui || !ui.contentSize) return;
+  const height = ui.contentSize.height;
+  const anchorY = typeof ui.anchorY === "number" ? ui.anchorY : 0.5;
+  const bottom = node.position.y - height * anchorY;
+  const limit = -CITY_VIEW_H / 2 + CITY_BAR_BOTTOM;
+  if (bottom >= limit) return;
+  node.setPosition(node.position.x, node.position.y + (limit - bottom), node.position.z || 0);
 }
 
 export function findDescendant(root: Node, name: string): Node | null {

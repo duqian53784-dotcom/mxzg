@@ -13,6 +13,12 @@ export const CITY_VIEW_W = 720;
 export const CITY_VIEW_H = 1280;
 export const CITY_MAP_W = 1500;
 export const CITY_MAP_H = 1280;
+/**
+ * 底栏盖住设计画面底部的高度。运行时把城景整层上移这么多，
+ * 近景底边贴在底栏上沿，召唤圆台和建筑标停在底栏上面。
+ * 顶栏仍叠在城景上。布局自检的画面坐标不含这层上移。
+ */
+export const CITY_BAR_BOTTOM = 140;
 /** 近景到远景。近的跟手更快。 */
 export const CITY_PARALLAX_SPEEDS = [1.3, 1, 0.82, 0.63];
 export const CITY_MAP_VARIANT = 1;

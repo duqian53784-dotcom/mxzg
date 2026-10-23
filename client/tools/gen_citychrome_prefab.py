@@ -80,9 +80,11 @@ SHELL_NODES = {
     "bottomBar": "CityChrome/BottomBar",
     "tabCity": "CityChrome/BottomBar/TabCity",
     "tabHero": "CityChrome/BottomBar/TabHero",
-    "tabSummon": "CityChrome/BottomBar/TabSummon",
-    "tabForge": "CityChrome/BottomBar/TabForge",
-    "tabPlay": "CityChrome/BottomBar/TabPlay",
+    "tabBag": "CityChrome/BottomBar/TabBag",
+    "tabBattle": "CityChrome/BottomBar/TabBattle",
+    "tabDungeon": "CityChrome/BottomBar/TabDungeon",
+    "tabClan": "CityChrome/BottomBar/TabClan",
+    "tabFetter": "CityChrome/BottomBar/TabFetter",
     "btnActivity": "CityChrome/BtnActivity",
     "btnMorePanel": "CityChrome/BtnMorePanel",
 }
@@ -95,9 +97,11 @@ BIND_PATHS = [
     "BottomBar/Bg",
     "BottomBar/TabCity",
     "BottomBar/TabHero",
-    "BottomBar/TabSummon",
-    "BottomBar/TabForge",
-    "BottomBar/TabPlay",
+    "BottomBar/TabBag",
+    "BottomBar/TabBattle",
+    "BottomBar/TabDungeon",
+    "BottomBar/TabClan",
+    "BottomBar/TabFetter",
 ]
 
 BASE64_KEYS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -576,8 +580,7 @@ class Builder(object):
         return cid
 
     def add_sprite(self, node_id, sprite):
-        if any(edge != 0 for edge in sprite["borders"]):
-            raise SystemExit("chrome sprite unexpectedly sliced: " + sprite["rel"])
+        # 有边距的图也按 SIMPLE 画。不改 .meta，也不把九宫格拉进 Prefab。
         spr = {
             "__type__": "cc.Sprite",
             "_name": "",
@@ -786,19 +789,24 @@ def build(shell, sprites):
     bottom = b.make_node("BottomBar", root, 0, -575, 720, 140)
     b.add_block(bottom)
     b.sprite_node("Bg", bottom, 0, -0.5, 720, 129, sprites["bottom"])
+    # 国服七格。战斗在正中，略大略高。坐标相对 BottomBar，和 cityBarSlot 的画面坐标一致。
     tabs = [
-        ("TabCity", "city", "主城", -288, 13, 86, "plate"),
-        ("TabHero", "hero", "英雄", -144, 13, 86, "plate"),
-        ("TabSummon", "summon", "召唤", 0, 13, 86, "plate"),
-        ("TabForge", "forge", "铁匠铺", 144, 13, 86, "plate"),
-        ("TabPlay", "battle", "玩法", 288, 21, 100, "plate_hot"),
+        ("TabCity", "city", "主城", -300, 13, 78, "plate"),
+        ("TabHero", "hero", "英雄", -200, 13, 78, "plate"),
+        ("TabBag", "bag", "背包", -100, 13, 78, "plate"),
+        ("TabBattle", "battle", "战斗", 0, 27, 96, "plate_hot"),
+        ("TabDungeon", "dungeon", "副本", 100, 13, 78, "plate"),
+        ("TabClan", "clan", "公会", 200, 13, 78, "plate"),
+        ("TabFetter", "fetter", "羁绊", 300, 13, 78, "plate"),
     ]
     icon_box = {
-        "city": (64, 62),
-        "hero": (62, 62),
-        "summon": (72, 43),
-        "forge": (72, 40),
-        "battle": (78, 74),
+        "city": (58, 56),
+        "hero": (56, 56),
+        "bag": (56, 56),
+        "battle": (74, 70),
+        "dungeon": (56, 56),
+        "clan": (56, 56),
+        "fetter": (56, 56),
     }
     for name, key, text, x, y, plate, plate_key in tabs:
         tab = b.make_node(name, bottom, x, y, plate, plate)
@@ -806,8 +814,8 @@ def build(shell, sprites):
         b.add_button(tab, sprites[plate_key])
         iw, ih = icon_box[key]
         b.sprite_node("Icon", tab, 0, 2, iw, ih, sprites[key])
-        label_y = -58 if plate == 86 else -66
-        b.label_node("Label", tab, 0, label_y, 108, 24, text, 16, TAB_COLOR, outline=True)
+        label_y = -52 if plate == 78 else -62
+        b.label_node("Label", tab, 0, label_y, 84, 22, text, 15, TAB_COLOR, outline=True)
         lock = b.sprite_node("Lock", tab, 28, 28, 30, 30, sprites["lock"], active=False)
         if b.node(b.path_of[lock])["_active"]:
             raise SystemExit("lock should start inactive")
@@ -852,8 +860,8 @@ def check(b):
         b.id_of(path)
     if b.node("CityChrome/BtnActivity")["_active"] or b.node("CityChrome/BtnMorePanel")["_active"]:
         raise SystemExit("activity stubs must stay inactive")
-    if b.node("CityChrome/BottomBar/TabForge/Lock")["_active"]:
-        raise SystemExit("forge lock must start inactive")
+    if b.node("CityChrome/BottomBar/TabBag/Lock")["_active"]:
+        raise SystemExit("bag lock must start inactive")
     # Grouped activities stay on the right. A full-width strip would reach x < 0.
     xs = []
     for name in (
@@ -872,13 +880,22 @@ def check(b):
             raise SystemExit("activity %s escaped the top-right cluster: %s,%s" % (name, x, y))
     if max(xs) - min(xs) > 280:
         raise SystemExit("activity cluster is too wide")
-    play = b.transform("CityChrome/BottomBar/TabPlay")["_contentSize"]["width"]
+    battle_w = b.transform("CityChrome/BottomBar/TabBattle")["_contentSize"]["width"]
     city = b.transform("CityChrome/BottomBar/TabCity")["_contentSize"]["width"]
-    if play <= city:
-        raise SystemExit("TabPlay should be the emphasized slot")
-    battle = b.comp_sprite("CityChrome/BottomBar/TabPlay/Icon")
+    if battle_w <= city:
+        raise SystemExit("TabBattle should be the emphasized slot")
+    battle = b.comp_sprite("CityChrome/BottomBar/TabBattle/Icon")
     if battle["rel"] != "ui/city/main-scene-lang_spr-battle.png":
-        raise SystemExit("TabPlay icon is not the battle art")
+        raise SystemExit("TabBattle icon is not the battle art")
+    dungeon = b.comp_sprite("CityChrome/BottomBar/TabDungeon/Icon")
+    if dungeon["rel"] != "ui/city/main-scene-lang_spr-skin.png":
+        raise SystemExit("TabDungeon icon is not the cn dungeon art")
+    names_expect = ["主城", "英雄", "背包", "战斗", "副本", "公会", "羁绊"]
+    tab_nodes = ["TabCity", "TabHero", "TabBag", "TabBattle", "TabDungeon", "TabClan", "TabFetter"]
+    for i, tab_name in enumerate(tab_nodes):
+        got = b.comp_label("CityChrome/BottomBar/" + tab_name + "/Label")["_string"]
+        if got != names_expect[i]:
+            raise SystemExit("%s text %s" % (tab_name, got))
     names = [b.objs[i]["_name"] for i in b.path_of]
     for banned in ("Tab_city", "Tab_hero", "Tab_summon", "Tab_smith", "Tab_plays"):
         if banned in names:
@@ -898,7 +915,8 @@ def check(b):
         ("CityChrome/TopBar/CurrencyGold/Value", "金币 0"),
         ("CityChrome/TopBar/CurrencyGem/Value", "钻石 0"),
         ("CityChrome/BottomBar/TabCity/Label", "主城"),
-        ("CityChrome/BottomBar/TabPlay/Label", "玩法"),
+        ("CityChrome/BottomBar/TabBattle/Label", "战斗"),
+        ("CityChrome/BottomBar/TabFetter/Label", "羁绊"),
     ):
         got = b.comp_label(path)["_string"]
         if got != text_expect:
@@ -1025,8 +1043,10 @@ def main():
         "city": "ui/city/main-scene-lang_spr-city.png",
         "hero": "ui/city/main-scene-lang_spr-hero.png",
         "battle": "ui/city/main-scene-lang_spr-battle.png",
-        "summon": "ui/city/main-city_icon-main_summon.png",
-        "forge": "ui/city/main-city_icon-main_smith_shop.png",
+        "bag": "ui/city/main-scene-lang_spr-backpack.png",
+        "dungeon": "ui/city/main-scene-lang_spr-skin.png",
+        "clan": "ui/city/main-scene-lang_spr-clan.png",
+        "fetter": "ui/city/main-scene_spr-fetter.png",
         "lock": "ui/city/main-scene_spr-lock.png",
         "power": "ui/common/other_spr-power.png",
         "coin": "ui/common/res-icon_res-1.png",

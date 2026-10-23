@@ -1,16 +1,17 @@
 /**
  * 绑定 CityHub.prefab。中间是旧主城：map-bg-city 视差板和建筑图标。
- * 路径相对 assets：prefabs/ui/city/CityHub。不走 resources.load。
+ * 路径相对 assets：prefabs/ui/city/CityHub。底板丢图时才用 resources 补 spriteFrame。
  * 不挂脚本组件，不改 Prefab。USE_CITY_HUB_PREFAB 为 false，或加载 / 绑节点失败时，
  * MainApp 仍走 mountCityMap。顶栏底栏仍是 CityChrome。
  * 建筑点击交给原来的 onCityAtom。根上的 BtnMainline 打开原来的主线页。
  * 活动通栏不画在这张 Prefab 上，避免盖住建筑。右上活动仍是 CityChrome 的 ActGroup。
  */
-import { Button, Color, EventTouch, Mask, Node, Sprite, UITransform } from "cc";
+import { Button, Color, EventTouch, Node, resources, Sprite, SpriteFrame, UITransform, Widget } from "cc";
 import { ConfigLoader } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
 import { CityMapHandle, CityMapQuery } from "./CityMap";
 import {
+  CITY_BAR_BOTTOM,
   CITY_CFG_BTN,
   CITY_CFG_EFFECT,
   CITY_CFG_POS,
@@ -22,6 +23,7 @@ import {
   buildCityMapLayout,
   cityAtomLocked,
   layerAnchorX,
+  mapFramePath,
 } from "./cityMapLayout";
 import { CITY_HUB_PREFAB_PATH, bindClick, loadPrefab, spawnPrefab } from "./prefabLoad";
 
@@ -83,9 +85,20 @@ async function bindCityHub(
   }
   const parallax = views.get("CityParallax") as Node;
   const rootUi = root.getComponent(UITransform);
-  if (rootUi) rootUi.setContentSize(layout.viewW, layout.viewH);
-  const mask = root.getComponent(Mask) || root.addComponent(Mask);
-  mask.type = Mask.Type.GRAPHICS_RECT;
+  if (rootUi) {
+    rootUi.setContentSize(layout.viewW, layout.viewH);
+    rootUi.setAnchorPoint(0.5, 0.5);
+  }
+  // 不挂 Mask。运行时 GRAPHICS_RECT 的模板矩形会是 0，城景被裁没，只剩页面底色。
+  // 设计分辨率已经是 720 宽，画面外的地图由相机裁掉。
+  root.setPosition(0, 0, 0);
+  const widget = root.getComponent(Widget) || root.addComponent(Widget);
+  widget.isAlignHorizontalCenter = true;
+  widget.isAlignVerticalCenter = true;
+  widget.horizontalCenter = 0;
+  widget.verticalCenter = 0;
+  widget.alignMode = Widget.AlignMode.ON_WINDOW_RESIZE;
+  if (typeof widget.updateAlignment === "function") widget.updateAlignment();
 
   const parallaxUi = parallax.getComponent(UITransform);
   if (parallaxUi) {
@@ -144,7 +157,8 @@ async function bindCityHub(
 
   const applyScroll = (next: number): void => {
     scroll = next;
-    placeBottomLeft(parallax, root, scroll, 0);
+    // 上移一个底栏高度，近景和召唤圆台停在底栏上面。顶栏继续叠在天空上。
+    placeBottomLeft(parallax, root, scroll, CITY_BAR_BOTTOM);
     for (let i = 0; i < layout.nodes.length; i++) {
       const desc = layout.nodes[i];
       if (!desc.parallax) continue;
@@ -164,6 +178,7 @@ async function bindCityHub(
   }
   placeBuildings();
   applyScroll(layout.scroll);
+  await ensureCityPlates(views);
 
   let moved = 0;
   const onStart = (): void => {
@@ -231,6 +246,46 @@ function fitNode(node: Node, w: number, h: number, ax: number, ay: number, scale
     ui.setAnchorPoint(ax, ay);
   }
   node.setScale(scale, scale, 1);
+  const sprite = node.getComponent(Sprite);
+  if (!sprite) return;
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  const trimable = sprite as Sprite & { trim?: boolean };
+  if (typeof trimable.trim === "boolean") trimable.trim = false;
+}
+
+const CITY_PLATES: { name: string; layer: number; piece: number }[] = [
+  { name: "spr_map_bg4_1", layer: 4, piece: 1 },
+  { name: "spr_map_bg3_1", layer: 3, piece: 1 },
+  { name: "spr_map_bg2_1", layer: 2, piece: 1 },
+  { name: "spr_map_bg1_1", layer: 1, piece: 1 },
+  { name: "spr_map_bg1_2", layer: 1, piece: 2 },
+];
+
+/** Prefab 跨 bundle 丢了 spriteFrame 时，城景会空。按 resources 再补一次。 */
+async function ensureCityPlates(views: Map<string, Node>): Promise<void> {
+  for (let i = 0; i < CITY_PLATES.length; i++) {
+    const plate = CITY_PLATES[i];
+    const node = views.get(plate.name);
+    if (!node) continue;
+    const sprite = node.getComponent(Sprite);
+    if (!sprite || sprite.spriteFrame) continue;
+    const frame = await loadFrame(mapFramePath(plate.layer, plate.piece, 1));
+    if (!frame || !sprite.isValid) continue;
+    sprite.spriteFrame = frame;
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  }
+}
+
+function loadFrame(path: string): Promise<SpriteFrame | null> {
+  return new Promise((resolve) => {
+    resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
+      if (err || !asset) {
+        resolve(null);
+        return;
+      }
+      resolve(asset);
+    });
+  });
 }
 
 function indexByName(root: Node): Map<string, Node> {

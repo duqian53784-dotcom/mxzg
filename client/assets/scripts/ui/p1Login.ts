@@ -10,8 +10,8 @@ import { GameLog } from "../core/GameLog";
 import { isP1ProgressStatus } from "./prefabShellMap";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { LoginPanelOptions, LoginPanelView } from "./LoginPanel";
-import { bindTap, centerInParent, findDescendant, liftNode } from "./pagePrefabShell";
-import { createButton, createField, createLabel, place, setText, TextField, uiNode } from "./UiKit";
+import { bindTap, centerInParent, findDescendant, liftNode, seatAboveChrome } from "./pagePrefabShell";
+import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
 export const USER_LOGIN_PREFAB_PATH = "prefabs/ui/login/UserLoginLayer";
 export const CHOOSE_SERVER_PREFAB_PATH = "prefabs/ui/login/ChooseServerLayer";
@@ -95,8 +95,14 @@ export async function mountP1LoginPrefab(
     void openSimple(NOTICE_PREFAB_PATH, (layer) => {
       const confirm = findDescendant(layer, "btn_confirm");
       const dismiss = findDescendant(layer, "btn_close");
-      if (confirm) bindTap(confirm, () => dismissLayer(layer));
-      if (dismiss) bindTap(dismiss, () => dismissLayer(layer));
+      if (confirm) {
+        liftNode(confirm, layer);
+        bindTap(confirm, () => dismissLayer(layer));
+      }
+      if (dismiss) {
+        liftNode(dismiss, layer);
+        bindTap(dismiss, () => dismissLayer(layer));
+      }
     });
   } catch (err) {
     host.destroy();
@@ -148,6 +154,7 @@ export async function mountP1LoginPrefab(
     const ui = layer.addComponent(UITransform);
     ui.setContentSize(2000, 2000);
     layer.addComponent(BlockInputEvents);
+    place(createRect("dim", 720, 1280, new Color(8, 16, 32, 210)), layer, 0, 0);
     layer.parent = host;
     layer.setSiblingIndex(Math.max(0, host.children.length - 1));
     try {
@@ -155,6 +162,7 @@ export async function mountP1LoginPrefab(
       if (!layer.isValid) return;
       const view = spawnPrefab(prefab, layer);
       centerInParent(view);
+      seatAboveChrome(view);
       bind(view);
       GameLog.shared.info("Boot", "login layer " + path);
     } catch (err) {
