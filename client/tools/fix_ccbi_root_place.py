@@ -16,7 +16,7 @@ Creator 3.8 的 Canvas 锚点在中心，节点本身放在 (设计宽/2, 设计
   python3 client/tools/fix_ccbi_root_place.py            # 只打印
   python3 client/tools/fix_ccbi_root_place.py --apply    # 改本批壳
   python3 client/tools/fix_ccbi_root_place.py --check    # 验收 BattleEndLayer
-  python3 client/tools/fix_ccbi_root_place.py --all --apply  # 其余同类壳，本批不用
+  python3 client/tools/fix_ccbi_root_place.py --all --apply  # 其余同类壳；已改过的会显示 already
 """
 
 from __future__ import annotations
