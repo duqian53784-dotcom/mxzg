@@ -26071,6 +26071,24 @@ function checkCityHub(): void {
     !!mainlineShell && mainlineShell.fight && mainlineShell.path === "prefabs/ui/battle/BattlePanelLayer",
     "mainline shell is the battle panel and keeps the existing fight"
   );
+  const hangSrc = readFileSync(uiSource("idleHangView.ts"), "utf8");
+  const clockSrc = readFileSync(uiSource("battleClock.ts"), "utf8");
+  assert(
+    hangSrc.indexOf("IDLE_HANG_MISSING_PREFAB") >= 0 &&
+      hangSrc.indexOf("map01_B") >= 0 &&
+      hangSrc.indexOf("map01_F") >= 0 &&
+      hangSrc.indexOf("不是森林 BattlePage") >= 0 &&
+      hangSrc.indexOf("mountIdleHang") >= 0,
+    "battle tab hang scene uses the marble hall and does not pretend BattlePage is the idle shell"
+  );
+  assert(
+    shellSrc.indexOf("mountIdleHang") >= 0 && shellSrc.indexOf("if (spec.fight) mountIdleHang") >= 0,
+    "fight shell paints the hang scene before the battle panel"
+  );
+  assert(
+    clockSrc.indexOf("EVENT_AFTER_UPDATE") >= 0 && clockSrc.indexOf("armBattleDelay") >= 0,
+    "battle beats arm on the director frame"
+  );
   assert(!!ancientShell && !ancientShell.fight && ancientShell.path.indexOf("AncientLayer") >= 0, "unrouted ancient building opens its prefab shell");
   assert(pagePrefabShell("shop") === null && pagePrefabShell("main_country_war") === null && pagePrefabShell("main_blessingpool") === null, "p5 screens stay without a new prefab shell");
   assert(pagePrefabShell("city") === null, "city page is the city hub, not a prefab shell");
@@ -26088,6 +26106,15 @@ function checkCityHub(): void {
   const battleLayoutSrc = readFileSync(uiSource("battlePrefabLayout.ts"), "utf8");
   const wireBattlePageSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
   assert(wireBattlePageSrc.indexOf("PAGE_SHELL_FIGHT") >= 0 && wireBattlePageSrc.indexOf("this.challenge()") >= 0, "wire mainline fight still calls challenge");
+  const accentAt = wireBattlePageSrc.indexOf("private mountAccent");
+  const accentSrc = accentAt >= 0 ? wireBattlePageSrc.slice(accentAt, accentAt + 500) : "";
+  assert(
+    wireBattlePageSrc.indexOf("armBattleDelay") >= 0 &&
+      accentSrc.indexOf("createLabel") < 0 &&
+      accentSrc.indexOf("root.active = false") >= 0 &&
+      wireBattlePageSrc.indexOf("page.y + 78") >= 0,
+    "replay follows the director clock, seats hp on the slot, and does not print sword or flag names"
+  );
   assert(battlePageSrc.indexOf("export const USE_BATTLE_PREFAB = true") >= 0, "battle prefab default stays on");
   assert(mainApp.indexOf("USE_BATTLE_PREFAB") < 0, "MainApp does not grow a battle prefab switch");
   assert(chrome.indexOf("USE_BATTLE_PREFAB") < 0 && chrome.indexOf("BattlePage") < 0, "city chrome is not part of the battle prefab switch");

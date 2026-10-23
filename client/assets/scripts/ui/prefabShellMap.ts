@@ -5,7 +5,10 @@
 
 export const USE_PAGE_PREFAB_SHELL = true;
 
-/** 主线壳上的「战斗」交给已经写好的挑战，不另发协议。 */
+/**
+ * 主线壳先是挂机站场，底钮仍是 BattlePanelLayer。
+ * 「战斗」才交给已经写好的挑战，不另发协议。不是一点底栏就进森林 BattlePage。
+ */
 export const PAGE_SHELL_FIGHT = "mxzg-shell-fight";
 
 export interface PagePrefabShellSpec {
