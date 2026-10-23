@@ -1,0 +1,14 @@
+{
+  "ver": "1.1.50",
+  "importer": "prefab",
+  "imported": true,
+  "uuid": "4fc580d3-2b11-4a52-a647-5017eaafd0a5",
+  "files": [
+    ".json"
+  ],
+  "subMetas": {
+  },
+  "userData": {
+    "syncNodeName": "ActiveFetterLayer"
+  }
+}
