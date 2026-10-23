@@ -56,6 +56,16 @@ export const WIRE_BATTLE_DEF_HERO_FIELD = 8;
 export const WIRE_BATTLE_CAMP_ALLY = 1;
 export const WIRE_BATTLE_CAMP_ENEMY = 2;
 
+/**
+ * 攻击者阵营的对面。受击位置经常和攻击者用同一个号，带了阵营才分得开。
+ * 没带、或不是 1/2，返回 null。调用方保持「阵营未带」，不猜人。
+ */
+export function wireBattleDefenderCamp(camp: number | null): number | null {
+  if (camp === WIRE_BATTLE_CAMP_ALLY) return WIRE_BATTLE_CAMP_ENEMY;
+  if (camp === WIRE_BATTLE_CAMP_ENEMY) return WIRE_BATTLE_CAMP_ALLY;
+  return null;
+}
+
 export const WIRE_BATTLE_EMPTY = "已同步空表";
 export const WIRE_BATTLE_UNSYNCED_TOAST = "真服未同步";
 export const WIRE_BATTLE_NO_REPORT = "没有 report";
@@ -503,7 +513,7 @@ function actionBeat(
       line += " · 位置 " + action.atkPos + (attack ? " 攻击" : " 站立");
     }
   }
-  applyDefenderHit(slots, cues, action, attacker);
+  applyDefenderHit(slots, cues, action, attacker, wireBattleDefenderCamp(action.camp));
   if (action.skillId !== null) {
     const skillStem = wireSpineSkillStem(action.skillId);
     line += skillStem ? " · 技能 " + action.skillId + " " + skillStem : " · 技能 " + action.skillId + " 未播";
@@ -512,7 +522,7 @@ function actionBeat(
     const hit = action.hits[i];
     if (hit.hurt !== null) line += " · 伤害 " + hit.hurt;
     if (hit.defPos === null || hit.hp === null) continue;
-    const target = matchSlot(slots, hit.defPos, null);
+    const target = matchSlot(slots, hit.defPos, wireBattleDefenderCamp(action.camp));
     if (typeof target !== "number") {
       line += " · 受击位置 " + hit.defPos + (target === "ambiguous" ? " 阵营未带" : " 未在场");
       continue;
@@ -527,11 +537,17 @@ function actionBeat(
 }
 
 /** 受击者套里有 hit 才改这一拍。攻击者自己被打到时仍留攻击，不改成受击。 */
-function applyDefenderHit(slots: WireSpineSlot[], cues: WireSpineCue[], action: WireBattleAction, attacker: number): void {
+function applyDefenderHit(
+  slots: WireSpineSlot[],
+  cues: WireSpineCue[],
+  action: WireBattleAction,
+  attacker: number,
+  defenderCamp: number | null
+): void {
   for (let i = 0; i < action.hits.length; i++) {
     const hit = action.hits[i];
     if (hit.defPos === null) continue;
-    const target = matchSlot(slots, hit.defPos, null);
+    const target = matchSlot(slots, hit.defPos, defenderCamp);
     if (typeof target !== "number" || target === attacker) continue;
     if (!wireSpineHasClip(slots[target].stem, "hit")) continue;
     setCue(cues, target, "hit");
@@ -555,7 +571,7 @@ function actionVfx(slots: WireSpineSlot[], action: WireBattleAction): WireSpineV
     for (let i = 0; i < action.hits.length; i++) {
       const hit = action.hits[i];
       if (hit.defPos === null) continue;
-      const target = matchSlot(slots, hit.defPos, null);
+      const target = matchSlot(slots, hit.defPos, wireBattleDefenderCamp(action.camp));
       if (typeof target === "number") {
         anchor = target;
         break;

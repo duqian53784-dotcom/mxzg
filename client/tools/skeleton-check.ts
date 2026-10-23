@@ -568,6 +568,7 @@ import {
   WIRE_SPINE_LOAD_FAIL,
   WIRE_SPINE_SKILL_STEMS,
   WIRE_SPINE_SWORD,
+  wireBattleDefenderCamp,
   wireMainlineFightStage,
   wireSpineHitStem,
   wireSpineSkillStem,
@@ -1206,9 +1207,11 @@ import {
 } from "../assets/scripts/net/protocol/wireLineUpSave";
 import {
   mainFormationHeroId,
+  mainFormationHeroes,
   planStarterChallenge,
   STARTER_LINEUP_NOTE,
 } from "../assets/scripts/net/protocol/starterLineup";
+import { idleHangDefaultStems, idleHangStemsFrom } from "../assets/scripts/ui/idleHangRoster";
 import {
   decodeWireRunningPromotion,
   formatWireRunningPromotionHead,
@@ -15575,6 +15578,82 @@ async function checkWs(): Promise<void> {
       bothPlan.beats[bothPlan.beats.length - 1].vfx.length === 0,
     "the same pos on both sides does not invent an attacker"
   );
+  assert(
+    wireBattleDefenderCamp(1) === 2 && wireBattleDefenderCamp(2) === 1 && wireBattleDefenderCamp(0) === null && wireBattleDefenderCamp(null) === null,
+    "only camp 1 and 2 name the other side"
+  );
+  const shareAlly = concatBytes(fieldVarint(1, 1), fieldVarint(2, 10105008));
+  const shareEnemy = concatBytes(fieldVarint(1, 1), fieldVarint(2, 10405006));
+  const shareHit = concatBytes(fieldVarint(1, 1), concatBytes(fieldVarint(2, 8), fieldVarint(3, 4)));
+  const shareAction = concatBytes(fieldVarint(1, 1), concatBytes(concatBytes(fieldVarint(2, 9), fieldVarint(4, 1)), fieldBytes(3, shareHit)));
+  const shareReport = decodeWireBattleMatch(
+    fieldBytes(1, concatBytes(fieldBytes(6, fieldBytes(2, shareAction)), concatBytes(fieldBytes(7, shareAlly), fieldBytes(8, shareEnemy))))
+  );
+  assert(shareReport !== null && shareReport.report !== null, "shared pos with camp decodes");
+  const sharePlan = planWireSpineReplay(shareReport.report as NonNullable<typeof shareReport.report>, null, 1);
+  const shareBeat = sharePlan.beats[sharePlan.beats.length - 1];
+  const sharePresent = planBattlePresentation(shareReport.report as NonNullable<typeof shareReport.report>, sharePlan);
+  const shareShown = playbackBeats(sharePlan);
+  let shareAttack = false;
+  let shareHitCue = false;
+  for (let sc = 0; sc < shareBeat.cues.length; sc++) {
+    if (shareBeat.cues[sc].slot === 0 && shareBeat.cues[sc].clip === "attack") shareAttack = true;
+    if (shareBeat.cues[sc].slot === 1 && shareBeat.cues[sc].clip === "hit") shareHitCue = true;
+  }
+  let shareSkillAnchor: number | null = null;
+  let shareHitAnchor: number | null = null;
+  for (let sv = 0; sv < shareBeat.vfx.length; sv++) {
+    if (shareBeat.vfx[sv].role === "skill") shareSkillAnchor = shareBeat.vfx[sv].anchor;
+    if (shareBeat.vfx[sv].role === "hit") shareHitAnchor = shareBeat.vfx[sv].anchor;
+  }
+  assert(
+    shareAttack &&
+      shareHitCue &&
+      shareBeat.hp[1] === 4 &&
+      shareSkillAnchor === 0 &&
+      shareHitAnchor === 1 &&
+      shareBeat.line.indexOf("阵营未带") < 0 &&
+      shareBeat.line.indexOf("伤害 8") >= 0 &&
+      sharePresent.beats.length === sharePlan.beats.length &&
+      sharePresent.beats[sharePresent.beats.length - 1].floats.length === 1 &&
+      sharePresent.beats[sharePresent.beats.length - 1].floats[0].anchor === 1 &&
+      sharePresent.beats[sharePresent.beats.length - 1].floats[0].hurt === 8 &&
+      sharePresent.beats[sharePresent.beats.length - 1].skillName === "act" &&
+      shareShown.length === sharePlan.beats.length &&
+      shareShown[shareShown.length - 1].line.indexOf("演示 · 攻击") < 0,
+    "camp 1 on a shared pos hits the enemy head, floats, and skill banner without a demo beat"
+  );
+  assert(idleHangDefaultStems(3).join(",") === WIRE_SPINE_ALLY_STEMS.join(","), "empty hang still uses the three default spines");
+  assert(mainFormationHeroes(null).length === 0 && idleHangStemsFrom(null, null, 3).join(",") === WIRE_SPINE_ALLY_STEMS.join(","), "missing lineup keeps the hang defaults");
+  assert(
+    idleHangStemsFrom({ rows: [] }, [], 3).join(",") === WIRE_SPINE_ALLY_STEMS.join(","),
+    "an empty MAIN keeps the hang defaults"
+  );
+  const hangOrdered = idleHangStemsFrom(
+    {
+      rows: [
+        {
+          marks: [
+            { field: 1, text: "0" },
+            { field: 4, text: "字段1=7,字段3=3" },
+            { field: 4, text: "字段1=8,字段3=1" },
+          ],
+        },
+      ],
+    },
+    [
+      { heroId: 8, heroType: 10105008 },
+      { heroId: 7, heroType: 10405005 },
+    ],
+    3
+  );
+  assert(hangOrdered.join(",") === "10105008,10405005", "hang stands MAIN heroes in position order through hero_type");
+  const hangOne = idleHangStemsFrom(
+    { rows: [{ marks: [{ field: 1, text: "0" }, { field: 4, text: "字段1=42,字段3=1" }] }] },
+    null,
+    3
+  );
+  assert(hangOne.length === 1 && hangOne[0] === "42", "one unbound hang hero is not padded with defaults");
   assert(WIRE_SPINE_LOAD_FAIL === "spine 未加载", "spine load failure has a visible toast");
   const pools = WIRE_SPINE_ALLY_STEMS.concat(WIRE_SPINE_ENEMY_STEMS);
   for (let pi = 0; pi < pools.length; pi++) {
@@ -26148,8 +26227,34 @@ function checkCityHub(): void {
       hangSrc.indexOf("map01_B") >= 0 &&
       hangSrc.indexOf("map01_F") >= 0 &&
       hangSrc.indexOf("不是森林 BattlePage") >= 0 &&
-      hangSrc.indexOf("mountIdleHang") >= 0,
+      hangSrc.indexOf("mountIdleHang") >= 0 &&
+      hangSrc.indexOf("idleHangStemsFrom") >= 0 &&
+      hangSrc.indexOf("slot.active = false") >= 0,
     "battle tab hang scene uses the marble hall and does not pretend BattlePage is the idle shell"
+  );
+  const rosterSrc = readFileSync(uiSource("idleHangRoster.ts"), "utf8");
+  assert(
+    rosterSrc.indexOf("mainFormationHeroes") >= 0 &&
+      rosterSrc.indexOf("idleHangDefaultStems") >= 0 &&
+      rosterSrc.indexOf("不填默认套") >= 0,
+    "hang roster uses MAIN heroes and only falls back when the formation is empty"
+  );
+  assert(
+    shellSrc.indexOf("btn_speed_battle") >= 0 &&
+      shellSrc.indexOf("btn_lineup") >= 0 &&
+      shellSrc.indexOf("QuickBattleLayer") >= 0 &&
+      shellSrc.indexOf("HeroSuggestLayer") >= 0 &&
+      shellSrc.indexOf("不发 3013") >= 0 &&
+      shellSrc.indexOf("encodeFrame") < 0,
+    "hang quick-battle and grow buttons open existing shells and do not send 3013"
+  );
+  const endSrc = readFileSync(uiSource("battleEndView.ts"), "utf8");
+  assert(
+    endSrc.indexOf("BattleEndLayer") >= 0 &&
+      endSrc.indexOf("lbl_time") >= 0 &&
+      endSrc.indexOf("btn_confirm") >= 0 &&
+      endSrc.indexOf("3002") >= 0,
+    "BattleEndLayer hides the auto-close timer and confirms without sending 3002"
   );
   assert(
     shellSrc.indexOf("mountIdleHang") >= 0 && shellSrc.indexOf("if (spec.fight) mountIdleHang") >= 0,
@@ -26176,13 +26281,20 @@ function checkCityHub(): void {
   const battleLayoutSrc = readFileSync(uiSource("battlePrefabLayout.ts"), "utf8");
   const wireBattlePageSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
   assert(wireBattlePageSrc.indexOf("PAGE_SHELL_FIGHT") >= 0 && wireBattlePageSrc.indexOf("this.challenge()") >= 0, "wire mainline fight still calls challenge");
+  assert(
+    wireBattlePageSrc.indexOf("returnToHang") >= 0 &&
+      wireBattlePageSrc.indexOf("回挂机") >= 0 &&
+      wireBattlePageSrc.indexOf("openBattleEnd") >= 0 &&
+      wireBattlePageSrc.indexOf("BattleEndLayer") >= 0,
+    "skip, retreat, and replay end overlay BattleEndLayer and close back to hang"
+  );
   const accentAt = wireBattlePageSrc.indexOf("private mountAccent");
   const accentSrc = accentAt >= 0 ? wireBattlePageSrc.slice(accentAt, accentAt + 500) : "";
   assert(
     wireBattlePageSrc.indexOf("armBattleDelay") >= 0 &&
       accentSrc.indexOf("createLabel") < 0 &&
       accentSrc.indexOf("root.active = false") >= 0 &&
-      accentSrc.indexOf("mountBattleSpine") < 0 &&
+      accentSrc.indexOf("mountBattleSpine") >= 0 &&
       wireBattlePageSrc.indexOf("page.y + 78") >= 0 &&
       wireBattlePageSrc.indexOf("playbackBeats") >= 0,
     "replay follows the director clock, seats hp on the slot, and does not print sword or flag names"

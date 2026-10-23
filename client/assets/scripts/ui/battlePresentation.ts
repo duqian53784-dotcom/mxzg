@@ -9,6 +9,7 @@
 import {
   WIRE_BATTLE_CAMP_ALLY,
   WIRE_BATTLE_CAMP_ENEMY,
+  wireBattleDefenderCamp,
   wireSpineSkillStem,
   WireBattleAction,
   WireBattleHero,
@@ -225,7 +226,7 @@ function actionPresent(action: WireBattleAction, slots: WireSpineSlot[]): Battle
     const hit = action.hits[i];
     if (hit.hurt === null || typeof hit.hurt !== "number" || !isFinite(hit.hurt)) continue;
     let anchor: number | null = null;
-    if (hit.defPos !== null) anchor = matchUnit(slots, hit.defPos, null);
+    if (hit.defPos !== null) anchor = matchUnit(slots, hit.defPos, wireBattleDefenderCamp(action.camp));
     floats.push({ anchor, hurt: hit.hurt, crit: readHitCrit(hit) === true });
   }
   return {
