@@ -687,6 +687,6 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 
 - **路径**：`client/assets/prefabs/ui/battle/BattlePage.prefab`、`client/assets/prefabs/ui/battle/WireBattlePage.prefab`
 - **状态**：BattlePage 挂在 `WireMainlinePage` 的进战回放上，吃已经接好的 3001 / 3030 / 3102（3006 走同一套回放）。同一份回放写 `LayerFloat` 的 `FloatDmg_0`–`3` 和 `FloatCrit`、`SkillNameBanner`、前排 `HeadAnchor`。缺字段藏起，不写成 0，不另建挂点。不改 Boot，不改协议，不删代码 UI。`USE_BATTLE_PREFAB` 在 `BattlePage.ts`，改成 `false` 就回到代码战斗页。WireBattlePage 仍不挂。
-- 页面 `Bg` 用 `ui/battle/battle-scene_spr-bg-1.png`（spriteFrame `b117e1f3-0253-4616-95db-bed6a5007adb@f9941`，白，简单模式，拉到 720×1280）。顶栏有 `BtnSpeed`（`battle-scene_btn-speed-1/2/3`）。血条和技能条用 `battle-scene_prog-bg-1` 和 `battle-scene_prog-1`。`BtnClose` 仍是通用关闭钮。不是主线关卡图。
+- 页面 `Bg` 用 `ui/maps/map-bg-mission-1.jpg`（648×1152，白，简单模式，拉到 720×1280）。**`battle-scene_spr-bg-1` 是 112×64 边角，不是全屏底。** 顶栏有 `BtnSpeed`（`battle-scene_btn-speed-1/2/3`）。血条和技能条用 `battle-scene_prog-bg-1` 和 `battle-scene_prog-1`。`BtnClose` 仍是通用关闭钮。帧清单见 [`battle-ui2-migration.md`](battle-ui2-migration.md)。
 - 不挂脚本组件，所以没有壳 `__type__`。以后若加壳，必须是 23 位 packer id，不要退回 22 位。
 - 再生：`python3 client/tools/gen_battle_prefab.py`

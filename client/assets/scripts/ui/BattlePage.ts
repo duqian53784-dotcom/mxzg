@@ -1,7 +1,7 @@
 /**
  * 绑定 BattlePage.prefab。节点名对齐 docs/battle-prefab-layout.md。
  * 路径相对 assets：prefabs/ui/battle/BattlePage。Prefab 本身不走 resources.load。
- * 战斗场景底另从 resources 换：ui/battle/battle-scene_spr-bg-*。没有就留 Prefab 上的战场图。
+ * 战斗场景底是 ui/maps/map-bg-mission-1。battle-scene_spr-bg-1 是 112×64 边角，不能当全屏底。
  * 不挂脚本组件，不改 Prefab。USE_BATTLE_PREFAB 为 false，或加载 / 绑节点失败时，调用方仍走代码 UI。
  * 飘字写 LayerFloat/FloatDmg_0..3 和 FloatCrit，技能名写 SkillNameBanner，前排头顶写 HeadAnchor。
  * 这些节点必须已经在 Prefab 上。缺一个就整页退回代码 UI，不另建同名节点。
@@ -34,13 +34,11 @@ export { BATTLE_PREFAB_PATH };
 export const USE_BATTLE_PREFAB = true;
 
 /**
- * Resource 入库后的战斗场景底。运行时优先换上，不等 Prefab 再生。
- * 仓里还没有这些图时，Prefab 底保持已有的战场图，不退回主线关卡图。
+ * 全屏战场底，和 Prefab Bg 同一张。648×1152，拉到 720×1280。
+ * battle-scene_spr-bg-1 只有约 112×64，不能铺满页面。
  */
 export const BATTLE_SCENE_BG_PATHS = [
-  "ui/battle/battle-scene_spr-bg-1",
-  "ui/battle/battle-scene_spr-bg-2",
-  "ui/battle/battle-scene_spr-bg",
+  "ui/maps/map-bg-mission-1",
 ];
 
 /** 代码战斗页没有 Prefab 底时用的沙地。已在 resources。 */
