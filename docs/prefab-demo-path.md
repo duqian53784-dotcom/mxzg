@@ -15,7 +15,7 @@
 2. **UserLoginLayer** 是登录屏。账号写在用户条上。点服务器条打开 **ChooseServerLayer**，三台 Mock 服用 **ChooseServerCell**。点「登录」走原来的 Mock / 1001。
 3. 右上关闭打开 **LanguageSelectLayer**（只看，不改语言）。登录失败一类状态打开 **ErrorLayer**。
 4. 没有角色，或点屏幕下方「创角」，仍进原来的 **CreateRolePanel**（`USE_CREATE_ROLE_PREFAB`）。
-5. 进主城后中间是 **CityHub**（`USE_CITY_HUB_PREFAB`），顶栏底栏是 **CityChrome**。左右拖地图，点建筑。
+5. 进主城后中间是 **CityHub**（`USE_CITY_HUB_PREFAB`）：整屏城景（天空、广场、召唤圆台）和建筑标，顶栏底栏叠在上面。不是中间一块黑。左右拖地图，点建筑。底栏七项是 **主城 / 英雄 / 背包 / 战斗 / 副本 / 公会 / 羁绊**。战斗进主线。城景上移一个底栏高度，圆台和建筑标不要落在底栏下面。
 6. 左下 **BtnMainline**（或「更多」里的主线）打开主线页，上面盖 **BattlePanelLayer**。点「战斗」走原来的挑战：Mock 打当前关并播代码战报；真服发 3001，有战报时仍挂 `BattlePage`（`USE_BATTLE_PREFAB`）。
 7. 壳上的「功能页」，或 Prefab 里的关闭，只把壳藏起来。下面的关卡列表、真服探针或占位页还在，返回也还在。
 
@@ -42,9 +42,9 @@
 | 入口 | 页面 | 壳 |
 |------|------|----|
 | 主线（BtnMainline / 更多） | 原来的主线页 | `battle/BattlePanelLayer`，「战斗」= 原来的挑战 |
-| 召唤 | 底栏召唤 | `summon/SummonLayer` |
-| 铁匠铺 | 底栏锻造 | `smith/SmithLayer` |
-| 英雄殿堂建筑 | 底栏英雄 | `hero/HeroListLayer` |
+| 召唤法阵 | 城内建筑，不是底栏 | `summon/SummonLayer` |
+| 铁匠铺 | 城内建筑，不是底栏 | `smith/SmithLayer` |
+| 英雄 | 底栏英雄 | `hero/HeroListLayer` |
 | 更多 → 英雄殿堂 | `heroPalace` | `hero/HeroPalaceLayer` |
 | 英雄详情 | `hero-detail` | `hero/HeroInfoLayer` |
 | 竞技场 | `arena` | `pvp/PvpLayer` |
@@ -66,6 +66,17 @@
 | 魔方 | 占位 `main_magic_cube` | `magic-cube/MagicCubeLayer` |
 
 商店、祈福池、先知之树、黑市、远征、国战没有 P1–P4 的 1:1 Prefab，仍走原来的页面或占位，不在这轮做壳。
+
+## 验收
+
+预览进主城后应看到：
+
+- 中间是城景（欧式建筑、广场、天空），召唤圆台在画面中下，建筑标可点。顶栏和底栏叠在城景上。
+- 底栏从左到右：主城、英雄、背包、战斗、副本、公会、羁绊。战斗在正中，略大。
+- 圆台和近景建筑在底栏之上。点战斗进主线，点英雄进英雄列表。
+- 公告盖住登录，登录字不会透出来。「确定」在公告窗里。
+
+主城页不挂 `USE_PAGE_PREFAB_SHELL`。壳上的「功能页」在左上，不压 1:1 画面中间。
 
 ## 已知缺口
 

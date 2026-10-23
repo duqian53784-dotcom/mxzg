@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { isEntryOpen, isServerGateOpen, listOpenEntries } from "../assets/scripts/config/gates";
 import {
   BOTTOM_TABS,
+  CITY_BAR,
   entryAccess,
   findNavEntry,
   NavHistory,
@@ -2426,7 +2427,10 @@ function checkPanelNav(): void {
 function checkCityMap(): void {
   const ids: string[] = [];
   for (let i = 0; i < BOTTOM_TABS.length; i++) ids.push(BOTTOM_TABS[i].id);
-  assert(ids.length === 5 && ids.join(",") === "city,hero,summon,smith,plays", "city bar stays five");
+  assert(ids.length === 5 && ids.join(",") === "city,hero,summon,smith,plays", "nav roots stay five");
+  const barTitles: string[] = [];
+  for (let i = 0; i < CITY_BAR.length; i++) barTitles.push(CITY_BAR[i].title);
+  assert(barTitles.join(",") === "主城,英雄,背包,战斗,副本,公会,羁绊", "city chrome bar is the seven cn entries");
 
   const config = configDir();
   const resources = join(config, "..");
@@ -25929,6 +25933,9 @@ function checkCityHub(): void {
   assert(hubPaths.indexOf("CityParallax/spr_map_bg2/spot-main_summon") >= 0, "city hub prefab has the summon building");
   assert(hubPaths.indexOf("CityParallax/spr_map_bg1/spr_map_bg1_1/spot-main_smith_shop") >= 0, "city hub prefab has the smith building");
   assert(hubPaths.indexOf("BtnMainline") >= 0, "city hub prefab has the mainline entry");
+  const hubSrc = readFileSync(uiSource("CityHub.ts"), "utf8");
+  assert(hubSrc.indexOf("CITY_BAR_BOTTOM") >= 0 && hubSrc.indexOf("addComponent(Mask)") < 0, "city hub lifts the map and does not stencil it away");
+  assert(mainApp.indexOf("id !== CITY_TAB") >= 0, "city page does not take a prefab shell");
   assert(hubPaths.indexOf("BtnIdle") < 0 && hubPaths.indexOf("BtnBag") < 0 && hubPaths.indexOf("BtnLogin7") < 0, "city hub prefab is not the debug button matrix");
   assert(mainApp.indexOf("mountCityChrome(") >= 0, "code chrome fallback stays");
   assert(mainApp.indexOf("setCityExtras") >= 0, "activity row hides off the city page");
@@ -25949,9 +25956,11 @@ function checkCityHub(): void {
     "UtilityRow/BtnMore",
     "BottomBar/TabCity",
     "BottomBar/TabHero",
-    "BottomBar/TabSummon",
-    "BottomBar/TabForge",
-    "BottomBar/TabPlay",
+    "BottomBar/TabBag",
+    "BottomBar/TabBattle",
+    "BottomBar/TabDungeon",
+    "BottomBar/TabClan",
+    "BottomBar/TabFetter",
   ];
   for (let i = 0; i < chromePaths.length; i++) {
     assert(chrome.indexOf(chromePaths[i]) >= 0, "chrome binds " + chromePaths[i]);
@@ -25977,6 +25986,7 @@ function checkCityHub(): void {
   );
   assert(!!ancientShell && !ancientShell.fight && ancientShell.path.indexOf("AncientLayer") >= 0, "unrouted ancient building opens its prefab shell");
   assert(pagePrefabShell("shop") === null && pagePrefabShell("main_country_war") === null && pagePrefabShell("main_blessingpool") === null, "p5 screens stay without a new prefab shell");
+  assert(pagePrefabShell("city") === null, "city page is the city hub, not a prefab shell");
   assert(isP1ProgressStatus("账号 mock") && isP1ProgressStatus("进入主城…") && !isP1ProgressStatus("服未启动，请检查启动 bat"), "login errors open ErrorLayer and progress stays on the form");
   const shellIds = ["mainline", "hero", "summon", "smith", "bag", "mail", "arena", "tower", "main_ancient", "main_hero_make", "main_altar", "main_magic_cube"];
   for (let si = 0; si < shellIds.length; si++) {

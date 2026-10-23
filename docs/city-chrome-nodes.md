@@ -4,7 +4,7 @@
 
 再生：`python3 client/tools/gen_citychrome_prefab.py`。脚本从 chrome zip 覆盖同路径 PNG（有则写），给新图补 Creator 3.8 `.meta`，已有图只在裁切数字变化时改 `.meta`，**不改 uuid**。不写 #66 那五张九宫格，不引用日文 `lbl` 位图。
 
-`CityChromeShell` 只有 `@property` 节点引用。不加载 Prefab，不发协议。`USE_CITY_CHROME_PREFAB` 仍是原来的开关，本刀不改它。`CityChrome.ts` 只把已有绑定改到下面这些路径，好让顶栏名字、货币和五个底栏继续能写、能点。
+`CityChromeShell` 只有 `@property` 节点引用。不加载 Prefab，不发协议。`USE_CITY_CHROME_PREFAB` 仍是原来的开关，本刀不改它。`CityChrome.ts` 只把已有绑定改到下面这些路径，好让顶栏名字、货币和七个底栏继续能写、能点。
 
 ## 脚本类 id
 
@@ -60,17 +60,19 @@
 | `UtilityRow/BtnMore` | (320, -468) | 48×48 | 更多（蓝圆加号） |
 | `BottomBar` | (0, -575) | 720×140 | 底栏组，挡点击 |
 | `BottomBar/Bg` | (0, -575.5) | 720×129 | 金边底框 |
-| `BottomBar/TabCity` | (-288, -562) | 86×86 | 主城。子节点 `Icon` `Label` `Lock` |
-| `BottomBar/TabHero` | (-144, -562) | 86×86 | 英雄 |
-| `BottomBar/TabSummon` | (0, -562) | 86×86 | 召唤 |
-| `BottomBar/TabForge` | (144, -562) | 86×86 | 铁匠铺 |
-| `BottomBar/TabPlay` | (288, -554) | 100×100 | 玩法，用战斗双剑，圆底更大、位置略高 |
+| `BottomBar/TabCity` | (-300, -562) | 78×78 | 主城。子节点 `Icon` `Label` `Lock` |
+| `BottomBar/TabHero` | (-200, -562) | 78×78 | 英雄 |
+| `BottomBar/TabBag` | (-100, -562) | 78×78 | 背包 |
+| `BottomBar/TabBattle` | (0, -548) | 96×96 | 战斗。正中，圆底更大、位置略高。打开主线 |
+| `BottomBar/TabDungeon` | (100, -562) | 78×78 | 副本。图标文件名是 `spr-skin`，国服字是副本 |
+| `BottomBar/TabClan` | (200, -562) | 78×78 | 公会 |
+| `BottomBar/TabFetter` | (300, -562) | 78×78 | 羁绊 |
 | `BtnActivity` | (-160, -470) | 168×48 | **未激活**。对齐 `CITY_SCREEN_ACTIVITY` |
 | `BtnMorePanel` | (160, -470) | 168×48 | **未激活**。对齐 `CITY_SCREEN_MORE` |
 
-底栏五个钮都有 `cc.Button`（缩放，`clickEvents` 为空）。选中时现有逻辑染的是圆底，不染 `Icon`。`Lock` 默认隐藏，锁定时由绑定打开。`Label` 文案仍走原来的 `setTabs`。
+底栏七个钮都有 `cc.Button`（缩放，`clickEvents` 为空）。选中时现有逻辑染的是圆底，不染 `Icon`。`Lock` 默认隐藏，锁定时由绑定打开。`Label` 文案仍走原来的 `setTabs`。
 
-`BtnActivity` / `BtnMorePanel` 仍不激活，没有可见底图，避免盖住 `UtilityRow`。主屏不再画红「活动」、蓝「更多」矩形。`ActGroup` 上每个钮打开原来的活动列表，`UtilityRow/BtnMore` 以及录像、好友、排行打开原来的更多列表。`UtilityRow/BtnMail` 打开原来的邮件页。离开主城页时这两块先隐藏，免得压住面板。底栏五个钮仍走原来的 `onTab`。
+`BtnActivity` / `BtnMorePanel` 仍不激活，没有可见底图，避免盖住 `UtilityRow`。主屏不再画红「活动」、蓝「更多」矩形。`ActGroup` 上每个钮打开原来的活动列表，`UtilityRow/BtnMore` 以及录像、好友、排行打开原来的更多列表。`UtilityRow/BtnMail` 打开原来的邮件页。离开主城页时这两块先隐藏，免得压住面板。底栏七个钮仍走原来的 `onTab`。战斗进主线，副本进日常副本。
 
 ## 贴图
 
@@ -86,8 +88,8 @@
 | 金币、钻石 | `ui/common/res-icon_res-1.png`、`res-icon_res-2.png` |
 | 蓝色加号 | `ui/common/button_btn-add-4.png` |
 | 底栏圆底 | `ui/common/button_btn-circle-blue-1.png`；玩法用 `button_btn-circle-blue-2.png` |
-| 主城 / 英雄 / 玩法图标 | `ui/city/main-scene-lang_spr-city.png`、`spr-hero.png`、`spr-battle.png` |
-| 召唤 / 铁匠铺图标 | `ui/city/main-city_icon-main_summon.png`、`icon-main_smith_shop.png` |
+| 主城 / 英雄 / 背包 / 战斗 | `ui/city/main-scene-lang_spr-city.png`、`spr-hero.png`、`spr-backpack.png`、`spr-battle.png` |
+| 副本 / 公会 / 羁绊 | `main-scene-lang_spr-skin.png`（字是副本）、`spr-clan.png`、`main-scene_spr-fetter.png` |
 | 锁 | `ui/city/main-scene_spr-lock.png` |
 | 活动图标 | `main-city_btn-hero-recommend-1`、`icon-act_sevent_day_target`、`icon-act_hero_arrive`、`icon-act_privilege`、`icon-act_welfare`、`icon-act_limit_gift`、`icon-act_limit_time_activity` |
 | 展开 | `ui/common/button_btn-down.png` |
@@ -99,11 +101,11 @@ zip 里另外盖上、本 Prefab 没用的图：`main-scene_spr-battle-bottom`�
 
 ## 和日文主城的差别
 
-日文参考是白金顶条、右上小叠活动圆、底栏上方一排工具圆、底栏约 7 个大圆标（主城 / 英雄 / 背包 / 战斗 / 副本 / 公会 / 羁绊），战斗在中间略突出。
+日文参考是白金顶条、右上小叠活动圆、底栏上方一排工具圆、底栏 7 个大圆标。国服字图是主城 / 英雄 / 背包 / 战斗 / 副本 / 公会 / 羁绊，战斗在正中略突出。副本图的文件名是 `spr-skin`，不要按日文 VIP 或「皮肤」来标。
 
 本刀：
 
-- 底栏仍是 **5** 格：主城、英雄、召唤、铁匠铺、玩法。没有背包、副本、公会、羁绊四个独立页签。玩法用战斗双剑，圆底用更亮的 `circle-blue-2`，直径 100，比其余 86 略高，仍排在最右，不改五个 id 的顺序。
+- 底栏是这 **7** 格。召唤和铁匠铺留在城内建筑上，不占底栏。玩法列表仍在，不占底栏。公会只开占位页。
 - 顶条是现有 `spr-up-bg`（蓝底金边），图集里没有另一张纯白顶条。
 - 加号是蓝色菱形 `btn-add-4`，不是圆角小蓝钮。
 - 召唤、铁匠铺没有独立圆标，用的是地图建筑牌（自带「召唤法阵」「铁匠铺」横幅），再加中文 `Label`。

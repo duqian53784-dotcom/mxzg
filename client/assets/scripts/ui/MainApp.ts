@@ -6,7 +6,7 @@
  * 单独预览 Main：把 MainApp 挂到 Main 场景的 Canvas 上。开关为 true 时看到 Prefab 壳。
  * 顶栏和底栏在 UIShell 的 chrome 层，不进页面栈。系统面板走 PanelNav。
  * 主城页中间默认 USE_CITY_HUB_PREFAB：CityHub Prefab 的地图和建筑。
- * false 或加载失败时仍 mountCityMap，代码地图不删。底栏仍是五项。
+ * false 或加载失败时仍 mountCityMap，代码地图不删。底栏是国服七项。
  * 已有页面默认再盖 USE_PAGE_PREFAB_SHELL 的 1:1 Prefab。关掉后仍是原来的页面。
  * 不改 Boot 的主城开关，不改战斗特效。主线「战斗」仍走原来的挑战。
  * 主屏不再画红「活动」、蓝「更多」矩形，也不再铺调试按钮矩阵。
@@ -16,7 +16,7 @@ import { _decorator, BlockInputEvents, Color, Component, Node, UITransform } fro
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
 import { listOpenEntries } from "../config/gates";
 import {
-  BOTTOM_TABS,
+  CITY_BAR,
   CITY_TAB,
   entryAccess,
   findNavEntry,
@@ -612,6 +612,18 @@ export class MainApp extends Component {
   }
 
   private onTab(id: string): void {
+    if (id === "battle") {
+      this.openMainline();
+      return;
+    }
+    if (id === "dungeon") {
+      this.openChild("daily");
+      return;
+    }
+    if (id === "bag" || id === "clan" || id === "fetter") {
+      this.openChild(id);
+      return;
+    }
     GameLog.shared.info("MainApp", "tab " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
@@ -668,10 +680,10 @@ export class MainApp extends Component {
     return false;
   }
 
-  /** 原来的页面仍由 buildPage 做。壳加载失败时页面不动。 */
+  /** 原来的页面仍由 buildPage 做。壳加载失败时页面不动。主城不盖壳。 */
   private presentPage(id: string): Node {
     const page = this.buildPage(id);
-    if (USE_PAGE_PREFAB_SHELL) void attachPagePrefabShell(page, id);
+    if (USE_PAGE_PREFAB_SHELL && id !== CITY_TAB) void attachPagePrefabShell(page, id);
     return page;
   }
 
@@ -761,6 +773,10 @@ export class MainApp extends Component {
   private buildCity(): Node {
     const page = this.pageRoot("CityPage");
     const mapHost = uiNode("CityMapHost");
+    const hostUi = mapHost.addComponent(UITransform);
+    hostUi.setContentSize(720, 1280);
+    hostUi.setAnchorPoint(0.5, 0.5);
+    mapHost.setPosition(0, 0, 0);
     mapHost.parent = page;
     if (!USE_CITY_HUB_PREFAB) {
       void this.mountCityMap(mapHost);
@@ -795,6 +811,7 @@ export class MainApp extends Component {
       }
       this.netState = state;
     });
+    mapHost.setSiblingIndex(Math.max(0, page.children.length - 1));
     return page;
   }
 
@@ -1221,6 +1238,7 @@ export class MainApp extends Component {
       this.cityMap = handle;
       if (handle.mainButton) this.mainButton = handle.mainButton;
       this.setMainButton(this.stageButtonText());
+      if (host.isValid && host.parent) host.setSiblingIndex(Math.max(0, host.parent.children.length - 1));
     } catch (err) {
       GameLog.shared.error("MainApp", "city hub prefab " + messageOf(err) + "，改用代码 UI");
       if (!this.isValid || !host.isValid) return;
@@ -1242,6 +1260,7 @@ export class MainApp extends Component {
         return;
       }
       this.cityMap = handle;
+      if (host.isValid && host.parent) host.setSiblingIndex(Math.max(0, host.parent.children.length - 1));
     } catch (err) {
       GameLog.shared.error("MainApp", "city map " + messageOf(err));
     }
@@ -1325,17 +1344,30 @@ export class MainApp extends Component {
     return page;
   }
 
+  /** 国服底栏高亮。战斗看主线页，副本看日常副本，不跟导航根的五项混。 */
+  private barSelected(id: string, current: string, root: string): boolean {
+    if (id === "city") return current === CITY_TAB;
+    if (id === "hero") return current === "hero" || current === "hero-detail" || root === "hero";
+    if (id === "bag") return current === "bag";
+    if (id === "battle") return current === "mainline";
+    if (id === "dungeon") return current === "daily";
+    if (id === "clan") return current === "clan";
+    if (id === "fetter") return current === "fetter" || current === "fetterData" || current === "fetterFashion";
+    return false;
+  }
+
   private refreshChrome(): void {
     const chrome = this.chrome;
     if (!chrome) return;
     chrome.setIdentity(formatNameLine(), formatSubLine());
     chrome.setCurrencies(formatGoldLine(), formatDiamondLine());
+    const current = this.panels?.current || "";
     const root = this.panels?.rootTab || CITY_TAB;
     const tabs: TabState[] = [];
-    for (let i = 0; i < BOTTOM_TABS.length; i++) {
-      const tab = BOTTOM_TABS[i];
+    for (let i = 0; i < CITY_BAR.length; i++) {
+      const tab = CITY_BAR[i];
       const access = entryAccess(tab, this.level(), this.day(), ConfigDb.current);
-      const state = !access.open ? "locked" : tab.id === root ? "selected" : "open";
+      const state = !access.open ? "locked" : this.barSelected(tab.id, current, root) ? "selected" : "open";
       tabs.push({ id: tab.id, text: tabLabel(tab.title, access.open), state });
     }
     chrome.setTabs(tabs);

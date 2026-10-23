@@ -2,15 +2,16 @@
  * 主城地图层。挂在主城页面里，顶栏和底栏仍是 CityChrome。
  * 视差底板用 resources/ui/maps/map-bg-city-*，建筑图标用 resources/ui/city。
  * 点击只回调 atom，由 MainApp 走已有的 PanelNav，不另开一套导航。
- * 地图内容比设计画面宽，拖动是预期。根上的 Mask 把子节点裁在 viewW×viewH 里。
+ * 地图内容比设计画面宽，拖动是预期。不挂 Mask，避免模板把城景裁没。
  * 配置里的活动图标不再铺成通栏。右上活动在 CityChrome 的 ActGroup。
  */
-import { Button, Color, EventTouch, Mask, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
+import { Button, Color, EventTouch, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
 import { GateSnapshot } from "../config/nav";
 import { ConfigLoader } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
 import { createLabel, uiNode } from "./UiKit";
 import {
+  CITY_BAR_BOTTOM,
   CITY_CFG_BTN,
   CITY_CFG_EFFECT,
   CITY_CFG_POS,
@@ -58,9 +59,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   const rootUi = root.addComponent(UITransform);
   rootUi.setContentSize(layout.viewW, layout.viewH);
   rootUi.setAnchorPoint(0.5, 0.5);
-  // 先定好画面尺寸再挂 Mask。矩形裁切跟这块 UITransform 走。活动通栏不挂在这层。
-  const mask = root.addComponent(Mask);
-  mask.type = Mask.Type.GRAPHICS_RECT;
+  root.setPosition(0, 0, 0);
   root.parent = parent;
 
   const parallax = uiNode("CityParallax");
@@ -68,7 +67,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   parallaxUi.setContentSize(layout.contentW, layout.viewH);
   parallaxUi.setAnchorPoint(0, 0);
   parallax.parent = root;
-  placeBottomLeft(parallax, root, layout.scroll, 0);
+  placeBottomLeft(parallax, root, layout.scroll, CITY_BAR_BOTTOM);
 
   const views = new Map<string, Node>();
   for (let i = 0; i < layout.nodes.length; i++) {
@@ -113,7 +112,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
     moved += Math.abs(dx);
     if (moved > DRAG_PX) gesture.dragged = true;
     scroll = clamp(scroll + dx, layout.minScroll, layout.maxScroll);
-    placeBottomLeft(parallax, root, scroll, 0);
+    placeBottomLeft(parallax, root, scroll, CITY_BAR_BOTTOM);
     for (let i = 0; i < layout.nodes.length; i++) {
       const desc = layout.nodes[i];
       if (!desc.parallax) continue;

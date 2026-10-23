@@ -1,5 +1,5 @@
 import { Color, Node, UITransform } from "cc";
-import { BOTTOM_TABS } from "../config/nav";
+import { CITY_BAR, cityBarSlot } from "../config/nav";
 import {
   bindClick,
   CITY_CHROME_PREFAB_PATH,
@@ -28,7 +28,7 @@ export interface CityChrome {
   setCityExtras(visible: boolean): void;
 }
 
-/** Prefab 壳上的活动列表、更多列表和邮件。底栏五项仍走 onTab。 */
+/** Prefab 壳上的活动列表、更多列表和邮件。底栏七项仍走 onTab。 */
 export interface CityChromeActions {
   openActivity(): void;
   openMore(): void;
@@ -100,15 +100,12 @@ export function mountCityChrome(parent: Node, onTab: (id: string) => void): City
 
   place(createRect("bottom-bg", 720, 104, new Color(14, 24, 44, 245)), root, 0, -580);
   const buttons: { [id: string]: Node } = {};
-  const width = 124;
-  const gap = 6;
-  const span = BOTTOM_TABS.length * width + (BOTTOM_TABS.length - 1) * gap;
-  const origin = -span / 2 + width / 2;
-  for (let i = 0; i < BOTTOM_TABS.length; i++) {
-    const entry = BOTTOM_TABS[i];
-    const button = createButton(entry.title, () => onTab(entry.id), width, 72, TAB_OPEN, 18);
+  for (let i = 0; i < CITY_BAR.length; i++) {
+    const entry = CITY_BAR[i];
+    const slot = cityBarSlot(i);
+    const button = createButton(entry.title, () => onTab(entry.id), slot.size, slot.size, TAB_OPEN, 16);
     button.name = "tab-" + entry.id;
-    place(button, root, origin + i * (width + gap), -580);
+    place(button, root, slot.x, slot.y);
     buttons[entry.id] = button;
   }
 
@@ -159,12 +156,12 @@ const BOTTOM_PAD_COLOR = new Color(46, 26, 22, 255);
 /**
  * 绑定 CityChrome.prefab。
  * TopBar 下是 LblName、LblSub、CurrencyGold/Value、CurrencyGem/Value。
- * BottomBar 下是 TabCity、TabHero、TabSummon、TabForge、TabPlay，子节点 Label、Lock。
+ * BottomBar 下是 TabCity、TabHero、TabBag、TabBattle、TabDungeon、TabClan、TabFetter，子节点 Label、Lock。
  * 路径相对 assets：prefabs/ui/city/CityChrome。不走 resources.load。
  * 不改 USE_CITY_CHROME_PREFAB，也不改 Boot。
  * ActGroup 打开活动列表，UtilityRow/BtnMore 打开更多列表，BtnMail 打开原来的邮件页。
  * BtnActivity / BtnMorePanel 保持 Prefab 里的未激活，避免再盖一层矩形。
- * 底栏五个钮仍把 id 交给 onTab。
+ * 底栏七个钮仍把 id 交给 onTab。战斗进主线，副本进日常副本。
  */
 export async function mountCityChromePrefab(
   parent: Node,
@@ -190,13 +187,15 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
   const tabPath: { [id: string]: string } = {
     city: "BottomBar/TabCity",
     hero: "BottomBar/TabHero",
-    summon: "BottomBar/TabSummon",
-    smith: "BottomBar/TabForge",
-    plays: "BottomBar/TabPlay",
+    bag: "BottomBar/TabBag",
+    battle: "BottomBar/TabBattle",
+    dungeon: "BottomBar/TabDungeon",
+    clan: "BottomBar/TabClan",
+    fetter: "BottomBar/TabFetter",
   };
   const buttons: { [id: string]: Node } = {};
-  for (let i = 0; i < BOTTOM_TABS.length; i++) {
-    const entry = BOTTOM_TABS[i];
+  for (let i = 0; i < CITY_BAR.length; i++) {
+    const entry = CITY_BAR[i];
     const button = requireNode(root, tabPath[entry.id]);
     const lock = button.getChildByName("Lock");
     if (lock) lock.active = false;
@@ -244,7 +243,7 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
 
 /**
  * BottomBar/Bg 背后垫满宽实色，并略加宽贴图节点，盖住 640→720 的左右透边。
- * 不改五个 Tab 的位置。顶栏原图左缘不透明，这里不垫。
+ * 不改七个 Tab 的位置。顶栏原图左缘不透明，这里不垫。
  */
 function sealBottomBg(root: Node): void {
   const bg = requireNode(root, "BottomBar/Bg");

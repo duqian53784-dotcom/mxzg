@@ -14,9 +14,9 @@
 | CityChrome | `prefabs/ui/city/CityChrome` | `MainApp.ts` 的 `mountCityChrome(...)` | `USE_CITY_CHROME_PREFAB` |
 | CityHub | `prefabs/ui/city/CityHub` | `MainApp.ts` 的 `buildCity()` | `USE_CITY_HUB_PREFAB` |
 | HeroPage | `prefabs/ui/hero/HeroPage` | `MainApp.ts` 的底栏「英雄」（Mock） | `USE_HERO_PREFAB` |
-| SummonPage | `prefabs/ui/summon/SummonPage` | `MainApp.ts` 的底栏「召唤」（Mock） | `USE_SUMMON_PREFAB` |
+| SummonPage | `prefabs/ui/summon/SummonPage` | 城内召唤法阵（Mock） | `USE_SUMMON_PREFAB` |
 
-Login / CreateRole / CityChrome / CityHub 四个主路径 flag 默认 **true**。Mock 启动出 Login Prefab，创角出 CreateRole Prefab，进主城后顶栏底栏来自 CityChrome，中间是 CityHub。底栏「英雄」「召唤」在 Mock 下再挂各自的 Prefab。真服只读页仍走原来的代码页。
+Login / CreateRole / CityChrome / CityHub 四个主路径 flag 默认 **true**。Mock 启动出 Login Prefab，创角出 CreateRole Prefab，进主城后顶栏底栏来自 CityChrome，中间是 CityHub。底栏「英雄」和城内召唤在 Mock 下再挂各自的 Prefab。真服只读页仍走原来的代码页。
 
 冷启动要看 P1 的 1:1 登录（`UserLoginLayer` / `ChooseServerLayer`）以及主城建筑、主线上的 P2–P4 壳时，走 [`prefab-demo-path.md`](prefab-demo-path.md)。`USE_P1_LOGIN_PREFAB` 默认开，关掉仍回到上表的 LoginPanel。页面壳是 `USE_PAGE_PREFAB_SHELL`，不进 Boot。
 
@@ -30,7 +30,7 @@ Login / CreateRole / CityChrome / CityHub 四个主路径 flag 默认 **true**�
 
 - Login：`Mask`、`Bg`、`Card/{CardBg,Title,Subtitle,AccountLabel,AccountField,PasswordLabel,PasswordField,ServerLabel,ServerRow/Btn_1|Btn_2|Btn_3,Picked,Status,Detail,BtnEnter,BtnCreate,BtnMock}`
 - CreateRole：`Mask,Bg,Card/{CardBg,Title,Hint,Meta,NameLabel,NameField,Status,BtnConfirm,BtnBack}`
-- CityChrome：`TopBar/{LblName,LblSub,CurrencyGold/Value,CurrencyGem/Value}`、`BottomBar/TabCity|TabHero|TabSummon|TabForge|TabPlay`（子节点 `Label`、`Lock`）。完整节点、贴图和与日文主城的差别见 [`city-chrome-nodes.md`](city-chrome-nodes.md)
+- CityChrome：`TopBar/{LblName,LblSub,CurrencyGold/Value,CurrencyGem/Value}`、`BottomBar/TabCity|TabHero|TabBag|TabBattle|TabDungeon|TabClan|TabFetter`（子节点 `Label`、`Lock`）。完整节点、贴图和与日文主城的差别见 [`city-chrome-nodes.md`](city-chrome-nodes.md)
 
 适配只绑这些节点。Login 对外仍是 `setStatus` / `setDetail` / `setBusy` / `account` / `password` / `serverId`。CreateRole 仍是 `setStatus` / `setBusy` / `name`。CityChrome 仍是 `setIdentity` / `setCurrencies` / `setTabs`，底栏点击走原来的 `onTab`。
 
