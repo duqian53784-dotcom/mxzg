@@ -26,6 +26,7 @@ import {
 } from "../config/nav";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
+import { chapterPlaceLabel } from "../config/gameCatalog";
 import { GameStore } from "../core/GameStore";
 import {
   formatDiamondLine,
@@ -4126,13 +4127,22 @@ export class MainApp extends Component {
   }
 
   private stageButtonText(): string {
+    let text: string;
+    let idx: number | null = null;
     if (Session.source === "wire") {
-      if (GameStore.source === "wire") return GameStore.mainlineLabel();
-      return WireSession.mainlineLabel();
+      text = GameStore.source === "wire" ? GameStore.mainlineLabel() : WireSession.mainlineLabel();
+      const chapter = GameStore.chapter();
+      if (chapter.fromStore) idx = chapter.nowIdx !== null ? chapter.nowIdx : chapter.maxIdx;
+    } else if (GameStore.source === "mock") {
+      text = GameStore.mainlineLabel();
+      idx = GameStore.mockStageId();
+    } else {
+      const stageId = Session.stageId >= 1 ? Session.stageId : 1;
+      text = "主线 · 第" + stageId + "关";
+      idx = stageId;
     }
-    if (GameStore.source === "mock") return GameStore.mainlineLabel();
-    const stageId = Session.stageId >= 1 ? Session.stageId : 1;
-    return "主线 · 第" + stageId + "关";
+    const place = chapterPlaceLabel(idx);
+    return place ? text + " · " + place : text;
   }
 
   private setMainButton(text: string): void {

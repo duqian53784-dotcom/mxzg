@@ -4,16 +4,14 @@
  */
 import { Color, Node } from "cc";
 import { GameLog } from "../core/GameLog";
+import { wireHeroBoard } from "../module/hero/rosterView";
 import { WireSession } from "../net/WireSession";
 import {
-  formatWireHeroDetail,
-  formatWireHeroLine,
   WIRE_HERO_EMPTY,
   WIRE_HERO_FIELD_NOTE,
   WIRE_HERO_READONLY_NOTE,
   WIRE_HERO_READONLY_TITLE,
   WIRE_HERO_UNSYNCED_TOAST,
-  WireHeroEntry,
 } from "../net/protocol/wireHero";
 import { createButton, createLabel, createRect, place, uiNode } from "./UiKit";
 
@@ -78,6 +76,7 @@ class WireHeroController implements WireHeroPage {
     place(createLabel(WIRE_HERO_READONLY_TITLE, 40, { color: TITLE }), this.body, 0, 470);
     place(createLabel(WIRE_HERO_READONLY_NOTE, 22, { color: MUTED, width: 640 }), this.body, 0, 420);
     place(createLabel(WIRE_HERO_FIELD_NOTE, 20, { color: MUTED, width: 640 }), this.body, 0, 380);
+    place(createLabel("名册读 GameStore。对上 herotype 时用表内名字、星级技能和 herobase", 18, { color: MUTED, width: 640 }), this.body, 0, 340);
     place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -460);
   }
 
@@ -95,45 +94,45 @@ class WireHeroController implements WireHeroPage {
     }
     const rows = uiNode("rows");
     rows.parent = this.listHost;
-    const heroes = WireSession.heroes;
-    if (!heroes) {
+    const board = wireHeroBoard(WireSession.heroes);
+    if (board.kind === "unsynced") {
       this.selected = -1;
       place(createLabel(WIRE_HERO_UNSYNCED_TOAST, 28, { color: TITLE, width: 640 }), rows, 0, 280);
       return;
     }
-    if (this.selected >= heroes.length) this.selected = -1;
-    if (heroes.length === 0) {
+    if (this.selected >= board.faces.length) this.selected = -1;
+    if (board.kind === "empty") {
       this.selected = -1;
       place(createLabel(WIRE_HERO_EMPTY, 28, { color: TITLE, width: 640 }), rows, 0, 280);
       return;
     }
     if (this.selected >= 0) {
-      this.renderDetail(rows, heroes[this.selected]);
+      this.renderDetail(rows, board.faces[this.selected].detail);
       return;
     }
-    const visible = Math.min(heroes.length, VISIBLE_ROWS);
+    const visible = Math.min(board.faces.length, VISIBLE_ROWS);
     for (let i = 0; i < visible; i++) {
       const index = i;
       place(
         createButton(
-          formatWireHeroLine(heroes[i]),
+          board.faces[i].line,
           () => this.openDetail(index),
           640,
           44,
           ROW_FILL,
-          20
+          18
         ),
         rows,
         0,
-        300 - i * 52
+        260 - i * 52
       );
     }
-    if (heroes.length > visible) {
+    if (board.faces.length > visible) {
       place(
-        createLabel("还有 " + (heroes.length - visible) + " 名", 20, { color: MUTED, width: 640 }),
+        createLabel("还有 " + (board.faces.length - visible) + " 名", 20, { color: MUTED, width: 640 }),
         rows,
         0,
-        300 - visible * 52
+        260 - visible * 52
       );
     }
   }
@@ -141,14 +140,13 @@ class WireHeroController implements WireHeroPage {
   private openDetail(index: number): void {
     if (this.disposed) return;
     this.selected = index;
-    const heroes = WireSession.heroes;
-    const entry = heroes && heroes[index] ? heroes[index] : null;
-    GameLog.shared.info("Hero", "wire detail " + (entry ? formatWireHeroLine(entry) : "missing"));
+    const board = wireHeroBoard(WireSession.heroes);
+    const face = board.faces[index];
+    GameLog.shared.info("Hero", "wire detail " + (face ? face.line : "missing"));
     this.render();
   }
 
-  private renderDetail(rows: Node, entry: WireHeroEntry): void {
-    const lines = formatWireHeroDetail(entry);
+  private renderDetail(rows: Node, lines: string[]): void {
     for (let i = 0; i < lines.length; i++) {
       place(
         createLabel(lines[i], 24, { color: TITLE, width: 640, align: "left" }),

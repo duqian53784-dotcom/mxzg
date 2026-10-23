@@ -287,6 +287,24 @@ export class GameStore {
     return { lineUp: this.state.lineUp, heroes: this.state.heroes };
   }
 
+  /** 4001 / Mock 名册。null 是还没同步。空数组是已同步的空名册。 */
+  static heroes(): StoreHero[] | null {
+    if (!this.state.heroes) return null;
+    return this.state.heroes.map(copyStoreHero);
+  }
+
+  /** 5001 / 5002 / Mock 背包。null 是还没同步。空数组是已同步的空背包。 */
+  static bag(): StoreBagItem[] | null {
+    if (!this.state.bag) return null;
+    return this.state.bag.map(copyStoreBag);
+  }
+
+  /** 3101 MAIN。Mock 没有这份阵容时是 null。 */
+  static formation(): StarterLineView | null {
+    if (!this.state.lineUp) return null;
+    return copyLine(this.state.lineUp);
+  }
+
   static hintFor(account: string): string {
     const cache = loadRoleCache(browserPrefStore());
     if (!cache || cache.account !== account.trim() || !cache.roleId) return "";
@@ -488,6 +506,22 @@ function parseInts(raw: unknown): number[] {
     if (value !== null) out.push(value);
   }
   return out;
+}
+
+function copyStoreHero(row: StoreHero): StoreHero {
+  return {
+    heroId: row.heroId,
+    heroType: row.heroType,
+    name: row.name,
+    level: row.level,
+    star: row.star,
+    fighting: row.fighting,
+    weaponLevel: row.weaponLevel,
+  };
+}
+
+function copyStoreBag(row: StoreBagItem): StoreBagItem {
+  return { itemId: row.itemId, itemType: row.itemType, num: row.num };
 }
 
 function copyWireHero(row: WireHeroEntry): StoreHero {

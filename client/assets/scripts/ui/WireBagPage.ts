@@ -7,16 +7,17 @@
  */
 import { Color, Node } from "cc";
 import { GameLog } from "../core/GameLog";
+import { wireBagBoard } from "../module/bag/bagView";
 import { WireSession } from "../net/WireSession";
 import {
   formatWireBagHead,
-  formatWireBagLine,
   WIRE_BAG_FIELD_NOTE,
   WIRE_BAG_READONLY_NOTE,
   WIRE_BAG_READONLY_TITLE,
   WIRE_BAG_SIDE_EFFECT,
   WIRE_BAG_UNSYNCED_TOAST,
 } from "../net/protocol/wireBag";
+import { mountItemIcon } from "./itemIcon";
 import { createButton, createLabel, createRect, place, uiNode } from "./UiKit";
 
 const PAGE_BG = new Color(8, 16, 32, 255);
@@ -79,6 +80,7 @@ class WireBagController implements WireBagPage {
     place(createLabel(WIRE_BAG_SIDE_EFFECT, 18, { color: TITLE, width: 640, height: 48 }), this.body, 0, 460);
     place(createLabel(WIRE_BAG_READONLY_NOTE, 18, { color: MUTED, width: 640, height: 72 }), this.body, 0, 390);
     place(createLabel(WIRE_BAG_FIELD_NOTE, 18, { color: MUTED, width: 640, height: 48 }), this.body, 0, 310);
+    place(createLabel("背包读 GameStore。item.idx 对上时用表内名字和图标", 16, { color: MUTED, width: 640 }), this.body, 0, 250);
     place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -520);
   }
 
@@ -96,32 +98,46 @@ class WireBagController implements WireBagPage {
     }
     const rows = uiNode("rows");
     rows.parent = this.listHost;
-    const items = WireSession.bagItems;
-    if (!items) {
-      place(createLabel(WIRE_BAG_UNSYNCED_TOAST, 28, { color: TITLE, width: 640 }), rows, 0, 220);
+    const board = wireBagBoard(WireSession.bagItems);
+    if (board.kind === "unsynced") {
+      place(createLabel(WIRE_BAG_UNSYNCED_TOAST, 28, { color: TITLE, width: 640 }), rows, 0, 180);
       return;
     }
+    if (board.kind === "empty") {
+      place(
+        createLabel(formatWireBagHead({ items: [], marks: WireSession.bagMarks }), 24, { color: TITLE, width: 640 }),
+        rows,
+        0,
+        180
+      );
+      return;
+    }
+    const headItems = [];
+    for (let n = 0; n < board.faces.length; n++) headItems.push({ itemId: null, itemType: null, num: null });
     place(
-      createLabel(formatWireBagHead({ items, marks: WireSession.bagMarks }), 24, { color: TITLE, width: 640 }),
+      createLabel(formatWireBagHead({ items: headItems, marks: WireSession.bagMarks }), 24, { color: TITLE, width: 640 }),
       rows,
       0,
-      220
+      180
     );
-    const visible = Math.min(items.length, VISIBLE_ROWS);
+    const visible = Math.min(board.faces.length, VISIBLE_ROWS);
     for (let i = 0; i < visible; i++) {
+      const y = 130 - i * 40;
+      const row = place(uiNode("bag-row"), rows, 0, y);
+      mountItemIcon(row, board.faces[i].icon, -300, 0);
       place(
-        createLabel(formatWireBagLine(items[i]), 22, { color: TITLE, width: 640, align: "left" }),
-        rows,
-        0,
-        170 - i * 36
+        createLabel(board.faces[i].line, 20, { color: TITLE, width: 560, align: "left" }),
+        row,
+        24,
+        0
       );
     }
-    if (items.length > visible) {
+    if (board.faces.length > visible) {
       place(
-        createLabel("还有 " + (items.length - visible) + " 件", 18, { color: MUTED, width: 640 }),
+        createLabel("还有 " + (board.faces.length - visible) + " 件", 18, { color: MUTED, width: 640 }),
         rows,
         0,
-        170 - visible * 36
+        130 - visible * 40
       );
     }
   }
