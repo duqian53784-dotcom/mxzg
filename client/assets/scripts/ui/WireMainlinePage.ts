@@ -150,7 +150,8 @@ import { mountBattleEnd } from "./battleEndView";
 import { armBattleDelay } from "./battleClock";
 import { battleFrameStep, FrameReel, mountFrameReel, warmBattleFrames } from "./battleFramePlay";
 import { battleCastFrameCount, effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
-import { battleCastWait, BattlePresentation, nextBattleSpeed, planBattlePresentation, playbackBeats } from "./battlePresentation";
+import { battleCastWait, BattlePresentation, fallbackAttackTitle, formatBattleRound, nextBattleSpeed, planBattlePresentation, playbackBeats, signedHpDeltas } from "./battlePresentation";
+import { beginHangBattle, bindHangSpeed, finishHangBattle, setHangSpeed, showHangStrike, stopHangBattle } from "./hangBattle";
 import {
   BattlePresentMount,
   clearBattleOverhead,
@@ -1134,10 +1135,12 @@ class WireMainlineController implements WireMainlinePage {
 
   private async showBattle(plan: WireSpineReplay, present: BattlePresentation): Promise<boolean> {
     this.phase = "battle";
+    setPagePrefabShellVisible(this.node, true);
+    beginHangBattle(this.node, "我方", "第" + plan.stageId + "关");
+    bindHangSpeed(this.node, () => this.cycleSpeed());
     this.endOpen = false;
     if (this.endLayer && this.endLayer.isValid) this.endLayer.destroy();
     this.endLayer = null;
-    setPagePrefabShellVisible(this.node, false);
     this.skipped = false;
     this.spineWarned = false;
     this.logLines = [];
@@ -1433,6 +1436,7 @@ class WireMainlineController implements WireMainlinePage {
     if (this.endOpen || this.disposed || this.phase !== "battle") return;
     this.endOpen = true;
     const win = snap.report ? resolveWireBattleWin(snap.report, this.host.roleId()) : null;
+    finishHangBattle(this.node, win);
     const layer = await mountBattleEnd(this.node, win, () => this.returnToHang());
     if (this.disposed || this.phase !== "battle") {
       if (layer && layer.isValid) layer.destroy();
@@ -1449,6 +1453,7 @@ class WireMainlineController implements WireMainlinePage {
   /** 关掉战斗或结算，回到挂机站场。不关主线页。 */
   private returnToHang(): void {
     if (this.disposed) return;
+    stopHangBattle(this.node);
     if (this.endLayer && this.endLayer.isValid) this.endLayer.destroy();
     this.endLayer = null;
     this.endOpen = false;
@@ -1573,6 +1578,7 @@ class WireMainlineController implements WireMainlinePage {
       row.actor.burst(wireSpineVfxClip(cue.stem));
     }
     this.playFrameVfx(plan, beat);
+    const prevHp = this.hpNow.slice();
     for (let i = 0; i < beat.hp.length; i++) {
       if (beat.hp[i] !== null) this.hpNow[i] = beat.hp[i];
     }
@@ -1580,12 +1586,13 @@ class WireMainlineController implements WireMainlinePage {
       const label = this.hpLabels[i];
       if (label && label.isValid) setText(label, hpText(plan.slots[i], this.hpNow[i]));
     }
-    if (this.roundLabel && this.roundLabel.isValid) setText(this.roundLabel, beat.line);
+    if (this.roundLabel && this.roundLabel.isValid) setText(this.roundLabel, formatBattleRound(beat.line));
     this.logLines.push(beat.line);
     if (this.logLines.length > 4) this.logLines.shift();
     if (this.logLabel && this.logLabel.isValid) setText(this.logLabel, this.logLines.join("\n"));
     this.paintPrefabBeat(plan, beat);
-    this.paintPresentBeat(plan, beat);
+    this.paintPresentBeat(plan, beat, prevHp);
+    this.paintHangBeat(plan, beat, prevHp);
   }
 
   private paintPrefabBeat(plan: WireSpineReplay, beat: WireSpineReplay["beats"][number]): void {
@@ -1706,15 +1713,59 @@ class WireMainlineController implements WireMainlinePage {
     }
   }
 
-  private paintPresentBeat(plan: WireSpineReplay, beat: WireSpineReplay["beats"][number]): void {
+  private paintPresentBeat(
+    plan: WireSpineReplay,
+    beat: WireSpineReplay["beats"][number],
+    prevHp: (number | null)[]
+  ): void {
     const mount = this.presentMount;
+    if (!mount) return;
     const present = this.present;
-    if (!mount || !present) return;
     const index = plan.beats.indexOf(beat);
-    if (index < 0 || index >= present.beats.length) return;
-    const row = present.beats[index];
-    paintBattleSkillName(mount, row.skillName);
-    paintBattleFloats(mount, row.floats, floatPages(plan, row.floats));
+    let skill: string | null = null;
+    let floats = signedHpDeltas(prevHp, this.hpNow);
+    if (present && index >= 0 && index < present.beats.length) {
+      const row = present.beats[index];
+      skill = row.skillName;
+      if (row.floats.length > 0) floats = row.floats;
+    }
+    const clips: string[] = [];
+    for (let i = 0; i < beat.cues.length; i++) clips.push(beat.cues[i].clip);
+    paintBattleSkillName(mount, fallbackAttackTitle(skill, beat.line, clips));
+    paintBattleFloats(mount, floats, floatPages(plan, floats));
+  }
+
+  /** 同一拍画到挂机壳上，底栏收益和三钮还在。 */
+  private paintHangBeat(
+    plan: WireSpineReplay,
+    beat: WireSpineReplay["beats"][number],
+    prevHp: (number | null)[]
+  ): void {
+    const present = this.present;
+    const index = plan.beats.indexOf(beat);
+    let skill: string | null = null;
+    const floats: { text: string; x: number; y: number; heal: boolean }[] = [];
+    let rows = signedHpDeltas(prevHp, this.hpNow);
+    if (present && index >= 0 && index < present.beats.length) {
+      skill = present.beats[index].skillName;
+      if (present.beats[index].floats.length > 0) rows = present.beats[index].floats;
+    }
+    const clips: string[] = [];
+    for (let i = 0; i < beat.cues.length; i++) clips.push(beat.cues[i].clip);
+    skill = fallbackAttackTitle(skill, beat.line, clips);
+    for (let i = 0; i < rows.length && i < 4; i++) {
+      const hurt = rows[i].hurt;
+      if (!isFinite(hurt) || hurt === 0) continue;
+      const heal = hurt > 0;
+      floats.push({
+        text: heal ? "+" + String(hurt) : String(hurt),
+        x: (i % 2 === 0 ? -140 : 140) + (i % 3) * 16,
+        y: 80 - i * 40,
+        heal,
+      });
+    }
+    const round = index >= 0 ? index + 1 : 1;
+    showHangStrike(this.node, round, 15, skill, floats);
   }
 
   /** 空着的前排后排先藏起来。点到的人才打开，沙地上不留一排色块。 */
@@ -1760,8 +1811,9 @@ class WireMainlineController implements WireMainlinePage {
     if (node && node.isValid) {
       const label = node.getChildByName("Label");
       if (label) setText(label, this.speedText());
-      else paintSpeedIcon(node, this.playSpeed);
+      else       paintSpeedIcon(node, this.playSpeed);
     }
+    setHangSpeed(this.node, this.playSpeed);
     GameLog.shared.info("Mainline", "加速 " + this.speedText() + "，跳过仍停在最后一拍");
   }
 

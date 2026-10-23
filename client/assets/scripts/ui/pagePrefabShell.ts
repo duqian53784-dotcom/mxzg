@@ -11,7 +11,10 @@ import { GameLog } from "../core/GameLog";
 import { WireSession } from "../net/WireSession";
 import { formatWireQuickBattle } from "../net/protocol/wireQuickBattle";
 import { mountIdleHang } from "./idleHangView";
+import { beginHangBattle } from "./hangBattle";
+import { hangLineupReady } from "./localLineup";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
+import { bindFormationSheet, dressHangPanel, dressHeroDetail, fillPageShell } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createButton, createRect, place, setText, uiNode } from "./UiKit";
 
@@ -19,6 +22,10 @@ import { createButton, createRect, place, setText, uiNode } from "./UiKit";
 export const HANG_QUICK_PREFAB = "prefabs/ui/quick-battle/QuickBattleLayer";
 /** 挂机底栏「我要变强」。已有壳，标题是英雄变强。不新发协议。 */
 export const HANG_GROW_PREFAB = "prefabs/ui/hero/HeroSuggestLayer";
+/** 挂机「战斗」先打开的出阵。确认不新发协议。 */
+export const HANG_FORMATION_PREFAB = "prefabs/ui/hero/HeroSelectLayer";
+/** 英雄格子点开的详情。 */
+export const HERO_INFO_PREFAB = "prefabs/ui/hero/HeroInfoLayer";
 
 export { PAGE_SHELL_FIGHT, USE_PAGE_PREFAB_SHELL };
 
@@ -63,6 +70,10 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     else place(createRect("dim", 720, 1280, new Color(8, 16, 32, 255)), root, 0, 0);
     const view = spawnPrefab(prefab, root);
     mountCcbiView(view);
+    fillPageShell(id, view, (hero) => {
+      void openHangSheet(root, HERO_INFO_PREFAB, (sheet) => dressHeroDetail(sheet, hero));
+    });
+    if (spec.fight) dressHangPanel(view);
     const close = findDescendant(view, "btn_close");
     if (close) {
       liftNode(close, view);
@@ -245,7 +256,22 @@ function wireFightButtons(view: Node, root: Node, page: Node, again: boolean): v
   if (battle) {
     liftNode(battle, root);
     bindTapOnce(battle, () => {
-      if (page.isValid) page.emit(PAGE_SHELL_FIGHT);
+      if (!page.isValid) return;
+      const go = () => {
+        beginHangBattle(page, "我方", "敌方");
+        if (page.isValid) page.emit(PAGE_SHELL_FIGHT);
+      };
+      if (hangLineupReady()) {
+        go();
+        return;
+      }
+      void openHangSheet(root, HANG_FORMATION_PREFAB, (sheet) => {
+        bindFormationSheet(sheet, () => {
+          const host = sheet.parent;
+          if (host && host.isValid) host.destroy();
+          go();
+        });
+      });
     });
     pokeButton(battle, again);
   }

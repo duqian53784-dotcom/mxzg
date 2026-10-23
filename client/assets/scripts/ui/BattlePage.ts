@@ -44,8 +44,32 @@ export const BATTLE_SCENE_BG_PATHS = [
 /** 代码战斗页没有 Prefab 底时用的沙地。已在 resources。 */
 export const BATTLE_SCENE_BG_FALLBACK = "ui/maps/map-bg-crusade-group-boss";
 
-/** 只换已有 Bg。战斗场景图还没进 resources 就保持 Prefab 上的那张。 */
+/**
+ * map-bg-mission-1 下半是黑的。放大并下移，让石板盖住站位，黑边落到画面外。
+ * 回合和倍速从顶栏挪到主城条下面。
+ */
+export function seatBattleField(root: Node): void {
+  const bg = root.name === "Bg" ? root : root.getChildByName("Bg");
+  if (bg) {
+    bg.setScale(1.85, 1.85, 1);
+    bg.setPosition(0, -280, 0);
+  }
+  const top = findNamed(root, "TopBar");
+  if (top) top.setPosition(0, 420, 0);
+}
+
+function findNamed(root: Node, name: string): Node | null {
+  if (root.name === name) return root;
+  const kids = root.children;
+  for (let i = 0; i < kids.length; i++) {
+    const found = findNamed(kids[i], name);
+    if (found) return found;
+  }
+  return null;
+}
+
 export function paintBattleScene(root: Node): void {
+  seatBattleField(root);
   const bg = root.name === "Bg" ? root : root.getChildByName("Bg");
   if (!bg) return;
   void loadFirstFrame(BATTLE_SCENE_BG_PATHS).then((frame) => {

@@ -54,6 +54,7 @@ export interface ChapterEnemy {
 const profiles = new Map<number, HeroProfile>();
 const bases = new Map<string, HeroBaseStats>();
 const items = new Map<number, ItemProfile>();
+const itemTypes = new Map<number, number>();
 const chapters = new Map<number, ChapterPlace>();
 const chapterEnemiesByIdx = new Map<number, ChapterEnemy[]>();
 const levels = new Map<number, number>();
@@ -62,6 +63,7 @@ export function clearGameCatalog(): void {
   profiles.clear();
   bases.clear();
   items.clear();
+  itemTypes.clear();
   chapters.clear();
   chapterEnemiesByIdx.clear();
   levels.clear();
@@ -115,6 +117,23 @@ export function itemDisplayName(
 export function itemIconResource(itemType: number | null | undefined, itemId: number | null | undefined): string | null {
   const profile = itemProfile(itemType, itemId);
   return profile ? profile.icon : null;
+}
+
+export type BagTabKind = "equip" | "item" | "shard" | "spirit";
+
+/** 装备 14/17/22/26，碎片 7/9，精灵 8。其余进道具。对不上表也进道具。 */
+export function itemBagTab(itemType: number | null | undefined, itemId: number | null | undefined): BagTabKind {
+  const type = lookupItemType(itemType, itemId);
+  if (type === 14 || type === 17 || type === 22 || type === 26) return "equip";
+  if (type === 7 || type === 9) return "shard";
+  if (type === 8) return "spirit";
+  return "item";
+}
+
+/** 金币、钻石留在顶栏，不进背包格子。 */
+export function itemIsWallet(itemType: number | null | undefined, itemId: number | null | undefined): boolean {
+  const type = lookupItemType(itemType, itemId);
+  return type === 1 || type === 2;
 }
 
 /** chapter.idx 对上时是「第 N 章 · 第 M 关」。对不上是 null，不写成第 0 章。 */
@@ -191,6 +210,8 @@ function bindItems(table: Table, text: Map<string, string>): void {
   for (const row of rows(table)) {
     const idx = num(row.idx);
     if (idx === null || idx <= 0) continue;
+    const type = num(row.type);
+    if (type !== null) itemTypes.set(idx, type);
     const nameKey = num(row.name);
     const name = nameKey === null ? "" : text.get(String(nameKey)) || "";
     if (!name) continue;
@@ -280,6 +301,14 @@ function rows(table: Table): Row[] {
 function num(value: unknown): number | null {
   if (typeof value === "number" && isFinite(value)) return Math.floor(value);
   if (typeof value === "string" && /^-?\d+$/.test(value.trim())) return parseInt(value.trim(), 10);
+  return null;
+}
+
+function lookupItemType(itemType: number | null | undefined, itemId: number | null | undefined): number | null {
+  const byType = whole(itemType);
+  if (byType !== null && itemTypes.has(byType)) return itemTypes.get(byType) ?? null;
+  const byId = whole(itemId);
+  if (byId !== null && itemTypes.has(byId)) return itemTypes.get(byId) ?? null;
   return null;
 }
 
