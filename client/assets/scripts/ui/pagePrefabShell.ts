@@ -3,7 +3,7 @@
  * 关闭壳只是藏起来，下面的代码页 / 旧 Prefab / 协议探针还在。
  * 加载失败留原来的页面，不留空画面。
  */
-import { BlockInputEvents, Button, Color, Label, Node, Overflow, Sprite, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, director, Director, Label, Node, Overflow, Sprite, UITransform } from "cc";
 import { labelCenterInParent, sliceAnchorShift } from "./ccbiPlace";
 import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
@@ -63,16 +63,6 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     else place(createRect("dim", 720, 1280, new Color(8, 16, 32, 255)), root, 0, 0);
     const view = spawnPrefab(prefab, root);
     mountCcbiView(view);
-    if (spec.fight) {
-      const battle = findDescendant(view, "btn_battle");
-      if (battle) {
-        liftNode(battle, view);
-        bindTap(battle, () => {
-          if (page.isValid) page.emit(PAGE_SHELL_FIGHT);
-        });
-      }
-      bindHangSheets(view, root);
-    }
     const close = findDescendant(view, "btn_close");
     if (close) {
       liftNode(close, view);
@@ -89,6 +79,7 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     root.active = hold.want;
     hold.root = root;
     raise();
+    if (spec.fight) bindFightChrome(view, root, page);
     page.once(Node.EventType.NODE_DESTROYED, () => {
       holds.delete(page);
     });
@@ -219,23 +210,78 @@ export function seatAboveChrome(node: Node): void {
 }
 
 /**
+ * 挂机壳上的「战斗」要在页进入场景后再绑一次。
+ * 第一次挂上时世界矩阵还是空的，按钮会抬偏，全屏 menu 把点击吃掉。
+ * 切走再回来是新的一页，矩阵已经稳了，所以第二次才点得中。
+ */
+function bindFightChrome(view: Node, root: Node, page: Node): void {
+  let follow = false;
+  let tries = 0;
+  const settle = () => {
+    director.off(Director.EVENT_AFTER_UPDATE, settle);
+    if (!view.isValid || !root.isValid || !page.isValid) return;
+    const live = root as Node & { activeInHierarchy?: boolean };
+    const seated = !!root.parent && live.activeInHierarchy !== false;
+    wireFightButtons(view, root, page, seated && follow);
+    if (!seated) {
+      tries += 1;
+      if (tries < 90) director.on(Director.EVENT_AFTER_UPDATE, settle);
+      return;
+    }
+    if (!follow) {
+      follow = true;
+      director.on(Director.EVENT_AFTER_UPDATE, settle);
+    }
+  };
+  settle();
+  page.once(Node.EventType.NODE_DESTROYED, () => {
+    director.off(Director.EVENT_AFTER_UPDATE, settle);
+  });
+}
+
+/** 中间「战斗」和两侧底栏抬到壳根上。全屏 menu 不再当命中框。 */
+function wireFightButtons(view: Node, root: Node, page: Node, again: boolean): void {
+  const battle = findDescendant(root, "btn_battle");
+  if (battle) {
+    liftNode(battle, root);
+    bindTapOnce(battle, () => {
+      if (page.isValid) page.emit(PAGE_SHELL_FIGHT);
+    });
+    pokeButton(battle, again);
+  }
+  bindHangSheets(view, root, again);
+  silenceHangMenu(view);
+}
+
+/** menu 是 640×960 的空命中框，盖住中间「战斗」。收成 0 后点击落到按钮上。 */
+function silenceHangMenu(view: Node): void {
+  const menu = findDescendant(view, "menu");
+  if (!menu) return;
+  const ui = menu.getComponent(UITransform);
+  if (!ui || !ui.contentSize) return;
+  if (ui.contentSize.width > 400 || ui.contentSize.height > 400) ui.setContentSize(0, 0);
+}
+
+/**
  * 底栏两侧。快速战斗打开已有 QuickBattleLayer，并读 3012。不发 3013。
  * 我要变强打开已有 HeroSuggestLayer（英雄变强）。关掉回到挂机。
  */
-function bindHangSheets(view: Node, host: Node): void {
-  const quick = findDescendant(view, "btn_speed_battle");
+function bindHangSheets(view: Node, host: Node, again: boolean): void {
+  const quick = findDescendant(host, "btn_speed_battle") || findDescendant(view, "btn_speed_battle");
   if (quick) {
-    liftNode(quick, view);
-    bindTap(quick, () => {
+    liftNode(quick, host);
+    bindTapOnce(quick, () => {
       void openHangSheet(host, HANG_QUICK_PREFAB, (sheet) => bindQuickSheet(sheet));
     });
+    pokeButton(quick, again);
   }
-  const grow = findDescendant(view, "btn_lineup");
+  const grow = findDescendant(host, "btn_lineup") || findDescendant(view, "btn_lineup");
   if (grow) {
-    liftNode(grow, view);
-    bindTap(grow, () => {
+    liftNode(grow, host);
+    bindTapOnce(grow, () => {
       void openHangSheet(host, HANG_GROW_PREFAB);
     });
+    pokeButton(grow, again);
   }
 }
 
@@ -316,13 +362,56 @@ export function bindTap(node: Node, fn: () => void): void {
   node.on(Button.EventType.CLICK, fn);
 }
 
-/** 全屏 CCMenu 会挡住兄弟节点。把按钮抬到宿主最上层，世界位置不变。 */
+/** 同一颗钮只绑一次。CLICK 和 TOUCH_END 都会到，80ms 内只算一下。 */
+function bindTapOnce(node: Node, fn: () => void): void {
+  const mark = node as Node & { mxzgTap?: boolean };
+  if (mark.mxzgTap) return;
+  mark.mxzgTap = true;
+  if (!node.getComponent(Button)) node.addComponent(Button);
+  let last = 0;
+  const fire = () => {
+    const now = Date.now();
+    if (now - last < 80) return;
+    last = now;
+    fn();
+  };
+  node.on(Button.EventType.CLICK, fire);
+  node.on(Node.EventType.TOUCH_END, fire);
+}
+
+/** 进了场景再拨一下 active，指针列表才会收这颗钮。没进场景时不拨。 */
+function pokeButton(node: Node, again: boolean): void {
+  const mark = node as Node & { mxzgPoked?: boolean; activeInHierarchy?: boolean };
+  if (mark.mxzgPoked && !again) return;
+  if (!node.parent || mark.activeInHierarchy === false) return;
+  mark.mxzgPoked = true;
+  node.active = false;
+  node.active = true;
+}
+
+/**
+ * 全屏 CCMenu 会挡住兄弟节点。把按钮抬到宿主最上层，世界位置不变。
+ * 记下 Prefab 里的原位。下一帧矩阵稳了再抬一次，不会停在第一次的空矩阵上。
+ * 已经在宿主上时仍把这颗钮放到最前。
+ */
 export function liftNode(node: Node, host: Node): void {
-  const from = node.parent;
-  if (!from || from === host) return;
+  const mark = node as Node & { mxzgRest?: { parent: Node; x: number; y: number; z: number } };
+  if (!mark.mxzgRest && node.parent && node.parent !== host) {
+    mark.mxzgRest = { parent: node.parent, x: node.position.x, y: node.position.y, z: node.position.z };
+  }
+  const rest = mark.mxzgRest;
+  const from = rest && rest.parent.isValid ? rest.parent : node.parent;
+  if (!from) return;
+  if (from === host) {
+    node.setSiblingIndex(Math.max(0, host.children.length - 1));
+    return;
+  }
+  const pos =
+    rest && from === rest.parent
+      ? { x: rest.x, y: rest.y, z: rest.z }
+      : { x: node.position.x, y: node.position.y, z: node.position.z };
   const fromUi = from.getComponent(UITransform);
   const hostUi = host.getComponent(UITransform);
-  const pos = { x: node.position.x, y: node.position.y, z: node.position.z };
   const fromConv = fromUi as UITransform & {
     convertToWorldSpaceAR?: (p: { x: number; y: number; z?: number }) => { x: number; y: number; z?: number };
   };
@@ -334,7 +423,8 @@ export function liftNode(node: Node, host: Node): void {
     return;
   }
   const world = fromConv.convertToWorldSpaceAR(pos);
-  node.parent = host;
+  if (node.parent !== host) node.parent = host;
   const local = hostConv.convertToNodeSpaceAR(world);
   node.setPosition(local.x, local.y, local.z || 0);
+  node.setSiblingIndex(Math.max(0, host.children.length - 1));
 }

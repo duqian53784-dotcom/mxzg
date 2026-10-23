@@ -121,3 +121,16 @@ export function skillFramePaths(skillId: number | null): string[] {
 export function skillLayerFramePaths(skillId: number | null): string[] | null {
   return skillLayerFrames(skillId);
 }
+
+/** 这一拍要留多久才够播完技能帧。没有 skill_id 是 0，调用方不编造技能。 */
+export function battleCastFrameCount(skillId: number | null): number {
+  if (typeof skillId !== "number" || !isFinite(skillId)) return 0;
+  const skill = skillFramePaths(skillId).length;
+  const layer = skillLayerFramePaths(skillId);
+  const effect = layer === null ? effectFramePaths(skillId).length : layer.length;
+  const hit = hitFramePaths(skillId).length;
+  let count = skill;
+  if (effect > count) count = effect;
+  if (hit > count) count = hit;
+  return count;
+}

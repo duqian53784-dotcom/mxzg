@@ -8,11 +8,29 @@ import { uiNode } from "./UiKit";
 
 export const FRAME_STEP_MS = 70;
 
+/** ×2、×3 把帧间隔收短，最短约一帧导演步，序列仍能在缩短后的拍子里播完。 */
+export function battleFrameStep(speed: number): number {
+  let steps = 1;
+  if (speed === 2) steps = 2;
+  else if (speed === 3) steps = 3;
+  const step = Math.floor(FRAME_STEP_MS / steps);
+  if (step < 24) return 24;
+  return step;
+}
+
+/** 进战先把帧拉进缓存。站场那一拍用来等图，第一下技能不用再空等加载。 */
+export function warmBattleFrames(paths: string[]): void {
+  for (let i = 0; i < paths.length; i++) {
+    const path = paths[i];
+    if (path) void loadFrame(path);
+  }
+}
+
 const frameLoads = new Map<string, Promise<SpriteFrame | null>>();
 
 export interface FrameReel {
   node: Node;
-  play(paths: string[], onResult?: (ok: boolean) => void): void;
+  play(paths: string[], onResult?: (ok: boolean) => void, stepMs?: number): void;
   stop(): void;
 }
 
@@ -21,7 +39,7 @@ export function mountFrameReel(parent: Node, size: number, name = "FrameReel"): 
   const ui = node.addComponent(UITransform);
   ui.setContentSize(size, size);
   const sprite = node.addComponent(Sprite);
-  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  sprite.sizeMode = Sprite.SizeMode.TRIMMED;
   sprite.type = Sprite.Type.SIMPLE;
   node.active = false;
   node.parent = parent;
@@ -41,10 +59,11 @@ export function mountFrameReel(parent: Node, size: number, name = "FrameReel"): 
     if (node.isValid) node.active = false;
   };
 
-  const play = (paths: string[], onResult?: (ok: boolean) => void) => {
+  const play = (paths: string[], onResult?: (ok: boolean) => void, stepMs?: number) => {
     token += 1;
     const mine = token;
     clearTimer();
+    const step = typeof stepMs === "number" && isFinite(stepMs) && stepMs > 0 ? stepMs : FRAME_STEP_MS;
     if (!paths || paths.length === 0) {
       if (node.isValid) node.active = false;
       if (onResult) onResult(false);
@@ -68,10 +87,11 @@ export function mountFrameReel(parent: Node, size: number, name = "FrameReel"): 
       const tick = () => {
         if (mine !== token || !node.isValid) return;
         sprite.spriteFrame = ready[index];
+        sprite.sizeMode = Sprite.SizeMode.TRIMMED;
         node.active = true;
         if (index >= ready.length - 1) return;
         index += 1;
-        cancel = armBattleDelay(FRAME_STEP_MS, tick);
+        cancel = armBattleDelay(step, tick);
       };
       tick();
       if (onResult) onResult(true);
