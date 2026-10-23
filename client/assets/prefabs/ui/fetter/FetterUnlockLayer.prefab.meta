@@ -1,0 +1,14 @@
+{
+  "ver": "1.1.50",
+  "importer": "prefab",
+  "imported": true,
+  "uuid": "420c4e2d-0a2f-4cf3-a117-14b90199b0a9",
+  "files": [
+    ".json"
+  ],
+  "subMetas": {
+  },
+  "userData": {
+    "syncNodeName": "FetterUnlockLayer"
+  }
+}

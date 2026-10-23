@@ -1,0 +1,14 @@
+{
+  "ver": "1.1.50",
+  "importer": "prefab",
+  "imported": true,
+  "uuid": "9e161b11-30b7-46f2-9f33-45c0d04cf9a4",
+  "files": [
+    ".json"
+  ],
+  "subMetas": {
+  },
+  "userData": {
+    "syncNodeName": "FetterMainViewLayer"
+  }
+}
