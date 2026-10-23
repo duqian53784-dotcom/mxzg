@@ -34,6 +34,7 @@
  * 收到 report 在本页播 spine 站场、回合攻击、有 hit 的受击，以及 batch2 技能/受击特效。3001、3006、3102 和 3030 都走 planWireSpineReplay。3103 不走。3101 不走。3099 不走。
  * 有拍时 VfxHit 再播 hero-beattack，VfxSkill 再播 skill 和 skill-effect。mountFrameReel 挂在已有锚点上，不另建 Vfx 节点。帧没加载到就留 batch2。
  * skill_id 对得上 resources 里的套时播那套帧，并再播下一层。对不上仍用 49 套和 skill-effect 取模。
+ * 有 skill_id 才开技能条并播技能帧。没有 skill_id 不编造，条和帧都关。英雄套没有 Skill 剪辑，不播缺的剪辑。帧按原图尺寸播，不压成 300 方块。进战先预热帧。
  * 底栏「战斗」先看到挂机站场（大理石殿 + BattlePanelLayer）。点壳上的「战斗」才发 3001。有 report 才挂森林 BattlePage。森林页不是挂机壳。
  * 站位是左敌右我，挂在已有的 Slot_E* / Slot_A* 上。报告没有英雄时仍补一格站场，页不空。
  * USE_BATTLE_PREFAB 默认开。上述回放进战时挂 BattlePage.prefab：站位、血条、回合、战报，技能挂 VfxSkill，受击挂 VfxHit。WireBattlePage 仍不挂。
@@ -44,7 +45,7 @@
  * 同一份回放再写 Prefab 的 FloatDmg、FloatCrit、SkillNameBanner、前排 HeadAnchor。没有的 crit / level / buffs 藏起，不写成 0，也不编名字。
  * 开关关掉或 Prefab 加载失败时，仍用本页代码 UI，不另建这些挂点。跳过、撤退、关闭不发新 c2s。不改 Boot。
  * 加速只把每一拍的等待收成 2 倍或 3 倍，最短 80ms，不跳过拍子，也不拆页。跳过仍停在最后一拍。
- * 回放结束不拆 BattlePage。跳过、撤退、播完都盖 BattleEndLayer，确定才回挂机。关闭战斗也回挂机，不关主线页。没有行动时只有站场，最后一拍只等 260ms，不在这一拍把页拆掉。没有恭喜获得层，不拿 3002 当自动关。BattleEndLayer 加载失败才用代码结算。
+ * 回放结束不拆 BattlePage。跳过、撤退、播完都盖 BattleEndLayer，确定才回挂机。关闭战斗也回挂机，不关主线页。3001 没有每拍时长。system.csv 的 time_diff 不是拍表，也不读。可见节奏 ×1 至少 1400ms，最后一拍至少 1000ms；有 skill_id 时再等技能帧张数乘 70ms。battleBeatWait 的 700/260 不是现在的可见节奏。加速仍收成 2 倍或 3 倍，最短 80ms。不在最后一拍把页拆掉。没有恭喜获得层，不拿 3002 当自动关。BattleEndLayer 加载失败才用代码结算。
  * 不发 18001，不把 Mock 1201/1202 当战报。
  * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。3103 的 fighting=0 不 Toast。
  */
@@ -135,9 +136,9 @@ import { planStarterChallenge, STARTER_LINEUP_NOTE } from "../net/protocol/start
 import { BattlePrefabShell, mountBattleBackdrop, mountBattlePrefab, paintBattleScene, paintSpeedIcon, USE_BATTLE_PREFAB } from "./BattlePage";
 import { mountBattleEnd } from "./battleEndView";
 import { armBattleDelay } from "./battleClock";
-import { FrameReel, mountFrameReel } from "./battleFramePlay";
-import { effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
-import { battleBeatWait, BattlePresentation, nextBattleSpeed, planBattlePresentation, playbackBeats } from "./battlePresentation";
+import { battleFrameStep, FrameReel, mountFrameReel, warmBattleFrames } from "./battleFramePlay";
+import { battleCastFrameCount, effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
+import { battleCastWait, BattlePresentation, nextBattleSpeed, planBattlePresentation, playbackBeats } from "./battlePresentation";
 import {
   BattlePresentMount,
   clearBattleOverhead,
@@ -865,17 +866,20 @@ class WireMainlineController implements WireMainlinePage {
     this.resumeChallenge = true;
     if (WireSession.lineUp !== null) {
       this.write(this.statusLabel, "等待名册后再挑战");
+      this.host.showToast("等待名册后再挑战");
       return;
     }
     this.seenLineUpSerial = WireSession.lineUpSerial;
     if (!WireSession.pullLineUpProbe()) {
       this.write(this.statusLabel, "等待名册后再挑战");
+      this.host.showToast("等待名册后再挑战");
       return;
     }
     this.lineUpForChallenge = true;
     this.waitKind = "3101";
     this.waiting = true;
     this.write(this.statusLabel, "等待阵容后再挑战");
+    this.host.showToast("等待阵容后再挑战");
     GameLog.shared.info("Mainline", "starter wait lineup 3101");
   }
 
@@ -1112,6 +1116,7 @@ class WireMainlineController implements WireMainlinePage {
     this.logLines = [];
     this.clearBody();
     this.present = present;
+    this.warmPresentFrames(plan);
     if (USE_BATTLE_PREFAB) {
       try {
         const shell = await mountBattlePrefab(this.body);
@@ -1322,7 +1327,7 @@ class WireMainlineController implements WireMainlinePage {
       }
       this.renderBeat(plan, beats[i]);
       const last = i === beats.length - 1;
-      const cont = await this.sleep(battleBeatWait(this.playSpeed, last));
+      const cont = await this.sleep(battleCastWait(this.playSpeed, last, battleCastFrameCount(this.beatSkillId(plan, beats[i]))));
       if (!cont || this.disposed) return false;
       if (this.skipped) {
         this.renderBeat(plan, beats[beats.length - 1]);
@@ -1741,11 +1746,29 @@ class WireMainlineController implements WireMainlinePage {
       }
     }
     const skillId = this.beatSkillId(plan, beat);
+    if (skillId !== null) wantSkill = true;
     const layered = skillLayerFramePaths(skillId);
     const effectPaths = layered === null ? effectFramePaths(skillId) : layered;
-    this.driveReel(this.effectReel, wantSkill && effectPaths.length > 0, effectPaths, "skill", skillXY, gen, beat);
-    this.driveReel(this.skillReel, wantSkill, skillFramePaths(skillId), "skill", skillXY, gen, beat);
-    this.driveReel(this.hitReel, wantHit, hitFramePaths(skillId), "hit", hitXY, gen, beat);
+    const step = battleFrameStep(this.playSpeed);
+    this.driveReel(this.effectReel, wantSkill && effectPaths.length > 0, effectPaths, "skill", skillXY, gen, beat, step);
+    this.driveReel(this.skillReel, wantSkill, skillFramePaths(skillId), "skill", skillXY, gen, beat, step);
+    this.driveReel(this.hitReel, wantHit, hitFramePaths(skillId), "hit", hitXY, gen, beat, step);
+  }
+
+  /** 有 skill_id 的拍先把技能帧、下一层和受击帧拉进缓存。没有 skill_id 不预热、不编造。 */
+  private warmPresentFrames(plan: WireSpineReplay): void {
+    const present = this.present;
+    if (!present) return;
+    const paths: string[] = [];
+    for (let i = 0; i < present.beats.length && i < plan.beats.length; i++) {
+      const skillId = present.beats[i].skillId;
+      if (skillId === null) continue;
+      pushFramePaths(paths, skillFramePaths(skillId));
+      const layer = skillLayerFramePaths(skillId);
+      pushFramePaths(paths, layer === null ? effectFramePaths(skillId) : layer);
+      pushFramePaths(paths, hitFramePaths(skillId));
+    }
+    warmBattleFrames(paths);
   }
 
   private driveReel(
@@ -1755,7 +1778,8 @@ class WireMainlineController implements WireMainlinePage {
     role: "skill" | "hit",
     xy: { x: number; y: number },
     gen: number,
-    beat: WireSpineReplay["beats"][number]
+    beat: WireSpineReplay["beats"][number],
+    stepMs?: number
   ): void {
     if (!reel) return;
     if (!want) {
@@ -1764,10 +1788,15 @@ class WireMainlineController implements WireMainlinePage {
     }
     if (this.battleShell && this.battleShell.root.isValid) this.battleShell.placeVfx(reel.node, role, xy.x, xy.y);
     else reel.node.setPosition(xy.x, xy.y, 0);
-    reel.play(paths, (ok) => {
-      if (!ok || this.disposed || gen !== this.frameGen) return;
-      this.hideSpineRole(role, beat);
-    });
+    if (reel.node.parent) reel.node.setSiblingIndex(Math.max(0, reel.node.parent.children.length - 1));
+    reel.play(
+      paths,
+      (ok) => {
+        if (!ok || this.disposed || gen !== this.frameGen) return;
+        this.hideSpineRole(role, beat);
+      },
+      stepMs
+    );
   }
 
   private hideSpineRole(role: "skill" | "hit", beat: WireSpineReplay["beats"][number]): void {
@@ -1954,6 +1983,10 @@ function sideIndexAt(slots: WireSpineSlot[], anchor: number): number {
     if (slots[i].side === side) index += 1;
   }
   return index;
+}
+
+function pushFramePaths(into: string[], paths: string[]): void {
+  for (let i = 0; i < paths.length; i++) into.push(paths[i]);
 }
 
 function countSides(slots: WireSpineSlot[]): { ally: number; enemy: number; sword: number; flag: number } {

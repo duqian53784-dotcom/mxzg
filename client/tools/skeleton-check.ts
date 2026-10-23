@@ -75,6 +75,7 @@ import {
   BATTLE_LAST_BEAT_MS,
   BATTLE_MIN_BEAT_MS,
   battleBeatWait,
+  battleCastWait,
   battleSkillTitle,
   beatShowsCrit,
   nextBattleSpeed,
@@ -92,6 +93,7 @@ import {
   EFFECT_RUNS,
   HIT_RUNS,
   SKILL_RUNS,
+  battleCastFrameCount,
   effectFramePaths,
   hitFramePaths,
   skillFramePaths,
@@ -26248,6 +26250,24 @@ function checkCityHub(): void {
       shellSrc.indexOf("encodeFrame") < 0,
     "hang quick-battle and grow buttons open existing shells and do not send 3013"
   );
+  assert(
+    shellSrc.indexOf("btn_battle") >= 0 &&
+      shellSrc.indexOf("EVENT_AFTER_UPDATE") >= 0 &&
+      shellSrc.indexOf("setContentSize(0, 0)") >= 0 &&
+      shellSrc.indexOf("TOUCH_END") >= 0 &&
+      shellSrc.indexOf("bindFightChrome") >= 0,
+    "hang fight button rebinds after the page is in the scene and the fullscreen menu is not the hit target"
+  );
+  const framePlaySrc = readFileSync(uiSource("battleFramePlay.ts"), "utf8");
+  const castPresentSrc = readFileSync(uiSource("battlePresentation.ts"), "utf8");
+  assert(
+    framePlaySrc.indexOf("export const FRAME_STEP_MS = 70") >= 0 &&
+      framePlaySrc.indexOf("SizeMode.TRIMMED") >= 0 &&
+      framePlaySrc.indexOf("warmBattleFrames") >= 0 &&
+      castPresentSrc.indexOf("BATTLE_FRAME_STEP_MS = 70") >= 0 &&
+      castPresentSrc.indexOf("time_diff") >= 0,
+    "skill frames stay at native size and the cast wait uses the same 70ms step"
+  );
   const endSrc = readFileSync(uiSource("battleEndView.ts"), "utf8");
   assert(
     endSrc.indexOf("BattleEndLayer") >= 0 &&
@@ -26313,7 +26333,11 @@ function checkCityHub(): void {
       wireBattlePageSrc.indexOf("回放结束不拆 BattlePage") >= 0 &&
       wireBattlePageSrc.indexOf("paintBattleScene") >= 0 &&
       wireBattlePageSrc.indexOf("battleSlotPage") >= 0 &&
+      wireBattlePageSrc.indexOf("battleCastWait") >= 0 &&
       wireBattlePageSrc.indexOf("battleBeatWait") >= 0 &&
+      wireBattlePageSrc.indexOf("warmBattleFrames") >= 0 &&
+      wireBattlePageSrc.indexOf("等待名册后再挑战") >= 0 &&
+      wireBattlePageSrc.indexOf("showToast(\"等待名册后再挑战\")") >= 0 &&
       wireBattlePageSrc.indexOf("左敌右我") >= 0 &&
       wireBattlePageSrc.indexOf("mountFrameReel") >= 0 &&
       wireBattlePageSrc.indexOf("hero-beattack") >= 0 &&
@@ -26350,7 +26374,14 @@ function checkCityHub(): void {
       battleBeatWait(9, false) === BATTLE_BEAT_MS &&
       nextBattleSpeed(1) === 2 &&
       nextBattleSpeed(2) === 3 &&
-      nextBattleSpeed(3) === 1,
+      nextBattleSpeed(3) === 1 &&
+      battleCastWait(1, false, 0) === 1400 &&
+      battleCastWait(1, true, 0) === 1000 &&
+      battleCastWait(2, false, 0) === 700 &&
+      battleCastWait(1, false, 30) >= 30 * 70 &&
+      battleCastWait(2, false, 30) < battleCastWait(1, false, 30) &&
+      battleCastFrameCount(null) === 0 &&
+      battleCastFrameCount(101010011) > 1,
     "accelerate shortens beats and skip stays a separate control"
   );
   assert(battleSlotPath("enemy", 0) === "LayerField/EnemySlots/Slot_E0", "enemy front slot");

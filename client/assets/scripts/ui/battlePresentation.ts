@@ -21,6 +21,9 @@ import {
 } from "../net/protocol/wireBattle";
 import { skillStemForId } from "../net/protocol/battleAssetIndex";
 
+/** 和 battleFramePlay 的 FRAME_STEP_MS 一样。不从那边 import，回放公式不拖进 cc。 */
+const BATTLE_FRAME_STEP_MS = 70;
+
 export const BATTLE_CRIT_BUBBLE = "暴击";
 
 /** 和 Prefab 的 FloatDmg_0..3、Buff_0..2 对齐。多出来的不另建节点。 */
@@ -32,6 +35,12 @@ export const BATTLE_BEAT_MS = 700;
 export const BATTLE_LAST_BEAT_MS = 260;
 /** 3 倍也不收成 0。收成 0 会在同一帧跳完，看起来像闪一下。 */
 export const BATTLE_MIN_BEAT_MS = 80;
+/**
+ * 可见节奏。3001 行动没有每拍时长，system.csv 的 time_diff 也不是拍表。
+ * ×1 至少这么久，有技能帧时再按张数加长。最后一拍同样留得住。
+ */
+export const BATTLE_CAST_MS = 1400;
+export const BATTLE_CAST_LAST_MS = 1000;
 
 /**
  * 加速只缩短每一拍的等待。1、2、3 倍。其它值当 1 倍。
@@ -43,6 +52,25 @@ export function battleBeatWait(speed: number, last: boolean): number {
   if (speed === 2) steps = 2;
   else if (speed === 3) steps = 3;
   const wait = Math.floor(base / steps);
+  if (wait < BATTLE_MIN_BEAT_MS) return BATTLE_MIN_BEAT_MS;
+  return wait;
+}
+
+/**
+ * 回放真正等待的时间。battleBeatWait 的 700/260 太短，技能帧还没出来拍就切了。
+ * frameCount 小于 2 时用 1400 / 1000。有技能帧时取张数 × 70ms，再按 2 倍、3 倍缩短。
+ */
+export function battleCastWait(speed: number, last: boolean, frameCount: number): number {
+  const base = last ? BATTLE_CAST_LAST_MS : BATTLE_CAST_MS;
+  let steps = 1;
+  if (speed === 2) steps = 2;
+  else if (speed === 3) steps = 3;
+  let wait = Math.floor(base / steps);
+  const frames = typeof frameCount === "number" && isFinite(frameCount) ? Math.floor(frameCount) : 0;
+  if (frames > 1) {
+    const reel = Math.floor((frames * BATTLE_FRAME_STEP_MS) / steps);
+    if (reel > wait) wait = reel;
+  }
   if (wait < BATTLE_MIN_BEAT_MS) return BATTLE_MIN_BEAT_MS;
   return wait;
 }
