@@ -10,8 +10,8 @@
 - **路径**：`client/assets/prefabs/ui/battle/BattlePage.prefab`、`client/assets/prefabs/ui/battle/WireBattlePage.prefab`
 - **开关**：`client/assets/scripts/ui/BattlePage.ts` 的 `USE_BATTLE_PREFAB`，默认 `true`，和登录、主城壳一样。改成 `false` 再预览，真服进战回到 `WireMainlinePage` 里原来的代码 UI。代码 UI 不删。不改 `Boot.ts`，不改 `USE_CITY_CHROME_PREFAB`，不改 CityChrome / 通用 Prefab 的 `__type__`。
 - **怎么打开**：预览加 `?transport=ws` 进真服主城，打开「更多」里的主线。页内仍用已经接好的按钮发 **3001**（挑战）、**3030**（切磋）或 **3102**（请求战报）。有 report 才进战斗表现，这时挂 BattlePage。**3006** 挂机战报本来就走同一套回放，所以也会看到这张壳。不新开 c2s。3103、3101、3099 仍不进这页。Mock 关卡页（`MainlinePage.ts`）仍是代码色块，不挂这张壳。
-- **吃哪些已有数据**：`planWireSpineReplay` 的 slots / beats，外加同一份 report 上已经解开的命中和英雄。站位进 `Slot_E0`–`E2`、`Slot_A0`–`A2`（后排 `E3`–`E5`、`A3`–`A5` 留着壳上的占位）。血量写 `EnemyHp_*` / `AllyHp_*` 的 `Label`，两边都有数时才改 `Fill` 宽度；缺一边不写成 0，空着的三格血条保持 Prefab 里的 `120/120`、`100/100`。回合行写 `TopBar/RoundLabel`，同一行再写 `Log`。技能特效挂 `LayerVfx/VfxSkill`，受击挂 `LayerVfx/VfxHit`，无锚点时就停在文档里的 (0, 180) / (0, 120)。`VfxScreen` 保持空挂点，现有拍没有全屏角色。技能条 `Label` 在有技能拍时写成 batch2 的 stem；填充保持 Prefab 占位，因为 3001 / 3030 / 3102 不带技能槽能量。战剑、战旗没有对应槽，挂在 `LayerField` 上，坐标仍是原来的代码回放。飘字写 `LayerFloat/FloatDamageRoot/FloatDmg_0`–`FloatDmg_3`，暴击写 `LayerFloat/FloatCrit`，技能名写 `SkillNameBanner/SkillNameLabel`，前排头顶写 `HeadAnchor/LevelLabel` 和 `HeadAnchor/BuffRow`。`hurt` 缺失不画，不写成 0。`crit`、`level`、`buffs` 只有报告上已经带了才显示；没有就藏起，不写成 0，也不把 `marks` 里的号猜成暴击、等级或 buff。不另建同名代码节点。
-- **按钮**：`BtnSkip` 把本地回放快进到最后一拍，页留着。`BtnSpeed` 在顶栏左侧，只在 ×1、×2、×3 之间换，缩短每一拍的等待，不跳过，也不拆页。`BtnRetreat` 才拆战斗壳，换成结算（再挑战 / 返回），不发 3002 / 3005 / 3020 / 3100 / 3098。`BtnClose` 关掉主线页，不发新帧。回放自己走完也不拆：`play` 以前在 `playback` 之后立刻 `showDone` → `clearBody`，最后一拍只等 260ms，没有行动的战报就会闪一下关掉。现在停在壳上，等关闭或撤退。没有恭喜获得层，不拿 3002 当自动关。
+- **吃哪些已有数据**：`planWireSpineReplay` 的 slots / beats，外加同一份 report 上已经解开的命中和英雄。站位进 `Slot_E0`–`E2`、`Slot_A0`–`A2`（后排 `E3`–`E5`、`A3`–`A5` 留着壳上的占位）。血量写 `EnemyHp_*` / `AllyHp_*` 的 `Label`，两边都有数时才改 `Fill` 宽度；缺一边不写成 0，空着的三格血条保持 Prefab 里的 `120/120`、`100/100`。回合行写 `TopBar/RoundLabel`，同一行再写 `Log`。技能特效挂 `LayerVfx/VfxSkill`，受击挂 `LayerVfx/VfxHit`，无锚点时就停在文档里的 (0, 180) / (0, 120)。`VfxScreen` 保持空挂点，现有拍没有全屏角色。技能条 `Label` 在有技能拍时写成 batch2 的 stem；填充保持 Prefab 占位，因为 3001 / 3030 / 3102 不带技能槽能量。战剑、战旗没有对应槽，挂在 `LayerField` 上，坐标仍是原来的代码回放。套是 `battle-sword`（stand）和 `zhandoujijian`（idle），走内存里的 3.7→运行时升级；加载失败只把格子藏起来，不印「战旗」「战剑」。飘字写 `LayerFloat/FloatDamageRoot/FloatDmg_0`–`FloatDmg_3`，暴击写 `LayerFloat/FloatCrit`，技能名写 `SkillNameBanner/SkillNameLabel`，前排头顶写 `HeadAnchor/LevelLabel` 和 `HeadAnchor/BuffRow`。`hurt` 缺失不画，不写成 0。`crit`、`level`、`buffs` 只有报告上已经带了才显示；没有就藏起，不写成 0，也不把 `marks` 里的号猜成暴击、等级或 buff。不另建同名代码节点。
+- **按钮**：`BtnSkip` 把本地回放快进到最后一拍，页留着，然后盖 `BattleEndLayer`。`BtnSpeed` 在顶栏左侧，只在 ×1、×2、×3 之间换，缩短每一拍的等待，不跳过，也不拆页。`BtnRetreat` 同样先画完最后一拍再盖结算，不发 3002 / 3005 / 3020 / 3100 / 3098。战斗里的 `BtnClose` 和结算「确定」都回挂机站场，不关主线页。回放自己走完也不拆 BattlePage：`play` 以前在 `playback` 之后立刻 `showDone` → `clearBody`，最后一拍只等 260ms，没有行动的战报就会闪一下关掉。现在停在壳上并盖结算，确定才回挂机。没有恭喜获得层，不拿 3002 当自动关。`BattleEndLayer` 加载失败才用代码「回挂机」。
 - **WireBattlePage**：没有站位和特效挂点。探针按钮仍在原来的真服主线页上，所以这张占位不挂。
 - **状态**：不删代码 UI。加载失败时 Toast「战斗 Prefab 未加载，改用代码 UI」，同一页继续播。`hero_id` 对得上 `resources/spine` 的套就用那套，`skill_id` 对得上 `resources/battle/skill` 的套就播那套帧。解码字段没加。
 
@@ -23,13 +23,13 @@ Creator 3.8.8 打开 `client`。要看这张战斗页，预览地址加 `?transp
 2. 壳上的「战斗」或页内「挑战」发 3001。有 report 才挂 BattlePage。底是 `ui/maps/map-bg-mission-1`（648×1152，拉到 720×1280），不是 `battle-scene_spr-bg-1`。
 3. 空名册不必手点 GM。挑战会先发 2015 ADD_HERO（默认类型 10505010、星 9），再 3100 上 MAIN，然后才 3001。`gm.cmd.open` 没开时停在「GM 未开」，看不到战报。
 4. 不加 `?transport=ws` 的 Mock 主线仍是代码色块，不挂这张壳。
-5. 跳过停在最后一拍，页不关。撤退才进结算。关闭离开主线页。顶栏加速在 ×1、×2、×3 之间换。血条跟这一拍的 hp。
+5. 跳过、撤退、播完都盖 BattleEndLayer，确定和关闭回挂机，不关主线页。顶栏加速在 ×1、×2、×3 之间换。血条跟这一拍的头顶。两边同一位置时，行动带了阵营 1/2 才把受击、飘字和血量记到对面。战旗、战剑在播；加载失败只藏格子。
 
 3006、3030、3102 有 report 时走同一套。3103、3101、3099 不进这页。
 
 ## 已知缺口
 
-- 英雄套是 Spine 3.7.94。Creator 3.8.8 播不出时该格亮 Placeholder，并 Toast「spine 未加载」。
+- 英雄套磁盘仍是 Spine 3.7.94，进内存后升到运行时版本，不改磁盘 json。加载失败该格藏起来，并 Toast「spine 未加载」。战旗、战剑走同一套升级，失败只藏格子，不印套名。
 - 这些英雄套没有 die。hp 到 0 之后停在 hit。只有 `crusade_boss_die` 播 die。
 - 只上场上前 3 人。后排槽留着，第 4 人起不补。
 - `skill_id` 对上 `skill-<id>` 就播那套帧，并再播下一层。没有底套时主套用 `-1`。对不上仍按原来 49 套和 skill-effect 取模。第三层、`_arrow` 和多出来的下划线分套不另挂。

@@ -48,19 +48,37 @@ export interface StarterChallengePlan {
   heroId: number | null;
 }
 
+/** MAIN 上一只已上阵英雄。position 没有时是 null，不写成 0。 */
+export interface MainFormationHero {
+  heroId: number;
+  position: number | null;
+}
+
 /**
  * MAIN 是 type=0 的那一行。英雄实例在字段 4（hero_list）嵌套的字段 1。
  * 没有正整数就不算在阵上。其它 type 的行不算 MAIN。
+ * 同一行里重复的字段 4 都收。顺序是包里的出现顺序。
  */
-export function mainFormationHeroId(lineUp: StarterLineView | null | undefined): number | null {
-  if (!lineUp || !lineUp.rows) return null;
+export function mainFormationHeroes(lineUp: StarterLineView | null | undefined): MainFormationHero[] {
+  if (!lineUp || !lineUp.rows) return [];
+  const heroes: MainFormationHero[] = [];
   for (let r = 0; r < lineUp.rows.length; r++) {
     const marks = lineUp.rows[r].marks || [];
     if (!isMainRow(marks)) continue;
-    const id = heroIdInHeroList(marks);
-    if (id !== null) return id;
+    for (let i = 0; i < marks.length; i++) {
+      if (marks[i].field !== 4) continue;
+      const found = heroesInMark(marks[i].text);
+      for (let h = 0; h < found.length; h++) heroes.push(found[h]);
+    }
   }
-  return null;
+  return heroes;
+}
+
+/** 第一只 MAIN 英雄。没有时是 null。挑战探针仍只用这一只。 */
+export function mainFormationHeroId(lineUp: StarterLineView | null | undefined): number | null {
+  const heroes = mainFormationHeroes(lineUp);
+  if (heroes.length === 0) return null;
+  return heroes[0].heroId;
 }
 
 /** 名册里第一只服端实例。类型号不算。0 和空不算。 */
@@ -98,21 +116,27 @@ function isMainRow(marks: StarterLineMark[]): boolean {
   return false;
 }
 
-function heroIdInHeroList(marks: StarterLineMark[]): number | null {
-  for (let i = 0; i < marks.length; i++) {
-    if (marks[i].field !== 4) continue;
-    const found = nestedHeroId(marks[i].text);
-    if (found !== null) return found;
+/** 字段 4 的正文是「字段1=<hero_id>,字段3=<position>」。一条里可以有多只。只收字段 1 的正整数。 */
+function heroesInMark(text: string): MainFormationHero[] {
+  if (!text) return [];
+  const heroes: MainFormationHero[] = [];
+  const re = /字段1=([1-9]\d*)/g;
+  let match: RegExpExecArray | null = re.exec(text);
+  while (match) {
+    const id = positive(Number(match[1]));
+    if (id !== null) {
+      const rest = text.slice(match.index, match.index + 48);
+      const posMatch = /字段3=(\d+)/.exec(rest);
+      let position: number | null = null;
+      if (posMatch) {
+        const pos = Number(posMatch[1]);
+        if (Number.isSafeInteger(pos) && pos >= 0) position = pos;
+      }
+      heroes.push({ heroId: id, position });
+    }
+    match = re.exec(text);
   }
-  return null;
-}
-
-/** 字段 4 的正文是「字段1=<hero_id>,字段3=<position>」。只收字段 1 的正整数。 */
-function nestedHeroId(text: string): number | null {
-  if (!text) return null;
-  const match = /(?:^|,)字段1=([1-9]\d*)/.exec(text);
-  if (!match) return null;
-  return positive(Number(match[1]));
+  return heroes;
 }
 
 function positive(value: number | null): number | null {

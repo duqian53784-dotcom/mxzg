@@ -37,14 +37,14 @@
  * 底栏「战斗」先看到挂机站场（大理石殿 + BattlePanelLayer）。点壳上的「战斗」才发 3001。有 report 才挂森林 BattlePage。森林页不是挂机壳。
  * 站位是左敌右我，挂在已有的 Slot_E* / Slot_A* 上。报告没有英雄时仍补一格站场，页不空。
  * USE_BATTLE_PREFAB 默认开。上述回放进战时挂 BattlePage.prefab：站位、血条、回合、战报，技能挂 VfxSkill，受击挂 VfxHit。WireBattlePage 仍不挂。
- * 战旗、战剑不挂到场中间，不把「战旗」「战剑」和套名写出来。血条跟到对应站位头顶。回放拍子跟导演帧走。导演订不上时用动画帧，到点仍会推进。
+ * 战旗、战剑用已有套在内存里升级后播。加载失败只藏格子，不把「战旗」「战剑」和套名写出来。血条每拍跟到对应站位头顶。同一位置号两边都有时，行动带了阵营才打到对面。回放拍子跟导演帧走。导演订不上时用动画帧，到点仍会推进。
  * 播的时候把 Spine 3.7.94 在内存里收成 3.8.99（皮改成数组，曲线改成 curve/c2/c3/c4），不改磁盘上的 json。
  * 战报只有一拍站场、没有攻击受击阵亡时，界面补一拍「演示 · 攻击」。有回合的战报不补。名册和 MAIN 都空时仍先走 2015 再 3100。GM 未开时 Toast「GM 未开」，不发 3001。
  * 底图是 ui/maps/map-bg-mission-1，拉到 720×1280。battle-scene_spr-bg-1 是边角小图，不当全屏底。代码页没有这张时才用沙地。
  * 同一份回放再写 Prefab 的 FloatDmg、FloatCrit、SkillNameBanner、前排 HeadAnchor。没有的 crit / level / buffs 藏起，不写成 0，也不编名字。
  * 开关关掉或 Prefab 加载失败时，仍用本页代码 UI，不另建这些挂点。跳过、撤退、关闭不发新 c2s。不改 Boot。
  * 加速只把每一拍的等待收成 2 倍或 3 倍，最短 80ms，不跳过拍子，也不拆页。跳过仍停在最后一拍。
- * 回放结束不拆 BattlePage。play 播完不再 showDone / clearBody。没有行动时只有站场，最后一拍只等 260ms，播完立刻拆页就是闪一下关掉。跳过停在最后一拍。撤退才进结算。关闭仍关掉主线页。没有恭喜获得层，不拿 3002 当自动关。
+ * 回放结束不拆 BattlePage。跳过、撤退、播完都盖 BattleEndLayer，确定才回挂机。关闭战斗也回挂机，不关主线页。没有行动时只有站场，最后一拍只等 260ms，不在这一拍把页拆掉。没有恭喜获得层，不拿 3002 当自动关。BattleEndLayer 加载失败才用代码结算。
  * 不发 18001，不把 Mock 1201/1202 当战报。
  * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。3103 的 fighting=0 不 Toast。
  */
@@ -133,6 +133,7 @@ import {
 } from "../net/protocol/wireGmCommand";
 import { planStarterChallenge, STARTER_LINEUP_NOTE } from "../net/protocol/starterLineup";
 import { BattlePrefabShell, mountBattleBackdrop, mountBattlePrefab, paintBattleScene, paintSpeedIcon, USE_BATTLE_PREFAB } from "./BattlePage";
+import { mountBattleEnd } from "./battleEndView";
 import { armBattleDelay } from "./battleClock";
 import { FrameReel, mountFrameReel } from "./battleFramePlay";
 import { effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
@@ -269,9 +270,10 @@ class WireMainlineController implements WireMainlinePage {
   private skipped = false;
   /** 1、2、3。只缩短拍子，跳过和撤退不看这个数。 */
   private playSpeed = 1;
+  private endOpen = false;
+  private endLayer: Node | null = null;
   private speedButton: Node | null = null;
   /** 用户点了撤退。回放自己结束时不拆页，只有这个标记才进结算。 */
-  private wantResult = false;
   private spineWarned = false;
   private actors: SpineActor[] = [];
   private vfxNodes: { stem: string; node: Node; actor: SpineActor }[] = [];
@@ -1091,21 +1093,19 @@ class WireMainlineController implements WireMainlinePage {
       GameLog.shared.warn("Mainline", "battle present beats " + present.beats.length + " / plan " + plan.beats.length);
     }
     GameLog.shared.info("Mainline", "wire spine idx " + plan.stageId + " " + plan.stems.join(",") + " beats " + plan.beats.length + " " + formatWireBattleMatch(snap, this.host.roleId()));
-    this.wantResult = false;
     const ready = await this.showBattle(plan, present);
     if (!ready || this.disposed || !this.host.alive()) return;
     const played = await this.playback(plan);
     if (!played || this.disposed || !this.host.alive() || this.phase !== "battle") return;
-    if (this.wantResult) {
-      this.wantResult = false;
-      this.showDone(snap);
-      return;
-    }
     this.holdBattle(snap);
+    await this.openBattleEnd(snap);
   }
 
   private async showBattle(plan: WireSpineReplay, present: BattlePresentation): Promise<boolean> {
     this.phase = "battle";
+    this.endOpen = false;
+    if (this.endLayer && this.endLayer.isValid) this.endLayer.destroy();
+    this.endLayer = null;
     setPagePrefabShellVisible(this.node, false);
     this.skipped = false;
     this.spineWarned = false;
@@ -1151,9 +1151,7 @@ class WireMainlineController implements WireMainlinePage {
       -150
     );
     place(createButton("跳过", () => this.skip(), 200, 52), this.body, -140, -280);
-    place(createButton("关闭", () => {
-      if (!this.disposed) this.host.close();
-    }, 200, 52, BACK_FILL), this.body, 140, -280);
+    place(createButton("关闭", () => this.returnToHang(), 200, 52, BACK_FILL), this.body, 140, -280);
   }
 
   private mountPrefabBattle(plan: WireSpineReplay, shell: BattlePrefabShell): void {
@@ -1163,9 +1161,7 @@ class WireMainlineController implements WireMainlinePage {
     setText(shell.logLabel, "");
     shell.bindSkip(() => this.skip());
     shell.bindRetreat(() => this.localRetreat());
-    shell.bindClose(() => {
-      if (!this.disposed) this.host.close();
-    });
+    shell.bindClose(() => this.returnToHang());
     this.presentMount = shell.present;
     paintBattleScene(shell.root);
     this.parkPrefabSlots(shell);
@@ -1195,8 +1191,7 @@ class WireMainlineController implements WireMainlinePage {
           setText(hp, hpText(slot, slot.hp));
         }
         shell.setHpFill(slot.side, index, slot.hp, slot.maxHp);
-        const page = battleSlotPage(slot.side, index);
-        if (hp && hp.parent && hp.parent !== root && page) hp.parent.setPosition(page.x, page.y + 78, 0);
+        this.seatHpBar(hp, root, slot.side, index);
         this.nameLabels.push(name || root);
         this.hpLabels.push(hp || root);
         this.hpNow.push(slot.hp);
@@ -1361,7 +1356,7 @@ class WireMainlineController implements WireMainlinePage {
       0,
       -80
     );
-    place(createButton("返回", () => this.host.close(), 240, 48, BACK_FILL), this.body, 0, -170);
+    place(createButton("回挂机", () => this.returnToHang(), 240, 48, BACK_FILL), this.body, 0, -170);
   }
 
   private again(): void {
@@ -1379,22 +1374,47 @@ class WireMainlineController implements WireMainlinePage {
 
   /**
    * 壳上的撤退。只结束本地回放，不发 3002 / 3005 / 3020 / 3100 / 3098。
-   * 和跳过不一样：跳过停在最后一拍；撤退才拆战斗页，换成结算。
+   * 和跳过一样先画完最后一拍，再盖结算。不拆 BattlePage，确定才回挂机。
    */
   private localRetreat(): void {
-    if (this.disposed || this.phase !== "battle") return;
+    if (this.disposed || this.phase !== "battle" || this.endOpen) return;
     GameLog.shared.info("Mainline", "撤退只结束本地回放，不发 c2s");
     const snap = this.lastSnap;
     if (!snap) return;
-    // sleep 还挂着时 skip 只把回放唤醒到最后一拍，showDone 等 play 回来再拆。
-    // wake 是微任务，这里如果立刻 showDone，最后一拍还没画完页就被清掉。
     if (this.beatCancel || this.timer || this.sleepResolve) {
-      this.wantResult = true;
       this.skip();
       return;
     }
-    this.wantResult = false;
-    this.showDone(snap);
+    this.holdBattle(snap);
+    void this.openBattleEnd(snap);
+  }
+
+  /** 跳过、撤退、播完都走这里。战斗页留着，结算盖在上面。确定回挂机。 */
+  private async openBattleEnd(snap: WireBattleMatch): Promise<void> {
+    if (this.endOpen || this.disposed || this.phase !== "battle") return;
+    this.endOpen = true;
+    const win = snap.report ? resolveWireBattleWin(snap.report, this.host.roleId()) : null;
+    const layer = await mountBattleEnd(this.node, win, () => this.returnToHang());
+    if (this.disposed || this.phase !== "battle") {
+      if (layer && layer.isValid) layer.destroy();
+      return;
+    }
+    if (!layer) {
+      this.showDone(snap);
+      return;
+    }
+    this.endLayer = layer;
+    GameLog.shared.info("Mainline", "结算确定回挂机");
+  }
+
+  /** 关掉战斗或结算，回到挂机站场。不关主线页。 */
+  private returnToHang(): void {
+    if (this.disposed) return;
+    if (this.endLayer && this.endLayer.isValid) this.endLayer.destroy();
+    this.endLayer = null;
+    this.endOpen = false;
+    this.wake(false);
+    this.showInfo();
   }
 
   private resultText(): string {
@@ -1530,8 +1550,17 @@ class WireMainlineController implements WireMainlinePage {
     for (let i = 0; i < plan.slots.length; i++) {
       const slot = plan.slots[i];
       if (slot.side !== "ally" && slot.side !== "enemy") continue;
-      shell.setHpFill(slot.side, sideIndexAt(plan.slots, i), this.hpNow[i], slot.maxHp);
+      const index = sideIndexAt(plan.slots, i);
+      shell.setHpFill(slot.side, index, this.hpNow[i], slot.maxHp);
+      this.seatHpBar(this.hpLabels[i], this.slotRoots[i], slot.side, index);
     }
+  }
+
+  /** 血条是 Hud 里的节点。每拍挪到这一格头顶，不留在 Prefab 的预览位。 */
+  private seatHpBar(label: Node | null, slotRoot: Node | null, side: "ally" | "enemy", index: number): void {
+    const page = battleSlotPage(side, index);
+    if (!page || !label || !label.isValid || !label.parent || label.parent === slotRoot) return;
+    label.parent.setPosition(page.x, page.y + 78, 0);
   }
 
   private gmText(): string {
@@ -1591,18 +1620,16 @@ class WireMainlineController implements WireMainlinePage {
     if (resolve) resolve(cont);
   }
 
-  /** 战旗、战剑不画在场中间，也不把「战旗」「战剑」和套名印出来。 */
+  /** 战旗、战剑用已有套播。失败只藏格子，不印「战旗」「战剑」或套名。 */
   private mountAccent(parent: Node, slot: WireSpineSlot, xy: { x: number; y: number }, _slotIndex: number): void {
     const root = place(uiNode("slot-" + slot.stem), parent, xy.x, xy.y);
-    root.active = false;
     this.nameLabels.push(root);
     this.hpLabels.push(root);
     this.hpNow.push(slot.hp);
     this.slotRoots.push(root);
-    this.actors.push({
-      play() {},
-      burst() {},
-    });
+    this.actors.push(mountBattleSpine(root, slot.stem, () => {
+      if (root.isValid) root.active = false;
+    }));
   }
 
   private paintOverhead(plan: WireSpineReplay): void {

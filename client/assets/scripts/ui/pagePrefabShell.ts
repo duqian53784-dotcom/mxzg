@@ -8,10 +8,17 @@ import { labelCenterInParent, sliceAnchorShift } from "./ccbiPlace";
 import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
+import { WireSession } from "../net/WireSession";
+import { formatWireQuickBattle } from "../net/protocol/wireQuickBattle";
 import { mountIdleHang } from "./idleHangView";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
-import { createButton, createRect, place, uiNode } from "./UiKit";
+import { createButton, createRect, place, setText, uiNode } from "./UiKit";
+
+/** 挂机底栏「快速战斗」。已有壳。3013 开战硬禁，只读 3012 次数。 */
+export const HANG_QUICK_PREFAB = "prefabs/ui/quick-battle/QuickBattleLayer";
+/** 挂机底栏「我要变强」。已有壳，标题是英雄变强。不新发协议。 */
+export const HANG_GROW_PREFAB = "prefabs/ui/hero/HeroSuggestLayer";
 
 export { PAGE_SHELL_FIGHT, USE_PAGE_PREFAB_SHELL };
 
@@ -64,6 +71,7 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
           if (page.isValid) page.emit(PAGE_SHELL_FIGHT);
         });
       }
+      bindHangSheets(view, root);
     }
     const close = findDescendant(view, "btn_close");
     if (close) {
@@ -208,6 +216,89 @@ export function seatAboveChrome(node: Node): void {
   const limit = -CITY_VIEW_H / 2 + CITY_BAR_BOTTOM;
   if (bottom >= limit) return;
   node.setPosition(node.position.x, node.position.y + (limit - bottom), node.position.z || 0);
+}
+
+/**
+ * 底栏两侧。快速战斗打开已有 QuickBattleLayer，并读 3012。不发 3013。
+ * 我要变强打开已有 HeroSuggestLayer（英雄变强）。关掉回到挂机。
+ */
+function bindHangSheets(view: Node, host: Node): void {
+  const quick = findDescendant(view, "btn_speed_battle");
+  if (quick) {
+    liftNode(quick, view);
+    bindTap(quick, () => {
+      void openHangSheet(host, HANG_QUICK_PREFAB, (sheet) => bindQuickSheet(sheet));
+    });
+  }
+  const grow = findDescendant(view, "btn_lineup");
+  if (grow) {
+    liftNode(grow, view);
+    bindTap(grow, () => {
+      void openHangSheet(host, HANG_GROW_PREFAB);
+    });
+  }
+}
+
+function bindQuickSheet(sheet: Node): void {
+  const write = () => {
+    const line = formatWireQuickBattle(WireSession.quickBattle);
+    const tip = findDescendant(sheet, "lbl_tip_2");
+    if (tip && tip.isValid) setText(tip, line + " · 不发 3013");
+    return line;
+  };
+  write();
+  if (!WireSession.hasQuickBattle()) WireSession.pullQuickBattleCount();
+  let off = () => {};
+  off = WireSession.onSync(() => {
+    if (!sheet.isValid) {
+      off();
+      return;
+    }
+    write();
+  });
+  sheet.once(Node.EventType.NODE_DESTROYED, () => off());
+  const go = findDescendant(sheet, "btn_quick");
+  if (!go) return;
+  liftNode(go, sheet);
+  bindTap(go, () => {
+    const line = write();
+    GameLog.shared.info("Mainline", "快速战斗只读 " + line + "，不发 3013");
+  });
+}
+
+async function openHangSheet(host: Node, path: string, onReady?: (view: Node) => void): Promise<void> {
+  if (!host.isValid) return;
+  const old = host.getChildByName("BattleSheet");
+  if (old) old.destroy();
+  try {
+    const prefab = await loadPrefab(path);
+    if (!host.isValid) return;
+    const sheet = uiNode("BattleSheet");
+    const ui = sheet.addComponent(UITransform);
+    ui.setContentSize(720, 1280);
+    sheet.addComponent(BlockInputEvents);
+    place(createRect("dim", 720, 1280, new Color(8, 16, 32, 170)), sheet, 0, 0);
+    const view = spawnPrefab(prefab, sheet);
+    mountCcbiView(view);
+    const close = () => {
+      if (sheet.isValid) sheet.destroy();
+    };
+    const button = findDescendant(view, "btn_close");
+    if (button) {
+      liftNode(button, view);
+      bindTap(button, close);
+    } else {
+      const back = createButton("关闭", close, 160, 44);
+      back.name = "BtnSheetClose";
+      place(back, sheet, 0, -460);
+    }
+    if (onReady) onReady(view);
+    sheet.parent = host;
+    sheet.setSiblingIndex(Math.max(0, host.children.length - 1));
+    GameLog.shared.info("Mainline", "hang sheet " + path);
+  } catch (err) {
+    GameLog.shared.warn("Mainline", "hang sheet " + path + " " + messageOf(err));
+  }
 }
 
 export function findDescendant(root: Node, name: string): Node | null {

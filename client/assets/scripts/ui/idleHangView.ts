@@ -3,11 +3,13 @@
  * 仓里没有把殿堂、站场英雄和三钮合成一张的挂机 Prefab。
  * 殿堂用已有 chapter/hang/map01_B（天）和 map01_F（柱、像、大理石地）。
  * 底栏「我要变强 / 战斗 / 快速战斗」仍是 BattlePanelLayer，盖在这块地上。
- * 站场人用已有 spine 默认套。加载失败把格子藏起来，不写套名。
+ * 站场优先 MAIN 阵容：hero_id 经名册 hero_type 对已有皮肤，再走内存里的 spine 升级。
+ * 阵容是空的才用三套默认。加载失败把格子藏起来，不写套名。
  */
 import { Color, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
-import { WIRE_SPINE_ALLY_STEMS } from "../net/protocol/wireBattle";
+import { WireSession } from "../net/WireSession";
 import { mountBattleSpine } from "./battleSpine";
+import { idleHangStemsFrom } from "./idleHangRoster";
 import { createLabel, createRect, place, uiNode } from "./UiKit";
 
 export const IDLE_HANG_SKY = "ui/chapter/hang/map01_B";
@@ -24,14 +26,13 @@ export const IDLE_HANG_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1
   { x: 168, y: 50, face: -1 },
 ];
 
+/** 当前 3101 / 4001。没有 MAIN 英雄时是三套默认。 */
 export function idleHangStems(): string[] {
-  const stems: string[] = [];
-  const n = IDLE_HANG_SPOTS.length < WIRE_SPINE_ALLY_STEMS.length ? IDLE_HANG_SPOTS.length : WIRE_SPINE_ALLY_STEMS.length;
-  for (let i = 0; i < n; i++) stems.push(WIRE_SPINE_ALLY_STEMS[i]);
-  return stems;
+  const bag = WireSession.heroes;
+  return idleHangStemsFrom(WireSession.lineUp, bag, IDLE_HANG_SPOTS.length);
 }
 
-/** 盖在主线壳最底层。BattlePanelLayer 后挂，所以三钮在上面。 */
+/** 盖在主线壳最底层。BattlePanelLayer 后挂，所以三钮在上面。阵容晚到会换站场。 */
 export function mountIdleHang(parent: Node): Node {
   const root = uiNode("IdleHang");
   const ui = root.addComponent(UITransform);
@@ -47,14 +48,29 @@ export function mountIdleHang(parent: Node): Node {
   place(floor, root, 0, 0);
   paintSprite(floor, IDLE_HANG_FLOOR);
 
-  const stems = idleHangStems();
-  for (let i = 0; i < stems.length; i++) {
-    const spot = IDLE_HANG_SPOTS[i];
-    const slot = place(uiNode("IdleHero"), root, spot.x, spot.y);
-    mountBattleSpine(slot, stems[i], () => {
-      if (slot.isValid) slot.active = false;
-    }, { face: spot.face });
-  }
+  const heroes = uiNode("IdleHeroes");
+  place(heroes, root, 0, 0);
+  let painted = "";
+  const paint = () => {
+    if (!heroes.isValid) return;
+    const stems = idleHangStems();
+    const key = stems.join(",");
+    if (key === painted) return;
+    painted = key;
+    const kids = heroes.children.slice();
+    for (let i = 0; i < kids.length; i++) kids[i].destroy();
+    for (let i = 0; i < stems.length; i++) {
+      const spot = IDLE_HANG_SPOTS[i];
+      const slot = place(uiNode("IdleHero"), heroes, spot.x, spot.y);
+      mountBattleSpine(slot, stems[i], () => {
+        if (slot.isValid) slot.active = false;
+      }, { face: spot.face });
+    }
+  };
+  paint();
+  let off = () => {};
+  off = WireSession.onSync(paint);
+  root.once(Node.EventType.NODE_DESTROYED, () => off());
 
   place(createLabel("挂机", 28, { width: 240, height: 40 }), root, 0, 500);
   return root;
