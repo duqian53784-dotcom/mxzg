@@ -12,11 +12,18 @@ Thumbs.db
 *.keystore
 *.pem
 
-# Local junctions / deferred trees (real content still at original paths)
-/config/
+# Local junctions / deferred trees.
+# Game tables live in the repo at config/gameconfig. Other config/ files stay local.
+/config/*
+!/config/README.md
+!/config/gameconfig/
+!/config/gameconfig/**
 /server/
 CONFIG_LINK.txt
 SERVER_LINK.txt
+
+# IP geolocation DB is large and stays on the machine, not in git.
+ip2region.db
 
 # Cocos Creator
 client/library/
