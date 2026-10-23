@@ -8,6 +8,7 @@ title mxzg-local-all
 echo ============================================================
 echo   mxzg 游戏服 + WebSocket 桥
 echo   %date% %time%
+echo   客户端默认 Mock。真服预览加 ?transport=ws ，桥 ws://127.0.0.1:13111/game
 echo ============================================================
 echo.
 

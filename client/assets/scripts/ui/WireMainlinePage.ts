@@ -45,7 +45,7 @@
  * 同一份回放再写 Prefab 的 FloatDmg、FloatCrit、SkillNameBanner、前排 HeadAnchor。没有的 crit / level / buffs 藏起，不写成 0，也不编名字。
  * 开关关掉或 Prefab 加载失败时，仍用本页代码 UI，不另建这些挂点。跳过、撤退、关闭不发新 c2s。不改 Boot。
  * 加速只把每一拍的等待收成 2 倍或 3 倍，最短 80ms，不跳过拍子，也不拆页。跳过仍停在最后一拍。
- * 回放结束不拆 BattlePage。跳过、撤退、播完都盖 BattleEndLayer，确定才回挂机。关闭战斗也回挂机，不关主线页。3001 没有每拍时长。system.csv 的 time_diff 不是拍表，也不读。可见节奏 ×1 至少 1400ms，最后一拍至少 1000ms；有 skill_id 时再等技能帧张数乘 70ms。battleBeatWait 的 700/260 不是现在的可见节奏。加速仍收成 2 倍或 3 倍，最短 80ms。不在最后一拍把页拆掉。没有恭喜获得层，不拿 3002 当自动关。BattleEndLayer 加载失败才用代码结算。
+ * 回放结束不拆 BattlePage。跳过、撤退、播完都盖 BattleEndLayer，确定才回挂机。关闭战斗也回挂机，不关主线页。3001 没有每拍时长。system.csv 的 time_diff 不是拍表，也不读。可见节奏 ×1 至少 1400ms，最后一拍至少 1000ms；有 skill_id 时再等技能帧张数。帧步默认 70ms，读到 effect2.eff_battle_start 之后改用那一格（0.01 秒）。buff.delay 只加在这一拍上。battleBeatWait 的 700/260 不是现在的可见节奏。加速仍收成 2 倍或 3 倍，最短 80ms。真服才按 system.battle_speed_level / battle_skip_level 拦加速和跳过。battletype.round_max 只写日志，不裁回合。不在最后一拍把页拆掉。没有恭喜获得层，不拿 3002 当自动关。BattleEndLayer 加载失败才用代码结算。
  * 不发 18001，不把 Mock 1201/1202 当战报。
  * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。3103 的 fighting=0 不 Toast。
  */
@@ -133,6 +133,16 @@ import {
   WIRE_GM_UNSYNCED_TOAST,
 } from "../net/protocol/wireGmCommand";
 import { planStarterChallenge, STARTER_LINEUP_NOTE } from "../net/protocol/starterLineup";
+import { Session } from "../core/Session";
+import {
+  battleFrameStepMs,
+  battleRoundMax,
+  battleSkipUnlocked,
+  battleSkipUnlockLevel,
+  battleSpeedUnlocked,
+  battleSpeedUnlockLevel,
+} from "../config/battleTiming";
+import { skillCastDelay } from "../config/lookups";
 import { BattlePrefabShell, mountBattleBackdrop, mountBattlePrefab, paintBattleScene, paintSpeedIcon, USE_BATTLE_PREFAB } from "./BattlePage";
 import { mountBattleEnd } from "./battleEndView";
 import { armBattleDelay } from "./battleClock";
@@ -178,6 +188,8 @@ export interface WireMainlineHost {
   roleName(): string;
   roleId(): number | null;
   connected(): boolean;
+  /** 真服加速、跳过门槛用。缺省当 1 级。 */
+  level?(): number;
 }
 
 export interface WireMainlinePage {
@@ -1096,6 +1108,16 @@ class WireMainlineController implements WireMainlinePage {
     if (present.beats.length !== plan.beats.length) {
       GameLog.shared.warn("Mainline", "battle present beats " + present.beats.length + " / plan " + plan.beats.length);
     }
+    const cap = battleRoundMax(snap.report.battleType === null ? 1 : snap.report.battleType);
+    GameLog.shared.info(
+      "Mainline",
+      "frame step " +
+        battleFrameStepMs() +
+        "ms battletype round_max " +
+        (cap === null ? "未读" : String(cap)) +
+        " report rounds " +
+        snap.report.rounds.length
+    );
     GameLog.shared.info("Mainline", "wire spine idx " + plan.stageId + " " + plan.stems.join(",") + " beats " + plan.beats.length + " " + formatWireBattleMatch(snap, this.host.roleId()));
     const ready = await this.showBattle(plan, present);
     if (!ready || this.disposed || !this.host.alive()) return;
@@ -1327,7 +1349,10 @@ class WireMainlineController implements WireMainlinePage {
       }
       this.renderBeat(plan, beats[i]);
       const last = i === beats.length - 1;
-      const cont = await this.sleep(battleCastWait(this.playSpeed, last, battleCastFrameCount(this.beatSkillId(plan, beats[i]))));
+      const skillId = this.beatSkillId(plan, beats[i]);
+      const cont = await this.sleep(
+        battleCastWait(this.playSpeed, last, battleCastFrameCount(skillId), skillId === null ? 0 : skillCastDelay(skillId))
+      );
       if (!cont || this.disposed) return false;
       if (this.skipped) {
         this.renderBeat(plan, beats[beats.length - 1]);
@@ -1373,6 +1398,10 @@ class WireMainlineController implements WireMainlinePage {
 
   private skip(): void {
     if (this.disposed || this.phase !== "battle") return;
+    if (Session.source === "wire" && !battleSkipUnlocked(this.hostLevel())) {
+      this.host.showToast("跳过需要主线达到 Lv" + battleSkipUnlockLevel());
+      return;
+    }
     this.skipped = true;
     this.wake(true);
   }
@@ -1699,7 +1728,12 @@ class WireMainlineController implements WireMainlinePage {
 
   private cycleSpeed(): void {
     if (this.disposed || this.phase !== "battle") return;
-    this.playSpeed = nextBattleSpeed(this.playSpeed);
+    const next = nextBattleSpeed(this.playSpeed);
+    if (Session.source === "wire" && next > 1 && !battleSpeedUnlocked(this.hostLevel())) {
+      this.host.showToast("加速需要主线达到 Lv" + battleSpeedUnlockLevel());
+      return;
+    }
+    this.playSpeed = next;
     const node = this.speedButton;
     if (node && node.isValid) {
       const label = node.getChildByName("Label");
@@ -1818,6 +1852,12 @@ class WireMainlineController implements WireMainlinePage {
 
   private speedText(): string {
     return "×" + String(this.playSpeed);
+  }
+
+  private hostLevel(): number {
+    const level = this.host.level ? this.host.level() : 1;
+    if (typeof level !== "number" || !isFinite(level)) return 1;
+    return Math.floor(level);
   }
 
   /**

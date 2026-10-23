@@ -1,8 +1,11 @@
+import { heroBaseHp } from "../../config/lookups";
 import { Session } from "../../core/Session";
 import { StageResultResp, StageReward } from "../../net/protocol/types";
 
 /**
- * 主线简化战报。不读表，不改协议号。
+ * 主线简化战报。不改协议号。
+ * 我方血量在 herobase 已登记时用 type 10101001、1 星，否则仍是 100。敌方仍是 120。
+ * 真服战报上的 hp 不从这张表改写。
  * 自然推进时等级 = 1 + 已通关，下一关 = 已通关 + 1，所以「关卡号 ≤ 等级」必胜，
  * 连打可以推过第 70 关。高于等级的跳关判负。
  * 主线页打当前关时会把等级抬到至少等于关卡号，避免等级暂时落后时判负卡死。
@@ -227,8 +230,9 @@ function frame(
   const enemyNames = ["前锋", "守卫", "术士"];
   const allies: BattleUnit[] = [];
   const enemies: BattleUnit[] = [];
+  const allyHp = heroBaseHp(10101001, 1) ?? ALLY_HP;
   for (let i = 0; i < allyNames.length; i++) {
-    allies.push(unit(allyNames[i], ALLY_HP, allyRatio[i]));
+    allies.push(unit(allyNames[i], allyHp, allyRatio[i]));
     enemies.push(unit(enemyNames[i], ENEMY_HP, enemyRatio[i]));
   }
   return { round, line: "第" + round + "回合 · " + line, actor, allies, enemies };

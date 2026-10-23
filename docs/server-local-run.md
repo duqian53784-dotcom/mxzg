@@ -5,7 +5,7 @@
 > **cross 默认不启。** 游戏服连 `127.0.0.1:11422` 失败、中心服「游戏服加载跨服失败」类日志是预期，不算启动失败。分析里 cross 曾因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败；单机只需 center + gameserver。  
 > **客户端默认仍走 Mock。** 预览加 `?transport=ws` 走本机桥 `ws://127.0.0.1:13111/game`（转到 TCP 9902），不直连 13101。日常双击一次 `scripts\start-local-all.bat`。只拉了客户端就刷新预览，不必重启服和桥。步骤见 `docs/h5-websocket.md`。D2 已在倩本机验证。
 
-`server/`、`config/` 是本机 junction，不在 Git 里。不要把 junction 背后的内容推进这个仓库。
+`server/` 仍是本机 junction，不在 Git 里。策划表在仓库 `config/gameconfig`（`F:\project\mxzg\config\gameconfig`）。`ip2region.db` 留在本机，不要推进 Git。
 
 ## 已经确定的路径
 
@@ -13,7 +13,7 @@
 |------|------|
 | 工程根 | `F:\project\mxzg` |
 | 新客户端 | `F:\project\mxzg\client`（Creator 3.8.8 打开这个目录） |
-| 配置表 junction | `F:\project\mxzg\config` → `F:\mxzg-local` |
+| 策划表 | `F:\project\mxzg\config\gameconfig`（仓库内 `config/gameconfig`） |
 | Java 服 junction | `F:\project\mxzg\server` → `F:\源码\mj\program\server` |
 | 旧工程参考 | `F:\源码\mj\program` |
 | 构建和启动的工作目录 | `F:\源码\mj\program\server`（与上面的 junction 是同一目录） |
@@ -25,15 +25,15 @@
 | Maven 3.6.3 | `C:\dev\maven`（已配 `JAVA_HOME`、`MAVEN_HOME`、`PATH`） |
 | MySQL 8.0.29 | `C:\dev\mysql`（Windows 服务 `MySQL80`，开机自启） |
 | Redis 5.0.14 | `C:\dev\redis`（Windows 服务 `RedisDev`，开机自启） |
-| 服读的策划表 | `F:\mxzg-local\gameconfig` |
+| 服读的策划表 | `F:\project\mxzg\config\gameconfig` |
 | 策划表来源 | `F:\FansGameX\mxzg-h5\配置表\shared-config`（534 张，已复制服务端要的 232 张） |
 | IP 归属地库 | `F:\mxzg-local\ip2region.db` |
 | Maven 镜像 | `~/.m2/settings.xml` |
 | 开服日口径 | `docs/day60-open-server.md`：开服当天 = 第 1 天 |
 
-`.gitignore` 忽略了 `/config` 和 `/server`。
+`.gitignore` 忽略 `/config/*` 和 `/server/`，但保留 `/config/gameconfig/`。`ip2region.db` 不进 Git。
 
-服读的是 `F:\mxzg-local\gameconfig`，不是整个 `F:\mxzg-local`，也不是新客户端用的 JSON。分析把表放在纯英文目录，避免中文路径在 properties 里出编码问题。客户端导出是 D4，分析没有说两份表是同一次导出。
+服读的是 `F:\project\mxzg\config\gameconfig` 里的 xlsx，不是客户端导出的 JSON。properties 写绝对路径 `F:\\project\\mxzg\\config\\gameconfig`。服进程若从仓库根启动，也可以指相对的 `config/gameconfig`，只要读到同一批文件。`ip2region.file` 仍指向本机库，例如 `F:\\mxzg-local\\ip2region.db`。
 
 ## 客户端默认仍是 Mock
 
@@ -281,7 +281,7 @@ center 和 gameserver 都要：
 
 ```
 network.tcpSocket.ip=0.0.0.0
-config.path=F:\\mxzg-local\\gameconfig
+config.path=F:\\project\\mxzg\\config\\gameconfig
 ip2region.file=F:\\mxzg-local\\ip2region.db
 spring.redis.host=127.0.0.1
 spring.redis.port=11001
@@ -441,7 +441,7 @@ Windows：在该服务的命令行窗口输入 `stop` 然后回车。`scripts\st
 | Q2 | 依赖下载卡住，或 Nexus 超时 | 内网 `http://192.168.1.131:8081` 外网不可达。用第 3.1 节的阿里云 `<mirrorOf>*</mirrorOf>`。`game.common.version=1.3.3` 没有被引用 |
 | Q3 | `DataSource` 初始化失败 | 查 `database*.properties` 的地址、账号、库名，以及 MySQL 是否已启动 |
 | Q4 | gameserver 连不上 center | 查 `center.server.host` / `center.server.port`。center 要先起来，防火墙不要拦它的 TCP |
-| Q5 | `config.path` 找不到配置 | 目录必须存在，且含策划 Excel/CSV。本机是 `F:\mxzg-local\gameconfig` |
+| Q5 | `config.path` 找不到配置 | 目录必须存在，且含策划 Excel。本机是 `F:\project\mxzg\config\gameconfig` |
 | Q6 | Redis 超时 | `spring.redis.host` / `port` / `password` 要和 Redis 一致。本机是 `127.0.0.1`、`11001`、`^-^ayjsgame!@#redis&201912` |
 | Q7 | 端口被占用 | `netstat -ano \| findstr <port>` 看 PID，`taskkill /PID <pid> /F`，或改 properties 里的端口 |
 | Q8 | 找不到符号 `RandomUtils`（`com.ayjs.mxzg.common.util`） | `mxzg-config`、`mxzg-battle`、`mxzg-cross` 共 36 处引用它，仓库里原来只有 `RandomUtil`。在 `mxzg-common/src/main/java/com/ayjs/mxzg/common/util/RandomUtils.java` 补一个类，内部委托 `RandomUtil` 做 `isHit` / `nextInt`，再 `mvn install` |

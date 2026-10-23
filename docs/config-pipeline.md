@@ -1,35 +1,57 @@
-# 配置表导出（规划，阶段 D 落地）
+# 配置表导出
 
-客户端现在只吃 JSON。源 xlsx 不在本仓库：本机 `config/` 是 junction，指向 `F:\mxzg-local`。
+策划表在仓库里：`config/gameconfig/*.xlsx`（本机绝对路径 `F:\project\mxzg\config\gameconfig`）。这是客户端和服共用的源。客户端运行时不读 xlsx，只读导出的 JSON。
 
-## 现在就能读到的样例
+`ip2region.db` 体积大，留在本机，不进 Git。`server/` 仍是本机 junction，不在这个仓库里。
 
-`client/assets/resources/config/`
+## 导出
 
-- `opencondition.json` — 入口（等级 + 可选开服日）
-- `system_gate.json` — 开服日门槛
+```text
+pip install -r tools/requirements.txt
+python tools/export_gameconfig.py
+```
 
-加载：`ConfigLoader.loadAll()` → `resources.load("config/<表名>", JsonAsset)`。
+默认读 `config/gameconfig`，写出 `client/assets/resources/config/<表名>.json`。可以用 `--src` / `GAMECONFIG_SRC`、`--out` / `GAMECONFIG_OUT` 改路径。云上同一份 534 张表的压缩包也可以解到 `--src` 再导。
 
-Boot 会打日志 `[Boot] config open@Lv1/D1 ...`。主城底部显示开服第 1 天、1 级已开的入口。
+表头沿用旧 ExcelReader：
 
-## 以后 xlsx 怎么进来
+1. 中文说明
+2. 导出标记：`1` 服、`2` 客户端、`3` 两边、空或 `0` 跳过。整行是类型词（`string` / `int` / `json`）时，字段列都导出
+3. 英文字段名
+4. 起是数据
 
-1. 只导出当前分期白名单，禁止把全量 xlsx 打进 `client`。
-2. 脚本读 `config/*.xlsx`（或导出后的中间表），写出与样例相同的 `{ "table", "note", "rows" }` JSON。
-3. 产物放到 `client/assets/resources/config/<表名>.json`。文件名与逻辑表名一致，例如 `opencondition.xlsx` → `opencondition.json`。
-4. 客户端继续走 `ConfigLoader`，不在运行时解析 xlsx。
-5. 每张表补一个同名 `.meta`（Creator 导入 JSON 用）。uuid 稳定后再提交。
+空数据的表仍写出 `rows: []`。多出来的有效 sheet 写成 `<表名>__<sheet>.json`。`manifest.json` 列出要加载的表名。
 
-`opencondition` 行字段保持：`id`、`name`、`condition_type`、`level`、`open_server_day`。  
-`system` 的 `*_open_day` 收成 `system_gate` 行：`key`、`open_server_day`、`note`。
+`system_gate.json` 从 `system.xlsx` 里整数值、且 key 含 `open_day` 或以 `_days` 结尾的行收成 `{key, open_server_day, note}`。`superstage_day_open` 这种非整数值不收。
 
-## P0 起步白名单（不是完整清单）
+`opencondition.json` 保留 `{id, name, condition_type, level, open_server_day}`，并带上原始列。`id` 是 atom，`name` 用中文 note，`level` 是 `condition_value`。`{atom}_open_day` 对得上时写入 `open_server_day`。`main_cafe` 是 `main_pub_task` 的别名，`mail` 是 `main_mail` 的别名。导航 id `bag` 在表里没有原子，导出补一行等级 1，和原来的入口门槛一致。
 
-- `opencondition`
-- `system`（先抽开服日门槛）
-- `promotioncontrol`
-- 主线关卡、英雄、召唤、道具
-- 七日目标、七天登录
+已有 `.meta` 的 uuid 会留下。新 JSON 才生成 Creator 2.0.1 的 json meta。
 
-完整文件名等待对照 `F:\mxzg-local` 再补。导表脚本本身还没写。
+## 客户端怎么读
+
+`ConfigLoader.loadAll()` 先读 `config/manifest`，再按批 `resources.load("config/<表名>", JsonAsset)`。`opencondition` 和 `system_gate` 仍进 `ConfigDb`，`gates.ts` / `nav.ts` 的入口判断不变。其它表留在 `ConfigDb.tables`，Boot 打出表数和行数。
+
+Boot 登记这些表，没读到时仍用原来的常量：
+
+| 表 | 客户端用途 |
+|----|------------|
+| `herotype` | `note` 登记到英雄类型名。对不上仍写「类型 N」 |
+| `heroskill` + `language` | `type` 的 `lan_name` 对上 `language.key` 时，技能条用这句。调用方传入自己的名字表时不读这里 |
+| `heroskill.art_list` + `buff.delay` | 大于 0 的延迟加在这一拍上 |
+| `herobase` | Mock 主线我方血量用 type `10101001`、1 星的 `hp`。没登记仍是 100。敌方仍是 120。真服战报 hp 不改 |
+| `effect2` | `eff_battle_start` 的 `speed` 单位是 0.01 秒，乘 10 成为帧步。没读到仍是 70ms |
+| `system` | `battle_speed_level`、`battle_skip_level` 只拦真服回放的加速和跳过。`time_diff` 不是拍间隔 |
+| `battletype` | `round_max` 只写日志。主线 type 1 是 15 回合上限，不是毫秒。不裁服已下发的回合 |
+
+`battletype` / `battleroundaddition` 不是播放毫秒。`battleroundaddition` 是每回合属性加成。
+
+## 服
+
+服仍读 xlsx，不改成读客户端 JSON。`config.path` 指到这份工程表：
+
+```text
+config.path=F:\\project\\mxzg\\config\\gameconfig
+```
+
+本机若把服启动目录放在仓库里，也可以用相对 `config/gameconfig` 的路径，只要进程读得到同一批 xlsx。`ip2region.file` 仍指向本机的 `ip2region.db`（例如 `F:\\mxzg-local\\ip2region.db`），不要把这个库推进 Git。

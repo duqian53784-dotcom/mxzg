@@ -31,6 +31,7 @@
  * batch2 仍是 Spine 3.7.94。Creator 3.8.8 用 spine-3.8，曲线、约束、裁剪可能播不出。播不出就跳过该特效。
  */
 import { heroSkinClips } from "./battleAssetIndex";
+import { wireHeroTypeLabel } from "./wireHero";
 
 const MAX_BODY = 65536;
 
@@ -407,7 +408,7 @@ function heroSlots(heroes: WireBattleHero[], side: "ally" | "enemy"): WireSpineS
       pos: hero.pos,
       hp: hero.hp,
       maxHp: hero.maxHp,
-      label: heroLabel(side, hero.pos, hero.hp, hero.maxHp, stem),
+      label: heroLabel(side, hero.pos, hero.hp, hero.maxHp, stem, hero.heroId),
     });
   }
   return slots;
@@ -421,18 +422,30 @@ function fillerSlot(side: "ally" | "enemy", win: boolean | null): WireSpineSlot 
     pos: null,
     hp: null,
     maxHp: null,
-    label: heroLabel(side, null, null, null, stem),
+    label: heroLabel(side, null, null, null, stem, null),
   };
 }
 
-function heroLabel(side: "ally" | "enemy", pos: number | null, hp: number | null, maxHp: number | null, stem: string): string {
+function heroLabel(
+  side: "ally" | "enemy",
+  pos: number | null,
+  hp: number | null,
+  maxHp: number | null,
+  stem: string,
+  heroId: number | null
+): string {
   const who = side === "ally" ? "我方" : "敌方";
   const posText = pos === null ? "位置未带" : "位置 " + pos;
   let hpText = "";
   if (hp !== null && maxHp !== null) hpText = " " + hp + "/" + maxHp;
   else if (hp !== null) hpText = " hp " + hp;
   else if (maxHp !== null) hpText = " max " + maxHp;
-  return who + " " + posText + hpText + " " + stem;
+  let shown = stem;
+  if (heroId !== null) {
+    const typed = wireHeroTypeLabel(heroId);
+    if (typed.indexOf("类型 ") !== 0 && typed !== "类型未解") shown = typed;
+  }
+  return who + " " + posText + hpText + " " + shown;
 }
 
 function buildBeats(report: WireBattleReport, slots: WireSpineSlot[], win: boolean | null): WireSpineBeat[] {

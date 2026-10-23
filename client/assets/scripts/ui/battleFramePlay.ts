@@ -3,6 +3,7 @@
  * 路径是 resources 里的 spriteFrame，不带扩展名。
  */
 import { Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { battleFrameStepMs } from "../config/battleTiming";
 import { armBattleDelay } from "./battleClock";
 import { uiNode } from "./UiKit";
 
@@ -13,7 +14,7 @@ export function battleFrameStep(speed: number): number {
   let steps = 1;
   if (speed === 2) steps = 2;
   else if (speed === 3) steps = 3;
-  const step = Math.floor(FRAME_STEP_MS / steps);
+  const step = Math.floor((battleFrameStepMs() || FRAME_STEP_MS) / steps);
   if (step < 24) return 24;
   return step;
 }
@@ -63,7 +64,7 @@ export function mountFrameReel(parent: Node, size: number, name = "FrameReel"): 
     token += 1;
     const mine = token;
     clearTimer();
-    const step = typeof stepMs === "number" && isFinite(stepMs) && stepMs > 0 ? stepMs : FRAME_STEP_MS;
+    const step = typeof stepMs === "number" && isFinite(stepMs) && stepMs > 0 ? stepMs : battleFrameStepMs() || FRAME_STEP_MS;
     if (!paths || paths.length === 0) {
       if (node.isValid) node.active = false;
       if (onResult) onResult(false);

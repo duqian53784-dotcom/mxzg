@@ -1,7 +1,7 @@
 # 目录规划
 
 - client：新 Creator 客户端（已纳入版本库）
-- config：游戏配置表源与导出（当前本机联接 mxzg-local）
+- config/gameconfig：策划表 xlsx（在仓库内）。客户端 JSON 由 `tools/export_gameconfig.py` 导出
 - server：Java 服务端（当前本机联接 program/server）
 
 ## Prefab 与资源分目录（P0）
