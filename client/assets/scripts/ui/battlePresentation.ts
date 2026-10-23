@@ -2,7 +2,7 @@
  * 进战表现拍子。和 planWireSpineReplay 同一份 BattleReport、同一套站位。
  * 伤害用命中 hurt。hurt 没有就不画，不写成 0。
  * 暴击只认命中上已经有的 crit。没有这个字段不画「暴击」，也不把 marks 里的号猜成暴击。
- * 技能名用 wireSpineSkillStem。表对不上就写「技能 」加 id，不编造技能名。
+ * 技能名先对 resources 里的 skill-<id>。对不上再用 wireSpineSkillStem。表对不上就写「技能 」加 id，不编造技能名。
  * 等级、buff 只认英雄上已经有的 level、buffs。没有就不写 0，也不造图标。
  * 不发协议。
  */
@@ -16,6 +16,7 @@ import {
   WireSpineReplay,
   WireSpineSlot,
 } from "../net/protocol/wireBattle";
+import { skillStemForId } from "../net/protocol/battleAssetIndex";
 
 export const BATTLE_CRIT_BUBBLE = "暴击";
 
@@ -80,11 +81,16 @@ export interface BattlePresentation {
 }
 
 /**
- * 技能名。stem 来自现有取模表。表是空的、或这个 id 对不上时，写「技能 」加 id。
+ * 技能名。resources 里有这套帧时用目录名。否则用取模表。
+ * 调用方传入 table 时只看那张表，方便自检换空表。表是空的、或这个 id 对不上时，写「技能 」加 id。
  * skillId 缺失时是 null，调用方关掉中场条。
  */
 export function battleSkillTitle(skillId: number | null, table?: readonly string[]): string | null {
   if (skillId === null || typeof skillId !== "number" || !isFinite(skillId)) return null;
+  if (table === undefined) {
+    const framed = skillStemForId(skillId);
+    if (framed) return framed;
+  }
   const stem = wireSpineSkillStem(skillId, table);
   if (stem) return stem;
   return "技能 " + String(Math.trunc(skillId));

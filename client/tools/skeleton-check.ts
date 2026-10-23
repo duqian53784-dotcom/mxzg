@@ -93,6 +93,7 @@ import {
   effectFramePaths,
   hitFramePaths,
   skillFramePaths,
+  skillLayerFramePaths,
 } from "../assets/scripts/ui/battleFrames";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
 import {
@@ -15270,6 +15271,68 @@ async function checkWs(): Promise<void> {
     "rounds drive an attack cue, keep the hit hp, and mount batch2 skill and yanwu instead of hero hit or bisha"
   );
   assert(wireSpineHasClip("10405006", "hit") && wireSpineHasClip("10105008", "hit") && !wireSpineHasClip("10101", "hit"), "only battlepre packs expose a hit clip");
+  assert(
+    wireSpineHasClip("10101001", "attack") &&
+      wireSpineHasClip("10101001", "hit") &&
+      !wireSpineHasClip("10101001", "die") &&
+      wireSpineHasClip("10102", "stand") &&
+      !wireSpineHasClip("10102", "hit") &&
+      !wireSpineHasClip("99999999", "stand"),
+    "batch C skins expose attack and hit, stand-only bases stay standing, unknown ids stay off the table"
+  );
+  const skinPlan = planWireSpineReplay(
+    {
+      battleId: 1,
+      battleType: 1,
+      atkId: 7,
+      defId: 8,
+      winId: null,
+      rounds: [
+        {
+          index: 1,
+          actions: [
+            {
+              atkPos: 1,
+              skillId: 101010011,
+              camp: 1,
+              hits: [{ defPos: 2, hurt: 50, hp: 0, marks: [] }],
+              marks: [],
+            },
+            {
+              atkPos: 1,
+              skillId: 101020021,
+              camp: 1,
+              hits: [],
+              marks: [],
+            },
+          ],
+          marks: [],
+        },
+      ],
+      atkHeroes: [{ pos: 1, heroId: 10101001, hp: 100, maxHp: 100, marks: [] }],
+      defHeroes: [{ pos: 2, heroId: 10102002, hp: 50, maxHp: 50, marks: [] }],
+      marks: [],
+    },
+    null,
+    1
+  );
+  const downBeat = skinPlan.beats[skinPlan.beats.length - 1];
+  let downed = false;
+  let allyStillAttacks = false;
+  for (let sc = 0; sc < downBeat.cues.length; sc++) {
+    if (downBeat.cues[sc].slot === 1 && downBeat.cues[sc].clip === "hit") downed = true;
+    if (downBeat.cues[sc].slot === 0 && downBeat.cues[sc].clip === "attack") allyStillAttacks = true;
+  }
+  assert(
+    skinPlan.slots[0].stem === "10101001" &&
+      skinPlan.slots[1].stem === "10102002" &&
+      skinPlan.beats.length === 3 &&
+      downed &&
+      allyStillAttacks &&
+      battleSkillTitle(101010011) === "skill-101010011" &&
+      battleSkillTitle(9) === "act",
+    "a batch C hero id binds its spine and stays in hit after hp reaches 0"
+  );
   const hitPlan = planWireSpineReplay(
     {
       battleId: 1,
@@ -26144,6 +26207,26 @@ function checkCityHub(): void {
   assert(skillTotal === 533, "skill subset numbered frames, plate excluded");
   assert(skillFramePaths(0)[0].indexOf("hero-skill_effect-1-0") >= 0, "hero-skill uses the effect-1 names");
   assert(plateStem >= 0 && skillFramePaths(plateStem).length === 11 && skillFramePaths(plateStem)[10].indexOf("skill-101050201-3_10") >= 0, "skill-101050201-3 plays the numbered frames");
+  const boundSkill = skillFramePaths(101010011);
+  assert(boundSkill.length === 9 && boundSkill[0] === "battle/skill/skill-101010011/skill-101010011_0", "skill 101010011 plays its own frames");
+  assertFrames("skill-101010011", boundSkill);
+  const gappedSkill = skillFramePaths(101050211);
+  assert(
+    gappedSkill.indexOf("battle/skill/skill-101050211/skill-101050211_3") < 0 &&
+      gappedSkill[gappedSkill.length - 1] === "battle/skill/skill-101050211/skill-101050211_14",
+    "gapped skill frames skip missing numbers"
+  );
+  assertFrames("skill-101050211", gappedSkill);
+  const layeredSkill = skillFramePaths(101050201);
+  assert(layeredSkill[0] === "battle/skill/skill-101050201-1/skill-101050201-1_0", "a skill without a base stem starts at layer 1");
+  assertFrames("skill-101050201-1", layeredSkill);
+  const nextLayer = skillLayerFramePaths(101050080);
+  assert(
+    nextLayer !== null && nextLayer[0] === "battle/skill/skill-101050080-1/skill-101050080-1_0",
+    "the next skill layer plays beside the base stem"
+  );
+  assertFrames("skill-101050080-1", nextLayer || []);
+  assert(skillLayerFramePaths(9) === null && skillLayerFramePaths(101010011) !== null, "unknown skill ids keep the effect modulo");
   assert(battleLayoutSrc.indexOf("不发协议") >= 0, "battle layout helper does not own a protocol");
   const battleDoc = readFileSync(join(process.cwd(), "docs", "battle-prefab-layout.md"), "utf8");
   assert(

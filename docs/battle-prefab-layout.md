@@ -13,10 +13,32 @@
 - **吃哪些已有数据**：`planWireSpineReplay` 的 slots / beats，外加同一份 report 上已经解开的命中和英雄。站位进 `Slot_E0`–`E2`、`Slot_A0`–`A2`（后排 `E3`–`E5`、`A3`–`A5` 留着壳上的占位）。血量写 `EnemyHp_*` / `AllyHp_*` 的 `Label`，两边都有数时才改 `Fill` 宽度；缺一边不写成 0，空着的三格血条保持 Prefab 里的 `120/120`、`100/100`。回合行写 `TopBar/RoundLabel`，同一行再写 `Log`。技能特效挂 `LayerVfx/VfxSkill`，受击挂 `LayerVfx/VfxHit`，无锚点时就停在文档里的 (0, 180) / (0, 120)。`VfxScreen` 保持空挂点，现有拍没有全屏角色。技能条 `Label` 在有技能拍时写成 batch2 的 stem；填充保持 Prefab 占位，因为 3001 / 3030 / 3102 不带技能槽能量。战剑、战旗没有对应槽，挂在 `LayerField` 上，坐标仍是原来的代码回放。飘字写 `LayerFloat/FloatDamageRoot/FloatDmg_0`–`FloatDmg_3`，暴击写 `LayerFloat/FloatCrit`，技能名写 `SkillNameBanner/SkillNameLabel`，前排头顶写 `HeadAnchor/LevelLabel` 和 `HeadAnchor/BuffRow`。`hurt` 缺失不画，不写成 0。`crit`、`level`、`buffs` 只有报告上已经带了才显示；没有就藏起，不写成 0，也不把 `marks` 里的号猜成暴击、等级或 buff。不另建同名代码节点。
 - **按钮**：`BtnSkip` 把本地回放快进到最后一拍，页留着。`BtnSpeed` 在顶栏左侧，只在 ×1、×2、×3 之间换，缩短每一拍的等待，不跳过，也不拆页。`BtnRetreat` 才拆战斗壳，换成结算（再挑战 / 返回），不发 3002 / 3005 / 3020 / 3100 / 3098。`BtnClose` 关掉主线页，不发新帧。回放自己走完也不拆：`play` 以前在 `playback` 之后立刻 `showDone` → `clearBody`，最后一拍只等 260ms，没有行动的战报就会闪一下关掉。现在停在壳上，等关闭或撤退。没有恭喜获得层，不拿 3002 当自动关。
 - **WireBattlePage**：没有站位和特效挂点。探针按钮仍在原来的真服主线页上，所以这张占位不挂。
-- **状态**：不改协议脚本，不删代码 UI。加载失败时 Toast「战斗 Prefab 未加载，改用代码 UI」，同一页继续播。
+- **状态**：不删代码 UI。加载失败时 Toast「战斗 Prefab 未加载，改用代码 UI」，同一页继续播。`hero_id` 对得上 `resources/spine` 的套就用那套，`skill_id` 对得上 `resources/battle/skill` 的套就播那套帧。解码字段没加。
+
+## 验收预览
+
+Creator 3.8.8 打开 `client`。要看这张战斗页，预览地址加 `?transport=ws`（`http://127.0.0.1:7456/?transport=ws`），本机桥 `ws://127.0.0.1:13111/game` 转到 TCP 9902。游戏服要开着。`USE_BATTLE_PREFAB` 在 `BattlePage.ts`，默认 `true`。改成 `false` 就回到代码战斗页。不改 Boot。
+
+1. 登录进主城。底栏「战斗」，或左下 BtnMainline，或「更多」里的主线，打开主线页。
+2. 壳上的「战斗」或页内「挑战」发 3001。有 report 才挂 BattlePage。底是 `ui/maps/map-bg-mission-1`（648×1152，拉到 720×1280），不是 `battle-scene_spr-bg-1`。
+3. 空名册不必手点 GM。挑战会先发 2015 ADD_HERO（默认类型 10505010、星 9），再 3100 上 MAIN，然后才 3001。`gm.cmd.open` 没开时停在「GM 未开」，看不到战报。
+4. 不加 `?transport=ws` 的 Mock 主线仍是代码色块，不挂这张壳。
+5. 跳过停在最后一拍，页不关。撤退才进结算。关闭离开主线页。顶栏加速在 ×1、×2、×3 之间换。血条跟这一拍的 hp。
+
+3006、3030、3102 有 report 时走同一套。3103、3101、3099 不进这页。
+
+## 已知缺口
+
+- 英雄套是 Spine 3.7.94。Creator 3.8.8 播不出时该格亮 Placeholder，并 Toast「spine 未加载」。
+- 这些英雄套没有 die。hp 到 0 之后停在 hit。只有 `crusade_boss_die` 播 die。
+- 只上场上前 3 人。后排槽留着，第 4 人起不补。
+- `skill_id` 对上 `skill-<id>` 就播那套帧，并再播下一层。没有底套时主套用 `-1`。对不上仍按原来 49 套和 skill-effect 取模。第三层、`_arrow` 和多出来的下划线分套不另挂。
+- 3001 命中只解开 def_pos、hurt、hp。报告上没有 crit、level、buffs 时，暴击气泡、等级和 buff 藏起。有这些字段才会画。
+- 不播技能音效。WireBattlePage 仍不挂。
+
 - 设计基准 **720×1280**，坐标相对父节点中心。`LayerField`、`LayerVfx`、`LayerAppear`、`LayerHud`、`LayerFloat`、`EnemySlots`、`AllySlots`、`HpBars`、`SkillBars` 都是铺满页面的 (0, 0) 容器，所以它们的直接子节点就是页面坐标。`TopBar` 例外，它自己在页面上，子节点是它的本地坐标。`SkillNameBanner`、`FloatDamageRoot`、`HeadAnchor`、`BuffRow` 也不是铺满容器，子节点用它们自己的本地坐标。
 - 不挂脚本组件。Prefab 里的 `__type__` 只有 `cc.*`。现有通用壳的脚本 id 仍是 23 位 packer（保留头 5）。这一刀没有新的类 id，生成器会拒绝非 `cc.*` 组件，也会拒绝 22 位脚本 id，避免退回 `compressUuid(uuid, true)`。
-- 不嵌 Spine。`VfxSkill` / `VfxHit` / `VfxScreen` 只有 `cc.UITransform`。Spine 仍在 `client/assets/resources/spine/`。hero-beattack、skill-effect、skill 子集的帧在 `client/assets/resources/battle/`（见 `docs/battle-asset-migration.md`）。Prefab 上这三个挂点仍是空节点，不写 sprite uuid。回放把 `hero-beattack` 帧挂到 `VfxHit`，把 `skill` 和 `skill-effect` 帧挂到 `VfxSkill`。
+- 不嵌 Spine。`VfxSkill` / `VfxHit` / `VfxScreen` 只有 `cc.UITransform`。Spine 仍在 `client/assets/resources/spine/`。hero-beattack、skill-effect、skill 子集的帧在 `client/assets/resources/battle/`（见 `docs/battle-asset-migration.md`）。Prefab 上这三个挂点仍是空节点，不写 sprite uuid。回放把 `hero-beattack` 帧挂到 `VfxHit`，把 `skill` 和 `skill-effect` 帧挂到 `VfxSkill`。`skill_id` 对得上 resources 里的套时用那套，对不上仍用原来的 49 套取模。
 - 素材只引用 `client/assets/resources/` 的 spriteFrame `@f9941`。`prefabs/ui/battle/` 下没有 PNG。
 - 再生：`python3 client/tools/gen_battle_prefab.py`。从现有 `.meta` 读 uuid，再跑一次会覆写同一份 Prefab，并保留已有 `.meta` uuid。
 
@@ -161,7 +183,7 @@ Slot_E0–E2 / Slot_A0–A2
 
 - **大数字**：行动拍上每条命中的 `hurt`，按顺序写 `FloatDmg_0`–`FloatDmg_3`。`hurt` 缺失不占一条，不写成 0。出现的 0 仍写 `0`。超过四条不另建节点。不用到的格子藏起，并清掉 `-12345` 这类占位。
 - **「暴击」**：这四条里有一条命中的 `crit` 为 true 或非 0 数字时，打开 `FloatCrit`，文案保持 `暴击`。没有这个字段不打开，也不把 `marks` 的某个号猜成暴击。`crit` 为 0 或 false 同样不打开。
-- **技能名**：这一拍 `skill_id` 有值才打开 `SkillNameBanner`。名字用 `wireSpineSkillStem` 的现成 stem。表对不上就写 `技能 ` 加 id，不编造技能名，也不留 `圣光打击`。没有 `skill_id` 就关掉条。底栏 `SkillBar_*` 仍是原来的能量占位。
+- **技能名**：这一拍 `skill_id` 有值才打开 `SkillNameBanner`。resources 里有 `skill-<id>` 时写那套目录名。对不上再用 `wireSpineSkillStem` 的现成 stem。表对不上就写 `技能 ` 加 id，不编造技能名，也不留 `圣光打击`。没有 `skill_id` 就关掉条。底栏 `SkillBar_*` 仍是原来的能量占位。
 - **头顶等级 / buff**：只写前排、而且是报告里真正带上的英雄（每人最多前三个，不含补位）。`level` 缺失就藏起 `LevelLabel` 并清掉 `Lv.1`，不写 0。出现的 0 仍写 `Lv.0`。`buffs` 缺失或为空就藏起 `BuffRow`，不把三颗染色块当成 buff。有 id 时按顺序亮 `Buff_0`–`Buff_2`，多出来的不另建，不编 buff 名。后排没有 `HeadAnchor`，不补。
 
 ## WireBattlePage
