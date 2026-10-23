@@ -1,6 +1,8 @@
 # 战斗素材迁移（2026-10-22）
 
-资源进仓，给 Creator 看真战斗 UI 和受击 / 技能帧。不接 Boot，不加 `USE_*`，不改协议 TS，不改战斗回放脚本。Prefab 只把 `Bg` 换成 `battle-scene_spr-bg-1`。
+资源进仓，给 Creator 看真战斗 UI 和受击 / 技能帧。不接 Boot，不加 `USE_*`，不改协议 TS，不改战斗回放脚本。
+
+**`battle-scene_spr-bg-1` 不是全屏战场底。** 原图 112×64，裁切 111×63，是边角 chrome。#170 把它拉到 720×1280 当 `Bg` 是错的。BattlePage / WireBattlePage 的 `Bg` 现为 `ui/maps/map-bg-mission-1.jpg`（648×1152）。这一刀的帧和挂点见 [`battle-ui2-migration.md`](battle-ui2-migration.md)。
 
 每张新 PNG 带 Creator 3.8 image `.meta`（`6c48a` 贴图 + `f9941` spriteFrame，形状与 `client/assets/resources/ui/` 下现有 PNG 一致）。每个新目录带 `importer: directory` 的 folder `.meta`。uuid 是新生成的，已和仓内已有 `.meta` uuid 对过，没有撞车。
 
@@ -27,9 +29,9 @@
 - `battle-scene_prog-1.png`
 - `battle-scene_prog-bg-1.png`
 - `battle-scene_prog-frame-1.png`
-- `battle-scene_spr-bg-1.png`（原图 112×64，裁切 111×63）
+- `battle-scene_spr-bg-1.png`（原图 112×64，裁切 111×63）。**不是全屏底**，Prefab `Bg` 不再引用 `b117e1f3-0253-4616-95db-bed6a5007adb@f9941`。
 
-`BattlePage.prefab` 和 `WireBattlePage.prefab` 的 `Bg` 引用 `b117e1f3-0253-4616-95db-bed6a5007adb@f9941`，拉到 720×1280。`LayerFloat`、`SkillNameBanner`、`HeadAnchor` 不动。随后的表现接线挂上 `BtnSpeed`，血条和技能条改用 `battle-scene_prog-bg-1` / `battle-scene_prog-1`，回放把帧序列挂到 `VfxHit` / `VfxSkill`。`BtnClose` 仍用通用关闭钮，不用 `battle-scene_btn-close-1`。Prefab 上这三个特效挂点仍不写 sprite uuid。
+`BattlePage.prefab` 和 `WireBattlePage.prefab` 的 `Bg` 用 `ui/maps/map-bg-mission-1.jpg`，拉到 720×1280。`LayerFloat`、`SkillNameBanner`、`HeadAnchor` 不动。表现接线挂上 `BtnSpeed`，血条和技能条用 `battle-scene_prog-bg-1` / `battle-scene_prog-1`，回放把帧序列挂到 `VfxHit` / `VfxSkill`。`BtnClose` 仍用通用关闭钮，不用 `battle-scene_btn-close-1`。Prefab 上这三个特效挂点仍不写 sprite uuid。
 
 ### hero-beattack（26）
 

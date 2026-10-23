@@ -14,7 +14,7 @@
 - **按钮**：`BtnSkip` 把本地回放快进到最后一拍，页留着。`BtnSpeed` 在顶栏左侧，只在 ×1、×2、×3 之间换，缩短每一拍的等待，不跳过，也不拆页。`BtnRetreat` 才拆战斗壳，换成结算（再挑战 / 返回），不发 3002 / 3005 / 3020 / 3100 / 3098。`BtnClose` 关掉主线页，不发新帧。回放自己走完也不拆：`play` 以前在 `playback` 之后立刻 `showDone` → `clearBody`，最后一拍只等 260ms，没有行动的战报就会闪一下关掉。现在停在壳上，等关闭或撤退。没有恭喜获得层，不拿 3002 当自动关。
 - **WireBattlePage**：没有站位和特效挂点。探针按钮仍在原来的真服主线页上，所以这张占位不挂。
 - **状态**：不改协议脚本，不删代码 UI。加载失败时 Toast「战斗 Prefab 未加载，改用代码 UI」，同一页继续播。
-- 设计基准 **720×1280**，坐标相对父节点中心。`LayerField`、`LayerVfx`、`LayerHud`、`LayerFloat`、`EnemySlots`、`AllySlots`、`HpBars`、`SkillBars` 都是铺满页面的 (0, 0) 容器，所以它们的直接子节点就是页面坐标。`TopBar` 例外，它自己在页面上，子节点是它的本地坐标。`SkillNameBanner`、`FloatDamageRoot`、`HeadAnchor`、`BuffRow` 也不是铺满容器，子节点用它们自己的本地坐标。
+- 设计基准 **720×1280**，坐标相对父节点中心。`LayerField`、`LayerVfx`、`LayerAppear`、`LayerHud`、`LayerFloat`、`EnemySlots`、`AllySlots`、`HpBars`、`SkillBars` 都是铺满页面的 (0, 0) 容器，所以它们的直接子节点就是页面坐标。`TopBar` 例外，它自己在页面上，子节点是它的本地坐标。`SkillNameBanner`、`FloatDamageRoot`、`HeadAnchor`、`BuffRow` 也不是铺满容器，子节点用它们自己的本地坐标。
 - 不挂脚本组件。Prefab 里的 `__type__` 只有 `cc.*`。现有通用壳的脚本 id 仍是 23 位 packer（保留头 5）。这一刀没有新的类 id，生成器会拒绝非 `cc.*` 组件，也会拒绝 22 位脚本 id，避免退回 `compressUuid(uuid, true)`。
 - 不嵌 Spine。`VfxSkill` / `VfxHit` / `VfxScreen` 只有 `cc.UITransform`。Spine 仍在 `client/assets/resources/spine/`。hero-beattack、skill-effect、skill 子集的帧在 `client/assets/resources/battle/`（见 `docs/battle-asset-migration.md`）。Prefab 上这三个挂点仍是空节点，不写 sprite uuid。回放把 `hero-beattack` 帧挂到 `VfxHit`，把 `skill` 和 `skill-effect` 帧挂到 `VfxSkill`。
 - 素材只引用 `client/assets/resources/` 的 spriteFrame `@f9941`。`prefabs/ui/battle/` 下没有 PNG。
@@ -22,11 +22,11 @@
 
 ## 用了哪些图
 
-`client/assets/resources/ui/battle/` 有 10 张 `battle-scene` 帧。页面 `Bg` 用其中的 `battle-scene_spr-bg-1`。加速钮和进度条也挂上。关闭钮仍用通用图，不用 `battle-scene_btn-close-1`。`battle-scene_prog-frame-1` 中间是实心的，不叠在填充上。
+`client/assets/resources/ui/battle/` 里的 `battle-scene` 帧仍在。**`battle-scene_spr-bg-1` 不是全屏底**（112×64，裁切 111×63，边角 chrome），页面 `Bg` 不用它。全屏底是 `ui/maps/map-bg-mission-1.jpg`（648×1152，与旧 `hd/ccbi-res/map-bg-mission-1.jpg` 同一张；`ui/mainline/` 里还有一份相同字节，战斗页引用 `ui/maps/` 这一份）。加速钮和进度条仍挂 `battle-scene` 的 speed / prog。关闭钮仍用通用图，不用 `battle-scene_btn-close-1`。`battle-scene_prog-frame-1` 中间是实心的，不叠在填充上。
 
 | 用途 | 资源 | 模式 |
 |------|------|------|
-| 页面 `Bg` | `ui/battle/battle-scene_spr-bg-1.png` | 简单，白色，拉到 720×1280。spriteFrame `b117e1f3-0253-4616-95db-bed6a5007adb@f9941`。原图 112×64，裁切 111×63 |
+| 页面 `Bg` | `ui/maps/map-bg-mission-1.jpg` | 简单，白色，拉到 720×1280。spriteFrame `26aac3a3-2eeb-4fc3-99a1-fb5c2782be7b@f9941`。原图 648×1152。不要用 `battle-scene_spr-bg-1` |
 | 站位色块 | `ui/common/win-bg_block-bg-5.png` | 简单。敌 `(96, 40, 44, 168)`，我 `(28, 58, 96, 168)` |
 | 血条 / 技能条 | `ui/battle/battle-scene_prog-bg-1.png` 底，`battle-scene_prog-1.png` 填充 | 简单，不染色。不用 `battle-scene_prog-frame-1` |
 | 战报底 | `ui/common/win-bg_msg-bg.png` | 简单，`(10, 18, 32, 230)` |
@@ -43,7 +43,7 @@
 
 ## BattlePage
 
-根 `BattlePage`。绘制顺序：`Bg`、`LayerField`、`LayerVfx`、`SkillNameBanner`、`LayerHud`、`LayerFloat`。HUD 盖在战场和技能名上面，飘字层再盖在 HUD 上面。飘字和技能名都在场中，不压顶栏和底栏。
+根 `BattlePage`。绘制顺序：`Bg`、`LayerField`、`LayerVfx`、`LayerAppear`、`SkillNameBanner`、`LayerHud`、`LayerFloat`。HUD 盖在战场和开战挂点上面，飘字层再盖在 HUD 上面。飘字和技能名都在场中，不压顶栏和底栏。
 
 站位是左敌右我，和 `battleSlotPage` 同一套坐标。前排靠中线，后排靠外侧，三行自上而下（y = 140 / -36 / -212）。敌方 x 为 -158（前）和 -300（后），我方为 158 和 300。空着的格子进战后关掉，沙地上只留报告里的人；报告没有英雄时仍补一格站场。`VfxSkill` / `VfxHit` 的默认点仍是技能 (0, 180)、受击 (0, 120)，本地坐标从这里减。`BtnSkip` / `BtnRetreat` 放在底栏。
 
@@ -53,7 +53,7 @@
 
 | 节点 | 位置 (x, y) | 尺寸 | 说明 |
 |------|-------------|------|------|
-| `Bg` | (0, 0) | 720×1280 | `battle-scene_spr-bg-1` |
+| `Bg` | (0, 0) | 720×1280 | `ui/maps/map-bg-mission-1.jpg`。不是 `battle-scene_spr-bg-1` |
 | `LayerField` | (0, 0) | 720×1280 | 容器 |
 | `EnemySlots` | (0, 0) | 720×1280 | 容器 |
 | `Slot_E0` `Slot_E1` `Slot_E2` | (-158, 140 / -36 / -212) | 108×120 | 敌前排，靠中线。子节点 `Placeholder`、`Label`（`E0`…）、`HeadAnchor` |
@@ -75,6 +75,19 @@
 | `VfxScreen` | (0, 0) | 720×1280 |
 
 `VfxScreen` 铺满是为了全屏特效有一个页面大小的父节点。它不挡按钮：节点上没有点击组件。
+
+### 开战挂点
+
+`LayerAppear` 在 `LayerVfx` 和 `SkillNameBanner` 之间。左右擦除是空挂点，不把 15 帧收成一张图。`VsBar` 用 `battle-end_spr-vs`（80×46）。不接 Boot，不改协议。`spine/dwvs` 在 resources 里，Prefab 不嵌 Spine。
+
+| 节点 | 位置 (x, y) | 尺寸 | 说明 |
+|------|-------------|------|------|
+| `LayerAppear` | (0, 0) | 720×1280 | 容器，只有 `cc.UITransform` |
+| `AppearLeft` | (-180, 0) | 360×1280 | 空挂点。帧在 `ui/battle/battle-appear-left_0`–`14` |
+| `AppearRight` | (180, 0) | 360×1280 | 空挂点。帧在 `ui/battle/battle-appear-right_0`–`14` |
+| `VsBar` | (0, 240) | 80×46 | `battle-end_spr-vs`，白色，简单模式 |
+
+飘字 Label 仍是 `font/FZCSJW-GB1-0.ttf`。BMFont 已入库、还没挂到 Label：伤害 `font/yellow-73`，暴击 `font/red-73`。同包还有技能 `font/blue-73`、治疗 `font/green-73`。
 
 ### 场内表现挂点
 
@@ -157,7 +170,7 @@ Slot_E0–E2 / Slot_A0–A2
 
 | 节点 | 位置 (x, y) | 尺寸 | 默认文案 |
 |------|-------------|------|----------|
-| `Bg` | (0, 0) | 720×1280 | 与 BattlePage 同一张 `battle-scene_spr-bg-1` |
+| `Bg` | (0, 0) | 720×1280 | 与 BattlePage 同一张 `ui/maps/map-bg-mission-1.jpg`。不是 `battle-scene_spr-bg-1` |
 | `Title` | (0, 260) | 680×52 | `战斗（真服接线占位）`，字号 36 |
 | `Status` | (0, 170) | 640×38 | `未同步 · 等切 Prefab`，字号 22 |
 | `FieldHint` | (0, 40) | 640×112 | 站位与特效挂点见 BattlePage，并带一句 `LayerFloat`、`SkillNameBanner`、`HeadAnchor`。顶对齐，可换行，字号 20 |

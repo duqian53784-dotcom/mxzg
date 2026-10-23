@@ -7,8 +7,9 @@ Writes:
 and their .meta files, plus ui/battle.meta if it is missing.
 
 BattlePage is the mainline battle shell: slot mounts, empty VFX anchors,
-placeholder HP / skill bars, a fullscreen photo Bg, and presentation
-mounts (LayerFloat, SkillNameBanner, front-row HeadAnchor).
+placeholder HP / skill bars, a fullscreen photo Bg, presentation
+mounts (LayerFloat, SkillNameBanner, front-row HeadAnchor), and the
+battle-ui2 shell mounts (LayerAppear / AppearLeft / AppearRight / VsBar).
 WireBattlePage is the thinner swap target. They do not share a root.
 
 SpriteFrame uuids are read from client/assets/resources/**/*.meta (@f9941).
@@ -100,16 +101,10 @@ BUFF_ROW_H = 14
 BUFF_X = (-16, 0, 16)
 BUFF_SIZE = 12
 
-# Photo bg, in the order the battle shell should try.
-# Real battle ground first. crusade is the in-repo battlefield until
-# Resource commits ui/battle/battle-scene_spr-bg-1. Mission map is last.
-BG_CANDIDATES = (
-    "ui/battle/battle-scene_spr-bg-1.png",
-    "ui/battle/battle-scene_spr-bg-1.jpg",
-    "ui/maps/map-bg-crusade-group-boss.png",
-    "ui/mainline/map-bg-super-stage.jpg",
-    "ui/mainline/map-bg-mission-1.jpg",
-)
+# Hall photo. Same bytes as old hd/ccbi-res/map-bg-mission-1.jpg.
+# battle-scene_spr-bg-1 is 112×64 corner chrome and must never be the page Bg.
+BATTLE_HALL_BG = "ui/maps/map-bg-mission-1.jpg"
+SPR_BG_CHROME = "ui/battle/battle-scene_spr-bg-1.png"
 TINT_BG = "ui/common/win-bg_win-bg-12.png"
 # Close stays the common button so BtnClose does not resize.
 # Speed x1/x2/x3 and the prog bar do mount when those frames are on disk.
@@ -119,6 +114,12 @@ SPEED_REL = "ui/battle/battle-scene_btn-speed-1.png"
 SPEED_PRESSED_REL = "ui/battle/battle-scene_btn-speed-2.png"
 PROG_BG_REL = "ui/battle/battle-scene_prog-bg-1.png"
 PROG_FILL_REL = "ui/battle/battle-scene_prog-1.png"
+# battle-end_spr-vs. Appear wipes stay empty mounts; the frame lists are
+# resources, not a single sprite on the prefab.
+VS_REL = "ui/battle/battle-end_spr-vs.png"
+# Open band above the front-row heads and below SkillNameBanner.
+VS_Y = 240
+APPEAR_HALF_W = 360
 
 WIRE_TITLE = "战斗（真服接线占位）"
 WIRE_STATUS = "未同步 · 等切 Prefab"
@@ -230,11 +231,10 @@ def choose_art():
     BtnClose stays on the common button. BtnSpeed and the hp/skill bars
     use ui/battle when those files are present.
     """
-    bg_rel = first_existing(BG_CANDIDATES)
+    bg_rel = BATTLE_HALL_BG
     placeholder = False
-    if bg_rel is None:
-        bg_rel = TINT_BG
-        placeholder = True
+    if not os.path.isfile(os.path.join(RES, bg_rel + ".meta")):
+        raise SystemExit("battle hall bg missing: " + bg_rel)
     close_rel = COMMON_CLOSE_REL
     if not os.path.isfile(os.path.join(RES, close_rel + ".meta")):
         raise SystemExit("no close button sprite in resources")
@@ -260,6 +260,7 @@ def choose_art():
         "btn_blue_p": load_sprite("ui/common/button_btn-blue-big-2.png"),
         "btn_orange": load_sprite("ui/common/button_btn-orange-big-1.png", require_slice=True),
         "btn_orange_p": load_sprite("ui/common/button_btn-orange-big-2.png"),
+        "vs": load_sprite(VS_REL) if os.path.isfile(os.path.join(RES, VS_REL + ".meta")) else None,
     }
     if prog:
         art["bar_track"] = load_sprite(prog[0])
@@ -755,6 +756,24 @@ def build_battle_page():
     b.make_node("VfxHit", vfx, VFX_HIT[0], VFX_HIT[1], VFX_HIT[2], VFX_HIT[3])
     b.make_node("VfxScreen", vfx, 0, 0, PAGE_W, PAGE_H)
 
+    # Start wipe + VS. Left/right stay empty so the 15-frame sequences are
+    # not baked into one sprite. VsBar uses battle-end_spr-vs when that
+    # meta is present. No script, no Boot, no protocol.
+    appear = b.make_node("LayerAppear", root, 0, 0, PAGE_W, PAGE_H)
+    b.make_node("AppearLeft", appear, -APPEAR_HALF_W // 2, 0, APPEAR_HALF_W, PAGE_H)
+    b.make_node("AppearRight", appear, APPEAR_HALF_W // 2, 0, APPEAR_HALF_W, PAGE_H)
+    if ART["vs"]:
+        vs_user = ART["vs"]["user"]
+        vs_w = int(vs_user.get("width") or 0)
+        vs_h = int(vs_user.get("height") or 0)
+        if vs_w <= 0 or vs_h <= 0:
+            raise SystemExit("VsBar sprite is missing a trim size")
+        b.make_sprite_node(
+            "VsBar", appear, 0, VS_Y, vs_w, vs_h, ART["vs"], ART["vs"]["type"], col=WHITE,
+        )
+    else:
+        b.make_node("VsBar", appear, 0, VS_Y, 80, 46)
+
     banner = b.make_node("SkillNameBanner", root, 0, BANNER_Y, BANNER_W, BANNER_H)
     b.make_sprite_node(
         "BannerBg", banner, 0, 0, BANNER_W, BANNER_H, ART["msg"], SIMPLE, col=BANNER_TINT,
@@ -932,7 +951,9 @@ def check_battle(b):
     b.expect("BattlePage/LayerField", 0, 0, PAGE_W, PAGE_H)
     b.expect("BattlePage/LayerField/EnemySlots", 0, 0, PAGE_W, PAGE_H)
     b.expect("BattlePage/LayerField/AllySlots", 0, 0, PAGE_W, PAGE_H)
-    if b.child_names("BattlePage") != ["Bg", "LayerField", "LayerVfx", "SkillNameBanner", "LayerHud", "LayerFloat"]:
+    if b.child_names("BattlePage") != [
+        "Bg", "LayerField", "LayerVfx", "LayerAppear", "SkillNameBanner", "LayerHud", "LayerFloat",
+    ]:
         raise SystemExit("BattlePage child order drifted: %s" % b.child_names("BattlePage"))
     if b.child_names("BattlePage/LayerField") != ["EnemySlots", "AllySlots"]:
         raise SystemExit("field layers drifted")
@@ -973,6 +994,25 @@ def check_battle(b):
         b.expect_empty("BattlePage/LayerVfx/" + name)
     if b.child_names("BattlePage/LayerVfx") != ["VfxSkill", "VfxHit", "VfxScreen"]:
         raise SystemExit("vfx order drifted")
+
+    appear = "BattlePage/LayerAppear"
+    b.expect(appear, 0, 0, PAGE_W, PAGE_H)
+    if b.component_types(appear) != ["cc.UITransform"]:
+        raise SystemExit("LayerAppear should stay an empty layer")
+    if b.child_names(appear) != ["AppearLeft", "AppearRight", "VsBar"]:
+        raise SystemExit("appear children drifted: %s" % b.child_names(appear))
+    b.expect(appear + "/AppearLeft", -APPEAR_HALF_W // 2, 0, APPEAR_HALF_W, PAGE_H)
+    b.expect(appear + "/AppearRight", APPEAR_HALF_W // 2, 0, APPEAR_HALF_W, PAGE_H)
+    b.expect_empty(appear + "/AppearLeft")
+    b.expect_empty(appear + "/AppearRight")
+    if ART["vs"]:
+        vs_w = int(ART["vs"]["user"]["width"])
+        vs_h = int(ART["vs"]["user"]["height"])
+        b.expect(appear + "/VsBar", 0, VS_Y, vs_w, vs_h)
+        b.expect_sprite(appear + "/VsBar", ART["vs"], ART["vs"]["type"], WHITE)
+    else:
+        b.expect_empty(appear + "/VsBar")
+        b.expect(appear + "/VsBar", 0, VS_Y, 80, 46)
 
     hud_names = ["TopBar", "HpBars", "SkillBars", "LogBg", "Log", "BtnSkip", "BtnRetreat"]
     if b.child_names("BattlePage/LayerHud") != hud_names:
@@ -1038,6 +1078,7 @@ def check_battle(b):
         "BattlePage/LayerHud/BtnRetreat",
         "BattlePage/LayerVfx/VfxSkill",
         "BattlePage/LayerVfx/VfxHit",
+        "BattlePage/LayerAppear/VsBar",
     ))
     assert_gaps(b, gap_paths)
     expect_presentation(b, gap_paths, head_paths)
@@ -1082,6 +1123,8 @@ def assert_tree(b):
     if ART["speed"]:
         known.add(ART["speed"]["uuid"])
         known.add(ART["speed_pressed"]["uuid"])
+    if ART["vs"]:
+        known.add(ART["vs"]["uuid"])
     for index, obj in enumerate(b.objs):
         type_name = obj.get("__type__")
         if not isinstance(type_name, str) or not type_name.startswith("cc."):
@@ -1250,15 +1293,11 @@ def reject_extras():
 
 def assert_current_repo_choice():
     """Lock the art this tree can actually see."""
-    battle_bg = os.path.isfile(os.path.join(RES, BG_CANDIDATES[0] + ".meta"))
-    if battle_bg:
-        if ART["bg"]["rel"] != "ui/battle/battle-scene_spr-bg-1.png":
-            raise SystemExit("ui/battle exists but Bg did not use battle-scene_spr-bg-1")
-    else:
-        if ART["bg_placeholder"]:
-            raise SystemExit("mission / dungeon bg missing; tint fallback needs a doc update")
-        if ART["bg"]["rel"] != "ui/mainline/map-bg-mission-1.jpg":
-            raise SystemExit("expected map-bg-mission-1, got " + ART["bg"]["rel"])
+    if ART["bg_placeholder"] or ART["bg"]["rel"] != BATTLE_HALL_BG:
+        raise SystemExit("Bg must be ui/maps/map-bg-mission-1.jpg, got " + ART["bg"]["rel"])
+    if os.path.isfile(os.path.join(RES, SPR_BG_CHROME + ".meta")):
+        if ART["bg"]["uuid"] == load_sprite(SPR_BG_CHROME)["uuid"]:
+            raise SystemExit("spr-bg-1 is 112x64 chrome and must not be the page Bg")
     if not ART["bg"]["uuid"].endswith("@f9941"):
         raise SystemExit("bg uuid")
     if ART["close"]["rel"] != COMMON_CLOSE_REL:
@@ -1297,6 +1336,7 @@ def main():
     print("CLOSE", ART["close"]["rel"], ART["close"]["uuid"])
     print("BAR", ART["bar_track"]["rel"])
     print("SPEED", "yes" if ART["speed"] else "no")
+    print("VS", ART["vs"]["rel"] if ART["vs"] else "empty")
     print("OK")
 
 
