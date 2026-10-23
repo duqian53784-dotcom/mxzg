@@ -26259,13 +26259,13 @@ function checkCityHub(): void {
     "hang fight button rebinds after the page is in the scene and the fullscreen menu is not the hit target"
   );
   const framePlaySrc = readFileSync(uiSource("battleFramePlay.ts"), "utf8");
-  const presentSrc = readFileSync(uiSource("battlePresentation.ts"), "utf8");
+  const castPresentSrc = readFileSync(uiSource("battlePresentation.ts"), "utf8");
   assert(
     framePlaySrc.indexOf("export const FRAME_STEP_MS = 70") >= 0 &&
       framePlaySrc.indexOf("SizeMode.TRIMMED") >= 0 &&
       framePlaySrc.indexOf("warmBattleFrames") >= 0 &&
-      presentSrc.indexOf("BATTLE_FRAME_STEP_MS = 70") >= 0 &&
-      presentSrc.indexOf("time_diff") >= 0,
+      castPresentSrc.indexOf("BATTLE_FRAME_STEP_MS = 70") >= 0 &&
+      castPresentSrc.indexOf("time_diff") >= 0,
     "skill frames stay at native size and the cast wait uses the same 70ms step"
   );
   const endSrc = readFileSync(uiSource("battleEndView.ts"), "utf8");
