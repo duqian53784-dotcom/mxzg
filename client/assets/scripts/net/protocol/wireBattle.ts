@@ -26,9 +26,12 @@
  * camp 只有 1（我方）和 2（敌方）参与对位。其它值（含出现的 0）不当阵营。
  * 没有的数保持 null，不写成 0。有 report 才在主线页播 resources/spine 首批套的站场和回合动作。
  * 回合 skill_id 对 batch2 技能套取模，挂一个命名特效；hits 挂 yanwu。没有技能号、没有 hits，或表是空的，就不挂，站场和攻击照旧。
- * 受击者的套里有 hit 才播英雄受击。没有这个动作就留 stand。不播 bisha。不是旧技能表，不接 hd/skill、skill-effect、beattack 图集。
+ * hero_id 对得上 resources/spine 里的套时用那套。8 位套有 attack 和 hit。对不上仍用原来的三套默认。
+ * 受击者的套里有 hit 才播英雄受击。没有这个动作就留 stand。hp 已经到 0 的人下一拍停在 hit，有 die 才播 die。不播 bisha。不是旧技能表。
  * batch2 仍是 Spine 3.7.94。Creator 3.8.8 用 spine-3.8，曲线、约束、裁剪可能播不出。播不出就跳过该特效。
  */
+import { heroSkinClips } from "./battleAssetIndex";
+
 const MAX_BODY = 65536;
 
 /** 和 WsTransport 入站分发、encodeWireMessage 用同一个字符串。数字号是 WireCmd.battleMatch。 */
@@ -288,7 +291,7 @@ export function formatWireBattleMatch(snap: WireBattleMatch, roleId?: number | n
 }
 
 export function wireSpineHasClip(stem: string, clip: WireSpineClip): boolean {
-  const list = STEM_CLIPS[stem];
+  const list = STEM_CLIPS[stem] || heroSkinClips(stem);
   if (!list) return false;
   for (let i = 0; i < list.length; i++) {
     if (list[i] === clip) return true;
@@ -387,7 +390,7 @@ function heroSlots(heroes: WireBattleHero[], side: "ally" | "enemy"): WireSpineS
   for (let i = 0; i < heroes.length && slots.length < 3; i++) {
     const hero = heroes[i];
     const named = hero.heroId !== null ? String(hero.heroId) : "";
-    const stem = STEM_CLIPS[named] ? named : pool[slots.length % pool.length];
+    const stem = STEM_CLIPS[named] || heroSkinClips(named) ? named : pool[slots.length % pool.length];
     slots.push({
       side,
       stem,
@@ -423,37 +426,45 @@ function heroLabel(side: "ally" | "enemy", pos: number | null, hp: number | null
 }
 
 function buildBeats(report: WireBattleReport, slots: WireSpineSlot[], win: boolean | null): WireSpineBeat[] {
-  const beats: WireSpineBeat[] = [standBeat(slots, "站场")];
+  const carried: (number | null)[] = [];
+  for (let i = 0; i < slots.length; i++) carried.push(slots[i].hp);
+  const take = (beat: WireSpineBeat): WireSpineBeat => {
+    for (let i = 0; i < beat.hp.length; i++) {
+      if (beat.hp[i] !== null) carried[i] = beat.hp[i];
+    }
+    return beat;
+  };
+  const beats: WireSpineBeat[] = [take(standBeat(slots, "站场", carried))];
   let actionCount = 0;
   for (let r = 0; r < report.rounds.length; r++) actionCount += report.rounds[r].actions.length;
   if (actionCount === 0) {
     for (let r = 0; r < report.rounds.length; r++) {
-      beats.push(standBeat(slots, roundPrefix(report.rounds[r]) + " · 无行动"));
+      beats.push(take(standBeat(slots, roundPrefix(report.rounds[r]) + " · 无行动", carried)));
     }
-    if (win === true) beats.push(outcomeBeat(slots, "ally", win));
-    else if (win === false) beats.push(outcomeBeat(slots, "enemy", win));
+    if (win === true) beats.push(take(outcomeBeat(slots, "ally", win, carried)));
+    else if (win === false) beats.push(take(outcomeBeat(slots, "enemy", win, carried)));
     return beats;
   }
   for (let r = 0; r < report.rounds.length; r++) {
     const round = report.rounds[r];
     if (round.actions.length === 0) {
-      beats.push(standBeat(slots, roundPrefix(round) + " · 无行动"));
+      beats.push(take(standBeat(slots, roundPrefix(round) + " · 无行动", carried)));
       continue;
     }
     for (let a = 0; a < round.actions.length; a++) {
       const last = r === report.rounds.length - 1 && a === round.actions.length - 1;
-      beats.push(actionBeat(slots, round, round.actions[a], win, last));
+      beats.push(take(actionBeat(slots, round, round.actions[a], win, last, carried)));
     }
   }
   return beats;
 }
 
-function standBeat(slots: WireSpineSlot[], line: string): WireSpineBeat {
-  return { line, cues: baseCues(slots), hp: emptyHp(slots), vfx: [] };
+function standBeat(slots: WireSpineSlot[], line: string, carried: (number | null)[]): WireSpineBeat {
+  return { line, cues: baseCues(slots, carried), hp: emptyHp(slots), vfx: [] };
 }
 
-function outcomeBeat(slots: WireSpineSlot[], side: "ally" | "enemy", win: boolean | null): WireSpineBeat {
-  const cues = baseCues(slots);
+function outcomeBeat(slots: WireSpineSlot[], side: "ally" | "enemy", win: boolean | null, carried: (number | null)[]): WireSpineBeat {
+  const cues = baseCues(slots, carried);
   const actor = firstSide(slots, side);
   let verb = "站立";
   if (actor >= 0 && wireSpineHasClip(slots[actor].stem, "attack")) {
@@ -471,9 +482,10 @@ function actionBeat(
   round: WireBattleRound,
   action: WireBattleAction,
   win: boolean | null,
-  last: boolean
+  last: boolean,
+  carried: (number | null)[]
 ): WireSpineBeat {
-  const cues = baseCues(slots);
+  const cues = baseCues(slots, carried);
   const hp = emptyHp(slots);
   const vfx = actionVfx(slots, action);
   let line = roundPrefix(round);
@@ -561,10 +573,13 @@ function applyBossDie(slots: WireSpineSlot[], cues: WireSpineCue[], hp: (number 
   }
 }
 
-function baseCues(slots: WireSpineSlot[]): WireSpineCue[] {
+function baseCues(slots: WireSpineSlot[], carried: (number | null)[]): WireSpineCue[] {
   const cues: WireSpineCue[] = [];
   for (let i = 0; i < slots.length; i++) {
-    const clip: WireSpineClip = slots[i].side === "flag" ? "idle" : "stand";
+    let clip: WireSpineClip = slots[i].side === "flag" ? "idle" : "stand";
+    const downed = carried[i] === 0 && (slots[i].side === "ally" || slots[i].side === "enemy");
+    if (downed && wireSpineHasClip(slots[i].stem, "die")) clip = "die";
+    else if (downed && wireSpineHasClip(slots[i].stem, "hit")) clip = "hit";
     cues.push({ slot: i, clip: fallbackClip(slots[i].stem, clip) });
   }
   return cues;

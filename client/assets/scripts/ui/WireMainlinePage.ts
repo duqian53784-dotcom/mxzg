@@ -33,9 +33,10 @@
  * 主线入口已在「更多」，不往主屏再放矩形。
  * 收到 report 在本页播 spine 站场、回合攻击、有 hit 的受击，以及 batch2 技能/受击特效。3001、3006、3102 和 3030 都走 planWireSpineReplay。3103 不走。3101 不走。3099 不走。
  * 有拍时 VfxHit 再播 hero-beattack，VfxSkill 再播 skill 和 skill-effect。mountFrameReel 挂在已有锚点上，不另建 Vfx 节点。帧没加载到就留 batch2。
+ * skill_id 对得上 resources 里的套时播那套帧，并再播下一层。对不上仍用 49 套和 skill-effect 取模。
  * 站位是左敌右我，挂在已有的 Slot_E* / Slot_A* 上。报告没有英雄时仍补一格站场，页不空。
  * USE_BATTLE_PREFAB 默认开。上述回放进战时挂 BattlePage.prefab：站位、血条、回合、战报，技能挂 VfxSkill，受击挂 VfxHit。WireBattlePage 仍不挂。
- * 底图优先 resources 的 ui/battle/battle-scene_spr-bg-*。还没入库就用 Prefab 上的沙地，不把主线关卡图当最终底。
+ * 底图是 ui/maps/map-bg-mission-1，拉到 720×1280。battle-scene_spr-bg-1 是边角小图，不当全屏底。代码页没有这张时才用沙地。
  * 同一份回放再写 Prefab 的 FloatDmg、FloatCrit、SkillNameBanner、前排 HeadAnchor。没有的 crit / level / buffs 藏起，不写成 0，也不编名字。
  * 开关关掉或 Prefab 加载失败时，仍用本页代码 UI，不另建这些挂点。跳过、撤退、关闭不发新 c2s。不改 Boot。
  * 加速只把每一拍的等待收成 2 倍或 3 倍，最短 80ms，不跳过拍子，也不拆页。跳过仍停在最后一拍。
@@ -129,7 +130,7 @@ import {
 import { planStarterChallenge, STARTER_LINEUP_NOTE } from "../net/protocol/starterLineup";
 import { BattlePrefabShell, mountBattleBackdrop, mountBattlePrefab, paintBattleScene, paintSpeedIcon, USE_BATTLE_PREFAB } from "./BattlePage";
 import { FrameReel, mountFrameReel } from "./battleFramePlay";
-import { effectFramePaths, hitFramePaths, skillFramePaths } from "./battleFrames";
+import { effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
 import { battleBeatWait, BattlePresentation, nextBattleSpeed, planBattlePresentation } from "./battlePresentation";
 import {
   BattlePresentMount,
@@ -1690,7 +1691,9 @@ class WireMainlineController implements WireMainlinePage {
       }
     }
     const skillId = this.beatSkillId(plan, beat);
-    this.driveReel(this.effectReel, wantSkill, effectFramePaths(skillId), "skill", skillXY, gen, beat);
+    const layered = skillLayerFramePaths(skillId);
+    const effectPaths = layered === null ? effectFramePaths(skillId) : layered;
+    this.driveReel(this.effectReel, wantSkill && effectPaths.length > 0, effectPaths, "skill", skillXY, gen, beat);
     this.driveReel(this.skillReel, wantSkill, skillFramePaths(skillId), "skill", skillXY, gen, beat);
     this.driveReel(this.hitReel, wantHit, hitFramePaths(skillId), "hit", hitXY, gen, beat);
   }

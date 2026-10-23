@@ -2,7 +2,9 @@
  * 回放用的帧路径。都在 resources/battle 下，给 resources.load 的是不带扩展名的路径。
  * hero-beattack 跳过只有一张小图的第 0 套。skill-101050201-3 只播编号帧，不播那张无序号底图。
  * hero-skill 的文件名是 hero-skill_effect-1-0 … 9，不是 stem_序号。
+ * skill_id 对得上 resources 里的套时播那套。对不上仍用下面 49 套取模，所以 0 仍是 hero-skill。
  */
+import { skillLayerFrames, skillStemFrames } from "../net/protocol/battleAssetIndex";
 
 export const HIT_RUNS: readonly (readonly [string, number])[] = [
   ["1", 5],
@@ -103,9 +105,19 @@ export function effectFramePaths(skillId: number | null): string[] {
 }
 
 export function skillFramePaths(skillId: number | null): string[] {
+  const exact = skillStemFrames(skillId);
+  if (exact) return exact;
   const run = SKILL_RUNS[pickIndex(skillId, SKILL_RUNS.length)];
   if (run[0] === "hero-skill") {
     return numbered("battle/skill/hero-skill/hero-skill_effect-1-", run[1]);
   }
   return numbered("battle/skill/" + run[0] + "/" + run[0] + "_", run[1]);
+}
+
+/**
+ * 对得上的技能再播下一层。没有下一层是空数组。
+ * 技能号对不上是 null，调用方仍播 skill-effect 取模。
+ */
+export function skillLayerFramePaths(skillId: number | null): string[] | null {
+  return skillLayerFrames(skillId);
 }
