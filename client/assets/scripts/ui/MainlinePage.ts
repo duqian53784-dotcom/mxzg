@@ -26,6 +26,7 @@ import {
   rewardLines,
   winToast,
 } from "../module/mainline/battle";
+import { PAGE_SHELL_FIGHT, setPagePrefabShellVisible } from "./pagePrefabShell";
 import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
 
 const PAGE_BG = new Color(8, 16, 32, 255);
@@ -102,6 +103,10 @@ class MainlineController implements MainlinePage {
     place(createRect("bg", 720, 1280, PAGE_BG), this.node, 0, 0);
     this.body = uiNode("body");
     this.body.parent = this.node;
+    this.node.on(PAGE_SHELL_FIGHT, () => {
+      const current = this.host.stageId() >= 1 ? Math.floor(this.host.stageId()) : 1;
+      this.onRow(current);
+    });
     GameLog.shared.info("Mainline", "open list stage " + host.stageId());
     this.showList();
   }
@@ -115,6 +120,7 @@ class MainlineController implements MainlinePage {
 
   private showList(): void {
     this.phase = "list";
+    setPagePrefabShellVisible(this.node, true);
     this.clearBody();
     const current = this.host.stageId() >= 1 ? Math.floor(this.host.stageId()) : 1;
     const level = this.host.level();
@@ -284,6 +290,7 @@ class MainlineController implements MainlinePage {
 
   private showBattle(plan: BattlePlan): void {
     this.phase = "battle";
+    setPagePrefabShellVisible(this.node, false);
     this.action = null;
     this.logLines = [];
     this.clearBody();

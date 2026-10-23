@@ -28,6 +28,7 @@ import {
   MainCityEffectFile,
   MainCityPosFile,
 } from "../assets/scripts/ui/cityMapLayout";
+import { isP1ProgressStatus, pagePrefabShell } from "../assets/scripts/ui/prefabShellMap";
 import {
   attachReadonlyCityEntry,
   CITY_DRAG_HINT,
@@ -25962,9 +25963,34 @@ function checkCityHub(): void {
   const boot = readFileSync(bootSource(), "utf8");
   assert(boot.indexOf("USE_CITY_CHROME") < 0, "Boot does not grow a city chrome switch");
   assert(boot.indexOf("USE_BATTLE_PREFAB") < 0, "Boot does not grow a battle prefab switch");
+  assert(boot.indexOf("USE_PAGE_PREFAB_SHELL") < 0, "Boot does not grow a page prefab shell switch");
+  assert(boot.indexOf("export const USE_P1_LOGIN_PREFAB = true") >= 0, "p1 login prefab default stays on");
+  assert(boot.indexOf("export const USE_LOGIN_PREFAB = true") >= 0, "old login prefab stays the fallback");
+  assert(boot.indexOf("mountP1LoginPrefab") >= 0 && boot.indexOf("buildLoginPanel") >= 0, "p1 login falls back to the old panel");
+  assert(mainApp.indexOf("USE_PAGE_PREFAB_SHELL") >= 0 && mainApp.indexOf("attachPagePrefabShell") >= 0, "page shells mount from MainApp");
+  assert(mainApp.indexOf("USE_BATTLE_PREFAB") < 0, "MainApp does not grow a battle prefab switch");
+  const mainlineShell = pagePrefabShell("mainline");
+  const ancientShell = pagePrefabShell("main_ancient");
+  assert(
+    !!mainlineShell && mainlineShell.fight && mainlineShell.path === "prefabs/ui/battle/BattlePanelLayer",
+    "mainline shell is the battle panel and keeps the existing fight"
+  );
+  assert(!!ancientShell && !ancientShell.fight && ancientShell.path.indexOf("AncientLayer") >= 0, "unrouted ancient building opens its prefab shell");
+  assert(pagePrefabShell("shop") === null && pagePrefabShell("main_country_war") === null && pagePrefabShell("main_blessingpool") === null, "p5 screens stay without a new prefab shell");
+  assert(isP1ProgressStatus("账号 mock") && isP1ProgressStatus("进入主城…") && !isP1ProgressStatus("服未启动，请检查启动 bat"), "login errors open ErrorLayer and progress stays on the form");
+  const shellIds = ["mainline", "hero", "summon", "smith", "bag", "mail", "arena", "tower", "main_ancient", "main_hero_make", "main_altar", "main_magic_cube"];
+  for (let si = 0; si < shellIds.length; si++) {
+    const spec = pagePrefabShell(shellIds[si]);
+    assert(!!spec && existsSync(join(process.cwd(), "client", "assets", spec.path + ".prefab")), "shell prefab exists " + shellIds[si]);
+  }
+  assert(existsSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "login", "UserLoginLayer.prefab")), "p1 user login prefab exists");
+  assert(existsSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "login", "ChooseServerLayer.prefab")), "p1 choose server prefab exists");
+  const mainlineSrc = readFileSync(uiSource("MainlinePage.ts"), "utf8");
+  assert(mainlineSrc.indexOf("PAGE_SHELL_FIGHT") >= 0 && mainlineSrc.indexOf("onRow") >= 0, "mock mainline fight still enters the current stage");
   const battlePageSrc = readFileSync(uiSource("BattlePage.ts"), "utf8");
   const battleLayoutSrc = readFileSync(uiSource("battlePrefabLayout.ts"), "utf8");
   const wireBattlePageSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
+  assert(wireBattlePageSrc.indexOf("PAGE_SHELL_FIGHT") >= 0 && wireBattlePageSrc.indexOf("this.challenge()") >= 0, "wire mainline fight still calls challenge");
   assert(battlePageSrc.indexOf("export const USE_BATTLE_PREFAB = true") >= 0, "battle prefab default stays on");
   assert(mainApp.indexOf("USE_BATTLE_PREFAB") < 0, "MainApp does not grow a battle prefab switch");
   assert(chrome.indexOf("USE_BATTLE_PREFAB") < 0 && chrome.indexOf("BattlePage") < 0, "city chrome is not part of the battle prefab switch");

@@ -18,6 +18,8 @@
 
 Login / CreateRole / CityChrome / CityHub 四个主路径 flag 默认 **true**。Mock 启动出 Login Prefab，创角出 CreateRole Prefab，进主城后顶栏底栏来自 CityChrome，中间是 CityHub。底栏「英雄」「召唤」在 Mock 下再挂各自的 Prefab。真服只读页仍走原来的代码页。
 
+冷启动要看 P1 的 1:1 登录（`UserLoginLayer` / `ChooseServerLayer`）以及主城建筑、主线上的 P2–P4 壳时，走 [`prefab-demo-path.md`](prefab-demo-path.md)。`USE_P1_LOGIN_PREFAB` 默认开，关掉仍回到上表的 LoginPanel。页面壳是 `USE_PAGE_PREFAB_SHELL`，不进 Boot。
+
 ## 回滚
 
 把要退回的常量改成 `false`。`false` 时仍调用原来的 `buildLoginPanel` / `buildCreateRolePanel` / `mountCityChrome` / `mountCityMap`，代码搭 UI 没有删。CityHub 改 `false` 时主城中间回到代码地图。
