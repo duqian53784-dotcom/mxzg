@@ -1199,6 +1199,11 @@ import {
   WIRE_LINEUP_SAVE_SAMPLE_FRAME,
 } from "../assets/scripts/net/protocol/wireLineUpSave";
 import {
+  mainFormationHeroId,
+  planStarterChallenge,
+  STARTER_LINEUP_NOTE,
+} from "../assets/scripts/net/protocol/starterLineup";
+import {
   decodeWireRunningPromotion,
   formatWireRunningPromotionHead,
   formatWireRunningPromotionLine,
@@ -9542,6 +9547,100 @@ async function checkWs(): Promise<void> {
       formatWireLineUpLine(lineUpZeroSnap.rows[0]) === "字段1=0" &&
       formatWireLineUpHead(lineUpZeroSnap).indexOf("assistance_unlock") < 0,
     "present 3101 row zero stays zero and missing assistance_unlock stays absent"
+  );
+  const starterHeroBlob = concatBytes(fieldVarint(1, 42), fieldVarint(3, 2));
+  const starterMainRow = fieldBytes(
+    1,
+    concatBytes(concatBytes(fieldVarint(1, 0), fieldBytes(4, starterHeroBlob)), fieldVarint(5, 1))
+  );
+  const starterMainSnap = decodeWireLineUp(starterMainRow);
+  const starterOtherRow = fieldBytes(1, concatBytes(fieldVarint(1, 9), fieldBytes(4, starterHeroBlob)));
+  const starterOtherSnap = decodeWireLineUp(starterOtherRow);
+  const starterEmpty = decodeWireLineUp(new Uint8Array(0));
+  assert(
+    starterMainSnap !== null &&
+      mainFormationHeroId(starterMainSnap) === 42 &&
+      mainFormationHeroId(starterOtherSnap) === null &&
+      mainFormationHeroId(lineUpZeroSnap) === null &&
+      mainFormationHeroId(lineUpProbeRow) === null &&
+      mainFormationHeroId(starterEmpty) === null,
+    "MAIN hero id is type 0 field 4 nested field 1, not field 2 and not another lineup type"
+  );
+  const starterGrant = planStarterChallenge({
+    lineUp: starterEmpty,
+    heroes: [],
+    gmHeroId: null,
+    mainSaved: false,
+  });
+  const starterSave = planStarterChallenge({
+    lineUp: starterEmpty,
+    heroes: [{ heroId: 7 }],
+    gmHeroId: null,
+    mainSaved: false,
+  });
+  const starterGo = planStarterChallenge({
+    lineUp: starterMainSnap,
+    heroes: [],
+    gmHeroId: null,
+    mainSaved: false,
+  });
+  const starterSaved = planStarterChallenge({
+    lineUp: starterEmpty,
+    heroes: [],
+    gmHeroId: null,
+    mainSaved: true,
+  });
+  const starterWait = planStarterChallenge({
+    lineUp: null,
+    heroes: null,
+    gmHeroId: null,
+    mainSaved: false,
+  });
+  const starterWaitBag = planStarterChallenge({
+    lineUp: null,
+    heroes: [{ heroId: 7 }],
+    gmHeroId: null,
+    mainSaved: false,
+  });
+  assert(
+    starterGrant.kind === "grant" &&
+      starterGrant.heroId === null &&
+      starterSave.kind === "save" &&
+      starterSave.heroId === 7 &&
+      starterGo.kind === "challenge" &&
+      starterSaved.kind === "challenge" &&
+      starterWait.kind === "wait" &&
+      starterWaitBag.kind === "wait" &&
+      STARTER_LINEUP_NOTE.indexOf("2015") >= 0 &&
+      STARTER_LINEUP_NOTE.indexOf("3100") >= 0 &&
+      STARTER_LINEUP_NOTE.indexOf("不进 pullIdle") >= 0 &&
+      lineupPageSrc.indexOf("planStarterChallenge") >= 0 &&
+      lineupPageSrc.indexOf("STARTER_LINEUP_NOTE") >= 0 &&
+      lineupPageSrc.indexOf("不进 pullIdle") >= 0,
+    "empty MAIN grants or saves before challenge and does not run from the login chain"
+  );
+  const sessionCandidates = [
+    join(process.cwd(), "client", "assets", "scripts", "net", "WireSession.ts"),
+    join(process.cwd(), "assets", "scripts", "net", "WireSession.ts"),
+  ];
+  let sessionSrc = "";
+  for (let sessionTry = 0; sessionTry < sessionCandidates.length; sessionTry++) {
+    try {
+      sessionSrc = readFileSync(sessionCandidates[sessionTry], "utf8");
+      break;
+    } catch (_err) {
+      sessionSrc = "";
+    }
+  }
+  const idleAt = sessionSrc.indexOf("static pullIdle()");
+  const mailAt = sessionSrc.indexOf("static pullMail()");
+  const idleBody = idleAt >= 0 && mailAt > idleAt ? sessionSrc.slice(idleAt, mailAt) : "";
+  assert(
+    idleBody.length > 0 &&
+      idleBody.indexOf("pullGmAddHero") < 0 &&
+      idleBody.indexOf("pullMainLineUp") < 0 &&
+      idleBody.indexOf("2015") < 0,
+    "pullIdle does not grant a hero or save MAIN"
   );
   const lineUpUnlock0Snap = decodeWireLineUp(lineUpUnlock0);
   assert(
@@ -17937,6 +18036,15 @@ async function checkWs(): Promise<void> {
           WireSession.lineUp === lineUpBeforeGm &&
           WireSession.lineUpSerial === lineUpSerialBeforeGm,
         "non-empty s2c 3100 does not count as save success or replace the 3101 probe"
+      );
+      assert(WireSession.mainLineReady === true, "empty 3100 marks MAIN ready so the next challenge does not grant again");
+      const bagSave = encodeWireMessage({ cmd: "wire.3100", data: { heroId: 7, position: 2 } });
+      const sentBeforeBagSave = roleSockets[0].sent.length;
+      assert(bagSave !== null && WireSession.pullMainLineUp(7), "3100 save accepts a 4001 hero id");
+      assert(
+        roleSockets[0].sent.length === sentBeforeBagSave + 1 &&
+          bytesToHex(new Uint8Array(roleSockets[0].sent[sentBeforeBagSave] as ArrayBuffer)) === bytesToHex(bagSave.bytes),
+        "3100 save of bag hero 7 is one frame and is not the 4030 instance"
       );
       const sentBeforeFormationProbe = roleSockets[0].sent.length;
       const goldBeforeFormationProbe = Session.gold;

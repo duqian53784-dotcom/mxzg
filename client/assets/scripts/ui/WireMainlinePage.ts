@@ -21,6 +21,8 @@
  * 短等没有 4030 时 Toast「GM 未开」。s2c 1005 Toast 错误码。
  * 「GM 上 MAIN」在本页，发 c2s 3100（type=0，formation_id=1，goddess_type=0，hero_id 用上一只 4030 的实例，position=2）。成功是空的 s2c 3100。
  * 这两钮不进 pullIdle。只读「获取阵容」仍不发 3100。不接 3020。站位 1 和 4 不发。
+ * 空号点「挑战」不必打开这两钮。仓内没有教程发英雄 opcode。名册和 MAIN 都空时，挑战先复用 2015（默认 10505010 / 星 9）再 3100，然后才发 3001。
+ * 名册已有服端 hero_id 时只发 3100。MAIN 已有英雄，或本会话 3100 已空包确认，只发 3001。过渡直到新手 Prefab 和出阵 Prefab 落地。不进 pullIdle。
  * 「请求战报」在本页，发 c2s 3102（battle_id、type，不是空壳）。不从 3001 或 3006 自动接。
  * 3001 / 3006 的战报不落库，拿它们的 battle_id 常回 BATTLE_REPORT_TIMEOUT。
  * 「切磋」在本页，发 c2s 3030（type、opponent_id、server_id，不是空壳）。opponent_id 不预填。
@@ -124,6 +126,7 @@ import {
   WIRE_GM_SILENT_MS,
   WIRE_GM_UNSYNCED_TOAST,
 } from "../net/protocol/wireGmCommand";
+import { planStarterChallenge, STARTER_LINEUP_NOTE } from "../net/protocol/starterLineup";
 import { BattlePrefabShell, mountBattleBackdrop, mountBattlePrefab, paintBattleScene, paintSpeedIcon, USE_BATTLE_PREFAB } from "./BattlePage";
 import { FrameReel, mountFrameReel } from "./battleFramePlay";
 import { effectFramePaths, hitFramePaths, skillFramePaths } from "./battleFrames";
@@ -207,6 +210,10 @@ class WireMainlineController implements WireMainlinePage {
   private seenWireErrorSerial = 0;
   private gmTypeId = WIRE_GM_DEFAULT_TYPE;
   private gmSaved = false;
+  /** 这次「挑战」还要等 2015 / 3100 / 3101，完成后再发 3001。GM 按钮不置这个。 */
+  private resumeChallenge = false;
+  /** 这次 3101 是挑战前确认 MAIN，不是「获取阵容」按钮。 */
+  private lineUpForChallenge = false;
   private gmTimer: ReturnType<typeof setTimeout> | null = null;
   private lineTimer: ReturnType<typeof setTimeout> | null = null;
   private chapterIdx = 1;
@@ -313,6 +320,8 @@ class WireMainlineController implements WireMainlinePage {
     if (this.disposed) return;
     this.disposed = true;
     this.waiting = false;
+    this.resumeChallenge = false;
+    this.lineUpForChallenge = false;
     this.stopFrameReels();
     this.clearProbeTimer("all");
     this.unbindProbeScroll();
@@ -327,7 +336,7 @@ class WireMainlineController implements WireMainlinePage {
     if (this.disposed || !this.host.alive()) return;
     if (this.phase === "info") this.renderInfo();
     if (this.phase === "done") this.write(this.resultLabel, this.resultText());
-    if (!this.waiting || !this.waitKind) return;
+    if (this.waiting && this.waitKind) {
     if (this.waitKind === "3001") {
       if (WireSession.battleSerial === this.seenSerial) return;
       this.seenSerial = WireSession.battleSerial;
@@ -433,6 +442,10 @@ class WireMainlineController implements WireMainlinePage {
       this.waitKind = null;
       this.write(this.lineUpProbeLabel, this.lineUpProbeText());
       this.write(this.statusLabel, this.statusText());
+      if (this.lineUpForChallenge) {
+        this.lineUpForChallenge = false;
+        this.continueChallenge();
+      }
       return;
     }
     if (this.waitKind === "3099") {
@@ -457,8 +470,10 @@ class WireMainlineController implements WireMainlinePage {
         this.gmSaved = false;
         this.write(this.gmLabel, this.gmText());
         this.write(this.statusLabel, "4030 英雄实例 " + WireSession.gmHeroId);
+        if (this.resumeChallenge) this.continueChallenge();
         return;
       }
+      this.resumeChallenge = false;
       this.seenWireErrorSerial = WireSession.wireErrorSerial;
       const errText = WireSession.wireErrorText || "服端错误";
       this.host.showToast(errText);
@@ -478,8 +493,13 @@ class WireMainlineController implements WireMainlinePage {
         this.gmSaved = true;
         this.write(this.gmLabel, this.gmText());
         this.write(this.statusLabel, "3100 已上 MAIN");
+        if (this.resumeChallenge) {
+          this.resumeChallenge = false;
+          this.sendChallenge();
+        }
         return;
       }
+      this.resumeChallenge = false;
       this.seenWireErrorSerial = WireSession.wireErrorSerial;
       const errText = WireSession.wireErrorText || "服端错误";
       this.host.showToast(errText);
@@ -501,6 +521,9 @@ class WireMainlineController implements WireMainlinePage {
     this.replayKind = "3102";
     this.phase = "battle";
     void this.play({ empty: false, report: fetched.report, marks: fetched.marks });
+      return;
+    }
+    if (this.resumeChallenge && this.phase === "info") this.continueChallenge();
   }
 
   private showInfo(): void {
@@ -669,36 +692,48 @@ class WireMainlineController implements WireMainlinePage {
   }
 
   private addGmHero(): void {
+    this.beginGrant(false);
+  }
+
+  /** GM 按钮读类型号。挑战过渡用默认 10505010，不要求打开 GM。 */
+  private beginGrant(forChallenge: boolean): void {
     if (this.disposed || this.phase === "battle" || this.waiting) return;
-    const typed = this.gmTypeField ? this.gmTypeField.getValue() : this.gmTypeId;
+    if (!forChallenge) this.resumeChallenge = false;
+    const typed = forChallenge ? WIRE_GM_DEFAULT_TYPE : this.gmTypeField ? this.gmTypeField.getValue() : this.gmTypeId;
     const query = readWireGmAddHero({ command: WIRE_GM_COMMAND, typeId: typed });
     if (!query) {
       this.write(this.gmLabel, WIRE_GM_BAD_TYPE);
+      if (forChallenge) this.resumeChallenge = false;
       return;
     }
     this.gmTypeId = query.params[0];
     if (this.gmTypeField) this.gmTypeField.setValue(this.gmTypeId);
     if (!this.host.connected()) {
       this.host.showToast(errorText(ErrorCode.NET_NOT_CONNECTED));
+      if (forChallenge) this.resumeChallenge = false;
       return;
     }
     if (!WireSession.hasChapter()) {
       this.host.showToast(WIRE_GM_UNSYNCED_TOAST);
+      if (forChallenge) this.resumeChallenge = false;
       return;
     }
     this.seenGmHeroSerial = WireSession.gmHeroSerial;
     this.seenWireErrorSerial = WireSession.wireErrorSerial;
     if (!WireSession.pullGmAddHero(this.gmTypeId)) {
       this.host.showToast(WIRE_GM_UNSYNCED_TOAST);
+      if (forChallenge) this.resumeChallenge = false;
       return;
     }
+    this.resumeChallenge = forChallenge;
     this.waitKind = "2015";
     this.waiting = true;
-    this.write(this.statusLabel, "已发 2015，等待 4030");
+    this.write(this.statusLabel, forChallenge ? "空阵容，补第一只英雄" : "已发 2015，等待 4030");
     this.armProbeTimer("gm", WIRE_GM_SILENT_MS, () => {
       if (this.disposed || this.waitKind !== "2015") return;
       this.waiting = false;
       this.waitKind = null;
+      this.resumeChallenge = false;
       this.host.showToast(WIRE_GM_CLOSED_TOAST);
       this.write(this.statusLabel, this.statusText());
     });
@@ -706,35 +741,49 @@ class WireMainlineController implements WireMainlinePage {
   }
 
   private saveMainLine(): void {
+    this.beginSave(null, false);
+  }
+
+  /** heroId 为空时用最近一次 4030。挑战过渡传入 4001 或 4030 的实例。 */
+  private beginSave(heroId: number | null, forChallenge: boolean): void {
     if (this.disposed || this.phase === "battle" || this.waiting) return;
-    if (WireSession.gmHeroId === null) {
+    if (!forChallenge) this.resumeChallenge = false;
+    const id = heroId !== null ? heroId : WireSession.gmHeroId;
+    if (id === null) {
       this.host.showToast(WIRE_GM_NEED_HERO);
+      if (forChallenge) this.resumeChallenge = false;
       return;
     }
     if (!this.host.connected()) {
       this.host.showToast(errorText(ErrorCode.NET_NOT_CONNECTED));
+      if (forChallenge) this.resumeChallenge = false;
       return;
     }
     if (!WireSession.hasChapter()) {
       this.host.showToast(WIRE_GM_UNSYNCED_TOAST);
+      if (forChallenge) this.resumeChallenge = false;
       return;
     }
     this.seenLineUpSaveSerial = WireSession.lineUpSaveSerial;
     this.seenWireErrorSerial = WireSession.wireErrorSerial;
-    if (!WireSession.pullMainLineUp()) {
+    const sent = heroId !== null ? WireSession.pullMainLineUp(heroId) : WireSession.pullMainLineUp();
+    if (!sent) {
       this.host.showToast(WIRE_GM_NEED_HERO);
+      if (forChallenge) this.resumeChallenge = false;
       return;
     }
+    this.resumeChallenge = forChallenge;
     this.waitKind = "3100";
     this.waiting = true;
-    this.write(this.statusLabel, "已发 3100，等待空包");
+    this.write(this.statusLabel, forChallenge ? "空阵容，上 MAIN" : "已发 3100，等待空包");
     this.armProbeTimer("line", LINEUP_SAVE_WAIT_MS, () => {
       if (this.disposed || this.waitKind !== "3100") return;
       this.waiting = false;
       this.waitKind = null;
+      this.resumeChallenge = false;
       this.write(this.statusLabel, "3100 无回包");
     });
-    GameLog.shared.info("Mainline", "wire lineup save 3100 hero_id=" + WireSession.gmHeroId + " position=2");
+    GameLog.shared.info("Mainline", "wire lineup save 3100 hero_id=" + id + " position=2");
   }
 
   private pullChapterData(): void {
@@ -760,6 +809,65 @@ class WireMainlineController implements WireMainlinePage {
 
   private challenge(): void {
     if (this.disposed || this.phase === "battle" || this.waiting) return;
+    if (!this.host.connected()) {
+      this.host.showToast(errorText(ErrorCode.NET_NOT_CONNECTED));
+      return;
+    }
+    if (!WireSession.hasChapter()) {
+      this.host.showToast(WIRE_BATTLE_UNSYNCED_TOAST);
+      return;
+    }
+    this.resumeChallenge = false;
+    this.lineUpForChallenge = false;
+    this.continueChallenge();
+  }
+
+  /**
+   * 空 MAIN 时先补英雄再上阵，然后才发 3001。
+   * 已有 MAIN 英雄或本会话 3100 已确认时，直接发 3001。不打开 GM。
+   */
+  private continueChallenge(): void {
+    if (this.disposed || this.phase === "battle" || this.waiting) return;
+    const plan = planStarterChallenge({
+      lineUp: WireSession.lineUp,
+      heroes: WireSession.heroes,
+      gmHeroId: WireSession.gmHeroId,
+      mainSaved: WireSession.mainLineReady,
+    });
+    if (plan.kind === "challenge") {
+      this.sendChallenge();
+      return;
+    }
+    if (plan.kind === "save") {
+      this.beginSave(plan.heroId, true);
+      return;
+    }
+    if (plan.kind === "grant") {
+      GameLog.shared.info("Mainline", STARTER_LINEUP_NOTE);
+      this.beginGrant(true);
+      return;
+    }
+    this.resumeChallenge = true;
+    if (WireSession.lineUp !== null) {
+      this.write(this.statusLabel, "等待名册后再挑战");
+      return;
+    }
+    this.seenLineUpSerial = WireSession.lineUpSerial;
+    if (!WireSession.pullLineUpProbe()) {
+      this.write(this.statusLabel, "等待名册后再挑战");
+      return;
+    }
+    this.lineUpForChallenge = true;
+    this.waitKind = "3101";
+    this.waiting = true;
+    this.write(this.statusLabel, "等待阵容后再挑战");
+    GameLog.shared.info("Mainline", "starter wait lineup 3101");
+  }
+
+  private sendChallenge(): void {
+    if (this.disposed || this.phase === "battle" || this.waiting) return;
+    this.resumeChallenge = false;
+    this.lineUpForChallenge = false;
     if (!this.host.connected()) {
       this.host.showToast(errorText(ErrorCode.NET_NOT_CONNECTED));
       return;
