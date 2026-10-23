@@ -1,4 +1,4 @@
-import { Color, Node, UITransform } from "cc";
+import { Color, Node, resources, Sprite, SpriteFrame, UITransform, view } from "cc";
 import { CITY_BAR, cityBarSlot } from "../config/nav";
 import {
   bindClick,
@@ -150,14 +150,25 @@ const PREFAB_TAB_LOCKED = new Color(160, 164, 176, 255);
  * 拉宽后这块透出清屏黑。垫色取这条描边，避免透缝变成另一条色带。
  */
 const BOTTOM_BG_WIDTH = 724;
-const BOTTOM_PAD_WIDTH = 728;
 const BOTTOM_PAD_COLOR = new Color(46, 26, 22, 255);
+
+/** 国服底栏字图。副本的文件名是 skin，字是「副本」。 */
+const TAB_CAPTION: { [id: string]: string } = {
+  city: "ui/city/main-scene-lang_lbl-city",
+  hero: "ui/city/main-scene-lang_lbl-hero",
+  bag: "ui/city/main-scene-lang_lbl-backpack",
+  battle: "ui/city/main-scene-lang_lbl-battle",
+  dungeon: "ui/city/main-scene-lang_lbl-skin",
+  clan: "ui/city/main-scene-lang_lbl-clan",
+  fetter: "ui/city/main-scene-lang_lbl-fetter",
+};
 
 /**
  * 绑定 CityChrome.prefab。
  * TopBar 下是 LblName、LblSub、CurrencyGold/Value、CurrencyGem/Value。
  * BottomBar 下是 TabCity、TabHero、TabBag、TabBattle、TabDungeon、TabClan、TabFetter，子节点 Label、Lock。
- * 路径相对 assets：prefabs/ui/city/CityChrome。不走 resources.load。
+ * 路径相对 assets：prefabs/ui/city/CityChrome。Prefab 不走 resources.load。
+ * 七个底栏字是 resources 里的国服字图（副本文件名 lbl-skin）。
  * 不改 USE_CITY_CHROME_PREFAB，也不改 Boot。
  * ActGroup 打开活动列表，UtilityRow/BtnMore 打开更多列表，BtnMail 打开原来的邮件页。
  * BtnActivity / BtnMorePanel 保持 Prefab 里的未激活，避免再盖一层矩形。
@@ -179,6 +190,7 @@ export async function mountCityChromePrefab(
 }
 
 function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: CityChromeActions): CityChrome {
+  pinBottomBar(root);
   sealBottomBg(root);
   const nameNode = requireNode(root, "TopBar/LblName");
   const subNode = requireNode(root, "TopBar/LblSub");
@@ -199,6 +211,9 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
     const button = requireNode(root, tabPath[entry.id]);
     const lock = button.getChildByName("Lock");
     if (lock) lock.active = false;
+    const label = button.getChildByName("Label");
+    if (label) label.active = false;
+    mountTabCaption(button, TAB_CAPTION[entry.id] || "");
     bindClick(button, () => onTab(entry.id));
     buttons[entry.id] = button;
   }
@@ -225,8 +240,7 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
         const tab = tabs[i];
         const button = buttons[tab.id];
         if (!button) continue;
-        const label = button.getChildByName("Label");
-        if (label) setText(label, tab.text);
+        // 字图保持「副本」。不要把「锁·」写进 84px 的 Label，挤开会像「领·副本」。
         tintSprite(button, prefabTabColor(tab.state));
         const lock = button.getChildByName("Lock");
         if (lock) lock.active = tab.state === "locked";
@@ -242,18 +256,98 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
 }
 
 /**
- * BottomBar/Bg 背后垫满宽实色，并略加宽贴图节点，盖住 640→720 的左右透边。
+ * 底栏贴在 Canvas 底边，左右拉到可见宽度。
+ * 安全区把整层 chrome 上移时，底栏仍留在屏幕底（含 home indicator）。
+ * 城景不再跟着上移，贴图铺到屏底，由底栏盖住。
+ */
+function pinBottomBar(root: Node): void {
+  const bar = findNode(root, "BottomBar");
+  const canvas = findCanvas(root);
+  if (!bar || !canvas) return;
+  const apply = (): void => {
+    if (!bar.isValid || !canvas.isValid) return;
+    const canvasUi = canvas.getComponent(UITransform);
+    const barUi = bar.getComponent(UITransform);
+    const parentUi = bar.parent ? bar.parent.getComponent(UITransform) : null;
+    if (!canvasUi || !barUi || !parentUi) return;
+    const canvasW = canvasUi.contentSize.width;
+    const canvasH = canvasUi.contentSize.height;
+    const barH = barUi.contentSize.height;
+    const width = canvasW > 720 ? canvasW : 720;
+    barUi.setContentSize(width, barH);
+    const bg = bar.getChildByName("Bg");
+    const bgUi = bg ? bg.getComponent(UITransform) : null;
+    if (bgUi) bgUi.setContentSize(width, bgUi.contentSize.height);
+    const pad = bar.getChildByName("BgPad");
+    const padUi = pad ? pad.getComponent(UITransform) : null;
+    if (padUi) padUi.setContentSize(width, barH);
+    const canvasConv = canvasUi as UITransform & {
+      convertToWorldSpaceAR?: (p: { x: number; y: number; z?: number }) => { x: number; y: number; z?: number };
+    };
+    const parentConv = parentUi as UITransform & {
+      convertToNodeSpaceAR?: (p: { x: number; y: number; z?: number }) => { x: number; y: number; z?: number };
+    };
+    if (!canvasConv.convertToWorldSpaceAR || !parentConv.convertToNodeSpaceAR) {
+      bar.setPosition(0, -canvasH / 2 + barH / 2, 0);
+      return;
+    }
+    const world = canvasConv.convertToWorldSpaceAR({ x: 0, y: -canvasH / 2, z: 0 });
+    const local = parentConv.convertToNodeSpaceAR(world);
+    bar.setPosition(0, local.y + barH / 2, local.z || 0);
+  };
+  apply();
+  const host = view as { on?: (type: string, cb: () => void) => void; off?: (type: string, cb: () => void) => void };
+  if (host.on) host.on("canvas-resize", apply);
+  bar.once(Node.EventType.NODE_DESTROYED, () => {
+    if (host.off) host.off("canvas-resize", apply);
+  });
+  // 安全区在稍后的 tick 里平移 chrome 层。再钉一次，底边仍贴屏幕。
+  setTimeout(apply, 0);
+  setTimeout(apply, 80);
+}
+
+function findCanvas(node: Node): Node | null {
+  let cur: Node | null = node;
+  while (cur) {
+    if (cur.name === "Canvas") return cur;
+    cur = cur.parent;
+  }
+  return null;
+}
+
+function mountTabCaption(button: Node, path: string): void {
+  if (!path) return;
+  const ui = button.getComponent(UITransform);
+  const plate = ui ? ui.contentSize.height : 78;
+  const node = uiNode("Caption");
+  const captionUi = node.addComponent(UITransform);
+  captionUi.setContentSize(plate >= 90 ? 65 : 54, plate >= 90 ? 36 : 30);
+  const sprite = node.addComponent(Sprite);
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  node.setPosition(0, plate >= 90 ? -46 : -36, 0);
+  node.parent = button;
+  resources.load(path + "/spriteFrame", SpriteFrame, (err, frame) => {
+    if (err || !frame || !sprite.isValid) return;
+    sprite.spriteFrame = frame;
+  });
+}
+
+/**
+ * BottomBar/Bg 背后垫满底栏，盖住 640→屏宽的左右透边，以及贴图底边到屏幕底的缝。
  * 不改七个 Tab 的位置。顶栏原图左缘不透明，这里不垫。
  */
 function sealBottomBg(root: Node): void {
   const bg = requireNode(root, "BottomBar/Bg");
   const ui = bg.getComponent(UITransform);
-  const height = ui && ui.contentSize && typeof ui.contentSize.height === "number" ? ui.contentSize.height : 129;
-  if (ui) ui.setContentSize(BOTTOM_BG_WIDTH, height);
   const bottom = bg.parent;
   if (!bottom) return;
-  const pad = createRect("BgPad", BOTTOM_PAD_WIDTH, height, BOTTOM_PAD_COLOR);
-  pad.setPosition(bg.position.x, bg.position.y, 0);
+  const barUi = bottom.getComponent(UITransform);
+  const barW = barUi && barUi.contentSize.width > BOTTOM_BG_WIDTH ? barUi.contentSize.width : BOTTOM_BG_WIDTH;
+  const barH = barUi && barUi.contentSize.height > 0 ? barUi.contentSize.height : 140;
+  const height = ui && ui.contentSize && typeof ui.contentSize.height === "number" ? ui.contentSize.height : 129;
+  if (ui) ui.setContentSize(barW, height);
+  const pad = createRect("BgPad", barW, barH, BOTTOM_PAD_COLOR);
+  pad.setPosition(0, 0, 0);
   const index = bg.getSiblingIndex();
   pad.parent = bottom;
   pad.setSiblingIndex(index);

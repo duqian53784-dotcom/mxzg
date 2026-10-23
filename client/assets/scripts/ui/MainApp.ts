@@ -1368,7 +1368,7 @@ export class MainApp extends Component {
       const tab = CITY_BAR[i];
       const access = entryAccess(tab, this.level(), this.day(), ConfigDb.current);
       const state = !access.open ? "locked" : this.barSelected(tab.id, current, root) ? "selected" : "open";
-      tabs.push({ id: tab.id, text: tabLabel(tab.title, access.open), state });
+      tabs.push({ id: tab.id, text: tab.title, state });
     }
     chrome.setTabs(tabs);
     chrome.setCityExtras(this.panels?.current === CITY_TAB);

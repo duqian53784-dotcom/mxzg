@@ -3,7 +3,8 @@
  * 关闭壳只是藏起来，下面的代码页 / 旧 Prefab / 协议探针还在。
  * 加载失败留原来的页面，不留空画面。
  */
-import { BlockInputEvents, Button, Color, Node, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, Label, Node, Overflow, Sprite, UITransform } from "cc";
+import { labelCenterInParent, sliceAnchorShift } from "./ccbiPlace";
 import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
@@ -48,11 +49,11 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     const root = uiNode("PagePrefabShell");
     const ui = root.addComponent(UITransform);
     ui.setContentSize(720, 1280);
+    ui.setAnchorPoint(0.5, 0.5);
     root.addComponent(BlockInputEvents);
     place(createRect("dim", 720, 1280, new Color(8, 16, 32, 255)), root, 0, 0);
     const view = spawnPrefab(prefab, root);
-    centerInParent(view);
-    seatAboveChrome(view);
+    mountCcbiView(view);
     if (spec.fight) {
       const battle = findDescendant(view, "btn_battle");
       if (battle) {
@@ -85,6 +86,101 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
   } catch (err) {
     GameLog.shared.error("MainApp", "page prefab shell " + id + " " + messageOf(err) + "，仍用原来的页面");
   }
+}
+
+/**
+ * 把 ccbi 根放进 720×1280 父节点中心，并修正九宫格底左角和按钮上的字。
+ * 根锚点是 (0,0)。不要用 Widget 的水平/垂直居中，那会把底左角钉在画面中心。
+ */
+export function mountCcbiView(node: Node): void {
+  repairCcbiView(node);
+  centerInParent(node);
+  seatAboveChrome(node);
+}
+
+/** 九宫格按底左角归位，小按钮上的字回到盒子中心并缩进按钮。 */
+export function repairCcbiView(root: Node): void {
+  const stack: Node[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop() as Node;
+    const kids = node.children;
+    for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+    repairSlice(node);
+    repairLabel(node);
+  }
+}
+
+function repairSlice(node: Node): void {
+  const sprite = node.getComponent(Sprite);
+  if (!sprite || sprite.type !== Sprite.Type.SLICED) return;
+  const ui = node.getComponent(UITransform);
+  if (!ui) return;
+  const host = sizedAncestor(node);
+  if (!host) return;
+  const pos = anchorIn(node, host.node);
+  const shift = sliceAnchorShift(
+    {
+      x: pos.x,
+      y: pos.y,
+      ax: ui.anchorX,
+      ay: ui.anchorY,
+      w: ui.contentSize.width,
+      h: ui.contentSize.height,
+      sx: node.scale.x,
+      sy: node.scale.y,
+    },
+    {
+      ax: host.ui.anchorX,
+      ay: host.ui.anchorY,
+      w: host.ui.contentSize.width,
+      h: host.ui.contentSize.height,
+    }
+  );
+  if (!shift) return;
+  node.setPosition(node.position.x + shift.x, node.position.y + shift.y, node.position.z);
+}
+
+function repairLabel(node: Node): void {
+  const label = node.getComponent(Label);
+  const parent = node.parent;
+  if (!label || !parent) return;
+  const parentUi = parent.getComponent(UITransform);
+  if (!parentUi) return;
+  const width = parentUi.contentSize.width;
+  const height = parentUi.contentSize.height;
+  const center = labelCenterInParent(parentUi.anchorX, parentUi.anchorY, width, height, node.position.x, node.position.y);
+  if (center) node.setPosition(center.x, center.y, node.position.z);
+  if (Math.abs(node.scale.x - 1) > 0.05 || Math.abs(node.scale.y - 1) > 0.05) return;
+  if (width < 8 || height < 8 || width > 400) return;
+  const text = label.string || "";
+  const wide = label.fontSize * Math.max(1, text.length) * 0.55 > width;
+  const tall = label.fontSize > height * 0.85;
+  if (!wide && !tall) return;
+  const ui = node.getComponent(UITransform);
+  if (ui) ui.setContentSize(Math.max(8, width - 8), Math.max(8, height - 4));
+  label.overflow = Overflow.SHRINK;
+}
+
+function sizedAncestor(node: Node): { node: Node; ui: UITransform } | null {
+  let cur = node.parent;
+  while (cur) {
+    const ui = cur.getComponent(UITransform);
+    if (ui && ui.contentSize.width > 1 && ui.contentSize.height > 1) return { node: cur, ui };
+    cur = cur.parent;
+  }
+  return null;
+}
+
+function anchorIn(node: Node, ancestor: Node): { x: number; y: number } {
+  let x = 0;
+  let y = 0;
+  let cur: Node | null = node;
+  while (cur && cur !== ancestor) {
+    x += cur.position.x;
+    y += cur.position.y;
+    cur = cur.parent;
+  }
+  return { x, y };
 }
 
 export function centerInParent(node: Node): void {

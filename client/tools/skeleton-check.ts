@@ -29,6 +29,7 @@ import {
   MainCityEffectFile,
   MainCityPosFile,
 } from "../assets/scripts/ui/cityMapLayout";
+import { labelCenterInParent, sliceAnchorShift } from "../assets/scripts/ui/ccbiPlace";
 import { isP1ProgressStatus, pagePrefabShell } from "../assets/scripts/ui/prefabShellMap";
 import {
   attachReadonlyCityEntry,
@@ -25934,7 +25935,7 @@ function checkCityHub(): void {
   assert(hubPaths.indexOf("CityParallax/spr_map_bg1/spr_map_bg1_1/spot-main_smith_shop") >= 0, "city hub prefab has the smith building");
   assert(hubPaths.indexOf("BtnMainline") >= 0, "city hub prefab has the mainline entry");
   const hubSrc = readFileSync(uiSource("CityHub.ts"), "utf8");
-  assert(hubSrc.indexOf("CITY_BAR_BOTTOM") >= 0 && hubSrc.indexOf("addComponent(Mask)") < 0, "city hub lifts the map and does not stencil it away");
+  assert(hubSrc.indexOf("CITY_BAR_BOTTOM") < 0 && hubSrc.indexOf("placeBottomLeft(parallax, root, scroll, 0)") >= 0 && hubSrc.indexOf("addComponent(Mask)") < 0, "city hub stays on the screen bottom and does not stencil the map");
   assert(mainApp.indexOf("id !== CITY_TAB") >= 0, "city page does not take a prefab shell");
   assert(hubPaths.indexOf("BtnIdle") < 0 && hubPaths.indexOf("BtnBag") < 0 && hubPaths.indexOf("BtnLogin7") < 0, "city hub prefab is not the debug button matrix");
   assert(mainApp.indexOf("mountCityChrome(") >= 0, "code chrome fallback stays");
@@ -25977,6 +25978,29 @@ function checkCityHub(): void {
   assert(boot.indexOf("export const USE_LOGIN_PREFAB = true") >= 0, "old login prefab stays the fallback");
   assert(boot.indexOf("mountP1LoginPrefab") >= 0 && boot.indexOf("buildLoginPanel") >= 0, "p1 login falls back to the old panel");
   assert(mainApp.indexOf("USE_PAGE_PREFAB_SHELL") >= 0 && mainApp.indexOf("attachPagePrefabShell") >= 0, "page shells mount from MainApp");
+  assert(mainApp.indexOf("text: tab.title") >= 0, "city bar keeps the cn title and does not prefix 锁·");
+  const shellSrc = readFileSync(uiSource("pagePrefabShell.ts"), "utf8");
+  assert(shellSrc.indexOf("mountCcbiView") >= 0 && shellSrc.indexOf("sliceAnchorShift") >= 0, "page shells repair ccbi slice anchors before centering");
+  const loginSrc = readFileSync(uiSource("p1Login.ts"), "utf8");
+  assert(loginSrc.indexOf("mountCcbiView") >= 0 && loginSrc.indexOf("2000, 2000, new Color(8, 16, 32, 255)") >= 0, "notice mask is opaque and covers the login host");
+  assert(chrome.indexOf("lbl-skin") >= 0 && chrome.indexOf("pinBottomBar") >= 0, "dungeon caption is the cn bitmap and the bar pins to the canvas bottom");
+  const noticePlate = sliceAnchorShift(
+    { x: 38, y: 90, ax: 0.5, ay: 0.5, w: 526, h: 520, sx: 1, sy: 1 },
+    { ax: 0, ay: 0, w: 600, h: 860 }
+  );
+  assert(!!noticePlate && Math.round(noticePlate.x) === 263 && Math.round(noticePlate.y) === 260, "notice content plate shifts onto its window");
+  const heroBg = sliceAnchorShift(
+    { x: 0, y: 105.75, ax: 0.5, ay: 0.5, w: 640, h: 672, sx: 1, sy: 1 },
+    { ax: 0, ay: 0, w: 640, h: 960 }
+  );
+  assert(!!heroBg && Math.round(heroBg.x) === 320 && Math.round(heroBg.y) === 336, "hero list plate shifts into the page");
+  const loginBg = sliceAnchorShift(
+    { x: 288, y: 1.029, ax: 0.5, ay: 0, w: 576, h: 576, sx: 1, sy: 1 },
+    { ax: 0, ay: 0, w: 576, h: 576 }
+  );
+  assert(loginBg === null, "login background is already seated and stays put");
+  const tabLabelPos = labelCenterInParent(0.5, 0, 111, 43, 0, 0);
+  assert(!!tabLabelPos && Math.round(tabLabelPos.y) === 22, "hero tab titles sit in the tab, not on the anchor");
   assert(mainApp.indexOf("USE_BATTLE_PREFAB") < 0, "MainApp does not grow a battle prefab switch");
   const mainlineShell = pagePrefabShell("mainline");
   const ancientShell = pagePrefabShell("main_ancient");

@@ -10,7 +10,7 @@ import { GameLog } from "../core/GameLog";
 import { isP1ProgressStatus } from "./prefabShellMap";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { LoginPanelOptions, LoginPanelView } from "./LoginPanel";
-import { bindTap, centerInParent, findDescendant, liftNode, seatAboveChrome } from "./pagePrefabShell";
+import { bindTap, findDescendant, liftNode, mountCcbiView } from "./pagePrefabShell";
 import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
 export const USER_LOGIN_PREFAB_PATH = "prefabs/ui/login/UserLoginLayer";
@@ -51,7 +51,7 @@ export async function mountP1LoginPrefab(
   try {
     const prefab = await loadPrefab(USER_LOGIN_PREFAB_PATH);
     const view = spawnPrefab(prefab, host);
-    centerInParent(view);
+    mountCcbiView(view);
 
     const userBg = findDescendant(view, "spr_user_bg");
     if (!userBg) throw new Error("UserLoginLayer 缺少 spr_user_bg");
@@ -154,15 +154,15 @@ export async function mountP1LoginPrefab(
     const ui = layer.addComponent(UITransform);
     ui.setContentSize(2000, 2000);
     layer.addComponent(BlockInputEvents);
-    place(createRect("dim", 720, 1280, new Color(8, 16, 32, 210)), layer, 0, 0);
+    // 盖住整个登录宿主。720 宽的半透明层盖不住两侧，账号条和状态字会透出来。
+    place(createRect("dim", 2000, 2000, new Color(8, 16, 32, 255)), layer, 0, 0);
     layer.parent = host;
     layer.setSiblingIndex(Math.max(0, host.children.length - 1));
     try {
       const prefab = await loadPrefab(path);
       if (!layer.isValid) return;
       const view = spawnPrefab(prefab, layer);
-      centerInParent(view);
-      seatAboveChrome(view);
+      mountCcbiView(view);
       bind(view);
       GameLog.shared.info("Boot", "login layer " + path);
     } catch (err) {
@@ -196,7 +196,7 @@ export async function mountP1LoginPrefab(
         return;
       }
       const view = spawnPrefab(prefab, layer);
-      centerInParent(view);
+      mountCcbiView(view);
       const msg = createLabel(text, 22, { color: new Color(80, 40, 20, 255), width: 520, height: 180 });
       msg.name = "P1ErrorText";
       msg.parent = view;
