@@ -195,6 +195,45 @@ export function buffIconTexts(buffIds: number[] | null): string[] | null {
   return texts;
 }
 
+/**
+ * 没有技能名、但这一拍在攻击时，中场条写「攻击」。
+ * 没有攻击线索仍是 null，不编一个技能名。
+ */
+export function fallbackAttackTitle(skillName: string | null, line: string, clips: readonly string[]): string | null {
+  if (skillName) return skillName;
+  if (line.indexOf("攻击") >= 0) return "攻击";
+  for (let i = 0; i < clips.length; i++) {
+    if (clips[i] === "attack") return "攻击";
+  }
+  return null;
+}
+
+/** 「第N回合」补上 /15。对不上的句子原样返回，不写成第 0 回合。 */
+export function formatBattleRound(line: string, cap = 15): string {
+  const matched = /第\s*(\d+)\s*回合/.exec(line);
+  if (!matched) return line;
+  const total = cap >= 1 ? Math.floor(cap) : 15;
+  return "第" + matched[1] + "/" + total + "回合";
+}
+
+/**
+ * 上一拍和这一拍的血量都是数字、而且变了，才返回差值。
+ * 血量下降是负数（飘字带减号）。上升是正数。缺血不补 0。
+ */
+export function signedHpDeltas(prev: readonly (number | null)[], next: readonly (number | null)[]): BattleFloatCue[] {
+  const out: BattleFloatCue[] = [];
+  const n = prev.length < next.length ? prev.length : next.length;
+  for (let i = 0; i < n; i++) {
+    const before = prev[i];
+    const after = next[i];
+    if (before === null || after === null) continue;
+    if (typeof before !== "number" || typeof after !== "number" || !isFinite(before) || !isFinite(after)) continue;
+    if (before === after) continue;
+    out.push({ anchor: i, hurt: after - before, crit: false });
+  }
+  return out;
+}
+
 export function floatHurtText(hurt: number): string {
   if (typeof hurt !== "number" || !isFinite(hurt)) return "";
   return String(hurt);

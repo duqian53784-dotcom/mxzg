@@ -10,7 +10,8 @@ import { Color, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
 import { mountBattleSpine } from "./battleSpine";
-import { idleHangStemsFrom } from "./idleHangRoster";
+import { hangStemsForFormation, idleHangStemsFrom } from "./idleHangRoster";
+import { localLineupIds, onLocalLineup } from "./localLineup";
 import { createLabel, createRect, place, uiNode } from "./UiKit";
 
 export const IDLE_HANG_SKY = "ui/chapter/hang/map01_B";
@@ -27,8 +28,15 @@ export const IDLE_HANG_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1
   { x: 168, y: 50, face: -1 },
 ];
 
-/** 当前 3101 / 4001。没有 MAIN 英雄时是三套默认。 */
+/** 当前 3101 / 4001。本局出阵优先。没有 MAIN 英雄时是三套默认。 */
 export function idleHangStems(): string[] {
+  const localIds = localLineupIds();
+  if (localIds.length > 0) {
+    const formation = [];
+    for (let i = 0; i < localIds.length; i++) formation.push({ heroId: localIds[i], position: i + 1 });
+    const stems = hangStemsForFormation(formation, GameStore.heroes(), IDLE_HANG_SPOTS.length);
+    if (stems.length > 0) return stems;
+  }
   const roster = GameStore.hangRoster();
   if (roster) return idleHangStemsFrom(roster.lineUp, roster.heroes, IDLE_HANG_SPOTS.length);
   const bag = WireSession.heroes;
@@ -73,9 +81,22 @@ export function mountIdleHang(parent: Node): Node {
   paint();
   let off = () => {};
   off = WireSession.onSync(paint);
-  root.once(Node.EventType.NODE_DESTROYED, () => off());
+  const offLocal = onLocalLineup(paint);
+  root.once(Node.EventType.NODE_DESTROYED, () => {
+    off();
+    offLocal();
+  });
 
-  place(createLabel("挂机", 28, { width: 240, height: 40 }), root, 0, 500);
+  const pile = spriteNode("IdleDrop", 200, 130);
+  place(pile, root, 36, -150);
+  paintSprite(pile, "ui/city/main-scene_spr-drop-1");
+  for (let i = 0; i < IDLE_HANG_SPOTS.length; i++) {
+    const spot = IDLE_HANG_SPOTS[i];
+    const bubble = spriteNode("IdleTalk", 96, 44);
+    place(bubble, root, spot.x, spot.y + 118);
+    paintSprite(bubble, "ui/city/main-scene_spr-bubble");
+    place(createLabel("待命", 14, { width: 80, height: 24, color: new Color(90, 56, 32, 255) }), bubble, 0, 6);
+  }
   return root;
 }
 

@@ -29,6 +29,7 @@ import {
 import { mockBattleCast } from "../module/mainline/battleFromStore";
 import { chapterPlaceLabel, mainlevelExpLabel } from "../config/gameCatalog";
 import { battleCastWait } from "./battlePresentation";
+import { beginHangBattle, finishHangBattle, showMockRound, stopHangBattle } from "./hangBattle";
 import { PAGE_SHELL_FIGHT, setPagePrefabShellVisible } from "./pagePrefabShell";
 import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
 
@@ -98,6 +99,7 @@ class MainlineController implements MainlinePage {
   private allyRow: Node | null = null;
   private enemyRow: Node | null = null;
   private logLines: string[] = [];
+  private battleStage = 1;
 
   constructor(private readonly host: MainlineHost) {
     this.node = uiNode("MainlinePage");
@@ -137,6 +139,7 @@ class MainlineController implements MainlinePage {
 
   private showList(): void {
     this.phase = "list";
+    stopHangBattle(this.node);
     setPagePrefabShellVisible(this.node, true);
     this.clearBody();
     const current = this.host.stageId() >= 1 ? Math.floor(this.host.stageId()) : 1;
@@ -235,6 +238,7 @@ class MainlineController implements MainlinePage {
         const text = errorText(entered.code ?? ErrorCode.STAGE_ID_INVALID);
         GameLog.shared.warn("Mainline", text);
         this.host.showToast(text);
+        stopHangBattle(this.node);
         return;
       }
       GameLog.shared.info("Mainline", "stage enter " + entered.stageId + " " + entered.battleId);
@@ -290,6 +294,7 @@ class MainlineController implements MainlinePage {
       GameLog.shared.error("Mainline", "stage " + text);
       if (!this.disposed && this.host.alive()) {
         this.host.showToast(text);
+        stopHangBattle(this.node);
         if (this.phase !== "list") this.showList();
       }
     } finally {
@@ -313,7 +318,10 @@ class MainlineController implements MainlinePage {
 
   private showBattle(plan: BattlePlan): void {
     this.phase = "battle";
-    setPagePrefabShellVisible(this.node, false);
+    this.battleStage = plan.stageId;
+    setPagePrefabShellVisible(this.node, true);
+    const ally = plan.rounds[0] && plan.rounds[0].allies[0] ? plan.rounds[0].allies[0].name : "我方";
+    beginHangBattle(this.node, ally, "第" + plan.stageId + "关");
     this.action = null;
     this.logLines = [];
     this.clearBody();
@@ -362,6 +370,7 @@ class MainlineController implements MainlinePage {
 
   private showSettlement(result: StageResultResp, reason: BattleReason): void {
     this.phase = "settle";
+    finishHangBattle(this.node, result.win === true);
     this.clearBody();
     const win = result.win === true;
     const shown: BattleReason = win ? "clear" : reason === "clear" ? "retreat" : reason;
@@ -407,6 +416,7 @@ class MainlineController implements MainlinePage {
     this.applySide(cards.allies, round.allies);
     this.applySide(cards.enemies, round.enemies);
     if (this.roundLabel && this.roundLabel.isValid) setText(this.roundLabel, round.line);
+    showMockRound(this.node, round, this.battleStage);
     this.logLines.push(round.line);
     if (this.logLines.length > 4) this.logLines.shift();
     if (this.logLabel && this.logLabel.isValid) setText(this.logLabel, this.logLines.join("\n"));

@@ -39,6 +39,7 @@ const PREFAB_UUID: { [path: string]: string } = {
   "prefabs/ui/hero/HeroSuggestLayer": "985faa05-ddbb-4f27-8d0f-9a6d5b709750",
   "prefabs/ui/hero/HeroListLayer": "95a097b8-9964-4ac3-8b3d-b4f568b1eb53",
   "prefabs/ui/hero/HeroInfoLayer": "fa5d3f0c-1441-479b-a182-48d374c7dc6c",
+  "prefabs/ui/hero/HeroSelectLayer": "c75bff2b-0944-4809-9b5f-1eb8c09107f8",
   "prefabs/ui/hero/HeroPalaceLayer": "f585a6a0-f33b-5bcf-8d0c-0ffb96a65397",
   "prefabs/ui/hero/HeroPernuteLayer": "a329e2f3-32d1-58bf-b777-044a6fbb4f8e",
   "prefabs/ui/summon/SummonLayer": "c046c79b-a2a4-4bf1-b93a-966094c105b8",

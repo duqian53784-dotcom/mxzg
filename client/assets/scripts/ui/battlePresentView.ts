@@ -4,7 +4,7 @@
  * 缺字段就藏起，不写成 0，也不留编辑器占位（-12345、圣光打击、Lv.1、三色 buff）。
  * 不发协议，不加载 PVR。
  */
-import { Node } from "cc";
+import { Color, Label, Node } from "cc";
 import {
   BATTLE_BUFF_SLOT_COUNT,
   BATTLE_FLOAT_CRIT_PATH,
@@ -61,6 +61,11 @@ export function paintBattleSkillName(mount: BattlePresentMount, name: string | n
     return;
   }
   setText(mount.skillLabel, name);
+  const label = mount.skillLabel.getComponent(Label);
+  if (label) {
+    label.fontSize = 26;
+    label.color = new Color(255, 236, 180, 255);
+  }
   mount.skillBanner.active = true;
 }
 
@@ -91,6 +96,13 @@ export function paintBattleFloats(
       continue;
     }
     setText(node, text);
+    const label = node.getComponent(Label);
+    if (label) {
+      label.fontSize = 32;
+      label.lineHeight = 36;
+      label.isBold = true;
+      label.color = text.charAt(0) === "-" ? new Color(255, 72, 56, 255) : new Color(255, 236, 160, 255);
+    }
     node.active = true;
     const page = pages && i < pages.length ? pages[i] : null;
     if (page) {
