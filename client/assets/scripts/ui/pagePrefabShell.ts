@@ -91,6 +91,8 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
 /**
  * 把 ccbi 根放进 720×1280 父节点中心，并修正九宫格底左角和按钮上的字。
  * 根锚点是 (0,0)。不要用 Widget 的水平/垂直居中，那会把底左角钉在画面中心。
+ * 底板已经铺在 0..宽 里的壳，Prefab 根位置写成同一个偏移，编辑器里打开就在设计框中间。
+ * 底板中心本来就在根锚点上的壳不要写这个偏移。
  */
 export function mountCcbiView(node: Node): void {
   repairCcbiView(node);
