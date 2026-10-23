@@ -37,7 +37,9 @@
  * 底栏「战斗」先看到挂机站场（大理石殿 + BattlePanelLayer）。点壳上的「战斗」才发 3001。有 report 才挂森林 BattlePage。森林页不是挂机壳。
  * 站位是左敌右我，挂在已有的 Slot_E* / Slot_A* 上。报告没有英雄时仍补一格站场，页不空。
  * USE_BATTLE_PREFAB 默认开。上述回放进战时挂 BattlePage.prefab：站位、血条、回合、战报，技能挂 VfxSkill，受击挂 VfxHit。WireBattlePage 仍不挂。
- * 战旗、战剑没有图时藏起，不把「战旗」「战剑」和套名写在场中间。血条跟到对应站位头顶。回放拍子跟导演帧走。
+ * 战旗、战剑不挂到场中间，不把「战旗」「战剑」和套名写出来。血条跟到对应站位头顶。回放拍子跟导演帧走。导演订不上时用动画帧，到点仍会推进。
+ * 播的时候把 Spine 3.7.94 在内存里收成 3.8.99（皮改成数组，曲线改成 curve/c2/c3/c4），不改磁盘上的 json。
+ * 战报只有一拍站场、没有攻击受击阵亡时，界面补一拍「演示 · 攻击」。有回合的战报不补。名册和 MAIN 都空时仍先走 2015 再 3100。GM 未开时 Toast「GM 未开」，不发 3001。
  * 底图是 ui/maps/map-bg-mission-1，拉到 720×1280。battle-scene_spr-bg-1 是边角小图，不当全屏底。代码页没有这张时才用沙地。
  * 同一份回放再写 Prefab 的 FloatDmg、FloatCrit、SkillNameBanner、前排 HeadAnchor。没有的 crit / level / buffs 藏起，不写成 0，也不编名字。
  * 开关关掉或 Prefab 加载失败时，仍用本页代码 UI，不另建这些挂点。跳过、撤退、关闭不发新 c2s。不改 Boot。
@@ -134,7 +136,7 @@ import { BattlePrefabShell, mountBattleBackdrop, mountBattlePrefab, paintBattleS
 import { armBattleDelay } from "./battleClock";
 import { FrameReel, mountFrameReel } from "./battleFramePlay";
 import { effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
-import { battleBeatWait, BattlePresentation, nextBattleSpeed, planBattlePresentation } from "./battlePresentation";
+import { battleBeatWait, BattlePresentation, nextBattleSpeed, planBattlePresentation, playbackBeats } from "./battlePresentation";
 import {
   BattlePresentMount,
   clearBattleOverhead,
@@ -1316,18 +1318,19 @@ class WireMainlineController implements WireMainlinePage {
   }
 
   private async playback(plan: WireSpineReplay): Promise<boolean> {
-    for (let i = 0; i < plan.beats.length; i++) {
+    const beats = playbackBeats(plan);
+    for (let i = 0; i < beats.length; i++) {
       if (this.disposed) return false;
       if (this.skipped) {
-        this.renderBeat(plan, plan.beats[plan.beats.length - 1]);
+        this.renderBeat(plan, beats[beats.length - 1]);
         return true;
       }
-      this.renderBeat(plan, plan.beats[i]);
-      const last = i === plan.beats.length - 1;
+      this.renderBeat(plan, beats[i]);
+      const last = i === beats.length - 1;
       const cont = await this.sleep(battleBeatWait(this.playSpeed, last));
       if (!cont || this.disposed) return false;
       if (this.skipped) {
-        this.renderBeat(plan, plan.beats[plan.beats.length - 1]);
+        this.renderBeat(plan, beats[beats.length - 1]);
         return true;
       }
     }
@@ -1588,16 +1591,18 @@ class WireMainlineController implements WireMainlinePage {
     if (resolve) resolve(cont);
   }
 
-  /** 战旗、战剑没有对应槽。没加载到就藏起，不把节点名和「战旗」「战剑」写在场中间。 */
+  /** 战旗、战剑不画在场中间，也不把「战旗」「战剑」和套名印出来。 */
   private mountAccent(parent: Node, slot: WireSpineSlot, xy: { x: number; y: number }, _slotIndex: number): void {
     const root = place(uiNode("slot-" + slot.stem), parent, xy.x, xy.y);
+    root.active = false;
     this.nameLabels.push(root);
     this.hpLabels.push(root);
     this.hpNow.push(slot.hp);
     this.slotRoots.push(root);
-    this.actors.push(mountBattleSpine(root, slot.stem, () => {
-      if (root.isValid) root.active = false;
-    }, { face: 1 }));
+    this.actors.push({
+      play() {},
+      burst() {},
+    });
   }
 
   private paintOverhead(plan: WireSpineReplay): void {

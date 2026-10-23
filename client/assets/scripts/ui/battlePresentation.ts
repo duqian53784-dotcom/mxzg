@@ -13,6 +13,8 @@ import {
   WireBattleAction,
   WireBattleHero,
   WireBattleReport,
+  wireSpineHasClip,
+  WireSpineBeat,
   WireSpineReplay,
   WireSpineSlot,
 } from "../net/protocol/wireBattle";
@@ -266,6 +268,48 @@ function nthSide(slots: WireSpineSlot[], side: "ally" | "enemy", n: number): num
     seen += 1;
   }
   return -1;
+}
+
+/**
+ * 回放用的拍子。战报本身不改。
+ * 只有一拍、而且没有攻击 / 受击 / 阵亡时，补一拍「演示 · 攻击」，让补位英雄动一下。
+ * 已经有回合，或这一拍自己在攻击，就原样返回。
+ */
+export function playbackBeats(plan: WireSpineReplay): WireSpineBeat[] {
+  const beats = plan.beats;
+  if (beats.length !== 1) return beats;
+  const only = beats[0];
+  for (let i = 0; i < only.cues.length; i++) {
+    const clip = only.cues[i].clip;
+    if (clip === "attack" || clip === "hit" || clip === "die") return beats;
+  }
+  const cues = [];
+  for (let i = 0; i < only.cues.length; i++) {
+    cues.push({ slot: only.cues[i].slot, clip: only.cues[i].clip });
+  }
+  const hp = only.hp.slice();
+  for (let i = 0; i < plan.slots.length; i++) {
+    const slot = plan.slots[i];
+    if (slot.side !== "ally" || !wireSpineHasClip(slot.stem, "attack")) continue;
+    setPlaybackCue(cues, i, "attack");
+    break;
+  }
+  for (let i = 0; i < plan.slots.length; i++) {
+    const slot = plan.slots[i];
+    if (slot.side !== "enemy" || !wireSpineHasClip(slot.stem, "hit")) continue;
+    setPlaybackCue(cues, i, "hit");
+    break;
+  }
+  return beats.concat([{ line: "演示 · 攻击", cues, hp, vfx: [] }]);
+}
+
+function setPlaybackCue(cues: WireSpineBeat["cues"], slot: number, clip: WireSpineBeat["cues"][number]["clip"]): void {
+  for (let i = 0; i < cues.length; i++) {
+    if (cues[i].slot !== slot) continue;
+    cues[i] = { slot, clip };
+    return;
+  }
+  cues.push({ slot, clip });
 }
 
 function matchUnit(slots: WireSpineSlot[], pos: number, camp: number | null): number | null {

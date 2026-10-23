@@ -34,7 +34,7 @@ Names inside these exports are lowercase, and this batch does not contain `Skill
 
 ## Compatibility
 
-Source Spine export is **3.7.94**. This project is Cocos Creator **3.8.8** with the built-in **spine-3.8** runtime. Creator’s supported Spine line for 3.x is 3.8, so 3.7.94 skeletons may fail to import or play. That runtime/extension risk stays with Client. This change does not upgrade the skeleton data.
+Source Spine export is **3.7.94**. This project is Cocos Creator **3.8.8** with the built-in **spine-3.8** runtime. Creator’s supported Spine line for 3.x is 3.8, so 3.7.94 skeletons may fail to import or play. That runtime/extension risk stays with Client. This change does not upgrade the skeleton data. Playback upgrades a copy in memory (skins become `{name, attachments}` and 3.7 curve arrays become `curve` / `c2` / `c3` / `c4`, version `3.8.99`) and does not rewrite the files.
 
 ## Deferred
 

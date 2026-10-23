@@ -80,12 +80,14 @@ import {
   nextBattleSpeed,
   overheadLevelText,
   planBattlePresentation,
+  playbackBeats,
   readHeroBuffIds,
   readHeroLevel,
   readHitCrit,
   visibleBuffCount,
   visibleFloats,
 } from "../assets/scripts/ui/battlePresentation";
+import { SPINE_RUNTIME_VERSION, upgradeSpine37Json } from "../assets/scripts/ui/spineUpgrade";
 import {
   EFFECT_RUNS,
   HIT_RUNS,
@@ -15216,6 +15218,28 @@ async function checkWs(): Promise<void> {
       typePlan.beats[0].vfx.length === 0,
     "battle_type alone stands on the default spines and does not play the mock script"
   );
+  const demoBeats = playbackBeats(typePlan);
+  let demoAttack = false;
+  let demoHit = false;
+  let standStill = true;
+  for (let dc = 0; dc < demoBeats[1].cues.length; dc++) {
+    if (demoBeats[1].cues[dc].clip === "attack") demoAttack = true;
+    if (demoBeats[1].cues[dc].clip === "hit") demoHit = true;
+  }
+  for (let sc = 0; sc < typePlan.beats[0].cues.length; sc++) {
+    const clip = typePlan.beats[0].cues[sc].clip;
+    if (clip === "attack" || clip === "hit" || clip === "die") standStill = false;
+  }
+  assert(
+    demoBeats.length === typePlan.beats.length + 1 &&
+      demoBeats[0] === typePlan.beats[0] &&
+      standStill &&
+      demoBeats[1].line === "演示 · 攻击" &&
+      demoAttack &&
+      demoHit &&
+      demoBeats[1].vfx.length === 0,
+    "a stand-only report gets one demo attack beat at playback and leaves the report beat"
+  );
   const winPlan = planWireSpineReplay(winByAtk.report as NonNullable<typeof winByAtk.report>, null, 4);
   let winAttack = false;
   let winDie = false;
@@ -15240,6 +15264,15 @@ async function checkWs(): Promise<void> {
       winPlan.stems.indexOf(WIRE_SPINE_HIT_STEM) < 0,
     "a win without defenders plays an ally attack and crusade_boss_die"
   );
+  assert(playbackBeats(winPlan) === winPlan.beats, "a report that already attacks is not given a demo beat");
+  const alreadyAttacking = playbackBeats({
+    stageId: 1,
+    win: null,
+    slots: typePlan.slots,
+    stems: typePlan.stems,
+    beats: [{ line: "站场", cues: [{ slot: 0, clip: "attack" }], hp: [], vfx: [] }],
+  });
+  assert(alreadyAttacking.length === 1 && alreadyAttacking[0].line === "站场", "a single beat that already attacks stays one beat");
   const roundPlan = planWireSpineReplay(roundReport.report as NonNullable<typeof roundReport.report>, null, 1);
   const attackBeat = roundPlan.beats[roundPlan.beats.length - 1];
   let roundHit = false;
@@ -15459,6 +15492,43 @@ async function checkWs(): Promise<void> {
       mainlineSpineSrc.indexOf(".pvr") < 0 &&
       battleSpineSrc.indexOf("bisha") >= 0,
     "mainline mounts batch2 skeletons beside hero spines and still skips 3103"
+  );
+  const heroPackPath = join(spineRoot, "10105008.json");
+  const heroPackText = readFileSync(heroPackPath, "utf8");
+  const heroPack = JSON.parse(heroPackText);
+  const upgraded = upgradeSpine37Json(heroPack) as {
+    skeleton: { spine: string };
+    skins: Array<{ name: string; attachments: { by?: unknown } }>;
+    animations: { stand: { bones: { bone: { translate: Array<{ curve?: unknown; c2?: number; c3?: number; c4?: number }> } } } };
+  };
+  const standFrame = upgraded.animations.stand.bones.bone.translate[0];
+  assert(
+    heroPackText.indexOf('"spine":"3.7.94"') >= 0 &&
+      heroPack.skeleton.spine === "3.7.94" &&
+      !Array.isArray(heroPack.skins) &&
+      upgraded !== heroPack &&
+      upgraded.skeleton.spine === SPINE_RUNTIME_VERSION &&
+      SPINE_RUNTIME_VERSION !== "3.8.75" &&
+      Array.isArray(upgraded.skins) &&
+      upgraded.skins[0].name === "default" &&
+      !!upgraded.skins[0].attachments.by &&
+      typeof standFrame.curve === "number" &&
+      typeof standFrame.c2 === "number" &&
+      typeof standFrame.c3 === "number" &&
+      typeof standFrame.c4 === "number" &&
+      upgradeSpine37Json(upgraded) === upgraded &&
+      readFileSync(heroPackPath, "utf8").indexOf('"spine":"3.7.94"') >= 0,
+    "playback upgrades 3.7.94 skins and curves in memory and leaves the file at 3.7.94"
+  );
+  const pmaAt = battleSpineSrc.indexOf("premultipliedAlpha = false");
+  const dataAt = battleSpineSrc.indexOf("skeletonData = runtimeSpineData");
+  assert(
+    battleSpineSrc.indexOf("upgradeSpine37Json") >= 0 &&
+      battleSpineSrc.indexOf("pendingHero") >= 0 &&
+      battleSpineSrc.indexOf('"#38"') >= 0 &&
+      pmaAt >= 0 &&
+      dataAt > pmaAt,
+    "hero spines upgrade in memory, queue the clip requested before load, and set alpha before the data"
   );
   const spineDoc = readFileSync(join(process.cwd(), "docs", "h5-websocket.md"), "utf8");
   const batch2Doc = readFileSync(join(process.cwd(), "docs", "battle-spine-batch2.md"), "utf8");
@@ -26086,8 +26156,8 @@ function checkCityHub(): void {
     "fight shell paints the hang scene before the battle panel"
   );
   assert(
-    clockSrc.indexOf("EVENT_AFTER_UPDATE") >= 0 && clockSrc.indexOf("armBattleDelay") >= 0,
-    "battle beats arm on the director frame"
+    clockSrc.indexOf("EVENT_AFTER_UPDATE") >= 0 && clockSrc.indexOf("armBattleDelay") >= 0 && clockSrc.indexOf("requestAnimationFrame") >= 0,
+    "battle beats arm on the director frame and fall back to animation frames"
   );
   assert(!!ancientShell && !ancientShell.fight && ancientShell.path.indexOf("AncientLayer") >= 0, "unrouted ancient building opens its prefab shell");
   assert(pagePrefabShell("shop") === null && pagePrefabShell("main_country_war") === null && pagePrefabShell("main_blessingpool") === null, "p5 screens stay without a new prefab shell");
@@ -26112,7 +26182,9 @@ function checkCityHub(): void {
     wireBattlePageSrc.indexOf("armBattleDelay") >= 0 &&
       accentSrc.indexOf("createLabel") < 0 &&
       accentSrc.indexOf("root.active = false") >= 0 &&
-      wireBattlePageSrc.indexOf("page.y + 78") >= 0,
+      accentSrc.indexOf("mountBattleSpine") < 0 &&
+      wireBattlePageSrc.indexOf("page.y + 78") >= 0 &&
+      wireBattlePageSrc.indexOf("playbackBeats") >= 0,
     "replay follows the director clock, seats hp on the slot, and does not print sword or flag names"
   );
   assert(battlePageSrc.indexOf("export const USE_BATTLE_PREFAB = true") >= 0, "battle prefab default stays on");
