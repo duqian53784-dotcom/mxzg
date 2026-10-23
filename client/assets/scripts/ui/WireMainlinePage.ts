@@ -141,6 +141,7 @@ import {
 import { battleSlotPage } from "./battlePrefabLayout";
 import { mountBattleSpine, SpineActor } from "./battleSpine";
 import { bindClick } from "./prefabLoad";
+import { PAGE_SHELL_FIGHT, setPagePrefabShellVisible } from "./pagePrefabShell";
 import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
 const PAGE_BG = new Color(8, 16, 32, 255);
@@ -296,6 +297,10 @@ class WireMainlineController implements WireMainlinePage {
     this.viewport.parent = this.node;
     this.body = uiNode("body");
     this.body.parent = this.node;
+    this.node.on(PAGE_SHELL_FIGHT, () => {
+      this.challenge();
+      setPagePrefabShellVisible(this.node, !(this.waiting || this.phase === "battle"));
+    });
     this.seenSerial = WireSession.battleSerial;
     this.seenReportSerial = WireSession.chapterReportSerial;
     this.seenBattleReportSerial = WireSession.battleReportSerial;
@@ -528,6 +533,7 @@ class WireMainlineController implements WireMainlinePage {
 
   private showInfo(): void {
     this.phase = "info";
+    setPagePrefabShellVisible(this.node, true);
     this.clearBody();
     this.attachInfoScroll();
     place(createLabel(WIRE_MAINLINE_READONLY_TITLE, 40, { color: TITLE }), this.body, 0, 550);
@@ -1093,6 +1099,7 @@ class WireMainlineController implements WireMainlinePage {
 
   private async showBattle(plan: WireSpineReplay, present: BattlePresentation): Promise<boolean> {
     this.phase = "battle";
+    setPagePrefabShellVisible(this.node, false);
     this.skipped = false;
     this.spineWarned = false;
     this.logLines = [];

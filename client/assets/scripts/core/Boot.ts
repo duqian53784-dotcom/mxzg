@@ -3,8 +3,9 @@
  *
  * 阶段：version → hot-update 占位 → 读表 → 登录门（或跳过）→ Main。
  * 登录是本组件在 Canvas 上生成的面板，不另建 Login 场景。
- * 默认 USE_LOGIN_PREFAB / USE_CREATE_ROLE_PREFAB 挂 assets/prefabs 里的界面。
- * 改成 false 仍走 buildLoginPanel / buildCreateRolePanel，代码 UI 不删。
+ * 默认 USE_P1_LOGIN_PREFAB 挂 1:1 的 UserLoginLayer（选服、公告、语言、错误壳）。
+ * 改成 false 仍走 USE_LOGIN_PREFAB / buildLoginPanel。创角仍是 USE_CREATE_ROLE_PREFAB。
+ * 这两套关掉后仍走 buildLoginPanel / buildCreateRolePanel，代码 UI 不删。
  * 账号走 Proto.login / Proto.roleEnter；没有角色或点「创角」时再 Proto.roleCreate。
  * 默认仍是 NetClient → MockTransport，不需要服务器。
  * 预览地址加 ?transport=ws 才连本机桥 ws://127.0.0.1:13111/game（转到 TCP 9902）。
@@ -59,6 +60,7 @@ import { Proto } from "../net/protocol";
 import { RoleEnterResp } from "../net/protocol/types";
 import { buildCreateRolePanel, CreateRolePanelView, mountCreateRolePrefab } from "../ui/CreateRolePanel";
 import { buildLoginPanel, LoginPanelView, mountLoginPrefab } from "../ui/LoginPanel";
+import { mountP1LoginPrefab, USER_LOGIN_PREFAB_PATH } from "../ui/p1Login";
 import { CREATE_ROLE_PREFAB_PATH, LOGIN_PREFAB_PATH } from "../ui/prefabLoad";
 import { MainApp } from "../ui/MainApp";
 import { bindSafeArea, SafeAreaBinding } from "../ui/SafeArea";
@@ -72,6 +74,12 @@ import { Session } from "./Session";
 const { ccclass, property } = _decorator;
 
 const CLIENT_VERSION = "0.1.0-mock";
+
+/**
+ * 默认挂 1:1 UserLoginLayer / ChooseServerLayer。
+ * false 时仍走 USE_LOGIN_PREFAB，再不行才是 buildLoginPanel。
+ */
+export const USE_P1_LOGIN_PREFAB = true;
 
 /** 默认挂 Login Prefab。false 时仍走 buildLoginPanel，和接 Prefab 之前一样。 */
 export const USE_LOGIN_PREFAB = true;
@@ -221,11 +229,64 @@ export class Boot extends Component {
         if (panel) this.onUseMock(panel);
       },
     };
+    if (USE_P1_LOGIN_PREFAB) {
+      void this.mountP1Login(parent, handlers, options, epoch, slot, account);
+      return;
+    }
     if (!USE_LOGIN_PREFAB) {
       this.finishLogin(buildLoginPanel(parent, handlers, options), slot, account);
       return;
     }
     void this.mountLoginFromPrefab(parent, handlers, options, epoch, slot, account);
+  }
+
+  private async mountP1Login(
+    parent: Node,
+    handlers: { onEnter: () => void; onCreate: () => void; onMock?: () => void },
+    options: { account: string; serverId: number; mode: "mock" | "ws"; wsUrl?: string },
+    epoch: number,
+    slot: { panel: LoginPanelView | null },
+    account: string
+  ): Promise<void> {
+    const loading = createLabel("加载登录界面…", 28);
+    place(loading, parent, 0, 40);
+    let panel: LoginPanelView | null = null;
+    try {
+      panel = await mountP1LoginPrefab(parent, handlers, options);
+      if (!this.isValid || epoch !== this.authEpoch) {
+        panel.root.destroy();
+        return;
+      }
+      GameLog.shared.info("Boot", "login prefab p1 " + USER_LOGIN_PREFAB_PATH);
+    } catch (err) {
+      if (!this.isValid || epoch !== this.authEpoch) return;
+      GameLog.shared.error("Boot", "login prefab p1 " + messageOf(err) + "，改用原来的登录");
+      panel = await this.fallbackLogin(parent, handlers, options);
+    } finally {
+      if (loading.isValid) loading.destroy();
+    }
+    if (!panel || !this.isValid || epoch !== this.authEpoch) {
+      if (panel) panel.root.destroy();
+      return;
+    }
+    this.finishLogin(panel, slot, account);
+  }
+
+  /** P1 壳加载失败时，回到原来的 LoginPanel 或代码登录。 */
+  private async fallbackLogin(
+    parent: Node,
+    handlers: { onEnter: () => void; onCreate: () => void; onMock?: () => void },
+    options: { account: string; serverId: number; mode: "mock" | "ws"; wsUrl?: string }
+  ): Promise<LoginPanelView> {
+    if (!USE_LOGIN_PREFAB) return buildLoginPanel(parent, handlers, options);
+    try {
+      const panel = await mountLoginPrefab(parent, handlers, options);
+      GameLog.shared.info("Boot", "login prefab " + LOGIN_PREFAB_PATH);
+      return panel;
+    } catch (err) {
+      GameLog.shared.error("Boot", "login prefab " + messageOf(err) + "，改用代码 UI");
+      return buildLoginPanel(parent, handlers, options);
+    }
   }
 
   private finishLogin(

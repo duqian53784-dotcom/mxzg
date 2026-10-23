@@ -16,3 +16,5 @@
 ## 打开方式
 
 Cocos Creator 3.8.8 → 打开 `F:\project\mxzg\client`
+
+预览登录 → 主城 → 主线（新 Prefab 壳、开关和缺口）见 [`docs/prefab-demo-path.md`](docs/prefab-demo-path.md)。

@@ -7,6 +7,8 @@
  * 顶栏和底栏在 UIShell 的 chrome 层，不进页面栈。系统面板走 PanelNav。
  * 主城页中间默认 USE_CITY_HUB_PREFAB：CityHub Prefab 的地图和建筑。
  * false 或加载失败时仍 mountCityMap，代码地图不删。底栏仍是五项。
+ * 已有页面默认再盖 USE_PAGE_PREFAB_SHELL 的 1:1 Prefab。关掉后仍是原来的页面。
+ * 不改 Boot 的主城开关，不改战斗特效。主线「战斗」仍走原来的挑战。
  * 主屏不再画红「活动」、蓝「更多」矩形，也不再铺调试按钮矩阵。
  * 这两颗入口在 CityChrome Prefab 上。主线从 CityHub 的 BtnMainline 进。
  */
@@ -38,6 +40,7 @@ import { Proto } from "../net/protocol";
 import { BagPage, buildBagPage } from "./BagPage";
 import { CityChrome, mountCityChrome, mountCityChromePrefab, TabState } from "./CityChrome";
 import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
+import { attachPagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
 import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage, mountHeroDetailPrefab, mountHeroListPrefab, USE_HERO_PREFAB } from "./HeroPage";
 import { buildSummonPage, mountSummonPrefab, SummonPage, USE_SUMMON_PREFAB } from "./SummonPage";
 import { buildWireSummonPage, WireSummonPage } from "./WireSummonPage";
@@ -579,7 +582,7 @@ export class MainApp extends Component {
     }
     this.panels = new PanelNav<Node>(
       shell,
-      (id) => this.buildPage(id),
+      (id) => this.presentPage(id),
       (id) => this.noteClose(id)
     );
     this.panels.start(this.buildCity());
@@ -663,6 +666,13 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "locked " + id);
     this.shell?.showToast(access.hint, 2200);
     return false;
+  }
+
+  /** 原来的页面仍由 buildPage 做。壳加载失败时页面不动。 */
+  private presentPage(id: string): Node {
+    const page = this.buildPage(id);
+    if (USE_PAGE_PREFAB_SHELL) void attachPagePrefabShell(page, id);
+    return page;
   }
 
   private buildPage(id: string): Node {
