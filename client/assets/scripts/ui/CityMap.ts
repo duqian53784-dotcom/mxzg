@@ -11,7 +11,6 @@ import { ConfigLoader } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
 import { createLabel, uiNode } from "./UiKit";
 import {
-  CITY_BAR_BOTTOM,
   CITY_CFG_BTN,
   CITY_CFG_EFFECT,
   CITY_CFG_POS,
@@ -67,7 +66,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   parallaxUi.setContentSize(layout.contentW, layout.viewH);
   parallaxUi.setAnchorPoint(0, 0);
   parallax.parent = root;
-  placeBottomLeft(parallax, root, layout.scroll, CITY_BAR_BOTTOM);
+  placeBottomLeft(parallax, root, layout.scroll, 0);
 
   const views = new Map<string, Node>();
   for (let i = 0; i < layout.nodes.length; i++) {
@@ -112,7 +111,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
     moved += Math.abs(dx);
     if (moved > DRAG_PX) gesture.dragged = true;
     scroll = clamp(scroll + dx, layout.minScroll, layout.maxScroll);
-    placeBottomLeft(parallax, root, scroll, CITY_BAR_BOTTOM);
+    placeBottomLeft(parallax, root, scroll, 0);
     for (let i = 0; i < layout.nodes.length; i++) {
       const desc = layout.nodes[i];
       if (!desc.parallax) continue;

@@ -11,7 +11,6 @@ import { ConfigLoader } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
 import { CityMapHandle, CityMapQuery } from "./CityMap";
 import {
-  CITY_BAR_BOTTOM,
   CITY_CFG_BTN,
   CITY_CFG_EFFECT,
   CITY_CFG_POS,
@@ -157,8 +156,8 @@ async function bindCityHub(
 
   const applyScroll = (next: number): void => {
     scroll = next;
-    // 上移一个底栏高度，近景和召唤圆台停在底栏上面。顶栏继续叠在天空上。
-    placeBottomLeft(parallax, root, scroll, CITY_BAR_BOTTOM);
+    // 城景贴设计画面底边。底栏盖在上面。不要把整层上移，否则屏底露出页面黑底。
+    placeBottomLeft(parallax, root, scroll, 0);
     for (let i = 0; i < layout.nodes.length; i++) {
       const desc = layout.nodes[i];
       if (!desc.parallax) continue;
