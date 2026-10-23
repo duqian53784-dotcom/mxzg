@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "f9511a57-4f91-43c6-a5b7-eb091f80c776",
+  "uuid": "3c2a2117-b81a-40c8-8906-bacd06a6e18f",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "f9511a57-4f91-43c6-a5b7-eb091f80c776@6c48a",
-      "displayName": "plane-war_boss-bg.jpg",
+      "uuid": "3c2a2117-b81a-40c8-8906-bacd06a6e18f@6c48a",
+      "displayName": "promotion-71_spr-bg",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "f9511a57-4f91-43c6-a5b7-eb091f80c776",
+        "imageUuidOrDatabaseUri": "3c2a2117-b81a-40c8-8906-bacd06a6e18f",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,8 +34,8 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "f9511a57-4f91-43c6-a5b7-eb091f80c776@f9941",
-      "displayName": "plane-war_boss-bg.jpg",
+      "uuid": "3c2a2117-b81a-40c8-8906-bacd06a6e18f@f9941",
+      "displayName": "promotion-71_spr-bg",
       "id": "f9941",
       "name": "spriteFrame",
       "userData": {
@@ -46,9 +46,9 @@
         "trimX": 0,
         "trimY": 0,
         "width": 640,
-        "height": 1280,
+        "height": 1014,
         "rawWidth": 640,
-        "rawHeight": 1280,
+        "rawHeight": 1014,
         "borderTop": 0,
         "borderBottom": 0,
         "borderLeft": 0,
@@ -61,16 +61,16 @@
         "vertices": {
           "rawPosition": [
             -320,
-            -640,
+            -507,
             0,
             320,
-            -640,
+            -507,
             0,
             -320,
-            640,
+            507,
             0,
             320,
-            640,
+            507,
             0
           ],
           "indexes": [
@@ -83,9 +83,9 @@
           ],
           "uv": [
             0,
-            1280,
+            1014,
             640,
-            1280,
+            1014,
             0,
             0,
             640,
@@ -103,17 +103,17 @@
           ],
           "minPos": [
             -320,
-            -640,
+            -507,
             0
           ],
           "maxPos": [
             320,
-            640,
+            507,
             0
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "f9511a57-4f91-43c6-a5b7-eb091f80c776@6c48a",
+        "imageUuidOrDatabaseUri": "3c2a2117-b81a-40c8-8906-bacd06a6e18f@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -128,7 +128,7 @@
   "userData": {
     "fixAlphaTransparencyArtifacts": false,
     "hasAlpha": true,
-    "redirect": "f9511a57-4f91-43c6-a5b7-eb091f80c776@6c48a",
+    "redirect": "3c2a2117-b81a-40c8-8906-bacd06a6e18f@6c48a",
     "type": "sprite-frame"
   }
 }

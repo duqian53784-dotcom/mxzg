@@ -2,7 +2,7 @@
   "ver": "1.0.27",
   "importer": "image",
   "imported": true,
-  "uuid": "f70eae38-2297-4cbc-b121-bda8e545ed4b",
+  "uuid": "f9511a57-4f91-43c6-a5b7-eb091f80c776",
   "files": [
     ".json",
     ".png"
@@ -10,14 +10,14 @@
   "subMetas": {
     "6c48a": {
       "importer": "texture",
-      "uuid": "f70eae38-2297-4cbc-b121-bda8e545ed4b@6c48a",
-      "displayName": "plane-war_plane-war-bg.jpg",
+      "uuid": "f9511a57-4f91-43c6-a5b7-eb091f80c776@6c48a",
+      "displayName": "plane-war_boss-bg",
       "id": "6c48a",
       "name": "texture",
       "userData": {
         "wrapModeS": "clamp-to-edge",
         "wrapModeT": "clamp-to-edge",
-        "imageUuidOrDatabaseUri": "f70eae38-2297-4cbc-b121-bda8e545ed4b",
+        "imageUuidOrDatabaseUri": "f9511a57-4f91-43c6-a5b7-eb091f80c776",
         "isUuid": true,
         "visible": false,
         "minfilter": "linear",
@@ -34,8 +34,8 @@
     },
     "f9941": {
       "importer": "sprite-frame",
-      "uuid": "f70eae38-2297-4cbc-b121-bda8e545ed4b@f9941",
-      "displayName": "plane-war_plane-war-bg.jpg",
+      "uuid": "f9511a57-4f91-43c6-a5b7-eb091f80c776@f9941",
+      "displayName": "plane-war_boss-bg",
       "id": "f9941",
       "name": "spriteFrame",
       "userData": {
@@ -113,7 +113,7 @@
           ]
         },
         "isUuid": true,
-        "imageUuidOrDatabaseUri": "f70eae38-2297-4cbc-b121-bda8e545ed4b@6c48a",
+        "imageUuidOrDatabaseUri": "f9511a57-4f91-43c6-a5b7-eb091f80c776@6c48a",
         "atlasUuid": "",
         "trimType": "auto"
       },
@@ -128,7 +128,7 @@
   "userData": {
     "fixAlphaTransparencyArtifacts": false,
     "hasAlpha": true,
-    "redirect": "f70eae38-2297-4cbc-b121-bda8e545ed4b@6c48a",
+    "redirect": "f9511a57-4f91-43c6-a5b7-eb091f80c776@6c48a",
     "type": "sprite-frame"
   }
 }
