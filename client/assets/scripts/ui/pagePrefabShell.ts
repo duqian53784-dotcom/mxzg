@@ -8,6 +8,7 @@ import { labelCenterInParent, sliceAnchorShift } from "./ccbiPlace";
 import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
+import { mountIdleHang } from "./idleHangView";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createButton, createRect, place, uiNode } from "./UiKit";
@@ -51,7 +52,8 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     ui.setContentSize(720, 1280);
     ui.setAnchorPoint(0.5, 0.5);
     root.addComponent(BlockInputEvents);
-    place(createRect("dim", 720, 1280, new Color(8, 16, 32, 255)), root, 0, 0);
+    if (spec.fight) mountIdleHang(root);
+    else place(createRect("dim", 720, 1280, new Color(8, 16, 32, 255)), root, 0, 0);
     const view = spawnPrefab(prefab, root);
     mountCcbiView(view);
     if (spec.fight) {

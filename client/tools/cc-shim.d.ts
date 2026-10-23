@@ -115,9 +115,15 @@ declare module "cc" {
   export const VerticalTextAlignment: { CENTER: number; TOP: number };
   export const Overflow: { NONE: number; CLAMP: number };
 
+  export class Director {
+    static EVENT_AFTER_UPDATE: string;
+  }
+
   export const director: {
     loadScene(name: string, cb?: (err: Error | null, scene?: Node) => void): boolean;
     getScene(): { getChildByName(name: string): Node | null } | null;
+    on(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
+    off(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
   };
 
   export const view: {
@@ -167,6 +173,8 @@ declare module "cc" {
 
   export class Sprite {
     static SizeMode: { CUSTOM: number; TRIMMED: number; RAW: number };
+    static Type: { SIMPLE: number; SLICED: number; TILED: number; FILLED: number };
+    type: number;
     color: Color;
     grayscale: boolean;
     spriteFrame: SpriteFrame | null;

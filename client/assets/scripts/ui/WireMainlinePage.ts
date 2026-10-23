@@ -34,8 +34,10 @@
  * 收到 report 在本页播 spine 站场、回合攻击、有 hit 的受击，以及 batch2 技能/受击特效。3001、3006、3102 和 3030 都走 planWireSpineReplay。3103 不走。3101 不走。3099 不走。
  * 有拍时 VfxHit 再播 hero-beattack，VfxSkill 再播 skill 和 skill-effect。mountFrameReel 挂在已有锚点上，不另建 Vfx 节点。帧没加载到就留 batch2。
  * skill_id 对得上 resources 里的套时播那套帧，并再播下一层。对不上仍用 49 套和 skill-effect 取模。
+ * 底栏「战斗」先看到挂机站场（大理石殿 + BattlePanelLayer）。点壳上的「战斗」才发 3001。有 report 才挂森林 BattlePage。森林页不是挂机壳。
  * 站位是左敌右我，挂在已有的 Slot_E* / Slot_A* 上。报告没有英雄时仍补一格站场，页不空。
  * USE_BATTLE_PREFAB 默认开。上述回放进战时挂 BattlePage.prefab：站位、血条、回合、战报，技能挂 VfxSkill，受击挂 VfxHit。WireBattlePage 仍不挂。
+ * 战旗、战剑没有图时藏起，不把「战旗」「战剑」和套名写在场中间。血条跟到对应站位头顶。回放拍子跟导演帧走。
  * 底图是 ui/maps/map-bg-mission-1，拉到 720×1280。battle-scene_spr-bg-1 是边角小图，不当全屏底。代码页没有这张时才用沙地。
  * 同一份回放再写 Prefab 的 FloatDmg、FloatCrit、SkillNameBanner、前排 HeadAnchor。没有的 crit / level / buffs 藏起，不写成 0，也不编名字。
  * 开关关掉或 Prefab 加载失败时，仍用本页代码 UI，不另建这些挂点。跳过、撤退、关闭不发新 c2s。不改 Boot。
@@ -129,6 +131,7 @@ import {
 } from "../net/protocol/wireGmCommand";
 import { planStarterChallenge, STARTER_LINEUP_NOTE } from "../net/protocol/starterLineup";
 import { BattlePrefabShell, mountBattleBackdrop, mountBattlePrefab, paintBattleScene, paintSpeedIcon, USE_BATTLE_PREFAB } from "./BattlePage";
+import { armBattleDelay } from "./battleClock";
 import { FrameReel, mountFrameReel } from "./battleFramePlay";
 import { effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
 import { battleBeatWait, BattlePresentation, nextBattleSpeed, planBattlePresentation } from "./battlePresentation";
@@ -259,6 +262,7 @@ class WireMainlineController implements WireMainlinePage {
   private statusLabel: Node | null = null;
   private resultLabel: Node | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private beatCancel: (() => void) | null = null;
   private sleepResolve: ((cont: boolean) => void) | null = null;
   private skipped = false;
   /** 1、2、3。只缩短拍子，跳过和撤退不看这个数。 */
@@ -300,7 +304,7 @@ class WireMainlineController implements WireMainlinePage {
     this.body.parent = this.node;
     this.node.on(PAGE_SHELL_FIGHT, () => {
       this.challenge();
-      setPagePrefabShellVisible(this.node, !(this.waiting || this.phase === "battle"));
+      setPagePrefabShellVisible(this.node, this.phase !== "battle");
     });
     this.seenSerial = WireSession.battleSerial;
     this.seenReportSerial = WireSession.chapterReportSerial;
@@ -1189,6 +1193,8 @@ class WireMainlineController implements WireMainlinePage {
           setText(hp, hpText(slot, slot.hp));
         }
         shell.setHpFill(slot.side, index, slot.hp, slot.maxHp);
+        const page = battleSlotPage(slot.side, index);
+        if (hp && hp.parent && hp.parent !== root && page) hp.parent.setPosition(page.x, page.y + 78, 0);
         this.nameLabels.push(name || root);
         this.hpLabels.push(hp || root);
         this.hpNow.push(slot.hp);
@@ -1197,15 +1203,7 @@ class WireMainlineController implements WireMainlinePage {
         this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex), { face }));
         continue;
       }
-      const xy = slotXY(slot.side, index, totals[slot.side]);
-      const root = place(uiNode("slot-" + slot.stem), shell.layerField, xy.x, xy.y);
-      const name = place(createLabel(slot.label, 14, { color: MUTED, width: 180, height: 36 }), root, 0, -78);
-      const hp = place(createLabel(hpText(slot, slot.hp), 14, { color: TITLE, width: 180 }), root, 0, -108);
-      this.nameLabels.push(name);
-      this.hpLabels.push(hp);
-      this.hpNow.push(slot.hp);
-      this.slotRoots.push(root);
-      this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex), { face: 1 }));
+      this.mountAccent(shell.layerField, slot, slotXY(slot.side, index, totals[slot.side]), slotIndex);
     }
     this.mountPrefabVfx(plan, shell);
     this.paintOverhead(plan);
@@ -1249,6 +1247,11 @@ class WireMainlineController implements WireMainlinePage {
       const slot = plan.slots[i];
       const index = seen[slot.side];
       seen[slot.side] += 1;
+      const slotIndex = i;
+      if (slot.side === "sword" || slot.side === "flag") {
+        this.mountAccent(this.body, slot, slotXY(slot.side, index, totals[slot.side]), slotIndex);
+        continue;
+      }
       const xy = slotXY(slot.side, index, totals[slot.side]);
       const root = place(uiNode("slot-" + slot.stem), this.body, xy.x, xy.y);
       const name = place(createLabel(slot.label, 14, { color: MUTED, width: 180, height: 36 }), root, 0, -78);
@@ -1257,7 +1260,6 @@ class WireMainlineController implements WireMainlinePage {
       this.hpLabels.push(hp);
       this.hpNow.push(slot.hp);
       this.slotRoots.push(root);
-      const slotIndex = i;
       const face: -1 | 1 = slot.side === "ally" ? -1 : 1;
       this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex), { face }));
     }
@@ -1383,7 +1385,7 @@ class WireMainlineController implements WireMainlinePage {
     if (!snap) return;
     // sleep 还挂着时 skip 只把回放唤醒到最后一拍，showDone 等 play 回来再拆。
     // wake 是微任务，这里如果立刻 showDone，最后一拍还没画完页就被清掉。
-    if (this.timer || this.sleepResolve) {
+    if (this.beatCancel || this.timer || this.sleepResolve) {
       this.wantResult = true;
       this.skip();
       return;
@@ -1562,17 +1564,21 @@ class WireMainlineController implements WireMainlinePage {
   private sleep(ms: number): Promise<boolean> {
     return new Promise((resolve) => {
       this.sleepResolve = resolve;
-      this.timer = setTimeout(() => {
+      this.beatCancel = armBattleDelay(ms, () => {
+        this.beatCancel = null;
         this.timer = null;
+        if (this.sleepResolve !== resolve) return;
         this.sleepResolve = null;
         resolve(!this.disposed);
-      }, ms);
-      const maybe = this.timer as { unref?: () => void };
-      if (typeof maybe.unref === "function") maybe.unref();
+      });
     });
   }
 
   private wake(cont: boolean): void {
+    if (this.beatCancel) {
+      this.beatCancel();
+      this.beatCancel = null;
+    }
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -1580,6 +1586,18 @@ class WireMainlineController implements WireMainlinePage {
     const resolve = this.sleepResolve;
     this.sleepResolve = null;
     if (resolve) resolve(cont);
+  }
+
+  /** 战旗、战剑没有对应槽。没加载到就藏起，不把节点名和「战旗」「战剑」写在场中间。 */
+  private mountAccent(parent: Node, slot: WireSpineSlot, xy: { x: number; y: number }, _slotIndex: number): void {
+    const root = place(uiNode("slot-" + slot.stem), parent, xy.x, xy.y);
+    this.nameLabels.push(root);
+    this.hpLabels.push(root);
+    this.hpNow.push(slot.hp);
+    this.slotRoots.push(root);
+    this.actors.push(mountBattleSpine(root, slot.stem, () => {
+      if (root.isValid) root.active = false;
+    }, { face: 1 }));
   }
 
   private paintOverhead(plan: WireSpineReplay): void {

@@ -3,6 +3,7 @@
  * 路径是 resources 里的 spriteFrame，不带扩展名。
  */
 import { Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { armBattleDelay } from "./battleClock";
 import { uiNode } from "./UiKit";
 
 export const FRAME_STEP_MS = 70;
@@ -26,12 +27,12 @@ export function mountFrameReel(parent: Node, size: number, name = "FrameReel"): 
   node.parent = parent;
 
   let token = 0;
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  let cancel: (() => void) | null = null;
 
   const clearTimer = () => {
-    if (!timer) return;
-    clearTimeout(timer);
-    timer = null;
+    if (!cancel) return;
+    cancel();
+    cancel = null;
   };
 
   const stop = () => {
@@ -70,9 +71,7 @@ export function mountFrameReel(parent: Node, size: number, name = "FrameReel"): 
         node.active = true;
         if (index >= ready.length - 1) return;
         index += 1;
-        timer = setTimeout(tick, FRAME_STEP_MS);
-        const maybe = timer as { unref?: () => void };
-        if (typeof maybe.unref === "function") maybe.unref();
+        cancel = armBattleDelay(FRAME_STEP_MS, tick);
       };
       tick();
       if (onResult) onResult(true);
