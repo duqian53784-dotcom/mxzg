@@ -9,7 +9,10 @@
  * 账号走 Proto.login / Proto.roleEnter；没有角色或点「创角」时再 Proto.roleCreate。
  * 默认仍是 NetClient → MockTransport，不需要服务器。
  * 预览地址加 ?transport=ws 才连本机桥 ws://127.0.0.1:13111/game（转到 TCP 9902）。
+ * 登录页 Mock 下可点「连本机服」。?transport=auto 会短连一次，桥没开就回到 Mock。
+ * 上次成功连上桥会记住 transport=ws，下次预览不加查询也会再试。?transport=mock 仍强制离线。
  * 打开后发心跳 1004，点登录再发 1001。s2c 1001 有角色就进同一套主城壳。
+ * 进主城后角色数据进 GameStore，界面读那一份。Mock 进度写在本机，不含密码。
  * 空回包仍走创角 1002，再发一次 1001。金币钻石不从 Mock 填。
  * 连不上会提示检查 start-local-all.bat（或分拆的启服 / 桥脚本），并可改走 Mock。
  *
@@ -48,6 +51,7 @@ import { NetState } from "../net/NetTypes";
 import {
   explainWireTimeout,
   readPreviewTransport,
+  resolveBootTransport,
   TransportChoice,
   WS_CLOSE_STATUS,
   WS_DOWN_LOG,
@@ -59,7 +63,7 @@ import {
 import { Proto } from "../net/protocol";
 import { RoleEnterResp } from "../net/protocol/types";
 import { buildCreateRolePanel, CreateRolePanelView, mountCreateRolePrefab } from "../ui/CreateRolePanel";
-import { buildLoginPanel, LoginPanelView, mountLoginPrefab } from "../ui/LoginPanel";
+import { buildLoginPanel, LoginHandlers, LoginPanelView, mountLoginPrefab } from "../ui/LoginPanel";
 import { mountP1LoginPrefab, USER_LOGIN_PREFAB_PATH } from "../ui/p1Login";
 import { CREATE_ROLE_PREFAB_PATH, LOGIN_PREFAB_PATH } from "../ui/prefabLoad";
 import { MainApp } from "../ui/MainApp";
@@ -68,7 +72,8 @@ import { Toast } from "../ui/Toast";
 import { createLabel, place, setText, uiNode } from "../ui/UiKit";
 import { ErrorCode, errorText, GameError, messageOf } from "./errors";
 import { GameLog } from "./GameLog";
-import { browserPrefStore, loadLoginPrefs, PrefStore, resolveAccount, saveLoginPrefs } from "./LoginPrefs";
+import { GameStore } from "./GameStore";
+import { browserPrefStore, loadLoginPrefs, PrefStore, resolveAccount, saveLoginPrefs, TransportPref } from "./LoginPrefs";
 import { Session } from "./Session";
 
 const { ccclass, property } = _decorator;
@@ -110,6 +115,12 @@ export class Boot extends Component {
   private authEpoch = 0;
   private alive = true;
   private useWs = false;
+  /** ?transport=auto 时先短连。失败就回到 Mock 登录，不把预览卡住。 */
+  private autoFallback = false;
+  /** 只有 mock / ws 才会写进下次预览。没选过就保持上次的键。 */
+  private transportPref?: TransportPref;
+  /** 短连失败后，下一帧登录页用这句，而不是「账号」。 */
+  private pendingStatus: string | null = null;
   private wsChoice: TransportChoice = readPreviewTransport();
   private wsEpoch = 0;
   private wsLive = false;
@@ -143,12 +154,22 @@ export class Boot extends Component {
 
   private async runBoot(): Promise<void> {
     this.wsChoice = readPreviewTransport();
-    this.useWs = this.wsChoice.kind === "ws";
+    const stored = loadLoginPrefs(this.prefStore());
+    const resolved = resolveBootTransport(this.wsChoice, stored?.transport);
+    this.useWs = resolved.useWs;
+    this.autoFallback = resolved.autoFallback;
+    if (stored?.transport === "mock" || stored?.transport === "ws") this.transportPref = stored.transport;
+    const remembered = !this.wsChoice.explicit && stored?.transport === "ws";
     GameLog.shared.info(
       "Boot",
       this.useWs
-        ? "transport=ws " + this.wsChoice.wsUrl + " 真服预览。去掉 ?transport=ws 仍是 Mock"
-        : "transport=mock 默认 Mock。真服预览加 ?transport=ws ，桥 ws://127.0.0.1:13111/game"
+        ? "transport=" +
+            (this.autoFallback ? "auto" : "ws") +
+            " " +
+            this.wsChoice.wsUrl +
+            (remembered ? " 上次记住 transport=ws" : " 真服预览") +
+            "。去掉 ?transport=ws 仍可走 Mock"
+        : "transport=mock 默认 Mock。真服预览加 ?transport=ws ，或点连本机服。桥 ws://127.0.0.1:13111/game"
     );
     const canvas = this.resolveCanvas();
     this.canvas = canvas;
@@ -244,6 +265,7 @@ export class Boot extends Component {
         const panel = slot.panel;
         if (panel) this.onUseMock(panel);
       },
+      onLive: () => this.onUseLive(),
     };
     if (USE_P1_LOGIN_PREFAB) {
       void this.mountP1Login(parent, handlers, options, epoch, slot, account);
@@ -258,7 +280,7 @@ export class Boot extends Component {
 
   private async mountP1Login(
     parent: Node,
-    handlers: { onEnter: () => void; onCreate: () => void; onMock?: () => void },
+    handlers: LoginHandlers,
     options: { account: string; serverId: number; mode: "mock" | "ws"; wsUrl?: string },
     epoch: number,
     slot: { panel: LoginPanelView | null },
@@ -291,7 +313,7 @@ export class Boot extends Component {
   /** P1 壳加载失败时，回到原来的 LoginPanel 或代码登录。 */
   private async fallbackLogin(
     parent: Node,
-    handlers: { onEnter: () => void; onCreate: () => void; onMock?: () => void },
+    handlers: LoginHandlers,
     options: { account: string; serverId: number; mode: "mock" | "ws"; wsUrl?: string }
   ): Promise<LoginPanelView> {
     if (!USE_LOGIN_PREFAB) return buildLoginPanel(parent, handlers, options);
@@ -314,16 +336,25 @@ export class Boot extends Component {
     this.loginPanel = panel;
     if (this.useWs) {
       panel.setStatus("正在连接 " + this.wsChoice.wsUrl);
-      panel.setDetail("打开后发心跳 1004");
+      const hint = GameStore.hintFor(account);
+      panel.setDetail(hint || "打开后发心跳 1004");
       void this.probeLocalWs();
       return;
     }
+    if (this.pendingStatus) {
+      panel.setStatus(this.pendingStatus);
+      panel.setDetail("服未启动。可点进入游戏走 Mock，或点连本机服再试");
+      this.pendingStatus = null;
+      return;
+    }
     panel.setStatus("账号 " + account);
+    const hint = GameStore.hintFor(account);
+    if (hint) panel.setDetail(hint);
   }
 
   private async mountLoginFromPrefab(
     parent: Node,
-    handlers: { onEnter: () => void; onCreate: () => void; onMock?: () => void },
+    handlers: LoginHandlers,
     options: { account: string; serverId: number; mode: "mock" | "ws"; wsUrl?: string },
     epoch: number,
     slot: { panel: LoginPanelView | null },
@@ -364,7 +395,10 @@ export class Boot extends Component {
   /** 关掉桥上的套接字，再用原来的 Mock 登录进主城。失败不把预览打崩。 */
   private onUseMock(panel: LoginPanelView): void {
     if (!this.alive || this.entering || this.authBusy) return;
+    this.autoFallback = false;
     this.useWs = false;
+    this.transportPref = "mock";
+    this.pendingStatus = null;
     this.dropWs();
     GameLog.shared.info("Boot", WS_MOCK_STATUS);
     this.showBootToast(WS_MOCK_STATUS);
@@ -391,6 +425,16 @@ export class Boot extends Component {
     this.showBootToast(WS_OPEN_TOAST);
   }
 
+  /** 登录页上的「连本机服」。不立刻进主城，先打开桥再等用户点进入游戏。 */
+  private onUseLive(): void {
+    if (!this.alive || this.entering || this.authBusy) return;
+    this.useWs = true;
+    this.autoFallback = false;
+    this.pendingStatus = null;
+    const parent = this.loginPanel && this.loginPanel.root.parent;
+    if (parent && parent.isValid) this.showLogin(parent);
+  }
+
   /** 连上后 NetClient 会立刻发一拍心跳 1004，之后每 25 秒一拍。这里不发登录。 */
   private async openWs(epoch: number): Promise<boolean> {
     const url = this.wsChoice.wsUrl;
@@ -404,6 +448,18 @@ export class Boot extends Component {
       if (!already) await net.connect(url);
     } catch (err) {
       if (!this.alive || epoch !== this.wsEpoch) return false;
+      if (this.autoFallback) {
+        this.autoFallback = false;
+        this.useWs = false;
+        GameLog.shared.warn("Boot", "本机桥没接上，已改走 Mock。" + messageOf(err));
+        this.dropWs();
+        this.pendingStatus = "已改走 Mock";
+        this.authBusy = false;
+        const parent = this.loginPanel && this.loginPanel.root.parent;
+        if (parent && parent.isValid) this.showLogin(parent);
+        else this.showBootToast(this.pendingStatus);
+        return false;
+      }
       GameLog.shared.error("Boot", "WebSocket 连接失败 " + messageOf(err) + "。" + WS_DOWN_LOG);
       if (this.loginPanel) {
         this.loginPanel.setStatus(WS_DOWN_STATUS);
@@ -416,6 +472,9 @@ export class Boot extends Component {
     }
     if (!this.alive || epoch !== this.wsEpoch) return false;
     this.wsLive = true;
+    this.autoFallback = false;
+    this.transportPref = "ws";
+    if (this.loginPanel) this.remember(resolveAccount(this.loginPanel.account(), this.account), this.loginPanel.serverId());
     // 登录回包可能和 2001、3007 粘在同一条消息里。先听着，进主城再写。
     WireSession.watch(net);
     return true;
@@ -501,7 +560,7 @@ export class Boot extends Component {
 
   private ensureWsNet(): NetClient {
     if (this.wsNet) return this.wsNet;
-    const transport = new WsTransport({ connectTimeoutMs: 5000 });
+    const transport = new WsTransport({ connectTimeoutMs: this.autoFallback ? 1500 : 5000 });
     const net = new NetClient(transport, {
       heartbeatMs: WIRE_HEARTBEAT_MS,
       reconnectDelayMs: 800,
@@ -843,7 +902,8 @@ export class Boot extends Component {
   }
 
   private remember(account: string, serverId: number): void {
-    saveLoginPrefs({ account, serverId }, this.prefStore());
+    const transport = this.transportPref === "mock" || this.transportPref === "ws" ? this.transportPref : undefined;
+    saveLoginPrefs({ account, serverId, transport }, this.prefStore());
   }
 
   private prefStore(): PrefStore | null {

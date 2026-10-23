@@ -9,7 +9,7 @@ import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import { isP1ProgressStatus } from "./prefabShellMap";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
-import { LoginPanelOptions, LoginPanelView } from "./LoginPanel";
+import { LoginHandlers, LoginPanelOptions, LoginPanelView } from "./LoginPanel";
 import { bindTap, findDescendant, liftNode, mountCcbiView } from "./pagePrefabShell";
 import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
@@ -22,7 +22,7 @@ export const ERROR_PREFAB_PATH = "prefabs/ui/login/ErrorLayer";
 
 export async function mountP1LoginPrefab(
   parent: Node,
-  handlers: { onEnter: () => void; onCreate: () => void; onMock?: () => void },
+  handlers: LoginHandlers,
   options?: LoginPanelOptions
 ): Promise<LoginPanelView> {
   const host = uiNode("P1Login");
@@ -90,6 +90,8 @@ export async function mountP1LoginPrefab(
     place(createButton("创角", () => handlers.onCreate(), 200, 44), host, -120, -520);
     if (options?.mode === "ws" && handlers.onMock) {
       place(createButton("改走 Mock", () => handlers.onMock && handlers.onMock(), 200, 44), host, 120, -520);
+    } else if (options?.mode !== "ws" && handlers.onLive) {
+      place(createButton("连本机服", () => handlers.onLive && handlers.onLive(), 200, 44), host, 120, -520);
     }
 
     void openSimple(NOTICE_PREFAB_PATH, (layer) => {

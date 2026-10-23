@@ -477,6 +477,7 @@ import {
   summonToast,
 } from "../assets/scripts/module/summon/pull";
 import { GameLog } from "../assets/scripts/core/GameLog";
+import { GameStore, saveRoleCache } from "../assets/scripts/core/GameStore";
 import { loadLoginPrefs, LoginPrefs, PrefStore, resolveAccount, saveLoginPrefs } from "../assets/scripts/core/LoginPrefs";
 import {
   formatDiamondLine,
@@ -1572,6 +1573,7 @@ import {
   explainWireTimeout,
   parseTransportSearch,
   readPreviewTransport,
+  resolveBootTransport,
   TransportConfig,
   WS_DOWN_LOG,
   WS_DOWN_STATUS,
@@ -2066,6 +2068,161 @@ function memoryStore(seed?: Record<string, string>): PrefStore & { data: Record<
   };
 }
 
+function checkGameStore(): void {
+  GameStore.reset();
+  const plain = parseTransportSearch("");
+  assert(plain.kind === "mock" && plain.explicit === false, "empty search is not explicit");
+  assert(!resolveBootTransport(plain, null).useWs && !resolveBootTransport(plain, null).autoFallback, "empty plus null stays mock");
+  const savedWs = resolveBootTransport(plain, "ws");
+  assert(savedWs.useWs && !savedWs.autoFallback, "empty plus saved ws uses the bridge");
+  const forced = parseTransportSearch("?transport=mock");
+  const beat = resolveBootTransport(forced, "ws");
+  assert(forced.explicit && !beat.useWs && !beat.autoFallback, "explicit mock beats saved ws");
+  const auto = parseTransportSearch("?transport=auto");
+  const autoBoot = resolveBootTransport(auto, "mock");
+  assert(auto.kind === "auto" && auto.explicit && autoBoot.useWs && autoBoot.autoFallback, "auto falls back");
+  const mistaken = parseTransportSearch("", { defaultKind: "auto", wsUrl: DEFAULT_WS_URL });
+  assert(mistaken.kind === "mock" && mistaken.explicit === false, "config auto does not change empty search");
+
+  GameStore.noteWire({
+    enabled: false,
+    account: "nope",
+    serverId: 1,
+    roleId: 9,
+    name: "不写",
+    nameSynced: true,
+    level: 1,
+    gold: 1,
+    diamond: 1,
+    nowIdx: 9,
+    maxIdx: 9,
+    heroes: [],
+    bag: [],
+    lineUp: null,
+    unlockIds: [],
+    rewardTime: 1,
+    maxRewardTime: 1,
+    battle: null,
+  });
+  assert(GameStore.source === "empty", "disabled note does not wipe");
+
+  GameStore.fillFromMock({
+    account: "cache",
+    serverId: 1,
+    roleId: 9,
+    name: "旧号",
+    level: 4,
+    gold: 77,
+    diamond: 5,
+    openDay: 2,
+    stageId: 4,
+    clearedStage: 3,
+    idleAnchorMs: 1234,
+    heroes: [{ heroId: 10001, heroType: null, name: "光耀骑士", level: 2, star: 3, fighting: null, weaponLevel: 1 }],
+    items: [{ id: 101, count: 6 }],
+  });
+  assert(GameStore.source === "mock" && GameStore.mainlineLabel() === "主线 · 第4关", "mock label from the store");
+  assert(GameStore.mockStageId() === 4 && GameStore.hangRoster() === null, "mock stage stays off the hang roster");
+
+  GameStore.noteWire({
+    enabled: true,
+    account: "111",
+    serverId: 1,
+    roleId: 1000002,
+    name: "倩",
+    nameSynced: true,
+    level: 8,
+    gold: 50,
+    diamond: 3,
+    nowIdx: 2,
+    maxIdx: 9,
+    heroes: [],
+    bag: [],
+    lineUp: null,
+    unlockIds: [],
+    rewardTime: 1,
+    maxRewardTime: 2,
+    battle: null,
+  });
+  assert(GameStore.source === "wire" && GameStore.mainlineLabel() === "主线 · 当前 2 / 最高 9", "wire label replaces mock");
+  assert(GameStore.chapter().fromStore && GameStore.chapter().nowIdx === 2, "chapter comes from the store");
+  assert(GameStore.hangRoster() !== null, "wire hang reads the store");
+  GameStore.noteWire({
+    enabled: false,
+    account: "111",
+    serverId: 1,
+    roleId: 1,
+    name: "别覆盖",
+    nameSynced: false,
+    level: null,
+    gold: null,
+    diamond: null,
+    nowIdx: 0,
+    maxIdx: 0,
+    heroes: null,
+    bag: null,
+    lineUp: null,
+    unlockIds: null,
+    rewardTime: null,
+    maxRewardTime: null,
+    battle: null,
+  });
+  assert(GameStore.mainlineLabel() === "主线 · 当前 2 / 最高 9", "mock path does not wipe a wire store");
+
+  const mem = memoryStore();
+  saveRoleCache(
+    {
+      v: 1,
+      source: "mock",
+      account: "cache",
+      serverId: 1,
+      roleId: 9,
+      name: "旧号",
+      level: 4,
+      gold: 77,
+      diamond: 5,
+      openDay: 2,
+      stageId: 4,
+      clearedStage: 3,
+      nowIdx: null,
+      maxIdx: null,
+      heroes: [{ heroId: 10001, heroType: null, name: "光耀骑士", level: 2, star: 3, fighting: null, weaponLevel: 1 }],
+      bag: [{ itemId: 101, itemType: null, num: 6 }],
+      unlockIds: [],
+      slots: [],
+      rewardTime: null,
+      maxRewardTime: null,
+      idleAnchorMs: 1234,
+    },
+    mem
+  );
+  const seed = GameStore.mockSeedFor("cache", mem);
+  assert(seed !== null && seed.gold === 77 && seed.clearedStage === 3, "mock seed from the cache");
+  assert(GameStore.mockSeedFor("other", mem) === null, "other account does not take the cache");
+  const session = new MockGameSession();
+  session.login({ account: "cache", serverId: 1 });
+  session.restoreClientCache({
+    account: seed ? seed.account : "",
+    serverId: seed ? seed.serverId : 1,
+    role: { roleId: seed ? seed.roleId : 0, name: seed ? seed.name : "" },
+    clearedStage: seed ? seed.clearedStage : 0,
+    stageId: seed ? seed.stageId : 1,
+    openDay: seed ? seed.openDay : 1,
+    gold: seed ? seed.gold : 0,
+    diamond: seed ? seed.diamond : 0,
+    idleAnchorMs: seed ? seed.idleAnchorMs : 0,
+    items: seed ? seed.items : [],
+    heroes: [{ id: 10001, name: "光耀骑士", level: 2, star: 3, weaponLevel: 1 }],
+  });
+  const entered = session.roleEnter();
+  assert(entered.hasRole && entered.gold === 77 && session.clearedStage === 3, "restore puts gold and stage back");
+  const bag = session.bagList().items;
+  let stone = 0;
+  for (let i = 0; i < bag.length; i++) if (bag[i].id === 101) stone = bag[i].count;
+  assert(stone === 6, "restore replaces starter items");
+  GameStore.reset();
+}
+
 function checkLoginPrefs(): void {
   assert(MOCK_SERVERS.length === 3, "three servers");
   assert(findServer(1).name === "本地Mock" && findServer(2).name === "提审" && findServer(3).name === "正式占位", "server names");
@@ -2090,6 +2247,17 @@ function checkLoginPrefs(): void {
   const junk = memoryStore({ "mxzg.account": "qian", "mxzg.serverId": "nope" });
   const junkLoaded = loadLoginPrefs(junk);
   assert(junkLoaded !== null && junkLoaded.account === "qian" && junkLoaded.serverId === 1, "bad server id");
+  assert(empty.data["mxzg.transport"] === undefined, "account save does not write transport");
+  const transportStore = memoryStore();
+  saveLoginPrefs({ account: "live", serverId: 1, transport: "ws" }, transportStore);
+  assert(loadLoginPrefs(transportStore)?.transport === "ws", "transport pref ws");
+  saveLoginPrefs({ account: "live", serverId: 1 }, transportStore);
+  assert(loadLoginPrefs(transportStore)?.transport === "ws", "omitted transport keeps the key");
+  const badTransport = memoryStore({ "mxzg.account": "q", "mxzg.transport": "auto" });
+  assert(loadLoginPrefs(badTransport)?.transport === undefined, "junk transport ignored");
+  const onlyTransport = memoryStore({ "mxzg.transport": "mock" });
+  const onlyLoaded = loadLoginPrefs(onlyTransport);
+  assert(onlyLoaded !== null && onlyLoaded.account === "" && onlyLoaded.transport === "mock", "transport without account");
 
   const prevAccount = Session.account;
   const prevServer = Session.serverName;
@@ -26638,6 +26806,7 @@ async function main(): Promise<void> {
   checkSafeArea();
   checkLog();
   checkLoginPrefs();
+  checkGameStore();
   checkMainline();
   checkIdleMath();
   await checkNet();

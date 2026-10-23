@@ -133,6 +133,7 @@ import {
   WIRE_GM_UNSYNCED_TOAST,
 } from "../net/protocol/wireGmCommand";
 import { planStarterChallenge, STARTER_LINEUP_NOTE } from "../net/protocol/starterLineup";
+import { GameStore } from "../core/GameStore";
 import { Session } from "../core/Session";
 import {
   battleFrameStepMs,
@@ -369,7 +370,7 @@ class WireMainlineController implements WireMainlinePage {
       this.seenSerial = WireSession.battleSerial;
       this.waiting = false;
       this.waitKind = null;
-      const snap = WireSession.battleMatch;
+      const snap = GameStore.battle() ?? WireSession.battleMatch;
       if (!snap || !snap.report) {
         this.phase = "info";
         this.showInfo();
@@ -1097,7 +1098,10 @@ class WireMainlineController implements WireMainlinePage {
 
   private async play(snap: WireBattleMatch, stageOverride?: number): Promise<void> {
     this.lastSnap = snap;
-    const stage = typeof stageOverride === "number" ? stageOverride : wireMainlineFightStage(WireSession.nowIdx, WireSession.maxIdx);
+    const chapter = GameStore.chapter();
+    const nowIdx = chapter.fromStore ? chapter.nowIdx : WireSession.nowIdx;
+    const maxIdx = chapter.fromStore ? chapter.maxIdx : WireSession.maxIdx;
+    const stage = typeof stageOverride === "number" ? stageOverride : wireMainlineFightStage(nowIdx, maxIdx);
     if (stage === null || !snap.report) {
       this.host.showToast(WIRE_BATTLE_UNSYNCED_TOAST);
       this.showInfo();
@@ -1505,15 +1509,20 @@ class WireMainlineController implements WireMainlinePage {
   }
 
   private nowText(): string {
-    return formatWireChapterIdx("now", WireSession.nowIdx);
+    const chapter = GameStore.chapter();
+    return formatWireChapterIdx("now", chapter.fromStore ? chapter.nowIdx : WireSession.nowIdx);
   }
 
   private maxText(): string {
-    return formatWireChapterIdx("max", WireSession.maxIdx);
+    const chapter = GameStore.chapter();
+    return formatWireChapterIdx("max", chapter.fromStore ? chapter.maxIdx : WireSession.maxIdx);
   }
 
   private fightText(): string {
-    return formatWireFightLine(WireSession.nowIdx, WireSession.maxIdx);
+    const chapter = GameStore.chapter();
+    const nowIdx = chapter.fromStore ? chapter.nowIdx : WireSession.nowIdx;
+    const maxIdx = chapter.fromStore ? chapter.maxIdx : WireSession.maxIdx;
+    return formatWireFightLine(nowIdx, maxIdx);
   }
 
   private rewardText(): string {
@@ -1525,7 +1534,7 @@ class WireMainlineController implements WireMainlinePage {
   }
 
   private statusText(): string {
-    const snap = WireSession.battleMatch;
+    const snap = GameStore.battle() ?? WireSession.battleMatch;
     if (!snap) return "点挑战发 3001";
     return formatWireBattleMatch(snap, this.host.roleId());
   }

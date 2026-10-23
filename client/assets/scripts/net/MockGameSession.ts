@@ -2876,6 +2876,18 @@ export class MockGameSession {
     return this.account === this.roleAccount;
   }
 
+  /**
+   * 同账号刷新后把上次 Mock 快照接上。不写密码、不写 token。
+   * 道具列表按种子整份替换，避免构造时发的起步消耗品叠在快照上。
+   */
+  restoreClientCache(seed: MockSessionSeed): void {
+    if (Array.isArray(seed.items)) this.itemCounts = {};
+    this.applySeed(seed);
+    this.hasRole = true;
+    if (seed.account) this.roleAccount = seed.account;
+    this.ensureStarterGear();
+  }
+
   /** resetOpenDay：创角时开服天回到推导值，而不是保留旧号的天数。 */
   private syncDerived(resetOpenDay: boolean): void {
     this.role.level = 1 + this.clearedStage;

@@ -6,13 +6,19 @@ export interface PrefStore {
   setItem(key: string, value: string): void;
 }
 
+/** 上次预览走 Mock 还是本机桥。不存密码。 */
+export type TransportPref = "mock" | "ws";
+
 export interface LoginPrefs {
   account: string;
   serverId: number;
+  /** 没选过时没有这一项。查询参数优先于它。 */
+  transport?: TransportPref;
 }
 
 const ACCOUNT_KEY = "mxzg.account";
 const SERVER_KEY = "mxzg.serverId";
+const TRANSPORT_KEY = "mxzg.transport";
 
 export function loadLoginPrefs(store: PrefStore | null): LoginPrefs | null {
   if (!store) return null;
@@ -25,8 +31,17 @@ export function loadLoginPrefs(store: PrefStore | null): LoginPrefs | null {
     return null;
   }
   const hasServer = serverRaw !== null && serverRaw !== "";
-  if (!account && !hasServer) return null;
-  return { account, serverId: findServer(parseServerId(serverRaw)).id };
+  let transportRaw: string | null = null;
+  try {
+    transportRaw = store.getItem(TRANSPORT_KEY);
+  } catch (_err) {
+    transportRaw = null;
+  }
+  const transport = parseTransportPref(transportRaw);
+  if (!account && !hasServer && !transport) return null;
+  const prefs: LoginPrefs = { account, serverId: findServer(parseServerId(serverRaw)).id };
+  if (transport) prefs.transport = transport;
+  return prefs;
 }
 
 export function saveLoginPrefs(prefs: LoginPrefs, store: PrefStore | null): void {
@@ -36,6 +51,7 @@ export function saveLoginPrefs(prefs: LoginPrefs, store: PrefStore | null): void
   try {
     if (account) store.setItem(ACCOUNT_KEY, account);
     store.setItem(SERVER_KEY, String(serverId));
+    if (prefs.transport === "mock" || prefs.transport === "ws") store.setItem(TRANSPORT_KEY, prefs.transport);
   } catch (_err) {
     // 隐私模式或配额满时下次仍可手输。
   }
@@ -59,6 +75,11 @@ export function resolveAccount(primary: string | undefined, fallback: string | u
   const second = (fallback ?? "").trim();
   if (second) return second;
   return "mock";
+}
+
+function parseTransportPref(raw: string | null): TransportPref | null {
+  if (raw === "mock" || raw === "ws") return raw;
+  return null;
 }
 
 function parseServerId(raw: string | null): number {
