@@ -1705,7 +1705,10 @@ function checkGates(): void {
   assert(summon && smith && tower, "sample rows");
   assert(isEntryOpen(summon, 1, 1), "summon open at lv1");
   assert(!isEntryOpen(smith, 1, 1) && isEntryOpen(smith, 5, 1), "smith at lv5");
-  assert(!isEntryOpen(tower, 1, 1) && isEntryOpen(tower, 1, 30), "magic tower on D30");
+  assert(
+    !isEntryOpen(tower, 1, 30) && !isEntryOpen(tower, 120, 1) && isEntryOpen(tower, 120, 30),
+    "magic tower needs lv120 and D30"
+  );
   const arenaRow = rows.find((row) => row.id === "main_pvp");
   assert(arenaRow && arenaRow.level === 8, "arena row");
   assert(!isEntryOpen(arenaRow, 7, 99) && isEntryOpen(arenaRow, 8, 1), "arena at lv8");
@@ -2164,7 +2167,12 @@ function checkNav(rows: OpenConditionRow[], gates: SystemGateRow[]): void {
   assert(!entryAccess(smith, 4, 30, db).open && entryAccess(smith, 5, 1, db).open, "smith opens at lv5");
   const magicLock = entryAccess(magic, 99, 1, db);
   assert(!magicLock.open && magicLock.hint.split("开服第30天").length === 2, "magic hint once");
-  assert(!entryAccess(magic, 1, 29, db).open && entryAccess(magic, 1, 30, db).open, "magic opens on D30");
+  assert(
+    !entryAccess(magic, 1, 30, db).open &&
+      !entryAccess(magic, 120, 1, db).open &&
+      entryAccess(magic, 120, 30, db).open,
+    "magic opens at lv120 and D30"
+  );
   assert(!entryAccess(smith, 9, 30, null).open && entryAccess(smith, 9, 30, null).hint.indexOf("配置未加载") >= 0, "gated without config");
   assert(tabLabel("铁匠铺", false) === "锁·铁匠铺" && tabLabel("铁匠铺", true) === "铁匠铺", "locked label");
   const arenaEntry = findNavEntry("arena");

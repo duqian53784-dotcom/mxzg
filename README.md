@@ -5,13 +5,15 @@
 | 目录 | 说明 |
 |------|------|
 | `client/` | Cocos Creator 3.8.8 新前端（用 Creator 打开此目录） |
-| `config/` | 配置表。本机当前为目录联接 → `F:\mxzg-local`（暂不进 Git） |
+| `config/gameconfig/` | 策划表 xlsx。源路径 `F:\project\mxzg\config\gameconfig`。客户端运行时读导出的 JSON |
 | `server/` | 服务端。本机当前为目录联接 → `F:\源码\mj\program\server`（暂不进 Git） |
 
 ## 本地联接说明
 
-开发机用 junction 复用已有配置与服代码，避免复制数 GB。  
-以后要正式进仓时：去掉联接，放入真实 `config` / `server` 内容或子模块，并改 `.gitignore`。
+`server/` 仍用 junction 复用服代码。策划表在仓库 `config/gameconfig`。`ip2region.db` 留在本机。  
+导出与服的 `config.path` 见 [`docs/config-pipeline.md`](docs/config-pipeline.md)。
+
+预览默认 Mock。真服加 `?transport=ws`，连 `ws://127.0.0.1:13111/game`。日常启动见 `scripts/start-local-all.bat`。
 
 ## 打开方式
 

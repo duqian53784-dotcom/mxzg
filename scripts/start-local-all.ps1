@@ -44,6 +44,7 @@ function Start-BatWindow {
 Write-Host '============================================================'
 Write-Host '  mxzg 游戏服 + WebSocket 桥'
 Write-Host ('  ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
+Write-Host '  客户端默认 Mock。真服预览加 ?transport=ws ，桥 ws://127.0.0.1:13111/game'
 Write-Host '============================================================'
 Write-Host ''
 

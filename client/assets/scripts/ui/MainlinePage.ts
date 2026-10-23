@@ -26,6 +26,7 @@ import {
   rewardLines,
   winToast,
 } from "../module/mainline/battle";
+import { battleCastWait } from "./battlePresentation";
 import { PAGE_SHELL_FIGHT, setPagePrefabShellVisible } from "./pagePrefabShell";
 import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
 
@@ -50,8 +51,6 @@ const CARD_H = 108;
 const BAR_W = 150;
 const ENEMY_Y = 270;
 const ALLY_Y = 70;
-const ROUND_MS = 480;
-
 export interface MainlineHost {
   level(): number;
   roleName(): string;
@@ -326,7 +325,7 @@ class MainlineController implements MainlinePage {
       }
       this.renderRound(plan.rounds[i]);
       const last = i === plan.rounds.length - 1;
-      const cont = await this.sleep(last ? 260 : ROUND_MS);
+      const cont = await this.sleep(battleCastWait(1, last, 0));
       if (!cont || this.disposed) return "cancel";
       if (this.action === "retreat") return "retreat";
       if (this.action === "skip") {

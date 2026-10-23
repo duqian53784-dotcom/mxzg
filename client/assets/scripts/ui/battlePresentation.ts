@@ -2,7 +2,7 @@
  * 进战表现拍子。和 planWireSpineReplay 同一份 BattleReport、同一套站位。
  * 伤害用命中 hurt。hurt 没有就不画，不写成 0。
  * 暴击只认命中上已经有的 crit。没有这个字段不画「暴击」，也不把 marks 里的号猜成暴击。
- * 技能名先对 resources 里的 skill-<id>。对不上再用 wireSpineSkillStem。表对不上就写「技能 」加 id，不编造技能名。
+ * 技能名：没传入 table 且语言表已登记时用那句。否则先对 resources 里的 skill-<id>，再 wireSpineSkillStem。对不上就写「技能 」加 id。调用方传入 table 时不读语言表。
  * 等级、buff 只认英雄上已经有的 level、buffs。没有就不写 0，也不造图标。
  * 不发协议。
  */
@@ -20,6 +20,8 @@ import {
   WireSpineSlot,
 } from "../net/protocol/wireBattle";
 import { skillStemForId } from "../net/protocol/battleAssetIndex";
+import { battleFrameStepMs } from "../config/battleTiming";
+import { skillDisplayName } from "../config/lookups";
 
 /** 和 battleFramePlay 的 FRAME_STEP_MS 一样。不从那边 import，回放公式不拖进 cc。 */
 const BATTLE_FRAME_STEP_MS = 70;
@@ -60,7 +62,7 @@ export function battleBeatWait(speed: number, last: boolean): number {
  * 回放真正等待的时间。battleBeatWait 的 700/260 太短，技能帧还没出来拍就切了。
  * frameCount 小于 2 时用 1400 / 1000。有技能帧时取张数 × 70ms，再按 2 倍、3 倍缩短。
  */
-export function battleCastWait(speed: number, last: boolean, frameCount: number): number {
+export function battleCastWait(speed: number, last: boolean, frameCount: number, extraDelayMs?: number): number {
   const base = last ? BATTLE_CAST_LAST_MS : BATTLE_CAST_MS;
   let steps = 1;
   if (speed === 2) steps = 2;
@@ -68,9 +70,15 @@ export function battleCastWait(speed: number, last: boolean, frameCount: number)
   let wait = Math.floor(base / steps);
   const frames = typeof frameCount === "number" && isFinite(frameCount) ? Math.floor(frameCount) : 0;
   if (frames > 1) {
-    const reel = Math.floor((frames * BATTLE_FRAME_STEP_MS) / steps);
+    const stepMs = battleFrameStepMs() || BATTLE_FRAME_STEP_MS;
+    const reel = Math.floor((frames * stepMs) / steps);
     if (reel > wait) wait = reel;
   }
+  const extra =
+    typeof extraDelayMs === "number" && isFinite(extraDelayMs) && extraDelayMs > 0
+      ? Math.floor(extraDelayMs / steps)
+      : 0;
+  if (extra > 0) wait += extra;
   if (wait < BATTLE_MIN_BEAT_MS) return BATTLE_MIN_BEAT_MS;
   return wait;
 }
@@ -112,13 +120,16 @@ export interface BattlePresentation {
 }
 
 /**
- * 技能名。resources 里有这套帧时用目录名。否则用取模表。
+ * 技能名。没传入 table 且 heroskill.lan_name 对上 language 时用那句。
+ * 否则 resources 里有这套帧时用目录名，再用取模表。
  * 调用方传入 table 时只看那张表，方便自检换空表。表是空的、或这个 id 对不上时，写「技能 」加 id。
  * skillId 缺失时是 null，调用方关掉中场条。
  */
 export function battleSkillTitle(skillId: number | null, table?: readonly string[]): string | null {
   if (skillId === null || typeof skillId !== "number" || !isFinite(skillId)) return null;
   if (table === undefined) {
+    const named = skillDisplayName(skillId);
+    if (named) return named;
     const framed = skillStemForId(skillId);
     if (framed) return framed;
   }

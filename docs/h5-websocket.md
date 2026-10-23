@@ -29,7 +29,7 @@ D3 仍未勾完。s2c 1001 里有角色 id 时，登录面板关掉，进入和 
 
 换地址（一般不用）：`?transport=ws&ws=ws://127.0.0.1:13111/game`。不要改成 `ws://127.0.0.1:13101/` 或 wss。本地分析里 SSL 证书是空的。
 
-代码开关在 `client/assets/scripts/net/transportSelect.ts` 的 `TransportConfig.defaultKind`，仓库里保持 `"mock"`。
+代码开关在 `client/assets/scripts/net/transportSelect.ts` 的 `TransportConfig.defaultKind`，仓库里保持 `"mock"`。Boot 启动时会打 `transport=mock` 或 `transport=ws`，并写明真服要加 `?transport=ws`。
 
 ## 为什么不直连 13101
 

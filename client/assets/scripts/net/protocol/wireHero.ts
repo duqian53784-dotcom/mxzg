@@ -21,8 +21,8 @@
  *
  * ResHeroData 对得上的号：
  * 1 hero_id、2 hero_type、3 level、4 stage、5 star、6 elem、7 occupation、8 is_lock、9 fighting。
- * 线上没有名字。hero_type 对上 CHeroType.note 才用那句；对不上写类型号，不编名字。
- * 仓内没有 CHeroType.json，所以默认写类型号。
+ * 线上没有名字。hero_type 对上 herotype.note 才用那句；对不上写类型号，不编名字。
+ * Boot 读 config/gameconfig 导出的 herotype.json 后登记 note。没登记时仍写类型号。
  */
 
 /** 和 WsTransport 入站分发、encodeWireMessage 用同一个字符串。数字号是 WireCmd.heroList。 */
@@ -62,12 +62,12 @@ export interface WireHeroList {
 
 const MAX_BODY = 65536;
 
-/** CHeroType.note。没有这张表时保持空。 */
+/** herotype.note。Boot 登记之前保持空。 */
 const heroTypeNotes = new Map<number, string>();
 
 /**
- * 记下一条 CHeroType.note。空白则去掉。
- * 不在这里填写英雄名。仓内没有表时调用方不要编。
+ * 记下一条 herotype.note。空白则去掉。
+ * 不在这里填写英雄名。表还没读到时调用方不要编。
  */
 export function setWireHeroTypeNote(heroType: number, note: string): void {
   if (!Number.isFinite(heroType) || heroType < 0) return;

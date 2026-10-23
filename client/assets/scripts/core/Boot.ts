@@ -144,7 +144,12 @@ export class Boot extends Component {
   private async runBoot(): Promise<void> {
     this.wsChoice = readPreviewTransport();
     this.useWs = this.wsChoice.kind === "ws";
-    GameLog.shared.info("Boot", this.useWs ? "transport=ws " + this.wsChoice.wsUrl : "transport=mock");
+    GameLog.shared.info(
+      "Boot",
+      this.useWs
+        ? "transport=ws " + this.wsChoice.wsUrl + " 真服预览。去掉 ?transport=ws 仍是 Mock"
+        : "transport=mock 默认 Mock。真服预览加 ?transport=ws ，桥 ws://127.0.0.1:13111/game"
+    );
     const canvas = this.resolveCanvas();
     this.canvas = canvas;
     const frame = this.mountSafeFrame(canvas);
@@ -194,7 +199,18 @@ export class Boot extends Component {
     try {
       const db = ConfigDb.current ?? (await ConfigLoader.loadAll());
       const open = listOpenEntries(db.opencondition, 1, 1).map((row) => row.id);
-      GameLog.shared.info("Boot", "config open@Lv1/D1 " + open.join(","));
+      const shown = open.slice(0, 12);
+      const more = open.length > shown.length ? " +" + (open.length - shown.length) : "";
+      GameLog.shared.info(
+        "Boot",
+        "config tables=" +
+          db.tableCount +
+          " rows=" +
+          db.rowCount +
+          " open@Lv1/D1 " +
+          shown.join(",") +
+          more
+      );
     } catch (err) {
       GameLog.shared.error("Boot", "config load failed " + messageOf(err));
     }

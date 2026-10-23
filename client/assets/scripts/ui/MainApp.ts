@@ -4112,6 +4112,7 @@ export class MainApp extends Component {
         return role.roleId;
       },
       connected: () => this.cityNet().state === "connected",
+      level: () => this.level(),
     });
     this.mainline = page;
     return page.node;
