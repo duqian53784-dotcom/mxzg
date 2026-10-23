@@ -1,0 +1,134 @@
+{
+  "ver": "1.0.27",
+  "importer": "image",
+  "imported": true,
+  "uuid": "dbc1875b-f211-429d-8bd7-316c122f2691",
+  "files": [
+    ".json",
+    ".png"
+  ],
+  "subMetas": {
+    "6c48a": {
+      "importer": "texture",
+      "uuid": "dbc1875b-f211-429d-8bd7-316c122f2691@6c48a",
+      "displayName": "alice_city-shadow-5",
+      "id": "6c48a",
+      "name": "texture",
+      "userData": {
+        "wrapModeS": "clamp-to-edge",
+        "wrapModeT": "clamp-to-edge",
+        "imageUuidOrDatabaseUri": "dbc1875b-f211-429d-8bd7-316c122f2691",
+        "isUuid": true,
+        "visible": false,
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "none",
+        "anisotropy": 0
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f9941": {
+      "importer": "sprite-frame",
+      "uuid": "dbc1875b-f211-429d-8bd7-316c122f2691@f9941",
+      "displayName": "alice_city-shadow-5",
+      "id": "f9941",
+      "name": "spriteFrame",
+      "userData": {
+        "trimThreshold": 1,
+        "rotated": false,
+        "offsetX": 1.5,
+        "offsetY": -12.5,
+        "trimX": 3,
+        "trimY": 30,
+        "width": 402,
+        "height": 247,
+        "rawWidth": 405,
+        "rawHeight": 282,
+        "borderTop": 0,
+        "borderBottom": 0,
+        "borderLeft": 0,
+        "borderRight": 0,
+        "packable": true,
+        "pixelsToUnit": 100,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "meshType": 0,
+        "vertices": {
+          "rawPosition": [
+            -201,
+            -123.5,
+            0,
+            201,
+            -123.5,
+            0,
+            -201,
+            123.5,
+            0,
+            201,
+            123.5,
+            0
+          ],
+          "indexes": [
+            0,
+            1,
+            2,
+            2,
+            1,
+            3
+          ],
+          "uv": [
+            3,
+            277,
+            405,
+            277,
+            3,
+            30,
+            405,
+            30
+          ],
+          "nuv": [
+            0.007407407407407408,
+            0.10638297872340426,
+            1.0,
+            0.10638297872340426,
+            0.007407407407407408,
+            0.9822695035460993,
+            1.0,
+            0.9822695035460993
+          ],
+          "minPos": [
+            -201,
+            -123.5,
+            0
+          ],
+          "maxPos": [
+            201,
+            123.5,
+            0
+          ]
+        },
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "dbc1875b-f211-429d-8bd7-316c122f2691@6c48a",
+        "atlasUuid": "",
+        "trimType": "auto"
+      },
+      "ver": "1.0.12",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "fixAlphaTransparencyArtifacts": false,
+    "hasAlpha": true,
+    "redirect": "dbc1875b-f211-429d-8bd7-316c122f2691@6c48a",
+    "type": "sprite-frame"
+  }
+}
