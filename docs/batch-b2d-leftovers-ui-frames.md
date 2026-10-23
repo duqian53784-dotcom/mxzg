@@ -138,11 +138,11 @@ Notes:
 - **alice / alice-2.** Both stems land in `ui/alice/` and both use the filename prefix `alice_`. Manifest frames are 54 + 15. The folder has 69 `alice_*.png` files and the byte total matches 2669941 + 1253369. The two stems are not separable by filename.
 - **dungeon-anim-2.** All 426 frames are named `ui/dungeon-anim/dungeon-anim_*.png`, not `dungeon-anim-2_*`.
 - **skill-before.** All 112 frames are `ui/battle/skill-before_*.png` inside the existing battle folder. No `battle-scene_*` file was added or replaced.
-- **plane-war names.** Two source frame names already ended in `.jpg`, so the files are `plane-war_boss-bg.jpg.png` and `plane-war_plane-war-bg.jpg.png`. Both are PNG (RGBA), not JPEG.
+- **plane-war names.** Two source frame names already ended in `.jpg`, so they were first stored as `plane-war_boss-bg.jpg.png` and `plane-war_plane-war-bg.jpg.png`. Both are PNG (RGBA), not JPEG, and are now `plane-war_boss-bg.png` and `plane-war_plane-war-bg.png`.
 - **magic-cube.** Only stem whose manifest pixfmt is `0x0:311` (every other stem is `0x12:32`). The six extracted PNGs are still RGBA and use the same sprite-frame meta. Largest edge in that folder is 311 (`magic-cube_mf_djk.png`).
 - **spellings kept.** Folder `ui/shenyu-effet/` and `ui/floating-Islands/` match the manifest, including `effet` and the capital `I`.
 
-Every new file is RGBA. Largest edge is 1280 (`cloud-1_cloud-1-y-1.png` and `plane-war_boss-bg.jpg.png`).
+Every new file is RGBA. Largest edge is 1280 (`cloud-1_cloud-1-y-1.png` and `plane-war_boss-bg.png`).
 
 ## Shared filename prefixes
 
