@@ -1,0 +1,134 @@
+{
+  "ver": "1.0.27",
+  "importer": "image",
+  "imported": true,
+  "uuid": "805eeda0-32e5-4388-b3b0-c3129bd607ca",
+  "files": [
+    ".json",
+    ".png"
+  ],
+  "subMetas": {
+    "6c48a": {
+      "importer": "texture",
+      "uuid": "805eeda0-32e5-4388-b3b0-c3129bd607ca@6c48a",
+      "displayName": "blessing-pool-effect_2-10",
+      "id": "6c48a",
+      "name": "texture",
+      "userData": {
+        "wrapModeS": "clamp-to-edge",
+        "wrapModeT": "clamp-to-edge",
+        "imageUuidOrDatabaseUri": "805eeda0-32e5-4388-b3b0-c3129bd607ca",
+        "isUuid": true,
+        "visible": false,
+        "minfilter": "linear",
+        "magfilter": "linear",
+        "mipfilter": "none",
+        "anisotropy": 0
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f9941": {
+      "importer": "sprite-frame",
+      "uuid": "805eeda0-32e5-4388-b3b0-c3129bd607ca@f9941",
+      "displayName": "blessing-pool-effect_2-10",
+      "id": "f9941",
+      "name": "spriteFrame",
+      "userData": {
+        "trimThreshold": 1,
+        "rotated": false,
+        "offsetX": 5,
+        "offsetY": -22.5,
+        "trimX": 38,
+        "trimY": 68,
+        "width": 461,
+        "height": 434,
+        "rawWidth": 527,
+        "rawHeight": 525,
+        "borderTop": 0,
+        "borderBottom": 0,
+        "borderLeft": 0,
+        "borderRight": 0,
+        "packable": true,
+        "pixelsToUnit": 100,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "meshType": 0,
+        "vertices": {
+          "rawPosition": [
+            -230.5,
+            -217,
+            0,
+            230.5,
+            -217,
+            0,
+            -230.5,
+            217,
+            0,
+            230.5,
+            217,
+            0
+          ],
+          "indexes": [
+            0,
+            1,
+            2,
+            2,
+            1,
+            3
+          ],
+          "uv": [
+            38,
+            502,
+            499,
+            502,
+            38,
+            68,
+            499,
+            68
+          ],
+          "nuv": [
+            0.07210626185958255,
+            0.1295238095238095,
+            0.9468690702087287,
+            0.1295238095238095,
+            0.07210626185958255,
+            0.9561904761904761,
+            0.9468690702087287,
+            0.9561904761904761
+          ],
+          "minPos": [
+            -230.5,
+            -217,
+            0
+          ],
+          "maxPos": [
+            230.5,
+            217,
+            0
+          ]
+        },
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "805eeda0-32e5-4388-b3b0-c3129bd607ca@6c48a",
+        "atlasUuid": "",
+        "trimType": "auto"
+      },
+      "ver": "1.0.12",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "fixAlphaTransparencyArtifacts": false,
+    "hasAlpha": true,
+    "redirect": "805eeda0-32e5-4388-b3b0-c3129bd607ca@6c48a",
+    "type": "sprite-frame"
+  }
+}
