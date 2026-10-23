@@ -1,4 +1,5 @@
 import { GameLog } from "../core/GameLog";
+import { GameStore } from "../core/GameStore";
 import { Session } from "../core/Session";
 import { NetClient } from "./NetClient";
 import {
@@ -1613,6 +1614,7 @@ export class WireSession {
     this.christmasMission = null;
     this.magicTowerLevelRank = null;
     this.springOutingGrid = null;
+    this.mirrorStore();
   }
 
   /** 只放下引用。调用方自己 close。 */
@@ -5680,7 +5682,33 @@ export class WireSession {
     this.emit();
   }
 
+  /** 真服 s2c 落地后抄一份给界面。source 不是 wire 时 GameStore 自己不动 Mock。 */
+  private static mirrorStore(): void {
+    const role = Session.role;
+    GameStore.noteWire({
+      enabled: Session.source === "wire" && !!role,
+      account: Session.account,
+      serverId: Session.serverId,
+      roleId: role ? role.roleId : null,
+      name: role ? role.name : "",
+      nameSynced: Session.wireSync.name,
+      level: Session.wireSync.level && role ? role.level : null,
+      gold: Session.wireSync.gold ? Session.gold : null,
+      diamond: Session.wireSync.diamond ? Session.diamond : null,
+      nowIdx: this.nowIdx,
+      maxIdx: this.maxIdx,
+      heroes: this.heroes,
+      bag: this.bagItems,
+      lineUp: this.lineUp,
+      unlockIds: this.formation ? this.formation.unlockIds : null,
+      rewardTime: this.rewardTime,
+      maxRewardTime: this.maxRewardTime,
+      battle: this.battleMatch,
+    });
+  }
+
   private static emit(): void {
+    this.mirrorStore();
     for (const listener of [...this.listeners]) {
       try {
         listener();

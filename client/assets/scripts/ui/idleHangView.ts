@@ -7,6 +7,7 @@
  * 阵容是空的才用三套默认。加载失败把格子藏起来，不写套名。
  */
 import { Color, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
 import { mountBattleSpine } from "./battleSpine";
 import { idleHangStemsFrom } from "./idleHangRoster";
@@ -28,6 +29,8 @@ export const IDLE_HANG_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1
 
 /** 当前 3101 / 4001。没有 MAIN 英雄时是三套默认。 */
 export function idleHangStems(): string[] {
+  const roster = GameStore.hangRoster();
+  if (roster) return idleHangStemsFrom(roster.lineUp, roster.heroes, IDLE_HANG_SPOTS.length);
   const bag = WireSession.heroes;
   return idleHangStemsFrom(WireSession.lineUp, bag, IDLE_HANG_SPOTS.length);
 }

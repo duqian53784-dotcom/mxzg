@@ -13,6 +13,14 @@ import {
 } from "./prefabLoad";
 import { createButton, createField, createLabel, createRect, paintRect, place, setText, TextField, uiNode } from "./UiKit";
 
+export interface LoginHandlers {
+  onEnter: () => void;
+  onCreate: () => void;
+  onMock?: () => void;
+  /** Mock 登录页上的「连本机服」。Prefab 没有这颗钮，代码 UI 和 P1 壳才放。 */
+  onLive?: () => void;
+}
+
 export interface LoginPanelView {
   root: Node;
   setStatus(text: string): void;
@@ -43,7 +51,7 @@ const IDLE = new Color(46, 110, 190, 255);
  */
 export function buildLoginPanel(
   parent: Node,
-  handlers: { onEnter: () => void; onCreate: () => void; onMock?: () => void },
+  handlers: LoginHandlers,
   options?: LoginPanelOptions
 ): LoginPanelView {
   const ws = options?.mode === "ws";
@@ -53,8 +61,9 @@ export function buildLoginPanel(
   root.addComponent(BlockInputEvents);
   root.parent = parent;
 
-  const card = createRect("card", 560, ws ? 780 : 700, new Color(16, 28, 52, 245));
-  place(card, root, 0, ws ? 0 : 10);
+  const live = !ws && !!handlers.onLive;
+  const card = createRect("card", 560, ws || live ? 780 : 700, new Color(16, 28, 52, 245));
+  place(card, root, 0, ws || live ? 0 : 10);
 
   place(createLabel("mxzg", 48, { color: new Color(255, 228, 170, 255), width: 500 }), root, 0, 280);
   const subtitle = ws ? "本机 WebSocket " + (options?.wsUrl || "") : "Mock 登录，不连服务器";
@@ -91,19 +100,27 @@ export function buildLoginPanel(
 
   const status = createLabel("准备登录", 20, { color: new Color(240, 240, 240, 255), width: 520 });
   place(status, root, 0, ws ? -148 : -156);
-  const detail = ws
-    ? place(createLabel("进入游戏发登录 1001。有角色就进主城", 18, { color: new Color(180, 196, 220, 255), width: 520 }), root, 0, -186)
-    : null;
+  const detail = place(
+    createLabel(ws ? "进入游戏发登录 1001。有角色就进主城" : "", 18, { color: new Color(180, 196, 220, 255), width: 520 }),
+    root,
+    0,
+    -186
+  );
 
   const enterNode = createButton("进入游戏", handlers.onEnter, 280, 56);
   place(enterNode, root, 0, ws ? -232 : -220);
   const createNode = createButton("创角", handlers.onCreate, 280, 52, new Color(62, 96, 78, 255));
   place(createNode, root, 0, ws ? -292 : -286);
   let mockButton: Button | null = null;
+  let liveButton: Button | null = null;
   if (ws && handlers.onMock) {
     const mockNode = createButton("改走 Mock", handlers.onMock, 280, 48, new Color(72, 78, 96, 255), 22);
     place(mockNode, root, 0, -352);
     mockButton = mockNode.getComponent(Button);
+  } else if (live && handlers.onLive) {
+    const liveNode = createButton("连本机服", handlers.onLive, 280, 48, new Color(72, 78, 96, 255), 22);
+    place(liveNode, root, 0, -352);
+    liveButton = liveNode.getComponent(Button);
   }
 
   const enterButton = enterNode.getComponent(Button);
@@ -129,6 +146,7 @@ export function buildLoginPanel(
       if (enterButton) enterButton.interactable = !busy;
       if (createButtonNode) createButtonNode.interactable = !busy;
       if (mockButton) mockButton.interactable = !busy;
+      if (liveButton) liveButton.interactable = !busy;
     },
     account(): string {
       return readField(accountField);
@@ -155,7 +173,7 @@ const PREFAB_IDLE = new Color(255, 255, 255, 255);
  */
 export async function mountLoginPrefab(
   parent: Node,
-  handlers: { onEnter: () => void; onCreate: () => void; onMock?: () => void },
+  handlers: LoginHandlers,
   options?: LoginPanelOptions
 ): Promise<LoginPanelView> {
   const prefab = await loadPrefab(LOGIN_PREFAB_PATH);
@@ -170,7 +188,7 @@ export async function mountLoginPrefab(
 
 function bindLoginPrefab(
   root: Node,
-  handlers: { onEnter: () => void; onCreate: () => void; onMock?: () => void },
+  handlers: LoginHandlers,
   options?: LoginPanelOptions
 ): LoginPanelView {
   const ws = options?.mode === "ws";

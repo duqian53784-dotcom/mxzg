@@ -26,6 +26,7 @@ import {
 } from "../config/nav";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
+import { GameStore } from "../core/GameStore";
 import {
   formatDiamondLine,
   formatGoldLine,
@@ -4050,7 +4051,7 @@ export class MainApp extends Component {
     if (Session.source === "wire") return this.mountWireIdle();
     this.idle?.dispose();
     const page = buildIdlePage({
-      stageId: () => (Session.stageId >= 1 ? Session.stageId : 1),
+      stageId: () => this.mockStageId(),
       showToast: (text) => this.shell?.showToast(text, 2400),
       alive: () => this.isValid,
       query: () => Proto.idleQuery({}, NetClient.shared),
@@ -4084,7 +4085,7 @@ export class MainApp extends Component {
     const page = buildMainlinePage({
       level: () => this.level(),
       roleName: () => Session.role?.name || "勇者",
-      stageId: () => (Session.stageId >= 1 ? Session.stageId : 1),
+      stageId: () => this.mockStageId(),
       showToast: (text) => this.shell?.showToast(text, 2200),
       alive: () => this.isValid,
       enter: (stageId) => Proto.stageEnter({ stageId }, NetClient.shared),
@@ -4118,8 +4119,18 @@ export class MainApp extends Component {
     return page.node;
   }
 
+  private mockStageId(): number {
+    const stored = GameStore.mockStageId();
+    if (stored !== null) return stored;
+    return Session.stageId >= 1 ? Session.stageId : 1;
+  }
+
   private stageButtonText(): string {
-    if (Session.source === "wire") return WireSession.mainlineLabel();
+    if (Session.source === "wire") {
+      if (GameStore.source === "wire") return GameStore.mainlineLabel();
+      return WireSession.mainlineLabel();
+    }
+    if (GameStore.source === "mock") return GameStore.mainlineLabel();
     const stageId = Session.stageId >= 1 ? Session.stageId : 1;
     return "主线 · 第" + stageId + "关";
   }

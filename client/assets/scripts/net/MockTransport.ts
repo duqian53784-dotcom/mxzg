@@ -1,4 +1,5 @@
 import { ErrorCode, logErrorCode } from "../core/errors";
+import { GameStore } from "../core/GameStore";
 import { MockGameSession } from "./MockGameSession";
 import { encodeRequest } from "./protocol/codec";
 import { Cmd } from "./protocol/cmds";
@@ -73,7 +74,36 @@ export class MockTransport implements ITransport {
     }
     const session = this.session;
     if (msg.cmd === Cmd.login) {
-      this.emit(encodeRequest(Cmd.login, session.login(msg.data)));
+      const resp = session.login(msg.data);
+      const seed = GameStore.mockSeedFor(resp.account);
+      if (seed) {
+        const heroes: { id: number; name: string; level: number; star: number; weaponLevel?: number }[] = [];
+        for (let i = 0; i < seed.heroes.length; i++) {
+          const row = seed.heroes[i];
+          if (row.heroId === null || row.heroId < 1) continue;
+          heroes.push({
+            id: row.heroId,
+            name: row.name || "英雄" + row.heroId,
+            level: row.level !== null && row.level >= 1 ? row.level : 1,
+            star: row.star !== null && row.star >= 1 ? row.star : 1,
+            weaponLevel: row.weaponLevel,
+          });
+        }
+        session.restoreClientCache({
+          account: seed.account,
+          serverId: seed.serverId,
+          role: { roleId: seed.roleId, name: seed.name },
+          clearedStage: seed.clearedStage,
+          stageId: seed.stageId,
+          openDay: seed.openDay,
+          gold: seed.gold,
+          diamond: seed.diamond,
+          idleAnchorMs: seed.idleAnchorMs,
+          items: seed.items,
+          heroes,
+        });
+      }
+      this.emit(encodeRequest(Cmd.login, resp));
       return;
     }
     if (msg.cmd === Cmd.heartbeat) {
@@ -269,6 +299,59 @@ export class MockTransport implements ITransport {
   }
 
   private emit(msg: NetMessage): void {
+    this.publishStore();
     if (this.messageHandler) this.messageHandler(msg);
+  }
+
+  /** 有可见角色才写入。登录别的空号时不拿上一名角色盖掉快照。 */
+  private publishStore(): void {
+    const session = this.session;
+    const enter = session.roleEnter();
+    if (!enter.hasRole || enter.roleId < 1) return;
+    const heroes: {
+      heroId: number;
+      heroType: null;
+      name: string;
+      level: number;
+      star: number;
+      fighting: null;
+      weaponLevel?: number;
+    }[] = [];
+    for (let i = 0; i < session.heroes.length; i++) {
+      const row = session.heroes[i];
+      heroes.push({
+        heroId: row.id,
+        heroType: null,
+        name: row.name,
+        level: row.level,
+        star: row.star,
+        fighting: null,
+        weaponLevel: row.weaponLevel,
+      });
+    }
+    const items: { id: number; count: number }[] = [];
+    const counts = session.itemCounts;
+    const keys = Object.keys(counts);
+    for (let i = 0; i < keys.length; i++) {
+      const id = Number(keys[i]);
+      const count = counts[id];
+      if (!isFinite(id) || id < 1 || typeof count !== "number" || count <= 0) continue;
+      items.push({ id: Math.floor(id), count: Math.floor(count) });
+    }
+    GameStore.fillFromMock({
+      account: session.account,
+      serverId: session.serverId,
+      roleId: enter.roleId,
+      name: enter.name,
+      level: enter.level,
+      gold: session.gold,
+      diamond: session.diamond,
+      openDay: session.openDay,
+      stageId: session.stageId,
+      clearedStage: session.clearedStage,
+      idleAnchorMs: session.idleAnchorMs,
+      heroes,
+      items,
+    });
   }
 }

@@ -6,11 +6,13 @@
  * 查询和安全区的 ?safe= 可以同时放在地址上。
  */
 
-export type TransportKind = "mock" | "ws";
+export type TransportKind = "mock" | "ws" | "auto";
 
 export interface TransportChoice {
   kind: TransportKind;
   wsUrl: string;
+  /** 地址上写了 transport= 才是 true。没写时才看上次记住的 mock / ws。 */
+  explicit: boolean;
 }
 
 /** 本机桥。先双击 start-ws-bridge.bat。不是游戏服自带的 13101。 */
@@ -34,15 +36,38 @@ export const WS_MOCK_STATUS = "已改走 Mock";
 export function parseTransportSearch(search: string, config: { defaultKind: TransportKind; wsUrl: string } = TransportConfig): TransportChoice {
   const kindRaw = queryParam(search, "transport");
   const wsRaw = queryParam(search, "ws");
-  let kind = config.defaultKind;
-  if (kindRaw === "ws" || kindRaw === "websocket" || kindRaw === "wss") kind = "ws";
-  else if (kindRaw === "mock") kind = "mock";
+  let kind = config.defaultKind === "auto" ? "mock" : config.defaultKind;
+  let explicit = false;
+  if (kindRaw === "ws" || kindRaw === "websocket" || kindRaw === "wss") {
+    kind = "ws";
+    explicit = true;
+  } else if (kindRaw === "mock") {
+    kind = "mock";
+    explicit = true;
+  } else if (kindRaw === "auto") {
+    kind = "auto";
+    explicit = true;
+  }
   let wsUrl = config.wsUrl;
   if (wsRaw) {
     const scheme = wsRaw.toLowerCase();
     if (scheme.indexOf("ws://") === 0 || scheme.indexOf("wss://") === 0) wsUrl = wsRaw;
   }
-  return { kind, wsUrl };
+  return { kind, wsUrl, explicit };
+}
+
+/**
+ * 地址优先。没写 transport 时，上次成功连上桥会记住 ws，预览不用再加查询。
+ * auto：先短连本机桥，失败就回到 Mock，服没开也不会把预览卡住。
+ */
+export function resolveBootTransport(
+  choice: TransportChoice,
+  saved: "mock" | "ws" | null | undefined
+): { useWs: boolean; autoFallback: boolean } {
+  if (choice.kind === "ws") return { useWs: true, autoFallback: false };
+  if (choice.kind === "auto") return { useWs: true, autoFallback: true };
+  if (!choice.explicit && saved === "ws") return { useWs: true, autoFallback: false };
+  return { useWs: false, autoFallback: false };
 }
 
 /** 先看本页查询，再看父页面。Creator 预览若把参数放在外层地址上，这里也能读到。 */

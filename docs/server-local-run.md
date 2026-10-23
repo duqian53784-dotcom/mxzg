@@ -42,7 +42,7 @@
 - Boot 走 `mock://`，`MockTransport` 里一份 `MockGameSession`。
 - 协议在 `client/assets/scripts/net/protocol/`。`CmdId` 是客户端占位号，**不是**旧服消息号。限时活动是 `2801`–`2804`，同样是占位。心跳占位是 **1002**。旧桥日志里的心跳是 **1004**，不要混。
 - 编解码仍是明文对象。`?transport=ws` 不把 `encodeRequest` 的对象写到线上，只写旧桥日志里的长度前缀帧，经 `13111/game` 转到 TCP 9902。调用方继续用 `Proto.*` 走 Mock。
-- 细节见 `docs/protocol-stubs.md`、`docs/mock-replay.md`、`docs/h5-websocket.md`。
+- 细节见 `docs/protocol-stubs.md`、`docs/mock-replay.md`、`docs/h5-websocket.md`。怎么把预览接到本机服、以及哪条协议灌进客户端 `GameStore`，见 `docs/local-link-and-store.md`。
 
 D2 已在倩本机验证：`?transport=ws` 经桥 13111 看到 `收到 s2c 1001`。有角色会进主城壳。s2c 2001 的字段 9、6、2、1 同步角色名、等级、金币和钻石。缺字段仍是未同步，不当成 Mock 进度。开服天仍未同步。s2c 3007 的字段 2、3 只改主城「更多」里「主线」按钮上的 idx，点进去仍不打开 Mock 关卡页。空 c2s 3004 在 3007 之后发，挂机页只展示这一包的时间；没有数据时 Toast「真服挂机未同步」。3005 不改金币。细节见 `docs/h5-websocket.md`。
 

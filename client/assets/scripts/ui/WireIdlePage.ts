@@ -5,6 +5,7 @@
 import { Color, Node } from "cc";
 import { ErrorCode, errorText } from "../core/errors";
 import { GameLog } from "../core/GameLog";
+import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
 import { formatWireIdle } from "../net/protocol/wireIdle";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
@@ -112,8 +113,11 @@ class WireIdleController implements WireIdlePage {
 
   private render(): void {
     if (this.disposed) return;
+    const stored = GameStore.idle();
     const view = formatWireIdle(
-      { rewardTime: WireSession.rewardTime, maxRewardTime: WireSession.maxRewardTime },
+      stored.fromStore
+        ? { rewardTime: stored.rewardTime, maxRewardTime: stored.maxRewardTime }
+        : { rewardTime: WireSession.rewardTime, maxRewardTime: WireSession.maxRewardTime },
       Math.floor(Date.now() / 1000)
     );
     this.write(this.lastLabel, view.last);
