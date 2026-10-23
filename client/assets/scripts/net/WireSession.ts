@@ -768,6 +768,11 @@ export class WireSession {
   static gmHeroSerial = 0;
   /** 每收到一帧空的 s2c 3100 加一。有包体不加，也不改 3101。 */
   static lineUpSaveSerial = 0;
+  /**
+   * 本会话空的 s2c 3100 已经确认 MAIN 写入。
+   * 3101 快照不跟着改，空号挑战用它避免再发 2015。换号时清掉。
+   */
+  static mainLineReady = false;
   /** 最近一帧 s2c 1005 的说明。空字符串表示还没收到。 */
   static wireErrorText = "";
   /** 每收到一帧 s2c 1005 加一。主线页等 2015 / 3100 时用来 Toast。 */
@@ -2263,7 +2268,7 @@ export class WireSession {
   }
 
   /**
-   * 主线页「GM 加英雄」。c2s 2015，GReqGMCommandNew。
+   * 主线页「GM 加英雄」，以及空名册点「挑战」的过渡补英雄。c2s 2015，GReqGMCommandNew。
    * command=ADD_HERO，param 是类型号和 "9"。类型号空白时用 10505010。不是正整数不发。
    * 不进 pullIdle。成功没有 2015 回包。实例在 s2c 4030。
    * 没连上或还没有 3007 idx 时返回 false。
@@ -2279,18 +2284,20 @@ export class WireSession {
   }
 
   /**
-   * 主线页「GM 上 MAIN」。c2s 3100，GReqLineUpSave。
-   * type=0，formation_id=1，goddess_type=0，position=2。hero_id 用最近一次 4030 的实例。
+   * 主线页「GM 上 MAIN」，以及空 MAIN 点「挑战」时的过渡上阵。c2s 3100，GReqLineUpSave。
+   * type=0，formation_id=1，goddess_type=0，position=2。
+   * 传入 heroId 时用这只服端实例（4001 或 4030）。不传时用最近一次 4030。
    * 没有实例不发。站位不在 2/3/5/6/7/8/9 不发。
    * 不进 pullIdle。不改 3101 的只读快照。成功是空的 s2c 3100。
    * 没连上或还没有 3007 idx 时返回 false。
    */
-  static pullMainLineUp(): boolean {
+  static pullMainLineUp(heroId?: number): boolean {
     const net = this.net || this.watched;
     if (!net || net.state !== "connected") return false;
     if (!this.hasChapter()) return false;
-    if (this.gmHeroId === null) return false;
-    const query = readWireLineUpSave({ heroId: this.gmHeroId, position: WIRE_MAIN_POSITION });
+    const id = heroId === undefined ? this.gmHeroId : heroId;
+    if (id === null) return false;
+    const query = readWireLineUpSave({ heroId: id, position: WIRE_MAIN_POSITION });
     if (!query) return false;
     net.send(WIRE_LINEUP_SAVE_CMD, query);
     return true;
@@ -2301,6 +2308,7 @@ export class WireSession {
     this.gmHeroIds = [];
     this.gmHeroSerial = 0;
     this.lineUpSaveSerial = 0;
+    this.mainLineReady = false;
     this.wireErrorText = "";
     this.wireErrorSerial = 0;
   }
@@ -3412,6 +3420,7 @@ export class WireSession {
     const ack = decodeWireLineUpSave(wireBody(data));
     if (!ack) return;
     this.lineUpSaveSerial += 1;
+    this.mainLineReady = true;
     GameLog.shared.info("Wire", "s2c 3100 空包，MAIN 已保存");
     this.emit();
   }
