@@ -4,6 +4,8 @@ Thumbs.db
 .idea/
 .vscode/
 *.iml
+__pycache__/
+*.pyc
 
 # Secrets
 .env
