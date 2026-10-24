@@ -1756,7 +1756,7 @@ class WireMainlineController implements WireMainlinePage {
     const present = this.present;
     const index = plan.beats.indexOf(beat);
     let skill: string | null = null;
-    const floats: { text: string; x: number; y: number; heal: boolean }[] = [];
+    const floats: { text: string; x: number; y: number; heal: boolean; crit?: boolean }[] = [];
     let rows = signedHpDeltas(prevHp, this.hpNow);
     if (present && index >= 0 && index < present.beats.length) {
       skill = present.beats[index].skillName;
