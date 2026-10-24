@@ -488,6 +488,7 @@ import {
   itemIconResource,
   mainlevelExpLabel,
 } from "../assets/scripts/config/gameCatalog";
+import { chapterIdleMinute, heroSpaceCap, idleCapMs } from "../assets/scripts/config/rosterCatalog";
 import { formatStoreBagLine } from "../assets/scripts/module/bag/bagView";
 import { formatStoreHeroLine } from "../assets/scripts/module/hero/rosterView";
 import { replayFromStore } from "../assets/scripts/module/mainline/battleFromStore";
@@ -2242,7 +2243,7 @@ function checkStoreScreens(): void {
   assert(chapterPlaceLabel(1) === null, "chapter label stays empty before config");
   assert(itemDisplayName(900001, null, "原名") === "原名", "item name stays the fallback before config");
   const root = configDir();
-  const names = ["herotype", "herobase", "heroskill", "language", "item", "chapter", "mainlevel"];
+  const names = ["herotype", "herobase", "heroskill", "language", "item", "chapter", "mainlevel", "chapterreward", "system"];
   const tables = new Map<string, { table: string; rows: Record<string, unknown>[] }>();
   for (let i = 0; i < names.length; i++) {
     tables.set(names[i], JSON.parse(readFileSync(join(root, names[i] + ".json"), "utf8")));
@@ -2250,6 +2251,13 @@ function checkStoreScreens(): void {
   bindGameCatalog(tables);
   const profile = heroProfile(10101001);
   assert(profile !== null && profile.name === "独眼梦魇", "herotype note is the hero name");
+  assert(profile !== null && profile.icon === "ui/hero/hero-icon_20101001", "hero icon uses item_id");
+  const idle1 = chapterIdleMinute(1);
+  assert(idle1 !== null && idle1.gold === 200 && idle1.roleExp === 10 && idle1.heroExp === 25, "stage 1 idle rates per minute");
+  const idle5 = chapterIdleMinute(5);
+  assert(idle5 !== null && idle5.gold === 210 && idle5.roleExp === 20 && idle5.heroExp === 35, "stage 5 idle rates per minute");
+  assert(idleCapMs() === 21600000, "idle cap is system.idle_max_time in ms");
+  assert(heroSpaceCap() === 300, "hero space label uses hero_space_initial");
   assert(
     profile !== null && profile.skills.some((skill) => skill.id === 101010011 && skill.name === "烈焰之锤"),
     "herotype skills resolve through heroskill and language"

@@ -22,4 +22,8 @@
 - 「我要变强」没有专属协议，底栏仍打开已有的 `HeroSuggestLayer`。
 - Mock 起步英雄（光耀骑士等）和起步道具不在 `herotype` / `item` 里。名字留会话原文，不硬套表里的第一行。
 
-英雄列表、背包格子、挂机底栏、出阵和挂机上的战斗条，见 `docs/ui-1to1-hero-battle.md`。列表不再只留壳。
+英雄列表、背包格子、挂机底栏、出阵和挂机上的战斗条，见 `docs/ui-1to1-hero-battle.md`。列表不再只留壳，也不再停在 16 格。
+
+挂机底栏的三格数字在 `chapterreward.reward_base`。`item_num` 按每分钟用：第 1 关是金币 200、角色经验 10、英雄经验 25。`system.idle_max_time` 是秒，基础封顶 21600。随机掉落仍是 `drop_group`，每隔 `idle_drop_frequency`（60 秒）掷一次，不写进这三格。`idle_speed_up`（7200 秒）是高速战斗的两小时，这一轮不改领取。Mock 的 `module/idle/rewards.ts` 仍是占位公式，领取和骨架检查不读这张表。
+
+图鉴、星UP、宝石、神装、圣龙从 `herotype` / `herostar` / `jeweltype` / `godequipment` / `dragonlevel` / `dragonrelic` 画。背包里对得上 `item.idx` 的算持有，对不上就锁。不往名册里塞假英雄。

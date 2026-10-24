@@ -242,3 +242,26 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 | P3H | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ExoticAdventureReportLayer:/ExoticAdventureReportLayer/spr_bg` |
 | P3H | `win-bg_win-bg-11.png` | [59, 59, 59, 59] | [79, 79, 79, 79] | `ExoticAdventureShioInfoCtr:/ExoticAdventureShioInfoCtr/spr_bg` |
 | P3H | `map-bg-result-1.png` | [150, 150, 10, 10] | [50, 50, 50, 50] | `ExoticAdventureRandomEventsLayer:/ExoticAdventureRandomEventsLayer/spr_bg` |
+
+## 功能偏差（英雄 / 背包 / 挂机）
+
+这一节不是九宫格边距。旧 Lua 不在仓库里。下面是对照 ccbi、`client/assets/resources/config/` 和现有壳之后，仍和旧版不一样、或只能猜的地方。
+
+| 项 | 现在怎么做 | 依据 / 还差什么 |
+|---|---|---|
+| 英雄列表、背包滚动 | 运行时加竖向 ScrollView。壳上没有这个节点。空位只补满最后一行，并且至少 4 行，不是 300 个空格 | `hero_space_initial` 只用于「空间 n/300」这行字 |
+| 出阵列表 | 用已有 `scroll_view_backpack` 的 content，筛选后的英雄都放进去。上阵仍最多 8 | 以前只画前 8 个 |
+| 挂机三格 | `chapterreward.idx` 对当前关，`reward_base` 里 900001 / 900101 / 900003 的 `item_num` 写成「N/m」 | 和底栏三个图标一致。没有 Lua 逐行对过。表没绑上时底栏退回 `goldPerMin` |
+| Mock 领取 | 仍走 `rewards.ts`：未通关每分钟 6 金，封顶 8 小时，道具是强化石 | 和底栏的表内每分钟收益不是同一套。领取按钮这一轮不改 |
+| VIP | 不加 `extra_idle_time`、金币 / 英雄经验 / 角色经验加成 | 表里有，名册上没有 VIP 等级可用 |
+| 随机掉落 | 不画进三格 | `idle_drop_frequency` = 60 秒，走 `drop_group` |
+| 时钟 | 超过 1 小时写成 `hh:mm:ss`。读到 `idle_max_time` 就停在 06:00:00 | 没读到表时不封顶 |
+| 头像 | `ui/hero/hero-icon_<item_id>`。没有 `item_id` 的用 `hero-icon_spr-default` | 雷顿 10701001、赫卡忒·幽魂 10701003、撒旦·赫莱 10701004、深渊终结者 10701006 没有图标 |
+| 图鉴顺序 | `herotype` 表的顺序。同类型多只英雄打开名册里的第一只 | 旧排序没对上 |
+| 元素名 | 1 火、2 水、3 木、4 光、5 暗 | 对 language 2101–2105。不是 Lua 实证 |
+| 星UP | 只写等级上限、展示攻血、进阶石和 `to_N_star` 材料。升到 N 星的消耗用 `herostar` 里这一星那一行 | 不发升级协议。满星写「已满星」 |
+| 宝石 / 神装 | 按部位筛，图标 `backpack_<id>`，持有数是背包里 `itemType` 或 `itemId` 等于这条 idx 的数量。0 就灰掉加锁 | `StoreHero` 没有已穿装备。这是图鉴，不是「这名英雄身上穿着什么」 |
+| 稀有框 | 只有 2 / 3 / 4 用 `backpack_spr-rare-*` | 没有 `spr-rare-1` 或 `spr-rare-5`，其余用 `backpack_item-frame-1` |
+| 圣龙立绘 | `dragon_identify-1`…`4` 按名字第一次出现的顺序：斯摩格、迪斯莱尔、雷博尔、英菲尼迪。全部灰掉，写未解锁 | 表上没有立绘列。这四张图未必就是这四条龙 |
+| 圣物 | 每种 `kind` 用 1 星那条的名字、图标和特性。任一星的 id 在背包里就算持有 | 不发升星 |
+| 说明卡 | 按 BackpackInfoLayer 的 390×300 在运行时拼。不挂那个 prefab，也不发使用 / 出售 / 来源 | 关闭只关这张卡 |

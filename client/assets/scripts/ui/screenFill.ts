@@ -3,24 +3,43 @@
  * 格子是运行时拼的：HeroListLayer / BackpackLayer 本身没有网格。
  * 不造假英雄、不造假道具、不发新协议。
  */
-import { Button, Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, Label, Mask, Node, Overflow, resources, ScrollView, Sprite, SpriteFrame, UITransform } from "cc";
 import { GameStore, StoreBagItem, StoreHero } from "../core/GameStore";
 import { GameLog } from "../core/GameLog";
-import { heroBaseStats, heroProfile, itemBagTab, itemIconResource, itemIsWallet } from "../config/gameCatalog";
+import { heroBaseStats, heroProfile, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles } from "../config/gameCatalog";
+import { chapterIdleMinute, CostStack, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed } from "../config/rosterCatalog";
 import { goldPerMin, itemEveryMs } from "../module/idle/rewards";
 import { hangSpineStem } from "./idleHangRoster";
 import { mountBattleSpine } from "./battleSpine";
 import { deployedHeroIds, setLocalLineup } from "./localLineup";
-import { createLabel, place, setText, uiNode } from "./UiKit";
+import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 const INK = new Color(122, 71, 45, 255);
 const CREAM = new Color(255, 236, 190, 255);
 const COUNT = new Color(255, 248, 220, 255);
 const CHECK = new Color(70, 210, 90, 255);
+const NAME_GREEN = new Color(134, 236, 149, 255);
+const DESC = new Color(255, 249, 197, 255);
 
 const COLS = 4;
-const HERO_CAP_TEXT = 300;
 const CELL = 96;
+const HERO_PITCH_X = 108;
+const HERO_PITCH_Y = 112;
+const BAG_PITCH_X = 112;
+const BAG_PITCH_Y = 104;
+/** language 2101–2105。elem 0 是筛选里的全部。 */
+const ELEM_NAME = ["", "火", "水", "木", "光", "暗"];
+const GEM_PLACES = [
+  { id: 1, title: "攻击" },
+  { id: 2, title: "生命" },
+  { id: 3, title: "速度" },
+];
+const GEAR_PLACES = [
+  { id: 1, title: "戒指" },
+  { id: 2, title: "耳环" },
+  { id: 3, title: "披风" },
+  { id: 4, title: "腰带" },
+];
 
 type BagTab = "equip" | "item" | "shard" | "spirit";
 
@@ -59,9 +78,19 @@ export function dressHangPanel(view: Node): void {
   pinSprites(view);
   const tick = () => {
     if (!view.isValid) return;
-    const clock = clockText(idleElapsedMs());
+    let elapsed = idleElapsedMs();
+    const cap = idleCapMs();
+    if (cap !== null && elapsed > cap) elapsed = cap;
+    const clock = clockText(elapsed);
     writeNamed(view, "lbl_progress_time", clock);
     writeNamed(view, "lbl_progress_time2", clock);
+    const minute = chapterIdleMinute(currentStageIdx());
+    if (minute) {
+      writeNamed(view, "lbl_gold", minute.gold + "/m");
+      writeNamed(view, "lbl_souls", minute.heroExp + "/m");
+      writeNamed(view, "lbl_exp", minute.roleExp + "/m");
+      return;
+    }
     const cleared = clearedCount();
     const gold = goldPerMin(cleared);
     const every = itemEveryMs(cleared);
@@ -143,10 +172,13 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
   const stars = findNamed(view, "node_star");
   if (stars) {
     const count = hero.star ?? (profile && profile.star) ?? 0;
-    const n = clamp(count, 0, 6);
-    for (let i = 0; i < n; i++) {
+    const shown = count > 5 ? 5 : clamp(count, 0, 5);
+    for (let i = 0; i < shown; i++) {
       const star = sprite("star", 22, 22, "ui/hero/hero-info_spr-star-1");
-      place(star, stars, (i - (n - 1) / 2) * 24, 0);
+      place(star, stars, (i - (shown - 1) / 2) * 24, 0);
+    }
+    if (count > 5) {
+      place(createLabel(String(count), 16, { color: CREAM, width: 36, height: 22 }), stars, shown * 14, 0);
     }
   }
   if (hero.heroId) {
@@ -159,43 +191,34 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
   const board = uiNode("DetailBoard");
   place(board, view, 320, 250);
   const tabs = ["育成", "星UP", "宝石", "神装"];
+  const tabNodes: Node[] = [];
   let tab = 0;
+  let gemPlace = 1;
+  let gearPlace = 1;
   const body = uiNode("DetailBody");
   place(body, board, 0, -36);
   const paint = () => {
     if (!body.isValid) return;
-    const old = body.children.slice();
-    for (let i = 0; i < old.length; i++) old[i].destroy();
-    if (tab !== 0) {
-      place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 40 }), body, 0, 20);
-      return;
+    clearChildren(body);
+    for (let i = 0; i < tabNodes.length; i++) {
+      paintSprite(tabNodes[i], i === tab ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
     }
-    const level = hero.level === null ? "—" : String(hero.level);
-    place(createLabel("等级 " + level, 18, { color: INK, width: 200, height: 28 }), body, -120, 78);
-    const power = hero.fighting === null ? "—" : String(hero.fighting);
-    place(createLabel("战力 " + power, 18, { color: INK, width: 200, height: 28 }), body, 120, 78);
-    const atk = stats ? String(stats.atk) : "—";
-    const hp = stats ? String(stats.hp) : "—";
-    const def = stats ? String(stats.def) : "—";
-    const spd = stats ? String(stats.spd) : "—";
-    place(createLabel("攻击 " + atk, 18, { color: INK, width: 180, height: 28 }), body, -120, 40);
-    place(createLabel("HP " + hp, 18, { color: INK, width: 180, height: 28 }), body, 120, 40);
-    place(createLabel("防御 " + def, 18, { color: INK, width: 180, height: 28 }), body, -120, 8);
-    place(createLabel("速度 " + spd, 18, { color: INK, width: 180, height: 28 }), body, 120, 8);
-    const skills = profile ? profile.skills : [];
-    const names: string[] = [];
-    for (let i = 0; i < skills.length && i < 4; i++) names.push(skills[i].name);
-    place(
-      createLabel(names.length > 0 ? names.join("  ") : "无技能", 16, { color: INK, width: 460, height: 36 }),
-      body,
-      0,
-      -36
-    );
+    if (tab === 0) paintGrow(body, hero, profile, stats);
+    else if (tab === 1) paintStarUp(body, hero, profile);
+    else if (tab === 2) paintGems(view, body, gemPlace, (placeId) => {
+      gemPlace = placeId;
+      paint();
+    });
+    else paintGears(view, body, gearPlace, (placeId) => {
+      gearPlace = placeId;
+      paint();
+    });
   };
   for (let i = 0; i < tabs.length; i++) {
     const index = i;
     const button = sprite(tabs[i], 100, 36, index === 0 ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
     place(button, board, -180 + i * 110, 70);
+    tabNodes.push(button);
     const label = createLabel(tabs[i], 16, { color: INK, width: 90, height: 28 });
     place(label, button, 0, 0);
     if (!button.getComponent(Button)) button.addComponent(Button);
@@ -221,31 +244,55 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
   fitButton(findNamed(view, "btn_dragon"), "圣龙", 20);
   const cap = findNamed(view, "node_capacity");
   if (cap) cap.active = true;
-  writeNamed(view, "lbl_go", "点头像看详情");
   let tab: "hero" | "book" | "dragon" = "hero";
   let elem = 0;
   const host = uiNode("HeroFill");
   place(host, view, 0, 0);
+  const content = gridScroll(host, "HeroScroll", 270, 600, 448, 400);
   const paint = () => {
-    if (!host.isValid) return;
-    const old = host.children.slice();
-    for (let i = 0; i < old.length; i++) old[i].destroy();
-    const roster = tab === "hero" ? rosterOf(elem) : [];
+    if (!content.isValid) return;
+    clearChildren(content);
     const all = GameStore.heroes();
-    writeNamed(view, "lbl_capacity", "空间 " + (all ? all.length : 0) + "/" + HERO_CAP_TEXT);
+    writeNamed(view, "lbl_capacity", "空间 " + (all ? all.length : 0) + "/" + heroSpaceCap());
+    if (tab === "dragon") {
+      writeNamed(view, "lbl_go", "圣龙和圣物");
+      paintDragonBoard(view, content);
+      return;
+    }
+    writeNamed(view, "lbl_go", tab === "book" ? "灰头像是还没有" : "点头像看详情");
     const deployed = deployedSet();
-    const cells = Math.max(16, Math.ceil(roster.length / COLS) * COLS);
-    const shown = cells > 16 ? 16 : cells;
+    if (tab === "hero") {
+      const roster = rosterOf(elem);
+      const shown = paddedSlots(roster.length);
+      for (let i = 0; i < shown; i++) {
+        const hero = i < roster.length ? roster[i] : null;
+        const cell = heroCell(hero, hero ? deployed.has(hero.heroId || 0) : false, hero ? () => openHero(hero) : null, false);
+        place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+      }
+      sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 400);
+      return;
+    }
+    const book = bookOf(elem);
+    const shown = paddedSlots(book.length);
     for (let i = 0; i < shown; i++) {
-      const hero = i < roster.length ? roster[i] : null;
-      const col = i % COLS;
-      const row = Math.floor(i / COLS);
-      const cell = heroCell(hero, hero ? deployed.has(hero.heroId || 0) : false, hero ? () => openHero(hero) : null);
-      place(cell, host, 108 + col * 108, 548 - row * 112);
+      const profile = i < book.length ? book[i] : null;
+      if (!profile) {
+        place(heroCell(null, false, null, false), content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+        continue;
+      }
+      const owned = heroByType(profile.type);
+      const cell = heroCell(
+        owned || { heroId: null, heroType: profile.type, name: profile.name, level: null, star: profile.star, fighting: null },
+        owned ? deployed.has(owned.heroId || 0) : false,
+        () => {
+          if (owned) openHero(owned);
+          else showInfoCard(view, profileCard(profile));
+        },
+        !owned
+      );
+      place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
     }
-    if (tab !== "hero") {
-      place(createLabel(tab === "book" ? "图鉴" : "圣龙", 20, { color: INK, width: 200, height: 32 }), host, 320, 590);
-    }
+    sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 400);
   };
   const filters = [0, 1, 2, 3, 4, 5];
   for (let i = 0; i < filters.length; i++) {
@@ -255,7 +302,7 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     if (!button.getComponent(Button)) button.addComponent(Button);
     button.on(Button.EventType.CLICK, () => {
       elem = id;
-      tab = "hero";
+      if (tab === "dragon") tab = "hero";
       paint();
     });
   }
@@ -282,25 +329,22 @@ function fillBag(view: Node): void {
   let tab: BagTab = "item";
   const host = uiNode("BagFill");
   place(host, view, 0, 0);
+  const content = gridScroll(host, "BagScroll", 313, 560, 460, 420);
   const tabs: Node[] = [];
   const paint = () => {
-    const grid = host.getChildByName("BagGrid");
-    if (grid) grid.destroy();
-    const next = uiNode("BagGrid");
-    place(next, host, 0, 0);
+    if (!content.isValid) return;
+    clearChildren(content);
     for (let i = 0; i < tabs.length; i++) {
       paintSprite(tabs[i], BAG_TABS[i].id === tab ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
     }
     const rows = bagRows(tab);
-    const cells = Math.max(16, Math.ceil(rows.length / COLS) * COLS);
-    const shown = cells > 16 ? 16 : cells;
+    const shown = paddedSlots(rows.length);
     for (let i = 0; i < shown; i++) {
-      const col = i % COLS;
-      const row = Math.floor(i / COLS);
       const item = i < rows.length ? rows[i] : null;
-      const cell = item ? bagCell(item) : emptyBag();
-      place(cell, next, 145 + col * 112, 500 - row * 104);
+      const cell = item ? bagCell(item, () => showInfoCard(view, bagCard(item))) : emptyBag();
+      place(cell, content, gridX(i, -168, BAG_PITCH_X), gridY(i, -60, BAG_PITCH_Y));
     }
+    sizeScroll(content, slotRows(shown) * BAG_PITCH_Y + 24, 420);
   };
   for (let i = 0; i < BAG_TABS.length; i++) {
     const spec = BAG_TABS[i];
@@ -316,7 +360,7 @@ function fillBag(view: Node): void {
   }
   const bubble = findNamed(view, "spr_bubble_bg");
   if (bubble && bubble.parent && !findNamed(bubble.parent, "BagTip")) {
-    const tip = createLabel("道具在背包里", 16, { color: INK, width: 200, height: 48 });
+    const tip = createLabel("点格子看说明", 16, { color: INK, width: 200, height: 48 });
     tip.name = "BagTip";
     place(tip, bubble.parent, 150, 90);
   }
@@ -325,26 +369,32 @@ function fillBag(view: Node): void {
 
 function paintFormationGrid(view: Node, elem: number, selected: number[], toggle: (id: number) => void): void {
   const scroll = findNamed(view, "scroll_view_backpack");
-  const host = scroll || view;
+  const content = scroll ? scroll.getChildByName("content") : null;
+  const host = content || scroll || view;
   const old = host.getChildByName("FormGrid");
   if (old) old.destroy();
   const grid = uiNode("FormGrid");
-  place(grid, host, 0, scroll ? 180 : 640);
+  place(grid, host, 0, content ? 0 : scroll ? 180 : 640);
   const roster = rosterOf(elem);
-  const n = roster.length < 8 ? roster.length : 8;
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < roster.length; i++) {
     const hero = roster[i];
     const col = i % COLS;
     const row = Math.floor(i / COLS);
     const on = hero.heroId !== null && selected.indexOf(hero.heroId) >= 0;
     const cell = heroCell(hero, false, () => {
       if (hero.heroId) toggle(hero.heroId);
-    });
+    }, false);
     if (on) {
       const mark = createLabel("✓", 22, { color: CHECK, width: 28, height: 28 });
       place(mark, cell, 30, 36);
     }
-    place(cell, grid, -180 + col * 110, -row * 100);
+    const x = content ? 70 + col * 130 : -180 + col * 110;
+    const y = content ? -56 - row * HERO_PITCH_Y : -row * 100;
+    place(cell, grid, x, y);
+  }
+  if (content) {
+    const rows = roster.length === 0 ? 1 : Math.ceil(roster.length / COLS);
+    sizeScroll(content, rows * HERO_PITCH_Y + 24, 250);
   }
 }
 
@@ -363,7 +413,7 @@ function paintFormationSlots(view: Node, selected: number[]): void {
       if (label) label.active = false;
       continue;
     }
-    const face = sprite("SlotFace", 64, 64, "ui/hero/hero-icon_" + hero.heroType);
+    const face = sprite("SlotFace", 64, 64, heroFace(hero), "ui/hero/hero-icon_spr-default");
     place(face, slot, 0, 0);
     if (hero.fighting !== null) power += hero.fighting;
     if (label) {
@@ -375,7 +425,7 @@ function paintFormationSlots(view: Node, selected: number[]): void {
   writeNamed(view, "lbl_battle_count", String(power));
 }
 
-function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void) | null): Node {
+function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void) | null, locked: boolean): Node {
   const root = uiNode(hero ? "HeroCell" : "HeroEmpty");
   const ui = root.addComponent(UITransform);
   ui.setContentSize(CELL, CELL + 8);
@@ -384,7 +434,12 @@ function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void)
   if (!hero) return root;
   const profile = heroProfile(hero.heroType);
   if (hero.heroType) {
-    place(sprite("face", 72, 72, "ui/hero/hero-icon_" + hero.heroType), root, 0, 6);
+    const face = sprite("face", 72, 72, heroFace(hero), "ui/hero/hero-icon_spr-default");
+    place(face, root, 0, 6);
+    if (locked) {
+      const image = face.getComponent(Sprite);
+      if (image) image.grayscale = true;
+    }
   } else {
     place(createLabel(shortName(hero.name), 14, { color: CREAM, width: 72, height: 36 }), root, 0, 6);
   }
@@ -397,7 +452,8 @@ function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void)
   for (let i = 0; i < n; i++) {
     place(sprite("star", 14, 14, "ui/hero/hero-info_spr-star-1"), root, (i - (n - 1) / 2) * 15, -40);
   }
-  if (deployed) place(sprite("battle", 28, 28, "ui/hero/hero-icon_spr-battle"), root, 30, 32);
+  if (locked) place(sprite("lock", 28, 28, "ui/hero/hero-icon_spr-lock"), root, 28, 32);
+  else if (deployed) place(sprite("battle", 28, 28, "ui/hero/hero-icon_spr-battle"), root, 30, 32);
   if (onTap) {
     if (!root.getComponent(Button)) root.addComponent(Button);
     root.on(Button.EventType.CLICK, onTap);
@@ -405,19 +461,24 @@ function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void)
   return root;
 }
 
-function bagCell(item: StoreBagItem): Node {
+function bagCell(item: StoreBagItem, onTap: (() => void) | null): Node {
   const root = uiNode("BagCell");
   const ui = root.addComponent(UITransform);
   ui.setContentSize(96, 96);
-  place(sprite("frame", 88, 88, "ui/bag/backpack_item-frame-1"), root, 0, 0);
+  const profile = itemProfile(item.itemType, item.itemId);
+  place(sprite("frame", 88, 88, rareFrame(profile ? profile.rare : 0)), root, 0, 0);
   const icon = itemIconResource(item.itemType, item.itemId);
-  const face = sprite("icon", 72, 72, icon || "ui/bag/backpack_spr-default");
+  const face = sprite("icon", 72, 72, icon || "ui/bag/backpack_spr-default", "ui/bag/backpack_spr-default");
   place(face, root, 0, 6);
   if (!icon && item.itemId) paintFirst(face, ["ui/bag/backpack_" + item.itemId, "ui/bag/backpack_spr-default"]);
   const count = item.num === null ? "" : String(item.num);
   if (count) {
     const label = createLabel(count, 16, { color: COUNT, width: 72, height: 22 });
     place(label, root, 18, -30);
+  }
+  if (onTap) {
+    if (!root.getComponent(Button)) root.addComponent(Button);
+    root.on(Button.EventType.CLICK, onTap);
   }
   return root;
 }
@@ -427,6 +488,159 @@ function emptyBag(): Node {
   const ui = root.addComponent(UITransform);
   ui.setContentSize(96, 96);
   place(sprite("frame", 88, 88, "ui/common/other_spr-null"), root, 0, 0);
+  return root;
+}
+
+function paintGrow(
+  body: Node,
+  hero: StoreHero,
+  profile: HeroProfile | null,
+  stats: { atk: number; hp: number; def: number; spd: number } | null
+): void {
+  const level = hero.level === null ? "—" : String(hero.level);
+  place(createLabel("等级 " + level, 18, { color: INK, width: 200, height: 28 }), body, -120, 78);
+  const power = hero.fighting === null ? "—" : String(hero.fighting);
+  place(createLabel("战力 " + power, 18, { color: INK, width: 200, height: 28 }), body, 120, 78);
+  const atk = stats ? String(stats.atk) : "—";
+  const hp = stats ? String(stats.hp) : "—";
+  const def = stats ? String(stats.def) : "—";
+  const spd = stats ? String(stats.spd) : "—";
+  place(createLabel("攻击 " + atk, 18, { color: INK, width: 180, height: 28 }), body, -120, 40);
+  place(createLabel("HP " + hp, 18, { color: INK, width: 180, height: 28 }), body, 120, 40);
+  place(createLabel("防御 " + def, 18, { color: INK, width: 180, height: 28 }), body, -120, 8);
+  place(createLabel("速度 " + spd, 18, { color: INK, width: 180, height: 28 }), body, 120, 8);
+  const skills = profile ? profile.skills : [];
+  const names: string[] = [];
+  for (let i = 0; i < skills.length && i < 4; i++) names.push(skills[i].name);
+  place(createLabel(names.length > 0 ? names.join("  ") : "无技能", 16, { color: INK, width: 460, height: 36 }), body, 0, -36);
+}
+
+function paintStarUp(body: Node, hero: StoreHero, profile: HeroProfile | null): void {
+  const text = starText(hero, profile);
+  if (!text) {
+    place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 40 }), body, 0, 20);
+    return;
+  }
+  place(createLabel(text, 16, { color: INK, width: 460, height: 180, align: "left" }), body, 0, -20);
+}
+
+function paintGems(view: Node, body: Node, placeId: number, onPick: (id: number) => void): void {
+  paintPlaces(body, GEM_PLACES, placeId, onPick);
+  const rows = listJewels(placeId);
+  if (rows.length === 0) {
+    place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 40 }), body, 0, 20);
+    return;
+  }
+  const content = gridScroll(body, "DetailScroll", 0, 36, 460, 160);
+  for (let i = 0; i < rows.length; i++) {
+    const jewel = rows[i];
+    const owned = bagCount(jewel.id);
+    const face = itemProfile(jewel.id, null);
+    const icon = face && face.icon ? face.icon : "ui/bag/backpack_" + jewel.id;
+    const cell = catalogCell(icon, jewel.rare, owned, () => showInfoCard(view, jewelCard(jewel.id, placeId, jewel.rare, jewel.star, owned)));
+    place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+  }
+  sizeScroll(content, slotRows(rows.length) * HERO_PITCH_Y + 20, 160);
+}
+
+function paintGears(view: Node, body: Node, placeId: number, onPick: (id: number) => void): void {
+  paintPlaces(body, GEAR_PLACES, placeId, onPick);
+  const rows = listGodGears(placeId);
+  if (rows.length === 0) {
+    place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 40 }), body, 0, 20);
+    return;
+  }
+  const content = gridScroll(body, "DetailScroll", 0, 36, 460, 160);
+  for (let i = 0; i < rows.length; i++) {
+    const gear = rows[i];
+    const owned = bagCount(gear.id);
+    const face = itemProfile(gear.id, null);
+    const icon = face && face.icon ? face.icon : "ui/bag/backpack_" + gear.id;
+    const cell = catalogCell(icon, gear.rare, owned, () => showInfoCard(view, gearCard(gear.id, gear.name, placeId, gear.rare, gear.star, owned)));
+    place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+  }
+  sizeScroll(content, slotRows(rows.length) * HERO_PITCH_Y + 20, 160);
+}
+
+function paintPlaces(body: Node, places: { id: number; title: string }[], current: number, onPick: (id: number) => void): void {
+  for (let i = 0; i < places.length; i++) {
+    const spec = places[i];
+    const button = sprite(spec.title, 72, 32, spec.id === current ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
+    place(button, body, -150 + i * 86, 64);
+    place(createLabel(spec.title, 14, { color: INK, width: 68, height: 24 }), button, 0, 0);
+    if (!button.getComponent(Button)) button.addComponent(Button);
+    button.on(Button.EventType.CLICK, () => onPick(spec.id));
+  }
+}
+
+function paintDragonBoard(view: Node, content: Node): void {
+  const dragons = listDragons();
+  const relics = listRelics();
+  if (dragons.length === 0 && relics.length === 0) {
+    place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 36 }), content, 0, -40);
+    sizeScroll(content, 400, 400);
+    return;
+  }
+  for (let i = 0; i < dragons.length; i++) {
+    const face = dragons[i];
+    const card = dragonCard(face, () => showInfoCard(view, {
+      icon: face.portrait,
+      title: face.name,
+      typeLine: "圣龙",
+      body: "未解锁",
+      fallback: "ui/dragon/dragon_identify-0",
+    }));
+    place(card, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -70, 140));
+  }
+  const dRows = dragons.length === 0 ? 0 : Math.ceil(dragons.length / COLS);
+  let y = dragons.length === 0 ? -24 : -70 - dRows * 140 - 16;
+  place(createLabel("圣物", 18, { color: INK, width: 120, height: 28 }), content, 0, y);
+  y -= 56;
+  for (let i = 0; i < relics.length; i++) {
+    const relic = relics[i];
+    const col = i % COLS;
+    const row = Math.floor(i / COLS);
+    const owned = relicOwned(relic);
+    const cell = catalogCell(relic.icon, relic.rare, owned, () => showInfoCard(view, relicCard(relic, owned)));
+    place(cell, content, -162 + col * HERO_PITCH_X, y - row * HERO_PITCH_Y);
+  }
+  const rRows = relics.length === 0 ? 1 : Math.ceil(relics.length / COLS);
+  const height = Math.abs(y) + rRows * HERO_PITCH_Y + 40;
+  sizeScroll(content, height, 400);
+}
+
+function dragonCard(face: { name: string; portrait: string }, onTap: () => void): Node {
+  const root = uiNode("DragonCard");
+  const ui = root.addComponent(UITransform);
+  ui.setContentSize(100, 130);
+  const portrait = sprite("face", 84, 84, face.portrait, "ui/dragon/dragon_identify-0");
+  place(portrait, root, 0, 18);
+  const image = portrait.getComponent(Sprite);
+  if (image) image.grayscale = true;
+  place(sprite("lock", 32, 32, "ui/dragon/dragon_spr-lock"), root, 26, 42);
+  place(createLabel(face.name, 14, { color: INK, width: 96, height: 22 }), root, 0, -36);
+  place(createLabel("未解锁", 12, { color: INK, width: 80, height: 18 }), root, 0, -54);
+  if (!root.getComponent(Button)) root.addComponent(Button);
+  root.on(Button.EventType.CLICK, onTap);
+  return root;
+}
+
+function catalogCell(icon: string, rare: number, owned: number, onTap: () => void): Node {
+  const root = uiNode("CatalogCell");
+  const ui = root.addComponent(UITransform);
+  ui.setContentSize(96, 96);
+  place(sprite("frame", 88, 88, rareFrame(rare)), root, 0, 0);
+  const face = sprite("icon", 72, 72, icon, "ui/bag/backpack_spr-default");
+  place(face, root, 0, 4);
+  if (owned <= 0) {
+    const image = face.getComponent(Sprite);
+    if (image) image.grayscale = true;
+    place(sprite("lock", 28, 28, "ui/hero/hero-icon_spr-lock"), root, 28, 28);
+  } else {
+    place(createLabel(String(owned), 16, { color: COUNT, width: 72, height: 22 }), root, 18, -30);
+  }
+  if (!root.getComponent(Button)) root.addComponent(Button);
+  root.on(Button.EventType.CLICK, onTap);
   return root;
 }
 
@@ -461,6 +675,25 @@ function deployedSet(): Set<number> {
   const ids = deployedHeroIds();
   for (let i = 0; i < ids.length; i++) set.add(ids[i]);
   return set;
+}
+
+function bookOf(elem: number): HeroProfile[] {
+  const all = listHeroProfiles();
+  if (elem === 0) return all;
+  const rows: HeroProfile[] = [];
+  for (let i = 0; i < all.length; i++) {
+    if (all[i].elem === elem) rows.push(all[i]);
+  }
+  return rows;
+}
+
+function heroByType(type: number): StoreHero | null {
+  const all = GameStore.heroes();
+  if (!all) return null;
+  for (let i = 0; i < all.length; i++) {
+    if (all[i].heroType === type) return all[i];
+  }
+  return null;
 }
 
 function heroById(roster: StoreHero[], id: number): StoreHero | null {
@@ -522,14 +755,15 @@ function hideNamed(root: Node, name: string): void {
   if (node) node.active = false;
 }
 
-function sprite(name: string, width: number, height: number, path: string): Node {
+function sprite(name: string, width: number, height: number, path: string, fallback?: string): Node {
   const node = uiNode(name);
   const ui = node.addComponent(UITransform);
   ui.setContentSize(width, height);
   const image = node.addComponent(Sprite);
   image.sizeMode = Sprite.SizeMode.CUSTOM;
   image.type = Sprite.Type.SIMPLE;
-  paintSprite(node, path);
+  if (fallback && fallback !== path) paintFirst(node, [path, fallback]);
+  else paintSprite(node, path);
   return node;
 }
 
@@ -634,12 +868,284 @@ function bankedMs(rewardTime: number | null): number {
   return rewardTime * 1000;
 }
 
+interface InfoCard {
+  icon: string;
+  title: string;
+  typeLine: string;
+  body: string;
+  frame?: string;
+  fallback?: string;
+}
+
+function gridScroll(parent: Node, name: string, x: number, y: number, width: number, height: number): Node {
+  let view = parent.getChildByName(name);
+  if (!view) {
+    view = uiNode(name);
+    const ui = view.addComponent(UITransform);
+    ui.setContentSize(width, height);
+    ui.setAnchorPoint(0.5, 1);
+    const mask = view.addComponent(Mask);
+    mask.type = Mask.Type.GRAPHICS_RECT;
+    const scroll = view.addComponent(ScrollView);
+    scroll.vertical = true;
+    scroll.horizontal = false;
+    scroll.inertia = true;
+    scroll.elastic = true;
+    scroll.cancelInnerEvents = true;
+    const content = uiNode("content");
+    const box = content.addComponent(UITransform);
+    box.setAnchorPoint(0.5, 1);
+    box.setContentSize(width, height);
+    place(content, view, 0, 0);
+    scroll.content = content;
+    place(view, parent, x, y);
+  }
+  const content = view.getChildByName("content");
+  return content || view;
+}
+
+function sizeScroll(content: Node, height: number, minHeight: number): void {
+  const ui = content.getComponent(UITransform);
+  const width = ui && ui.contentSize.width > 0 ? ui.contentSize.width : 448;
+  if (ui) ui.setContentSize(width, Math.max(minHeight, height));
+}
+
+function clearChildren(node: Node): void {
+  const old = node.children.slice();
+  for (let i = 0; i < old.length; i++) old[i].destroy();
+}
+
+function paddedSlots(count: number): number {
+  return slotRows(Math.max(count, COLS * 4)) * COLS;
+}
+
+function slotRows(count: number): number {
+  if (count <= 0) return 4;
+  return Math.max(4, Math.ceil(count / COLS));
+}
+
+function gridX(index: number, origin: number, pitch: number): number {
+  return origin + (index % COLS) * pitch;
+}
+
+function gridY(index: number, origin: number, pitch: number): number {
+  return origin - Math.floor(index / COLS) * pitch;
+}
+
+function heroFace(hero: StoreHero): string {
+  const profile = heroProfile(hero.heroType);
+  if (profile && profile.icon) return profile.icon;
+  return "ui/hero/hero-icon_spr-default";
+}
+
+function rareFrame(rare: number): string {
+  if (rare === 2 || rare === 3 || rare === 4) return "ui/bag/backpack_spr-rare-" + rare;
+  return "ui/bag/backpack_item-frame-1";
+}
+
+function elemLabel(elem: number | null): string {
+  if (elem === null || elem < 1 || elem > 5) return "元素";
+  return ELEM_NAME[elem];
+}
+
+function placeTitle(id: number, places: { id: number; title: string }[]): string {
+  for (let i = 0; i < places.length; i++) {
+    if (places[i].id === id) return places[i].title;
+  }
+  return "";
+}
+
+function bagCount(id: number): number {
+  const all = GameStore.bag();
+  if (!all) return 0;
+  let n = 0;
+  for (let i = 0; i < all.length; i++) {
+    const item = all[i];
+    if (item.num !== null && item.num <= 0) continue;
+    if (item.itemType !== id && item.itemId !== id) continue;
+    n += item.num === null ? 1 : item.num;
+  }
+  return n;
+}
+
+function relicOwned(relic: RelicFace): number {
+  let n = 0;
+  for (let i = 0; i < relic.stages.length; i++) n += bagCount(relic.stages[i].id);
+  return n;
+}
+
+function starText(hero: StoreHero, profile: HeroProfile | null): string {
+  const star = hero.star ?? (profile && profile.star) ?? 1;
+  const next = star + 1;
+  const cur = heroStarStep(star);
+  const nxt = heroStarStep(next);
+  if (!cur && !nxt) return "";
+  if (star >= 14 || !nxt) {
+    const limit = cur ? "等级上限 " + cur.levelLimit : "";
+    return star + "星\n已满星" + (limit ? "\n" + limit : "");
+  }
+  const lines: string[] = [];
+  lines.push(star + "星 → " + next + "星");
+  if (cur) lines.push("等级上限 " + cur.levelLimit + " → " + nxt.levelLimit);
+  else lines.push("等级上限 " + nxt.levelLimit);
+  lines.push("攻击展示 " + (cur ? cur.attackShow : 0) + " → " + nxt.attackShow);
+  lines.push("生命展示 " + (cur ? cur.hpShow : 0) + " → " + nxt.hpShow);
+  lines.push("进阶消耗 " + costLine(nxt.cost));
+  const needs = heroStarNeeds(hero.heroType, next);
+  if (needs.length === 0) lines.push("升星材料 无");
+  else {
+    const bits: string[] = [];
+    for (let i = 0; i < needs.length; i++) bits.push(sacrificeLine(needs[i]));
+    lines.push("升星材料 " + bits.join("，"));
+  }
+  return lines.join("\n");
+}
+
+function costLine(costs: CostStack[]): string {
+  if (costs.length === 0) return "无";
+  const bits: string[] = [];
+  for (let i = 0; i < costs.length; i++) {
+    const face = itemProfile(costs[i].itemType, null);
+    const name = face && face.name ? face.name : String(costs[i].itemType);
+    bits.push(name + " ×" + costs[i].num);
+  }
+  return bits.join("  ");
+}
+
+function sacrificeLine(need: SacrificeNeed): string {
+  if (need.type > 0) {
+    const profile = heroProfile(need.type);
+    const name = profile ? profile.name : "英雄" + need.type;
+    return name + " " + need.star + "星 ×" + need.num;
+  }
+  if (need.elem > 0) return elemLabel(need.elem) + need.star + "星 ×" + need.num;
+  return "任意" + need.star + "星 ×" + need.num;
+}
+
+function profileCard(profile: HeroProfile): InfoCard {
+  const stats = heroBaseStats(profile.type, profile.star);
+  const names: string[] = [];
+  for (let i = 0; i < profile.skills.length && i < 4; i++) names.push(profile.skills[i].name);
+  const statLine = stats
+    ? "攻击 " + stats.atk + "  HP " + stats.hp + "  防御 " + stats.def + "  速度 " + stats.spd
+    : "";
+  return {
+    icon: profile.icon || "ui/hero/hero-icon_spr-default",
+    fallback: "ui/hero/hero-icon_spr-default",
+    title: profile.name,
+    typeLine: elemLabel(profile.elem) + "  " + (profile.star === null ? "—" : profile.star + "星"),
+    body: (names.length > 0 ? names.join("  ") : "无技能") + (statLine ? "\n" + statLine : "") + "\n未获得",
+  };
+}
+
+function bagCard(item: StoreBagItem): InfoCard {
+  const profile = itemProfile(item.itemType, item.itemId);
+  const tab = itemBagTab(item.itemType, item.itemId);
+  const count = item.num === null ? "" : "  数量 " + item.num;
+  const rare = profile && profile.rare > 0 ? "  稀有 " + profile.rare : "";
+  return {
+    icon: (profile && profile.icon) || itemIconResource(item.itemType, item.itemId) || "ui/bag/backpack_spr-default",
+    fallback: "ui/bag/backpack_spr-default",
+    frame: rareFrame(profile ? profile.rare : 0),
+    title: profile && profile.name ? profile.name : "道具",
+    typeLine: "类型：" + bagTabTitle(tab) + count + rare,
+    body: profile && profile.blurb ? profile.blurb : " ",
+  };
+}
+
+function jewelCard(id: number, placeId: number, rare: number, star: number, owned: number): InfoCard {
+  const face = itemProfile(id, null);
+  return {
+    icon: face && face.icon ? face.icon : "ui/bag/backpack_" + id,
+    fallback: "ui/bag/backpack_spr-default",
+    frame: rareFrame(rare),
+    title: face && face.name ? face.name : "宝石 " + id,
+    typeLine: placeTitle(placeId, GEM_PLACES) + "  " + star + "星  稀有 " + rare,
+    body: owned > 0 ? "持有 " + owned : "未获得",
+  };
+}
+
+function gearCard(id: number, note: string, placeId: number, rare: number, star: number, owned: number): InfoCard {
+  const face = itemProfile(id, null);
+  const name = face && face.name ? face.name : note || "神装 " + id;
+  return {
+    icon: face && face.icon ? face.icon : "ui/bag/backpack_" + id,
+    fallback: "ui/bag/backpack_spr-default",
+    frame: rareFrame(rare),
+    title: name,
+    typeLine: placeTitle(placeId, GEAR_PLACES) + "  " + star + "星  稀有 " + rare,
+    body: (face && face.blurb ? face.blurb + "\n" : "") + (owned > 0 ? "持有 " + owned : "未获得"),
+  };
+}
+
+function relicCard(relic: RelicFace, owned: number): InfoCard {
+  return {
+    icon: relic.icon,
+    fallback: "ui/bag/backpack_spr-default",
+    frame: rareFrame(relic.rare),
+    title: relic.name,
+    typeLine: "圣物  稀有 " + relic.rare,
+    body: (relic.feature || " ") + "\n" + (owned > 0 ? "持有 " + owned : "未获得"),
+  };
+}
+
+function bagTabTitle(tab: BagTab): string {
+  if (tab === "equip") return "装备";
+  if (tab === "shard") return "碎片";
+  if (tab === "spirit") return "精灵";
+  return "道具";
+}
+
+function showInfoCard(view: Node, spec: InfoCard): void {
+  const old = view.getChildByName("InfoCard");
+  if (old) old.destroy();
+  const root = uiNode("InfoCard");
+  place(root, view, 0, 0);
+  root.setSiblingIndex(Math.max(0, view.children.length - 1));
+  const dim = createRect("dim", 640, 960, new Color(0, 0, 0, 140));
+  place(dim, root, 320, 480);
+  if (!dim.getComponent(Button)) dim.addComponent(Button);
+  dim.on(Button.EventType.CLICK, () => {
+    if (root.isValid) root.destroy();
+  });
+  const card = uiNode("card");
+  const ui = card.addComponent(UITransform);
+  ui.setContentSize(390, 300);
+  card.addComponent(BlockInputEvents);
+  const bg = sprite("bg", 390, 300, "ui/common/win-bg_block-bg-24");
+  const bgImage = bg.getComponent(Sprite);
+  if (bgImage) bgImage.type = Sprite.Type.SLICED;
+  place(bg, card, 0, 0);
+  place(card, root, 320, 500);
+  place(sprite("frame", 88, 88, spec.frame || "ui/bag/backpack_item-frame-1"), card, -120, 70);
+  place(sprite("icon", 72, 72, spec.icon, spec.fallback), card, -120, 74);
+  place(createLabel(spec.title, 22, { color: NAME_GREEN, width: 220, height: 36, align: "left" }), card, 30, 96);
+  place(createLabel(spec.typeLine, 16, { color: CREAM, width: 220, height: 48, align: "left" }), card, 30, 52);
+  place(createLabel(spec.body || " ", 16, { color: DESC, width: 340, height: 140, align: "left" }), card, 0, -46);
+  const close = sprite("close", 44, 44, "ui/common/button_btn-close-1");
+  place(close, card, 165, 128);
+  if (!close.getComponent(Button)) close.addComponent(Button);
+  close.on(Button.EventType.CLICK, () => {
+    if (root.isValid) root.destroy();
+  });
+}
+
+function currentStageIdx(): number {
+  const mock = GameStore.mockStageId();
+  if (mock !== null && mock >= 1) return Math.floor(mock);
+  const chapter = GameStore.chapter();
+  if (chapter.nowIdx !== null && chapter.nowIdx >= 1) return Math.floor(chapter.nowIdx);
+  if (chapter.maxIdx !== null && chapter.maxIdx >= 1) return Math.floor(chapter.maxIdx);
+  return 1;
+}
+
 function clockText(ms: number): string {
   let total = Math.floor(ms / 1000);
   if (total < 0) total = 0;
-  const m = Math.floor(total / 60);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  const mm = m < 10 ? "0" + m : String(m);
-  const ss = s < 10 ? "0" + s : String(s);
-  return mm + ":" + ss;
+  const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+  if (h > 0) return pad(h) + ":" + pad(m) + ":" + pad(s);
+  return pad(m) + ":" + pad(s);
 }

@@ -7,6 +7,7 @@ declare module "cc" {
   };
 
   export class Color {
+    static WHITE: Color;
     constructor(r?: number, g?: number, b?: number, a?: number);
     r: number;
     g: number;
@@ -29,7 +30,12 @@ declare module "cc" {
     getChildByName(name: string): Node | null;
     addComponent(type: unknown): any;
     getComponent(type: unknown): any;
+    position: { x: number; y: number; z: number };
+    scale: { x: number; y: number; z: number };
+    getSiblingIndex(): number;
+    emit(type: string, ...args: unknown[]): void;
     on(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
+    once(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
     off(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
     destroy(): void;
     static EventType: {
@@ -37,7 +43,19 @@ declare module "cc" {
       TOUCH_MOVE: string;
       TOUCH_END: string;
       TOUCH_CANCEL: string;
+      NODE_DESTROYED: string;
+      CHILD_ADDED: string;
     };
+  }
+
+  export class Widget extends Component {
+    static AlignMode: { ON_WINDOW_RESIZE: number };
+    isAlignHorizontalCenter: boolean;
+    isAlignVerticalCenter: boolean;
+    horizontalCenter: number;
+    verticalCenter: number;
+    alignMode: number;
+    updateAlignment(): void;
   }
 
   export class Component {
@@ -54,6 +72,16 @@ declare module "cc" {
       SPRITE_STENCIL: number;
     };
     type: number;
+  }
+
+  export class ScrollView {
+    vertical: boolean;
+    horizontal: boolean;
+    inertia: boolean;
+    elastic: boolean;
+    cancelInnerEvents: boolean;
+    content: Node | null;
+    scrollToTop(time?: number): void;
   }
 
   export class UITransform {
@@ -113,7 +141,7 @@ declare module "cc" {
   export const Layers: { Enum: { UI_2D: number } };
   export const HorizontalTextAlignment: { CENTER: number; LEFT: number };
   export const VerticalTextAlignment: { CENTER: number; TOP: number };
-  export const Overflow: { NONE: number; CLAMP: number };
+  export const Overflow: { NONE: number; CLAMP: number; SHRINK: number };
 
   export class Director {
     static EVENT_AFTER_UPDATE: string;
