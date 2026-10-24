@@ -1,16 +1,29 @@
 /**
  * 战斗叠在挂机壳上。底栏三钮和收益留在下面。
- * 数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
+ * 回合写成 n/15。加速用 battle-scene 的速度图，跳过停在这一局的最后一拍。
+ * 血条跟站位。战报没有怒气字段时，怒气条按当前回合 / 15 填充，只标位置。
+ * 伤害红字，治疗绿字，暴击用更大的金字。数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
  */
-import { Button, Color, Label, Node, Overflow, UITransform } from "cc";
+import { Button, Color, Label, Node, Overflow, Sprite, UITransform } from "cc";
 import { BattleRound, BattleUnit } from "../module/mainline/battle";
-import { createLabel, place, setText, uiNode } from "./UiKit";
+import { paintSpeedIcon } from "./BattlePage";
+import { IDLE_HANG_SPOTS } from "./idleHangView";
+import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 export interface HangFloat {
   text: string;
   x: number;
   y: number;
   heal: boolean;
+  crit?: boolean;
+}
+
+export interface HangBar {
+  x: number;
+  y: number;
+  hpRatio: number;
+  rageRatio: number;
+  ally: boolean;
 }
 
 interface HangHold {
@@ -24,23 +37,51 @@ interface HangHold {
 
 const holds = new Map<Node, HangHold>();
 const speedFns = new Map<Node, () => void>();
+const skipFns = new Map<Node, () => void>();
 
 const INK = new Color(255, 236, 190, 255);
 const DMG = new Color(255, 70, 54, 255);
 const HEAL = new Color(90, 230, 120, 255);
+const CRIT = new Color(255, 214, 72, 255);
+const BAR_W = 78;
+
+/** 敌方站在殿堂后侧，和挂机三格错开。 */
+const ENEMY_SPOTS = [
+  { x: -180, y: 230 },
+  { x: 8, y: 268 },
+  { x: 188, y: 226 },
+];
 
 export function bindHangSpeed(page: Node, fn: () => void): void {
   speedFns.set(page, fn);
   page.once(Node.EventType.NODE_DESTROYED, () => speedFns.delete(page));
 }
 
+export function bindHangSkip(page: Node, fn: () => void): void {
+  skipFns.set(page, fn);
+  page.once(Node.EventType.NODE_DESTROYED, () => skipFns.delete(page));
+}
+
 export function setHangSpeed(page: Node, speed: number): void {
   const hold = holds.get(page);
-  if (hold) hold.speed = speed;
+  const next = speed === 2 || speed === 3 ? speed : 1;
+  if (hold) hold.speed = next;
   const layer = layerOf(page);
   if (!layer) return;
   const node = layer.getChildByName("HangSpeed");
-  if (node) setText(node, "×" + String(speed));
+  if (node) paintSpeedIcon(node, next);
+}
+
+/** 前排三格用挂机站位，敌方用后侧三格。多出来的人不画条。 */
+export function barsFromSides(
+  allies: { hp: number; maxHp: number }[],
+  enemies: { hp: number; maxHp: number }[],
+  rageRatio: number
+): HangBar[] {
+  const out: HangBar[] = [];
+  pushBars(out, allies, IDLE_HANG_SPOTS, true, rageRatio);
+  pushBars(out, enemies, ENEMY_SPOTS, false, rageRatio);
+  return out;
 }
 
 /** 出阵之后、战报还没到时，先把中间按钮改成战斗中，并闪一下开战。 */
@@ -60,7 +101,8 @@ export function beginHangBattle(page: Node, left: string, right: string): void {
   }
   paintVs(layer, hold);
   const round = layer.getChildByName("HangRound");
-  if (round) setText(round, "第1/15回合");
+  if (round) setText(round, "1/15");
+  setTalk(page, false);
 }
 
 export function showMockRound(page: Node, round: BattleRound, stageId: number): void {
@@ -72,10 +114,22 @@ export function showMockRound(page: Node, round: BattleRound, stageId: number): 
   hold.allies = round.allies.map(copyUnit);
   hold.enemies = round.enemies.map(copyUnit);
   const skill = skillFromLine(round.line);
-  showHangStrike(page, round.round, 15, skill, floats);
+  const critRound = round.line.indexOf("溃败") >= 0;
+  for (let i = 0; i < floats.length; i++) {
+    if (critRound && !floats[i].heal && floats[i].x < 0) floats[i].crit = true;
+  }
+  const rage = round.round >= 1 ? Math.min(1, round.round / 15) : 0;
+  showHangStrike(page, round.round, 15, skill, floats, barsFromSides(round.allies, round.enemies, rage));
 }
 
-export function showHangStrike(page: Node, round: number, total: number, skill: string | null, floats: HangFloat[]): void {
+export function showHangStrike(
+  page: Node,
+  round: number,
+  total: number,
+  skill: string | null,
+  floats: HangFloat[],
+  bars?: HangBar[]
+): void {
   const hold = ensureHold(page);
   const layer = ensureLayer(page);
   const flash = layer.getChildByName("HangFlash");
@@ -83,27 +137,28 @@ export function showHangStrike(page: Node, round: number, total: number, skill: 
   const cap = total >= 1 ? total : 15;
   const now = round >= 1 ? round : 1;
   const label = layer.getChildByName("HangRound");
-  if (label) setText(label, "第" + now + "/" + cap + "回合");
+  if (label) setText(label, now + "/" + cap);
   paintVs(layer, hold);
   const banner = layer.getChildByName("HangSkill");
-  if (banner) {
-    banner.active = !!skill;
-    if (skill) setText(banner, skill);
-  }
+  if (banner) setBanner(banner, skill);
+  paintBars(layer, bars || []);
   const host = layer.getChildByName("HangFloats");
   if (!host) return;
   const old = host.children.slice();
   for (let i = 0; i < old.length; i++) old[i].destroy();
   for (let i = 0; i < floats.length && i < 6; i++) {
     const row = floats[i];
-    const color = row.heal ? HEAL : DMG;
-    const node = createLabel(row.text, 32, { color, width: 140, height: 40 });
-    const text = node.getComponent(Label);
-    if (text) {
-      text.isBold = true;
-      text.overflow = Overflow.SHRINK;
+    const crit = row.crit === true && !row.heal;
+    const color = crit ? CRIT : row.heal ? HEAL : DMG;
+    const size = crit ? 40 : row.heal ? 30 : 34;
+    const text = crit ? "暴击 " + row.text : row.text;
+    const node = createLabel(text, size, { color, width: crit ? 180 : 140, height: 44 });
+    const labelNode = node.getComponent(Label);
+    if (labelNode) {
+      labelNode.isBold = true;
+      labelNode.overflow = Overflow.SHRINK;
     }
-    place(node, host, row.x, row.y);
+    place(node, host, row.x, row.y + (crit ? 18 : 0));
   }
 }
 
@@ -114,9 +169,9 @@ export function finishHangBattle(page: Node, win: boolean | null): void {
   if (layer) {
     const banner = layer.getChildByName("HangSkill");
     if (banner) {
-      banner.active = win !== null;
-      if (win === true) setText(banner, "胜利");
-      else if (win === false) setText(banner, "失败");
+      if (win === true) setBanner(banner, "胜利");
+      else if (win === false) setBanner(banner, "失败");
+      else setBanner(banner, null);
     }
     const flash = layer.getChildByName("HangFlash");
     if (flash) flash.active = false;
@@ -134,6 +189,7 @@ export function stopHangBattle(page: Node): void {
   holds.delete(page);
   const layer = layerOf(page);
   if (layer) layer.destroy();
+  setTalk(page, true);
   setCaption(page, "战斗");
 }
 
@@ -176,27 +232,45 @@ function ensureLayer(page: Node): Node {
   flash.name = "HangFlash";
   place(flash, layer, 0, 250);
 
-  const round = createLabel("第1/15回合", 22, { color: INK, width: 280, height: 36 });
+  const roundBg = createRect("HangRoundBg", 120, 36, new Color(16, 18, 28, 180));
+  place(roundBg, layer, 0, 560);
+  const round = createLabel("1/15", 26, { color: INK, width: 110, height: 32 });
   round.name = "HangRound";
-  place(round, layer, 0, 320);
+  place(round, layer, 0, 560);
 
   const vs = createLabel("我方  VS  敌方", 20, { color: INK, width: 520, height: 32 });
   vs.name = "HangVs";
   place(vs, layer, 0, 188);
 
-  const skill = createLabel("", 28, { color: INK, width: 360, height: 44 });
-  skill.name = "HangSkill";
-  skill.active = false;
-  place(skill, layer, 0, 130);
+  const skillBg = createRect("HangSkillBg", 280, 40, new Color(28, 16, 48, 200));
+  skillBg.name = "HangSkill";
+  skillBg.active = false;
+  place(skillBg, layer, 0, 150);
+  const skill = createLabel("", 26, { color: INK, width: 260, height: 36 });
+  place(skill, skillBg, 0, 0);
 
+  const bars = uiNode("HangBars");
+  place(bars, layer, 0, 0);
   const floats = uiNode("HangFloats");
   place(floats, layer, 0, 0);
 
-  const speed = createLabel("×1", 22, { color: INK, width: 72, height: 36 });
-  speed.name = "HangSpeed";
-  place(speed, layer, 250, 300);
+  const speed = uiNode("HangSpeed");
+  const speedUi = speed.addComponent(UITransform);
+  speedUi.setContentSize(73, 78);
+  const speedSprite = speed.addComponent(Sprite);
+  speedSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  place(speed, layer, -300, 540);
+  paintSpeedIcon(speed, 1);
   if (!speed.getComponent(Button)) speed.addComponent(Button);
   speed.on(Button.EventType.CLICK, () => tapSpeed(page, speed));
+
+  const skip = createLabel("跳过", 22, { color: INK, width: 88, height: 40 });
+  skip.name = "HangSkip";
+  const skipBg = createRect("HangSkipBg", 96, 44, new Color(46, 110, 190, 230));
+  place(skipBg, layer, 300, 540);
+  place(skip, skipBg, 0, 0);
+  if (!skipBg.getComponent(Button)) skipBg.addComponent(Button);
+  skipBg.on(Button.EventType.CLICK, () => tapSkip(page));
   return layer;
 }
 
@@ -208,7 +282,82 @@ function tapSpeed(page: Node, node: Node): void {
   }
   const hold = ensureHold(page);
   hold.speed = hold.speed === 1 ? 2 : hold.speed === 2 ? 3 : 1;
-  setText(node, "×" + String(hold.speed));
+  paintSpeedIcon(node, hold.speed);
+}
+
+function tapSkip(page: Node): void {
+  const fn = skipFns.get(page);
+  if (fn) fn();
+}
+
+function setBanner(banner: Node, text: string | null): void {
+  banner.active = !!text;
+  const kids = banner.children;
+  for (let i = 0; i < kids.length; i++) {
+    if (text) setText(kids[i], text);
+  }
+}
+
+function paintBars(layer: Node, bars: HangBar[]): void {
+  const host = layer.getChildByName("HangBars");
+  if (!host) return;
+  const old = host.children.slice();
+  for (let i = 0; i < old.length; i++) old[i].destroy();
+  for (let i = 0; i < bars.length && i < 6; i++) {
+    const row = bars[i];
+    const root = uiNode("HangBar");
+    place(root, host, row.x, row.y);
+    place(createRect("hpBg", BAR_W, 8, new Color(20, 16, 16, 220)), root, 0, 8);
+    const hp = Math.min(1, Math.max(0, row.hpRatio));
+    if (hp > 0) {
+      const width = BAR_W * hp;
+      place(
+        createRect("hp", width, 8, row.ally ? new Color(72, 210, 96, 255) : new Color(220, 64, 56, 255)),
+        root,
+        -BAR_W / 2 + width / 2,
+        8
+      );
+    }
+    place(createRect("rageBg", BAR_W, 6, new Color(16, 20, 36, 220)), root, 0, -2);
+    const rage = Math.min(1, Math.max(0, row.rageRatio));
+    if (rage > 0) {
+      const width = BAR_W * rage;
+      place(createRect("rage", width, 6, new Color(72, 156, 255, 255)), root, -BAR_W / 2 + width / 2, -2);
+    }
+  }
+}
+
+function pushBars(
+  out: HangBar[],
+  units: { hp: number; maxHp: number }[],
+  spots: ReadonlyArray<{ x: number; y: number }>,
+  ally: boolean,
+  rageRatio: number
+): void {
+  const n = units.length < spots.length ? units.length : spots.length;
+  for (let i = 0; i < n; i++) {
+    const max = units[i].maxHp;
+    const hp = units[i].hp;
+    if (typeof max !== "number" || !isFinite(max) || max <= 0) continue;
+    if (typeof hp !== "number" || !isFinite(hp)) continue;
+    out.push({
+      x: spots[i].x,
+      y: spots[i].y + 108,
+      hpRatio: hp <= 0 ? 0 : hp >= max ? 1 : hp / max,
+      rageRatio,
+      ally,
+    });
+  }
+}
+
+function setTalk(page: Node, visible: boolean): void {
+  const host = battleHost(page);
+  const hang = host.getChildByName("IdleHang");
+  if (!hang) return;
+  const kids = hang.children;
+  for (let i = 0; i < kids.length; i++) {
+    if (kids[i].name === "IdleTalk") kids[i].active = visible;
+  }
 }
 
 function paintVs(layer: Node, hold: HangHold): void {

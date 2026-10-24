@@ -8,6 +8,8 @@ import { labelCenterInParent, sliceAnchorShift } from "./ccbiPlace";
 import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
+import { GameStore } from "../core/GameStore";
+import { chapterIdleMinute } from "../config/rosterCatalog";
 import { WireSession } from "../net/WireSession";
 import { formatWireQuickBattle } from "../net/protocol/wireQuickBattle";
 import { mountIdleHang } from "./idleHangView";
@@ -83,7 +85,20 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     probe.name = "BtnShellProbe";
     place(probe, root, -300, 600);
     const raise = () => {
-      if (root.isValid && root.parent === page) root.setSiblingIndex(Math.max(0, page.children.length - 1));
+      if (!root.isValid || root.parent !== page) return;
+      const kids = page.children;
+      let overlay = -1;
+      for (let i = 0; i < kids.length; i++) {
+        if (kids[i] !== root && kids[i].name === "BattleEndHold") {
+          overlay = i;
+          break;
+        }
+      }
+      if (overlay < 0) {
+        root.setSiblingIndex(Math.max(0, kids.length - 1));
+        return;
+      }
+      if (kids.indexOf(root) > overlay) root.setSiblingIndex(overlay);
     };
     page.on(Node.EventType.CHILD_ADDED, raise);
     root.parent = page;
@@ -305,7 +320,7 @@ function bindHangSheets(view: Node, host: Node, again: boolean): void {
   if (grow) {
     liftNode(grow, host);
     bindTapOnce(grow, () => {
-      void openHangSheet(host, HANG_GROW_PREFAB);
+      void openHangSheet(host, HANG_GROW_PREFAB, (sheet) => bindGrowSheet(sheet));
     });
     pokeButton(grow, again);
   }
@@ -329,13 +344,102 @@ function bindQuickSheet(sheet: Node): void {
     write();
   });
   sheet.once(Node.EventType.NODE_DESTROYED, () => off());
+  const preview = quickPreviewLine();
+  const tip = findDescendant(sheet, "lbl_tip_1");
+  if (tip) setText(tip, preview);
   const go = findDescendant(sheet, "btn_quick");
-  if (!go) return;
-  liftNode(go, sheet);
-  bindTap(go, () => {
-    const line = write();
-    GameLog.shared.info("Mainline", "快速战斗只读 " + line + "，不发 3013");
-  });
+  if (go) {
+    liftNode(go, sheet);
+    bindTap(go, () => {
+      const line = write();
+      if (tip && tip.isValid) setText(tip, preview + " · 未发 3013");
+      GameLog.shared.info("Mainline", "快速战斗只读 " + line + "，不发 3013。" + preview);
+    });
+  }
+  const info = findDescendant(sheet, "btn_info");
+  if (info) {
+    bindTap(info, () => {
+      if (tip && tip.isValid) setText(tip, "高速战斗按两小时挂机收益预览，不发 3013");
+    });
+  }
+  const jump = findDescendant(sheet, "btn_jump");
+  if (jump) {
+    bindTap(jump, () => {
+      if (tip && tip.isValid) setText(tip, "这一页不跳转");
+    });
+  }
+}
+
+/** 我要变强。四个页签只切换已有节点，不发协议。 */
+function bindGrowSheet(sheet: Node): void {
+  const panels = ["node_strong", "node_resource", "node_hero", "node_lineup"];
+  const show = (name: string) => {
+    for (let i = 0; i < panels.length; i++) {
+      const node = findDescendant(sheet, panels[i]);
+      if (node) node.active = panels[i] === name;
+    }
+  };
+  show("node_strong");
+  const name = findDescendant(sheet, "_heroStrongName");
+  if (name) setText(name, growLine());
+  const pairs = [
+    ["btn_strong", "node_strong"],
+    ["btn_resource", "node_resource"],
+    ["btn_hero", "node_hero"],
+    ["btn_lineup", "node_lineup"],
+  ];
+  for (let i = 0; i < pairs.length; i++) {
+    const button = findDescendant(sheet, pairs[i][0]);
+    const panel = pairs[i][1];
+    if (!button) continue;
+    bindTap(button, () => show(panel));
+  }
+  const strategy = findDescendant(sheet, "btn_strategy");
+  if (strategy) {
+    bindTap(strategy, () => {
+      if (name && name.isValid) setText(name, growLine());
+      GameLog.shared.info("Mainline", "我要变强只展示名册，不发协议");
+    });
+  }
+}
+
+function growLine(): string {
+  const heroes = GameStore.heroes() || [];
+  if (heroes.length === 0) return "名册是空的";
+  const names: string[] = [];
+  for (let i = 0; i < heroes.length && names.length < 3; i++) {
+    if (heroes[i].name) names.push(heroes[i].name);
+  }
+  return names.length > 0 ? names.join("、") : "已有英雄";
+}
+
+/** idle_speed_up 是 7200 秒，按两小时的 reward_base 预览。不发放。 */
+function quickPreviewLine(): string {
+  const minute = chapterIdleMinute(hangStageIdx());
+  if (!minute) return "两小时收益还没有配置";
+  return "两小时约 金币 " + minute.gold * 120 + " · 英雄经验 " + minute.heroExp * 120 + " · 角色经验 " + minute.roleExp * 120;
+}
+
+function silenceSheetMenus(root: Node): void {
+  const stack: Node[] = [root];
+  while (stack.length > 0) {
+    const node = stack.pop() as Node;
+    const kids = node.children;
+    for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+    if (node.name.indexOf("Menu") < 0 && node.name !== "menu" && node.name.indexOf("menu") < 0) continue;
+    const ui = node.getComponent(UITransform);
+    if (!ui || ui.contentSize.width < 400 || ui.contentSize.height < 400) continue;
+    ui.setContentSize(0, 0);
+  }
+}
+
+function hangStageIdx(): number {
+  const mock = GameStore.mockStageId();
+  if (mock !== null && mock >= 1) return Math.floor(mock);
+  const chapter = GameStore.chapter();
+  if (chapter.nowIdx !== null && chapter.nowIdx >= 1) return Math.floor(chapter.nowIdx);
+  if (chapter.maxIdx !== null && chapter.maxIdx >= 1) return Math.floor(chapter.maxIdx);
+  return 1;
 }
 
 async function openHangSheet(host: Node, path: string, onReady?: (view: Node) => void): Promise<void> {
@@ -352,6 +456,7 @@ async function openHangSheet(host: Node, path: string, onReady?: (view: Node) =>
     place(createRect("dim", 720, 1280, new Color(8, 16, 32, 170)), sheet, 0, 0);
     const view = spawnPrefab(prefab, sheet);
     mountCcbiView(view);
+    silenceSheetMenus(view);
     const close = () => {
       if (sheet.isValid) sheet.destroy();
     };

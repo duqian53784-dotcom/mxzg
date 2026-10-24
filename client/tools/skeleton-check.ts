@@ -488,7 +488,7 @@ import {
   itemIconResource,
   mainlevelExpLabel,
 } from "../assets/scripts/config/gameCatalog";
-import { chapterIdleMinute, heroSpaceCap, idleCapMs } from "../assets/scripts/config/rosterCatalog";
+import { chapterClearReward, chapterIdleMinute, heroSpaceCap, idleCapMs } from "../assets/scripts/config/rosterCatalog";
 import { formatStoreBagLine } from "../assets/scripts/module/bag/bagView";
 import { formatStoreHeroLine } from "../assets/scripts/module/hero/rosterView";
 import { replayFromStore } from "../assets/scripts/module/mainline/battleFromStore";
@@ -2237,11 +2237,7 @@ function checkGameStore(): void {
   GameStore.reset();
 }
 
-function checkStoreScreens(): void {
-  GameStore.reset();
-  clearGameCatalog();
-  assert(chapterPlaceLabel(1) === null, "chapter label stays empty before config");
-  assert(itemDisplayName(900001, null, "原名") === "原名", "item name stays the fallback before config");
+function bindCheckCatalog(): void {
   const root = configDir();
   const names = ["herotype", "herobase", "heroskill", "language", "item", "chapter", "mainlevel", "chapterreward", "system"];
   const tables = new Map<string, { table: string; rows: Record<string, unknown>[] }>();
@@ -2249,6 +2245,14 @@ function checkStoreScreens(): void {
     tables.set(names[i], JSON.parse(readFileSync(join(root, names[i] + ".json"), "utf8")));
   }
   bindGameCatalog(tables);
+}
+
+function checkStoreScreens(): void {
+  GameStore.reset();
+  clearGameCatalog();
+  assert(chapterPlaceLabel(1) === null, "chapter label stays empty before config");
+  assert(itemDisplayName(900001, null, "原名") === "原名", "item name stays the fallback before config");
+  bindCheckCatalog();
   const profile = heroProfile(10101001);
   assert(profile !== null && profile.name === "独眼梦魇", "herotype note is the hero name");
   assert(profile !== null && profile.icon === "ui/hero/hero-icon_20101001", "hero icon uses item_id");
@@ -2257,6 +2261,11 @@ function checkStoreScreens(): void {
   const idle5 = chapterIdleMinute(5);
   assert(idle5 !== null && idle5.gold === 210 && idle5.roleExp === 20 && idle5.heroExp === 35, "stage 5 idle rates per minute");
   assert(idleCapMs() === 21600000, "idle cap is system.idle_max_time in ms");
+  const clear1 = chapterClearReward(1);
+  assert(
+    clear1 !== null && clear1.some((stack) => stack.itemType === 900001 && stack.num === 4000),
+    "stage 1 first_reward includes 4000 gold"
+  );
   assert(heroSpaceCap() === 300, "hero space label uses hero_space_initial");
   assert(
     profile !== null && profile.skills.some((skill) => skill.id === 101010011 && skill.name === "烈焰之锤"),
@@ -2956,23 +2965,35 @@ function checkMainline(): void {
 }
 
 function checkIdleMath(): void {
+  bindCheckCatalog();
+  const cap = idleCapMs();
+  const stage1 = chapterIdleMinute(1);
+  const stage6 = chapterIdleMinute(6);
+  assert(cap === 21600000 && stage1 !== null && stage1.gold === 200 && stage6 !== null, "claim reads the idle table");
   const fresh = buildIdleView(0, 0);
-  assert(fresh.pendingGold === 0 && fresh.pendingItem === 0 && fresh.capped === false, "zero idle");
-  assert(fresh.goldPerMin === 6 && fresh.itemEveryMs === 30000 && fresh.capMs === IDLE_CAP_MS, "base rates");
+  assert(fresh.pendingGold === 0 && fresh.pendingItem === 0 && fresh.pendingRoleExp === 0 && fresh.capped === false, "zero idle");
+  assert(fresh.goldPerMin === stage1.gold && fresh.itemEveryMs === 30000 && fresh.capMs === cap, "base rates follow reward_base and idle_max_time");
   const tenSec = buildIdleView(10000, 0);
-  assert(tenSec.pendingGold === 1 && tenSec.pendingItem === 0, "10s is 1 gold");
+  assert(tenSec.pendingGold === Math.floor((10000 * stage1.gold) / 60000) && tenSec.pendingItem === 0, "10s gold from the table");
   const halfMin = buildIdleView(30000, 0);
-  assert(halfMin.pendingGold === 3 && halfMin.pendingItem === 1, "30s gold and stone");
+  assert(
+    halfMin.pendingGold === Math.floor((30000 * stage1.gold) / 60000) &&
+      halfMin.pendingItem === 1 &&
+      halfMin.pendingRoleExp === Math.floor((30000 * stage1.roleExp) / 60000) &&
+      halfMin.pendingHeroExp === Math.floor((30000 * stage1.heroExp) / 60000),
+    "30s gold, exp, and stone"
+  );
   const progressed = buildIdleView(60000, 5);
-  assert(progressed.goldPerMin === 26 && progressed.pendingGold === 26, "five clears raise gold");
+  assert(progressed.goldPerMin === stage6.gold && progressed.pendingGold === stage6.gold, "five clears use stage 6 reward_base");
+  assert(progressed.pendingRoleExp === stage6.roleExp && progressed.pendingHeroExp === stage6.heroExp, "exp follows the same minute");
   assert(progressed.itemEveryMs === 25000 && progressed.pendingItem === 2, "five clears raise stones");
-  const over = buildIdleView(IDLE_CAP_MS + 60000, 0);
-  assert(over.capped && over.elapsedMs === IDLE_CAP_MS, "cap clamps elapsed");
-  assert(over.pendingGold === 8 * 60 * 6 && over.pendingItem === Math.floor(IDLE_CAP_MS / 30000), "cap rewards");
-  assert(over.pendingGold === over.capGold && over.pendingItem === buildIdleView(IDLE_CAP_MS, 0).pendingItem, "capped matches full window");
+  const over = buildIdleView(cap + 60000, 0);
+  assert(over.capped && over.elapsedMs === cap, "cap clamps elapsed");
+  assert(over.pendingGold === Math.floor((cap * stage1.gold) / 60000) && over.pendingItem === Math.floor(cap / 30000), "cap rewards");
+  assert(over.pendingGold === over.capGold && over.pendingItem === buildIdleView(cap, 0).pendingItem, "capped matches full window");
   const bad = buildIdleView(Number.NaN, -3);
-  assert(bad.pendingGold === 0 && bad.goldPerMin === 6 && bad.capped === false, "bad input");
-  assert(formatDuration(0) === "00:00:00" && formatDuration(IDLE_CAP_MS) === "08:00:00", "duration format");
+  assert(bad.pendingGold === 0 && bad.goldPerMin === stage1.gold && bad.capped === false, "bad input");
+  assert(formatDuration(0) === "00:00:00" && formatDuration(IDLE_CAP_MS) === "08:00:00" && formatDuration(cap) === "06:00:00", "duration format");
   assert(formatDuration(3661000) === "01:01:01", "duration hms");
   assert(formatItemEvery(30000) === "每 30 秒 1 个", "item every seconds");
   assert(formatItemEvery(120000) === "每 2 分钟 1 个", "item every minutes");
@@ -2984,42 +3005,50 @@ function checkIdleMath(): void {
   assert(quickBatchToast(1, 3, 4, 30) === "快速作战：第1关至第3关胜利，金币 +30，下一关 4", "batch toast");
   assert(capPreviewLine(2880, 960).indexOf("金币 2880") >= 0 && capPreviewLine(2880, 960).indexOf("强化石 960") >= 0, "cap line");
   assert(errorText(ErrorCode.IDLE_EMPTY) === "挂机时间太短，暂无收益", "empty idle text");
+  clearGameCatalog();
 }
 
 async function checkIdleSession(): Promise<void> {
+  bindCheckCatalog();
   let now = 1700000000000;
   const session = new MockGameSession(undefined, () => now);
   const anchor = session.idleAnchorMs;
+  const stage1 = chapterIdleMinute(1);
+  const cap = idleCapMs();
+  assert(stage1 !== null && cap !== null, "idle table is bound before the session check");
   const empty = session.idleQuery();
   assert(empty.ok && empty.pendingGold === 0 && empty.pendingItem === 0 && empty.ownedItem === 0, "fresh query");
-  assert(empty.capGold === 8 * 60 * 6 && empty.gold === MOCK_STARTER_GOLD && empty.diamond === MOCK_STARTER_DIAMOND, "cap preview");
+  assert(empty.capGold === Math.floor((cap * stage1.gold) / 60000) && empty.gold === MOCK_STARTER_GOLD && empty.diamond === MOCK_STARTER_DIAMOND, "cap preview");
   const rejected = session.idleClaim();
   assert(rejected.ok === false && rejected.code === ErrorCode.IDLE_EMPTY && session.gold === MOCK_STARTER_GOLD, "empty claim");
   assert(session.idleAnchorMs === anchor && session.diamond === MOCK_STARTER_DIAMOND, "empty claim keeps clock and diamond");
 
   now += 30000;
   const ready = session.idleQuery();
-  assert(ready.pendingGold === 3 && ready.pendingItem === 1 && ready.capped === false, "30s preview");
+  const halfGold = Math.floor((30000 * stage1.gold) / 60000);
+  assert(ready.pendingGold === halfGold && ready.pendingItem === 1 && ready.capped === false, "30s preview");
   const claimed = session.idleClaim();
-  assert(claimed.ok && claimed.gold === MOCK_STARTER_GOLD + 3 && claimed.diamond === MOCK_STARTER_DIAMOND, "claim gold");
-  assert(claimed.ownedItem === 1 && claimed.rewards.length === 2 && session.idleAnchorMs === now, "claim stone and reset");
+  assert(claimed.ok && claimed.gold === MOCK_STARTER_GOLD + halfGold && claimed.diamond === MOCK_STARTER_DIAMOND, "claim gold");
+  assert(claimed.ownedItem === 1 && claimed.rewards.length === 4 && session.idleAnchorMs === now, "claim stone, exp, and reset");
   assert(claimed.rewards[0].name === "金币" && claimed.rewards[1].id === IDLE_ITEM_ID, "claim reward names");
   const again = session.idleClaim();
-  assert(again.ok === false && session.gold === MOCK_STARTER_GOLD + 3 && session.itemCounts[IDLE_ITEM_ID] === 1, "second claim empty");
+  assert(again.ok === false && session.gold === MOCK_STARTER_GOLD + halfGold && session.itemCounts[IDLE_ITEM_ID] === 1, "second claim empty");
 
   now += 30000;
   const beforeQuick = session.idleAnchorMs;
   const entered = session.stageEnter({ stageId: session.stageId });
   const won = session.stageResult({ stageId: entered.stageId, battleId: entered.battleId, win: true });
   assert(won.ok && won.win && won.nextStageId === 2 && session.clearedStage === 1, "quick settle advances");
-  assert(session.idleAnchorMs === beforeQuick && session.gold === MOCK_STARTER_GOLD + 13, "stage win keeps idle clock");
+  assert(session.idleAnchorMs === beforeQuick && session.gold === MOCK_STARTER_GOLD + halfGold + 10, "stage win keeps idle clock");
+  const stage2 = chapterIdleMinute(2);
+  assert(stage2 !== null, "stage 2 reward_base");
   const after = session.idleQuery();
-  assert(after.goldPerMin === 10 && after.pendingGold === 5 && after.clearedStage === 1, "progress reprices the same window");
-  assert(after.pendingItem === 1 && after.capGold === 8 * 60 * 10 && after.ownedItem === 1, "higher cap after one clear");
+  assert(after.goldPerMin === stage2.gold && after.pendingGold === Math.floor((30000 * stage2.gold) / 60000) && after.clearedStage === 1, "progress reprices the same window");
+  assert(after.pendingItem === 1 && after.capGold === Math.floor((cap * stage2.gold) / 60000) && after.ownedItem === 1, "stage 2 cap follows the table");
 
-  now += IDLE_CAP_MS + 120000;
+  now += cap + 120000;
   const capped = session.idleQuery();
-  assert(capped.capped && capped.elapsedMs === IDLE_CAP_MS && capped.pendingGold === capped.capGold, "over cap");
+  assert(capped.capped && capped.elapsedMs === cap && capped.pendingGold === capped.capGold, "over cap");
   const walletBeforeCap = session.gold;
   const capClaim = session.idleClaim();
   assert(capClaim.ok && session.idleAnchorMs === now && session.gold === walletBeforeCap + capped.pendingGold, "cap claim");
@@ -3033,16 +3062,18 @@ async function checkIdleSession(): Promise<void> {
     { clearedStage: 2, idleAnchorMs: now - 60000, items: [{ id: IDLE_ITEM_ID, count: 4 }, { id: 9, count: 0 }] },
     () => now
   );
+  const stage3 = chapterIdleMinute(3);
+  assert(stage3 !== null, "stage 3 reward_base");
   const seededView = seeded.idleQuery();
-  assert(seededView.ownedItem === 4 && seededView.pendingGold === 14 && seededView.pendingItem === 2, "seeded idle");
+  assert(seededView.ownedItem === 4 && seededView.pendingGold === stage3.gold && seededView.pendingItem === 2, "seeded idle");
   assert(seeded.role.level === 3 && seeded.stageId === 3, "seed still derives stage");
 
   const net = quietNet(new MockTransport({ latencyMs: 5, session: seeded }));
   await net.connect("mock://local");
   const remote = await Proto.idleQuery({}, net);
-  assert(remote.ok && remote.pendingGold === 14 && remote.ownedItem === 4 && remote.itemName === "强化石", "proto query");
+  assert(remote.ok && remote.pendingGold === stage3.gold && remote.ownedItem === 4 && remote.itemName === "强化石", "proto query");
   const remoteClaim = await Proto.idleClaim({}, net);
-  assert(remoteClaim.ok && remoteClaim.gold === MOCK_STARTER_GOLD + 14 && remoteClaim.ownedItem === 6, "proto claim");
+  assert(remoteClaim.ok && remoteClaim.gold === MOCK_STARTER_GOLD + stage3.gold && remoteClaim.ownedItem === 6, "proto claim");
   const prevGold = Session.gold;
   const prevDiamond = Session.diamond;
   applyIdleClaim(remoteClaim);
@@ -3056,6 +3087,7 @@ async function checkIdleSession(): Promise<void> {
   const ids = P0_CMDS.filter((row) => row.cmd === Cmd.idleQuery || row.cmd === Cmd.idleClaim).map((row) => row.id);
   assert(ids.length === 2 && ids[0] === 1301 && ids[1] === 1302, "idle cmd ids");
   net.close();
+  clearGameCatalog();
 }
 
 async function checkHero(): Promise<void> {

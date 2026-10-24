@@ -136,6 +136,10 @@ export interface IdleQueryResp {
   itemName: string;
   pendingGold: number;
   pendingItem: number;
+  /** chapterreward 里的 900003。表没绑上时是 0。 */
+  pendingRoleExp?: number;
+  /** chapterreward 里的 900101。表没绑上时是 0。 */
+  pendingHeroExp?: number;
   capGold: number;
   capItem: number;
   ownedItem: number;
