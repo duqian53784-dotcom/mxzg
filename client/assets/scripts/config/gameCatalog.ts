@@ -3,6 +3,7 @@
  * Boot 读完 JSON 后由 bindConfigTables 登记。没登记时调用方保持原来的句子。
  * 不读 xlsx，不改战报里的 hp。
  */
+import { bindRosterCatalog, clearRosterCatalog } from "./rosterCatalog";
 import { ConfigTableFile } from "./types";
 
 type Row = Record<string, unknown>;
@@ -20,6 +21,8 @@ export interface HeroProfile {
   elem: number | null;
   star: number | null;
   skills: HeroSkillFace[];
+  /** `ui/hero/hero-icon_<item_id>`。表里没有 item_id 时是 null。 */
+  icon: string | null;
 }
 
 export interface HeroBaseStats {
@@ -34,6 +37,10 @@ export interface ItemProfile {
   name: string;
   /** resources 路径，不带扩展名。对不上贴图时是 null。 */
   icon: string | null;
+  /** item.rare_mark。没有这一列时是 0。 */
+  rare: number;
+  /** language 里的 content，去掉尖括号。没有时是空串。 */
+  blurb: string;
 }
 
 export interface ChapterPlace {
@@ -67,6 +74,7 @@ export function clearGameCatalog(): void {
   chapters.clear();
   chapterEnemiesByIdx.clear();
   levels.clear();
+  clearRosterCatalog();
 }
 
 /** 缺表就跳过。语言对不上的技能名写成「技能 N」，不编一句。 */
@@ -79,12 +87,20 @@ export function bindGameCatalog(tables: Map<string, ConfigTableFile<Row>>): void
   bindItems(tables.get("item"), text);
   bindChapters(tables.get("chapter"));
   bindLevels(tables.get("mainlevel"));
+  bindRosterCatalog(tables);
 }
 
 export function heroProfile(heroType: number | null | undefined): HeroProfile | null {
   const type = whole(heroType);
   if (type === null) return null;
   return profiles.get(type) ?? null;
+}
+
+/** 图鉴用。顺序跟 herotype 表一致，不另排。 */
+export function listHeroProfiles(): HeroProfile[] {
+  const out: HeroProfile[] = [];
+  profiles.forEach((profile) => out.push(profile));
+  return out;
 }
 
 export function heroBaseStats(heroType: number | null | undefined, star: number | null | undefined): HeroBaseStats | null {
@@ -181,6 +197,7 @@ function bindHeroProfiles(table: Table, skillNames: Map<number, string>): void {
       if (id === null || id <= 0) continue;
       skills.push({ id, name: skillNames.get(id) || "技能 " + id });
     }
+    const itemId = num(row.item_id);
     profiles.set(type, {
       type,
       name: note,
@@ -188,6 +205,7 @@ function bindHeroProfiles(table: Table, skillNames: Map<number, string>): void {
       elem: num(row.elem),
       star: num(row.star),
       skills,
+      icon: itemId !== null && itemId > 0 ? "ui/hero/hero-icon_" + itemId : null,
     });
   }
 }
@@ -217,7 +235,10 @@ function bindItems(table: Table, text: Map<string, string>): void {
     if (!name) continue;
     const iconField = typeof row.icon === "string" ? row.icon : "";
     const icon = iconField.indexOf("backpack/") === 0 ? "ui/bag/backpack_" + idx : null;
-    items.set(idx, { idx, name, icon });
+    const rare = num(row.rare_mark);
+    const contentKey = num(row.content);
+    const blurb = contentKey === null ? "" : plainLanguage(text.get(String(contentKey)) || "");
+    items.set(idx, { idx, name, icon, rare: rare === null || rare < 0 ? 0 : rare, blurb });
   }
 }
 
@@ -291,6 +312,10 @@ function skillNameMap(table: Table, text: Map<string, string>): Map<number, stri
   const names = new Map<number, string>();
   chosen.forEach((item, skillId) => names.set(skillId, item.name));
   return names;
+}
+
+function plainLanguage(value: string): string {
+  return value.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
 }
 
 function rows(table: Table): Row[] {

@@ -36,7 +36,7 @@ export const WS_MOCK_STATUS = "已改走 Mock";
 export function parseTransportSearch(search: string, config: { defaultKind: TransportKind; wsUrl: string } = TransportConfig): TransportChoice {
   const kindRaw = queryParam(search, "transport");
   const wsRaw = queryParam(search, "ws");
-  let kind = config.defaultKind === "auto" ? "mock" : config.defaultKind;
+  let kind: TransportKind = config.defaultKind === "auto" ? "mock" : config.defaultKind;
   let explicit = false;
   if (kindRaw === "ws" || kindRaw === "websocket" || kindRaw === "wss") {
     kind = "ws";

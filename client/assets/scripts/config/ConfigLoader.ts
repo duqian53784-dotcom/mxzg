@@ -70,8 +70,8 @@ export class ConfigLoader {
     if (!opencondition || !systemGate) {
       throw new Error("missing opencondition or system_gate");
     }
-    db.opencondition = Array.isArray(opencondition.rows) ? (opencondition.rows as OpenConditionRow[]) : [];
-    db.systemGate = Array.isArray(systemGate.rows) ? (systemGate.rows as SystemGateRow[]) : [];
+    db.opencondition = Array.isArray(opencondition.rows) ? (opencondition.rows as unknown as OpenConditionRow[]) : [];
+    db.systemGate = Array.isArray(systemGate.rows) ? (systemGate.rows as unknown as SystemGateRow[]) : [];
     db.tableCount = db.tables.size;
     bindConfigTables(db.tables);
     ConfigDb.current = db;
