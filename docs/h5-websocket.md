@@ -1,6 +1,6 @@
 # H5 连本机游戏服 WebSocket（D2 已验证，D3 主城壳）
 
-默认预览仍然是 Mock。要看真套接字时再加 `?transport=ws`。那会去连本机桥 `ws://127.0.0.1:13111/game`，桥把二进制帧原样转到游戏服 TCP `9902`。登录页也可以点「连本机服」。`?transport=auto` 会先短连，桥没开就回到 Mock。角色数据进 `GameStore` 的步骤见 `docs/local-link-and-store.md`。
+默认预览连真服，不必加 `?transport=ws`。地址是本机桥 `ws://127.0.0.1:13111/game`，桥把二进制帧原样转到游戏服 TCP `9902`。Mock 只在地址显式带 `?dev=mock`（或 `?transport=mock`）时打开，默认关，也不再从上次记住的键自动回到 Mock。`?transport=auto` 会先短连，桥没开停在「服未启动」，不进 Mock。角色数据只从 s2c 进 `GameStore`，步骤见 `docs/local-link-and-store.md` 和 `docs/real-data-audit.md`。
 
 D2 已在倩本机勾过：`收到 s2c 1001`（例：角色 1000002），后面还有真服推送。不要直连 13101。
 
@@ -24,12 +24,12 @@ D3 仍未勾完。s2c 1001 里有角色 id 时，登录面板关掉，进入和 
 9. 登录成功后马上会有一串真服推送（倩本机见过 28000、28103、20005、25001、23000、21013、50000 等）。GameLog 里是 `收到 s2c …`。这些包只记录，不写成金币或等级。预览不应因此停下。占位 `CmdId` 不改（Mock 的 `tower.view` 仍是 2001）。心跳仍是 **1004**。
 10. 若 5 秒内没有对上的回包，面板是「登录 1001 请求超时」，下面一行是 `s2c=有/无 心跳1004回包=有/无 登录1001回包=有/无`。GameLog 里还有这句的说明，以及超时前最近 6 条 `Ws` 行（前缀 `超时前`）。没有任何 s2c 时，先看桥窗口是否还在，以及 9902 是否在听。
 11. 刷新后再用同一个数字 uid 点进入游戏。若服务器留下了角色，回包字段 1 仍是那个角色 id，并再次进入主城壳。
-12. 桥或游戏服没开时面板是「服未启动，请检查启动 bat」。点 **改走 Mock** 仍进原来的 Mock 主城，顶栏回到 Mock 的金币和钻石。
-13. 去掉 `?transport=ws`，或改成 `?transport=mock`，全程 Mock。`skipLogin` 只跳过 Mock 面板；带了 `transport=ws` 仍显示这块面板。
+12. 桥或游戏服没开时面板是「服未启动，请检查启动 bat」。默认不进 Mock。只有地址带 `?dev=mock` 才出现「改走 Mock」。
+13. 不加查询就是真服。`?dev=mock` 或 `?transport=mock` 才全程 Mock。`skipLogin` 在默认真服下仍显示登录面板。
 
 换地址（一般不用）：`?transport=ws&ws=ws://127.0.0.1:13111/game`。不要改成 `ws://127.0.0.1:13101/` 或 wss。本地分析里 SSL 证书是空的。
 
-代码开关在 `client/assets/scripts/net/transportSelect.ts` 的 `TransportConfig.defaultKind`，仓库里保持 `"mock"`。Boot 启动时会打 `transport=mock` 或 `transport=ws`，并写明真服要加 `?transport=ws`。
+代码开关在 `client/assets/scripts/net/transportSelect.ts` 的 `TransportConfig.defaultKind`，仓库里是 `"ws"`。Boot 启动时会打 `transport=ws`。Mock 要加 `?dev=mock`。
 
 ## 为什么不直连 13101
 

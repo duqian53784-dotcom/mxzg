@@ -398,7 +398,7 @@ function bindGrowSheet(sheet: Node): void {
   if (strategy) {
     bindTap(strategy, () => {
       if (name && name.isValid) setText(name, growLine());
-      GameLog.shared.info("Mainline", "我要变强只展示名册，不发协议");
+      GameLog.shared.info("Mainline", "我要变强没有服端协议，只展示名册，不改战力，不发 3013");
     });
   }
 }

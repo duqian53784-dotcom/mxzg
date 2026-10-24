@@ -1,10 +1,12 @@
 /**
- * 这一局里点「出阵」记下的英雄。不发 3100 / 3013。
- * 真服 MAIN 仍走原来的阵容。这里只在 MAIN 还是空的时候，让挂机和出阵看同一份选择。
+ * ?dev=mock 时，出阵只记在本局。
+ * 真服不读这里。MAIN 以 s2c 3101 为准，确认出阵走 c2s 3100。
  */
 import { GameStore } from "../core/GameStore";
+import { Session } from "../core/Session";
 import { WireSession } from "../net/WireSession";
 import { mainFormationHeroes } from "../net/protocol/starterLineup";
+import { mockRuntimeEnabled } from "../net/transportSelect";
 
 const ids: number[] = [];
 const listeners: Array<() => void> = [];
@@ -40,10 +42,11 @@ export function hangLineupReady(): boolean {
   return deployedHeroIds().length > 0;
 }
 
-/** 本局出阵优先。否则用商店或会话里的 MAIN。 */
+/** 真服只读 s2c 3101。Mock 才用本局记下的 id。 */
 export function deployedHeroIds(): number[] {
-  if (ids.length > 0) return ids.slice();
-  const line = GameStore.formation() || WireSession.lineUp;
+  if (mockRuntimeEnabled() && ids.length > 0) return ids.slice();
+  if (Session.source !== "wire" && GameStore.source !== "wire" && !mockRuntimeEnabled()) return [];
+  const line = GameStore.formation() || (Session.source === "wire" ? WireSession.lineUp : null);
   const heroes = mainFormationHeroes(line);
   const found: number[] = [];
   for (let i = 0; i < heroes.length; i++) found.push(heroes[i].heroId);

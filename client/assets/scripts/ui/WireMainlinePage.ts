@@ -1470,6 +1470,7 @@ class WireMainlineController implements WireMainlinePage {
     this.endLayer = null;
     this.endOpen = false;
     this.wake(false);
+    if (this.replayKind === "3001") WireSession.refreshPersisted();
     this.showInfo();
   }
 

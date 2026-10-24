@@ -1,6 +1,6 @@
 # 本机联通和客户端数据存储
 
-预览默认仍是 Mock，服没开也能进主城。连本机游戏服时，角色、主线、背包、阵容从 s2c 灌进 `GameStore`，主城和战斗读这一份，不再拿 Mock 起步号当服务器进度。
+预览默认连本机游戏服。角色、主线、背包、阵容只从 s2c 灌进 `GameStore`。Mock 会话和本机快照播种只在 `?dev=mock` 时打开。服没开时停在登录页「服未启动」，不进 Mock 主城。
 
 ## 先把服和桥开起来
 
@@ -15,18 +15,17 @@
 
 | 方式 | 结果 |
 |------|------|
-| 不加查询 | Mock。上次成功连上桥并记住了 `transport=ws` 时，会再连本机桥（约 5 秒）。连不上停在「服未启动，请检查启动 bat」，可点「改走 Mock」。 |
-| `?transport=ws` | 连 `ws://127.0.0.1:13111/game`。打开后发心跳 **1004**，点进入游戏发登录 **1001**。 |
-| `?transport=auto` | 先用约 1.5 秒短连本机桥。没接上就回到 Mock 登录，不把预览卡住。不会自动进主城。 |
-| `?transport=mock` | 强制 Mock，盖过上次记住的 ws。 |
-| 登录页「连本机服」 | Mock 面板上再试本机桥。P1 壳和代码登录有这颗钮。旧 Login Prefab 没有，Prefab 路径仍用查询参数。 |
-| 「改走 Mock」 | 关掉桥上的套接字，记下 `transport=mock`，按原来的 Mock 登录进主城。 |
+| 不加查询 | 连 `ws://127.0.0.1:13111/game`。打开后发心跳 **1004**，点进入游戏发登录 **1001**。 |
+| `?transport=ws` | 与不加查询相同。 |
+| `?transport=auto` | 先用约 1.5 秒短连本机桥。没接上停在「服未启动」，不进 Mock。 |
+| `?dev=mock` 或 `?transport=mock` | 显式打开 Mock。默认关。上次记住的 `transport=mock` 不会单独把预览拉回 Mock。 |
+| 「改走 Mock」 | 只有地址已经带 `?dev=mock` 时才出现。 |
 
 地址示例：`http://127.0.0.1:7456/?transport=ws`。安全区可以写在一起：`?transport=ws&safe=88,0,34,0`。
 
 记住的键是 `mxzg.transport`，只有 `mock` 或 `ws`。不存密码，不存 token。账号和服务器仍是 `mxzg.account`、`mxzg.serverId`。
 
-`TransportConfig.defaultKind` 保持 `"mock"`。
+`TransportConfig.defaultKind` 是 `"ws"`。
 
 ## 数据放在哪
 
@@ -63,6 +62,8 @@
 
 这些不挡住登录、进主城和已有的 3001 战斗。
 
-- **GM 未开。** 空号挑战会试 c2s 2015 / 3100。服上 `gm.cmd.open=false` 时没有英雄回包，主线页 Toast「GM 未开」。空名册就没有可打的 MAIN 阵容。
-- **3013 硬禁。** 快速战斗次数只读 3012，不发 3013。
-- **「我要变强」没有专属协议。** 底栏仍打开已有的 `HeroSuggestLayer`，不新发 opcode。
+- **GM 停用。** 客户端仍可发 c2s 2015，但本仓库没有 Java 服源码，不能打开 `gm.cmd.open`。服上该开关为 false 时主线页 Toast「GM 未开」。空名册没有可打的 MAIN 阵容。
+- **3013 硬禁。** 快速战斗次数只读 3012，不发 3013，不发奖。
+- **「我要变强」没有专属协议。** 底栏仍打开已有的 `HeroSuggestLayer`，只展示名册，不改战力。
+- **英雄升级、升星、背包使用** 没有接到服端写协议。按钮停用，不在客户端改等级、星级或道具数量。
+- **出阵** 走 c2s 3100，`formation_id` 在字段 5。空的 s2c 3100 之后再拉 3101，阵容只从 s2c 进 `GameStore`。

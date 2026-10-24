@@ -115,7 +115,7 @@ goto :Fatal
 
 :CenterReady
 echo   cross 默认不启动。2026-10-19 它因讨伐团（CRUSADE_GROUP_WORKER）周期数据失败。large-cross 不启动。
-echo   不启动旧 H5 的 dev-platform.ps1、serve.ps1，也不开浏览器。Creator 客户端仍走 Mock。
+echo   不启动旧 H5 的 dev-platform.ps1、serve.ps1，也不开浏览器。Creator 客户端默认连真服。
 
 set "UP_9902=0"
 set "UP_13101=0"
@@ -310,7 +310,7 @@ exit /b 1
 :HealthOk
 echo [启动成功] TCP 11122、TCP 9902、WS 13101 都在听。
 echo 没启动 cross 时，游戏服连 127.0.0.1:11422 失败、中心服跨服加载失败是预期，不算启动失败。
-echo 客户端默认仍走 Mock。要连真服请预览 transport=ws。桥没开时双击 scripts\start-ws-bridge.bat，或下次用 scripts\start-local-all.bat。不要直连 13101。
+echo 客户端默认连真服，预览不必加 transport=ws。桥没开时双击 scripts\start-ws-bridge.bat，或下次用 scripts\start-local-all.bat。Mock 仅 ?dev=mock。不要直连 13101。
 exit /b 0
 
 :StopHint
