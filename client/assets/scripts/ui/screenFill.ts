@@ -4,8 +4,14 @@
  * 不造假英雄、不造假道具、不发新协议。
  */
 import { BlockInputEvents, Button, Color, Label, Mask, Node, Overflow, resources, ScrollView, Sprite, SpriteFrame, UITransform } from "cc";
+import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameStore, StoreBagItem, StoreHero } from "../core/GameStore";
 import { GameLog } from "../core/GameLog";
+import { Session } from "../core/Session";
+import { NetClient } from "../net/NetClient";
+import { Proto } from "../net/protocol/Proto";
+import { WireSession } from "../net/WireSession";
+import { applyIdleClaim, claimToast, IDLE_HERO_EXP_ID, IDLE_ITEM_ID, IDLE_ROLE_EXP_ID } from "../module/idle/rewards";
 import { heroBaseStats, heroProfile, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles } from "../config/gameCatalog";
 import { chapterIdleMinute, CostStack, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed } from "../config/rosterCatalog";
 import { goldPerMin, itemEveryMs } from "../module/idle/rewards";
@@ -76,6 +82,7 @@ export function dressHangPanel(view: Node): void {
   fitButton(findNamed(view, "btn_battle"), "战斗", 22);
   fitButton(findNamed(view, "btn_speed_battle"), "高速战斗", 20);
   pinSprites(view);
+  let claimNote = "";
   const tick = () => {
     if (!view.isValid) return;
     let elapsed = idleElapsedMs();
@@ -83,7 +90,7 @@ export function dressHangPanel(view: Node): void {
     if (cap !== null && elapsed > cap) elapsed = cap;
     const clock = clockText(elapsed);
     writeNamed(view, "lbl_progress_time", clock);
-    writeNamed(view, "lbl_progress_time2", clock);
+    writeNamed(view, "lbl_progress_time2", claimNote || clock);
     const minute = chapterIdleMinute(currentStageIdx());
     if (minute) {
       writeNamed(view, "lbl_gold", minute.gold + "/m");
@@ -103,6 +110,64 @@ export function dressHangPanel(view: Node): void {
   tick();
   const timer = setInterval(tick, 1000);
   view.once(Node.EventType.NODE_DESTROYED, () => clearInterval(timer));
+  bindHangClaim(view, (text, resetClock) => {
+    claimNote = text;
+    if (resetClock) dressClock.t = Date.now();
+    tick();
+  });
+}
+
+/** 底栏宝箱。Mock 走 idle.claim，真服只发已有的空 3005。 */
+function bindHangClaim(view: Node, note: (text: string, resetClock: boolean) => void): void {
+  const buttons = [findNamed(view, "btn_icon"), findNamed(view, "spr_box")];
+  let busy = false;
+  for (let i = 0; i < buttons.length; i++) {
+    const button = buttons[i];
+    if (!button) continue;
+    if (!button.getComponent(Button)) button.addComponent(Button);
+    button.on(Button.EventType.CLICK, () => {
+      if (busy) return;
+      busy = true;
+      void claimHang(view, note).then(() => {
+        busy = false;
+      });
+    });
+  }
+}
+
+async function claimHang(view: Node, note: (text: string, resetClock: boolean) => void): Promise<void> {
+  if (Session.source === "wire") {
+    if (!WireSession.claimIdle()) {
+      note("真服未连接", false);
+      return;
+    }
+    note("已发领取", false);
+    return;
+  }
+  try {
+    const resp = await Proto.idleClaim({}, NetClient.shared);
+    if (!view.isValid) return;
+    if (!resp.ok) {
+      note(errorText(resp.code ?? ErrorCode.IDLE_EMPTY), false);
+      return;
+    }
+    applyIdleClaim(resp);
+    note(claimToast(countReward(resp, 1), countReward(resp, IDLE_ITEM_ID), countReward(resp, IDLE_ROLE_EXP_ID), countReward(resp, IDLE_HERO_EXP_ID)), true);
+  } catch (err) {
+    note(messageOf(err), false);
+  }
+}
+
+function countReward(resp: { rewards?: { id: number; count: number }[] }, id: number): number {
+  const rewards = resp.rewards;
+  if (!rewards) return 0;
+  let total = 0;
+  for (let i = 0; i < rewards.length; i++) {
+    if (rewards[i].id !== id) continue;
+    const count = rewards[i].count;
+    if (typeof count === "number" && isFinite(count) && count > 0) total += Math.floor(count);
+  }
+  return total;
 }
 
 /** 英雄出阵。确认只记在本局，再由调用方进入挂机上的战斗。 */
@@ -127,7 +192,11 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
       selected = toggleId(selected, heroId);
       paint();
     });
-    paintFormationSlots(view, selected);
+    paintFormationSlots(view, selected, (heroId) => {
+      selected = toggleId(selected, heroId);
+      paint();
+    });
+    writeNamed(view, "lbl_tip", selected.length >= 8 ? "上阵 8/8" : "已选 " + selected.length + "/8");
   };
   for (let i = 0; i <= 5; i++) {
     const button = findNamed(view, "btn_elem" + i);
@@ -398,31 +467,47 @@ function paintFormationGrid(view: Node, elem: number, selected: number[], toggle
   }
 }
 
-function paintFormationSlots(view: Node, selected: number[]): void {
+function paintFormationSlots(view: Node, selected: number[], onRemove: (heroId: number) => void): void {
   const order = [4, 3, 2, 1, 8, 7, 6, 5];
   const roster = GameStore.heroes() || [];
   let power = 0;
+  let known = false;
   for (let i = 0; i < order.length; i++) {
-    const slot = findNamed(view, "node_icon_" + order[i]);
+    const slotNo = order[i];
+    const slot = findNamed(view, "node_icon_" + slotNo);
     if (!slot) continue;
+    const box = slot.getComponent(UITransform);
+    if (box && (box.contentSize.width < 8 || box.contentSize.height < 8)) box.setContentSize(80, 80);
     const old = slot.getChildByName("SlotFace");
     if (old) old.destroy();
     const hero = i < selected.length ? heroById(roster, selected[i]) : null;
-    const label = findNamed(slot, "lbl_attr_add_" + order[i]);
+    const label = findNamed(slot, "lbl_attr_add_" + slotNo);
+    const front = slotNo <= 4;
     if (!hero || !hero.heroType) {
-      if (label) label.active = false;
+      if (label) {
+        label.active = true;
+        setText(label, front ? "前" : "后");
+      }
       continue;
     }
     const face = sprite("SlotFace", 64, 64, heroFace(hero), "ui/hero/hero-icon_spr-default");
     place(face, slot, 0, 0);
-    if (hero.fighting !== null) power += hero.fighting;
+    const heroId = hero.heroId;
+    if (heroId !== null) {
+      if (!face.getComponent(Button)) face.addComponent(Button);
+      face.on(Button.EventType.CLICK, () => onRemove(heroId));
+    }
+    if (hero.fighting !== null) {
+      power += hero.fighting;
+      known = true;
+    }
     if (label) {
       const stats = heroBaseStats(hero.heroType, hero.star);
-      label.active = !!stats;
-      if (stats) setText(label, "攻" + stats.atk);
+      label.active = true;
+      setText(label, stats ? (front ? "前 " : "后 ") + stats.atk : front ? "前" : "后");
     }
   }
-  writeNamed(view, "lbl_battle_count", String(power));
+  writeNamed(view, "lbl_battle_count", known ? String(power) : "—");
 }
 
 function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void) | null, locked: boolean): Node {

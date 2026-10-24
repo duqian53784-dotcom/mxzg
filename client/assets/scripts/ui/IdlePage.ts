@@ -170,7 +170,9 @@ class IdleController implements IdlePage {
     );
     this.write(
       this.statusLabel,
-      view.capped ? "已达 8 小时上限，请领取" : "未到上限。整段时长按当前已通关关数计算"
+      view.capped
+        ? "已达 " + idleCapHours(view.capMs) + " 小时上限，请领取"
+        : "未到上限。整段时长按当前关收益计算，封顶 " + idleCapHours(view.capMs) + " 小时"
     );
     if (this.statusLabel && this.statusLabel.isValid) {
       const label = this.statusLabel.getComponent(Label);
@@ -179,10 +181,11 @@ class IdleController implements IdlePage {
         label.color = new Color(src.r, src.g, src.b, src.a);
       }
     }
-    this.write(
-      this.goldLabel,
-      "金币 +" + view.pendingGold + "（每分钟 " + view.goldPerMin + "）"
-    );
+    const roleExp = view.pendingRoleExp ?? 0;
+    const heroExp = view.pendingHeroExp ?? 0;
+    let goldLine = "金币 +" + view.pendingGold + "（每分钟 " + view.goldPerMin + "）";
+    if (roleExp > 0 || heroExp > 0) goldLine += " · 角色经验 +" + roleExp + " · 英雄经验 +" + heroExp;
+    this.write(this.goldLabel, goldLine);
     this.write(
       this.itemLabel,
       view.itemName + " +" + view.pendingItem + "（" + formatItemEvery(view.itemEveryMs) + "）"
@@ -209,7 +212,12 @@ class IdleController implements IdlePage {
       }
       applyIdleClaim(resp);
       if (this.host.alive()) this.host.onProgress();
-      const text = claimToast(rewardCount(resp, 1), rewardCount(resp, IDLE_ITEM_ID));
+      const text = claimToast(
+        rewardCount(resp, 1),
+        rewardCount(resp, IDLE_ITEM_ID),
+        rewardCount(resp, 900003),
+        rewardCount(resp, 900101)
+      );
       GameLog.shared.info("Idle", text + " gold " + resp.gold);
       this.host.showToast(text);
       await this.refresh();
@@ -339,6 +347,11 @@ class IdleController implements IdlePage {
   private write(node: Node | null, text: string): void {
     if (node && node.isValid) setText(node, text);
   }
+}
+
+function idleCapHours(capMs: number): number {
+  if (typeof capMs !== "number" || !isFinite(capMs) || capMs <= 0) return 8;
+  return Math.max(1, Math.round(capMs / 3600000));
 }
 
 function rewardCount(resp: { rewards?: { id: number; count: number }[] }, id: number): number {

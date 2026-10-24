@@ -151,7 +151,7 @@ import { armBattleDelay } from "./battleClock";
 import { battleFrameStep, FrameReel, mountFrameReel, warmBattleFrames } from "./battleFramePlay";
 import { battleCastFrameCount, effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
 import { battleCastWait, BattlePresentation, fallbackAttackTitle, formatBattleRound, nextBattleSpeed, planBattlePresentation, playbackBeats, signedHpDeltas } from "./battlePresentation";
-import { beginHangBattle, bindHangSpeed, finishHangBattle, setHangSpeed, showHangStrike, stopHangBattle } from "./hangBattle";
+import { barsFromSides, beginHangBattle, bindHangSkip, bindHangSpeed, finishHangBattle, setHangSpeed, showHangStrike, stopHangBattle } from "./hangBattle";
 import {
   BattlePresentMount,
   clearBattleOverhead,
@@ -284,6 +284,7 @@ class WireMainlineController implements WireMainlinePage {
   private beatCancel: (() => void) | null = null;
   private sleepResolve: ((cont: boolean) => void) | null = null;
   private skipped = false;
+  private foughtStage = 1;
   /** 1、2、3。只缩短拍子，跳过和撤退不看这个数。 */
   private playSpeed = 1;
   private endOpen = false;
@@ -1138,6 +1139,8 @@ class WireMainlineController implements WireMainlinePage {
     setPagePrefabShellVisible(this.node, true);
     beginHangBattle(this.node, "我方", "第" + plan.stageId + "关");
     bindHangSpeed(this.node, () => this.cycleSpeed());
+    bindHangSkip(this.node, () => this.skip());
+    this.foughtStage = plan.stageId;
     this.endOpen = false;
     if (this.endLayer && this.endLayer.isValid) this.endLayer.destroy();
     this.endLayer = null;
@@ -1437,7 +1440,16 @@ class WireMainlineController implements WireMainlinePage {
     this.endOpen = true;
     const win = snap.report ? resolveWireBattleWin(snap.report, this.host.roleId()) : null;
     finishHangBattle(this.node, win);
-    const layer = await mountBattleEnd(this.node, win, () => this.returnToHang());
+    const layer = await mountBattleEnd(this.node, win, () => this.returnToHang(), {
+      stageId: this.foughtStage,
+      onNext:
+        win === true
+          ? () => {
+              this.returnToHang();
+              this.challenge();
+            }
+          : undefined,
+    });
     if (this.disposed || this.phase !== "battle") {
       if (layer && layer.isValid) layer.destroy();
       return;
@@ -1744,7 +1756,7 @@ class WireMainlineController implements WireMainlinePage {
     const present = this.present;
     const index = plan.beats.indexOf(beat);
     let skill: string | null = null;
-    const floats: { text: string; x: number; y: number; heal: boolean }[] = [];
+    const floats: { text: string; x: number; y: number; heal: boolean; crit?: boolean }[] = [];
     let rows = signedHpDeltas(prevHp, this.hpNow);
     if (present && index >= 0 && index < present.beats.length) {
       skill = present.beats[index].skillName;
@@ -1762,10 +1774,21 @@ class WireMainlineController implements WireMainlinePage {
         x: (i % 2 === 0 ? -140 : 140) + (i % 3) * 16,
         y: 80 - i * 40,
         heal,
+        crit: rows[i].crit === true,
       });
     }
     const round = index >= 0 ? index + 1 : 1;
-    showHangStrike(this.node, round, 15, skill, floats);
+    const allies: { hp: number; maxHp: number }[] = [];
+    const enemies: { hp: number; maxHp: number }[] = [];
+    for (let i = 0; i < plan.slots.length; i++) {
+      const slot = plan.slots[i];
+      const hp = this.hpNow[i];
+      if (hp === null || typeof slot.maxHp !== "number" || !isFinite(slot.maxHp) || slot.maxHp <= 0) continue;
+      const row = { hp, maxHp: slot.maxHp };
+      if (slot.side === "ally") allies.push(row);
+      else if (slot.side === "enemy") enemies.push(row);
+    }
+    showHangStrike(this.node, round, 15, skill, floats, barsFromSides(allies, enemies, Math.min(1, round / 15)));
   }
 
   /** 空着的前排后排先藏起来。点到的人才打开，沙地上不留一排色块。 */

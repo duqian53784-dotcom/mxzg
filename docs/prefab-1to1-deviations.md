@@ -252,7 +252,14 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 | 英雄列表、背包滚动 | 运行时加竖向 ScrollView。壳上没有这个节点。空位只补满最后一行，并且至少 4 行，不是 300 个空格 | `hero_space_initial` 只用于「空间 n/300」这行字 |
 | 出阵列表 | 用已有 `scroll_view_backpack` 的 content，筛选后的英雄都放进去。上阵仍最多 8 | 以前只画前 8 个 |
 | 挂机三格 | `chapterreward.idx` 对当前关，`reward_base` 里 900001 / 900101 / 900003 的 `item_num` 写成「N/m」 | 和底栏三个图标一致。没有 Lua 逐行对过。表没绑上时底栏退回 `goldPerMin` |
-| Mock 领取 | 仍走 `rewards.ts`：未通关每分钟 6 金，封顶 8 小时，道具是强化石 | 和底栏的表内每分钟收益不是同一套。领取按钮这一轮不改 |
+| Mock 领取 | 金币、角色经验、英雄经验走 `chapterreward.reward_base`，当前关 = 已通关 + 1。封顶用 `system.idle_max_time`（21600 秒）。挂机壳宝箱和 Mock 挂机页都走这一套 | 强化石仍是旧节奏：未通关每 30 秒 1 个，每通关缩短 1 秒，最短 10 秒，不在 `reward_base` 里。表没绑上时金币退回每分钟 6、每关 +4，封顶 8 小时。角色经验 900003、英雄经验 900101 作为背包道具发放。VIP 加成仍不加 |
+| 怒气条 | 挂机战斗条上的蓝条按当前回合 / 15 填充 | 战报没有怒气字段，只标位置 |
+| 暴击飘字 | 战报 `crit` 为真时用更大的金字，前缀「暴击」。Mock 简化战报没有 crit，回合行里有「溃败」时敌方伤害按暴击画 | 不是表里的暴击率 |
+| 结算星 | 胜利在 `show_hero` 下画 3 颗 `hero-info_spr-star-1`，失败不画 | `chapterreward` 没有星级列 |
+| 结算奖励 | 胜利读这一关 `chapterreward.first_reward`，画在 `show_rich`，最多 6 个图标 | 失败不发这列。确定钮写成「回挂机」，不发 3002 |
+| 下一关 | 胜利时把已有 `btn_report` 改成「下一关」。Mock 再进当前关，真服先回挂机再走原来的 3001 | 不新开协议。失败不显示这颗钮 |
+| 快速战斗 | `QuickBattleLayer` 用 `idle_speed_up`（7200 秒）预览两小时 `reward_base`，并读已有 3012 | 不发 3013，不发奖励。说明和跳转只改提示字 |
+| 我要变强 | 打开已有 `HeroSuggestLayer`。四个页签只切换 `node_strong` / `resource` / `hero` / `lineup` | 不发协议。名字最多写名册前三名 |
 | VIP | 不加 `extra_idle_time`、金币 / 英雄经验 / 角色经验加成 | 表里有，名册上没有 VIP 等级可用 |
 | 随机掉落 | 不画进三格 | `idle_drop_frequency` = 60 秒，走 `drop_group` |
 | 时钟 | 超过 1 小时写成 `hh:mm:ss`。读到 `idle_max_time` 就停在 06:00:00 | 没读到表时不封顶 |

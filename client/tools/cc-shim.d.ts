@@ -100,6 +100,7 @@ declare module "cc" {
     useSystemFont: boolean;
     fontFamily: string;
     overflow: number;
+    isBold: boolean;
     horizontalAlign: number;
     verticalAlign: number;
     color: Color;

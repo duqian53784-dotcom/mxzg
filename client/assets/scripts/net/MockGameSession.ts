@@ -22,7 +22,14 @@ import {
   upgradeCost,
   WEAPON_MAX_LEVEL,
 } from "../module/hero/growth";
-import { buildIdleView, elapsedSince, IDLE_ITEM_ID, IDLE_ITEM_NAME } from "../module/idle/rewards";
+import {
+  buildIdleView,
+  elapsedSince,
+  IDLE_HERO_EXP_ID,
+  IDLE_ITEM_ID,
+  IDLE_ITEM_NAME,
+  IDLE_ROLE_EXP_ID,
+} from "../module/idle/rewards";
 import { MAINLINE_PUSH_MAX, MAINLINE_PUSH_STAGE, STAGE_WIN_GOLD } from "../module/mainline/battle";
 import {
   attachmentName,
@@ -681,6 +688,8 @@ export class MockGameSession {
       itemName: IDLE_ITEM_NAME,
       pendingGold: view.pendingGold,
       pendingItem: view.pendingItem,
+      pendingRoleExp: view.pendingRoleExp,
+      pendingHeroExp: view.pendingHeroExp,
       capGold: view.capGold,
       capItem: view.capItem,
       ownedItem: this.itemCount(IDLE_ITEM_ID),
@@ -690,14 +699,15 @@ export class MockGameSession {
   }
 
   /**
-   * 把当前可领的金币和强化石计入钱包，然后重新起算。
+   * 把当前可领的金币、角色经验、英雄经验和强化石计入，然后重新起算。
+   * 金币和两种经验来自当前关 reward_base。强化石仍是 Mock 侧节奏。
    * 不满 1 个单位时拒绝，钱包和起算时刻都不动。
    * 主线胜利不调用这里，快速作战也不会把挂机时间清掉。
    */
   idleClaim(): IdleClaimResp {
     const view = buildIdleView(elapsedSince(this.clock(), this.idleAnchorMs), this.clearedStage);
     const owned = this.itemCount(IDLE_ITEM_ID);
-    if (view.pendingGold <= 0 && view.pendingItem <= 0) {
+    if (view.pendingGold <= 0 && view.pendingItem <= 0 && view.pendingRoleExp <= 0 && view.pendingHeroExp <= 0) {
       return {
         ok: false,
         code: ErrorCode.IDLE_EMPTY,
@@ -711,8 +721,12 @@ export class MockGameSession {
     const rewards: { id: number; count: number; name: string }[] = [];
     if (view.pendingGold > 0) rewards.push({ id: 1, count: view.pendingGold, name: "金币" });
     if (view.pendingItem > 0) rewards.push({ id: IDLE_ITEM_ID, count: view.pendingItem, name: IDLE_ITEM_NAME });
+    if (view.pendingRoleExp > 0) rewards.push({ id: IDLE_ROLE_EXP_ID, count: view.pendingRoleExp, name: "角色经验" });
+    if (view.pendingHeroExp > 0) rewards.push({ id: IDLE_HERO_EXP_ID, count: view.pendingHeroExp, name: "英雄经验" });
     this.addRewards(rewards);
     if (view.pendingItem > 0) this.addItem(IDLE_ITEM_ID, view.pendingItem);
+    if (view.pendingRoleExp > 0) this.addItem(IDLE_ROLE_EXP_ID, view.pendingRoleExp);
+    if (view.pendingHeroExp > 0) this.addItem(IDLE_HERO_EXP_ID, view.pendingHeroExp);
     this.idleAnchorMs = this.clock();
     this.idleClaimCount += 1;
     return {

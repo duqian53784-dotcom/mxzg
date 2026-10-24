@@ -28,8 +28,9 @@ import {
 } from "../module/mainline/battle";
 import { mockBattleCast } from "../module/mainline/battleFromStore";
 import { chapterPlaceLabel, mainlevelExpLabel } from "../config/gameCatalog";
-import { battleCastWait } from "./battlePresentation";
-import { beginHangBattle, finishHangBattle, showMockRound, stopHangBattle } from "./hangBattle";
+import { battleCastWait, nextBattleSpeed } from "./battlePresentation";
+import { mountBattleEnd } from "./battleEndView";
+import { beginHangBattle, bindHangSkip, bindHangSpeed, finishHangBattle, setHangSpeed, showMockRound, stopHangBattle } from "./hangBattle";
 import { PAGE_SHELL_FIGHT, setPagePrefabShellVisible } from "./pagePrefabShell";
 import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
 
@@ -100,6 +101,7 @@ class MainlineController implements MainlinePage {
   private enemyRow: Node | null = null;
   private logLines: string[] = [];
   private battleStage = 1;
+  private playSpeed = 1;
 
   constructor(private readonly host: MainlineHost) {
     this.node = uiNode("MainlinePage");
@@ -322,6 +324,10 @@ class MainlineController implements MainlinePage {
     setPagePrefabShellVisible(this.node, true);
     const ally = plan.rounds[0] && plan.rounds[0].allies[0] ? plan.rounds[0].allies[0].name : "我方";
     beginHangBattle(this.node, ally, "第" + plan.stageId + "关");
+    this.playSpeed = 1;
+    setHangSpeed(this.node, 1);
+    bindHangSpeed(this.node, () => this.cycleSpeed());
+    bindHangSkip(this.node, () => this.request("skip"));
     this.action = null;
     this.logLines = [];
     this.clearBody();
@@ -357,7 +363,7 @@ class MainlineController implements MainlinePage {
       }
       this.renderRound(plan.rounds[i]);
       const last = i === plan.rounds.length - 1;
-      const cont = await this.sleep(battleCastWait(1, last, 0));
+      const cont = await this.sleep(battleCastWait(this.playSpeed, last, 0));
       if (!cont || this.disposed) return "cancel";
       if (this.action === "retreat") return "retreat";
       if (this.action === "skip") {
@@ -368,11 +374,24 @@ class MainlineController implements MainlinePage {
     return "done";
   }
 
-  private showSettlement(result: StageResultResp, reason: BattleReason): void {
+  private async showSettlement(result: StageResultResp, reason: BattleReason): Promise<void> {
     this.phase = "settle";
     finishHangBattle(this.node, result.win === true);
-    this.clearBody();
     const win = result.win === true;
+    const layer = await mountBattleEnd(this.node, win, () => {
+      stopHangBattle(this.node);
+      this.showList();
+    }, {
+      stageId: result.stageId,
+      onNext: win
+        ? () => {
+            stopHangBattle(this.node);
+            void this.begin(this.host.stageId());
+          }
+        : undefined,
+    });
+    if (layer) return;
+    this.clearBody();
     const shown: BattleReason = win ? "clear" : reason === "clear" ? "retreat" : reason;
     place(createLabel(win ? "胜利" : "失败", 56, { color: win ? WIN : LOSE }), this.body, 0, 430);
     place(
@@ -401,6 +420,13 @@ class MainlineController implements MainlinePage {
     }
     place(createButton("关卡列表", () => this.showList(), 240, 48, LIST_FILL), this.body, 0, -90);
     place(createButton("返回主城", () => this.host.close(), 240, 48), this.body, 0, -170);
+  }
+
+  private cycleSpeed(): void {
+    if (this.disposed || this.phase !== "battle") return;
+    this.playSpeed = nextBattleSpeed(this.playSpeed);
+    setHangSpeed(this.node, this.playSpeed);
+    GameLog.shared.info("Mainline", "加速 ×" + this.playSpeed + "，跳过仍停在最后一拍");
   }
 
   private request(action: "skip" | "retreat"): void {

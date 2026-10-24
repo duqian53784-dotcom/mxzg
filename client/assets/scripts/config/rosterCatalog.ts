@@ -73,6 +73,7 @@ const ROLE_EXP = 900003;
 const HERO_EXP = 900101;
 
 const idleByIdx = new Map<number, IdleMinute>();
+const clearByIdx = new Map<number, CostStack[]>();
 let idleMaxMs: number | null = null;
 let heroSpace = 300;
 const starSteps = new Map<number, StarStep>();
@@ -84,6 +85,7 @@ const relics: RelicFace[] = [];
 
 export function clearRosterCatalog(): void {
   idleByIdx.clear();
+  clearByIdx.clear();
   idleMaxMs = null;
   heroSpace = 300;
   starSteps.clear();
@@ -109,20 +111,18 @@ export function bindRosterCatalog(tables: Map<string, ConfigTableFile<Row>>): vo
 
 /** 当前关的每分钟收益。表还没登记时是 null，调用方留原来的句子。 */
 export function chapterIdleMinute(stageIdx: number): IdleMinute | null {
-  if (idleByIdx.size === 0) return null;
-  let idx = Math.floor(stageIdx);
-  if (!isFinite(stageIdx) || idx < 1) idx = 1;
-  const exact = idleByIdx.get(idx);
-  if (exact) return copyMinute(exact);
-  let best = 0;
-  let lower = 0;
-  idleByIdx.forEach((_row, key) => {
-    if (key > best) best = key;
-    if (key <= idx && key > lower) lower = key;
-  });
-  const pick = idx > best ? best : lower || best;
+  const pick = pickIdleIdx(stageIdx);
+  if (pick === null) return null;
   const row = idleByIdx.get(pick);
   return row ? copyMinute(row) : null;
+}
+
+/** chapterreward.first_reward。通关结算用。表还没登记时是 null。 */
+export function chapterClearReward(stageIdx: number): CostStack[] | null {
+  const pick = pickIdleIdx(stageIdx);
+  if (pick === null) return null;
+  const row = clearByIdx.get(pick);
+  return row ? row.slice() : [];
 }
 
 /** system.idle_max_time，毫秒。表上没有这一项时是 null。 */
@@ -186,7 +186,23 @@ function bindIdle(table: Table): void {
       roleExp: stackNum(stacks, ROLE_EXP),
       heroExp: stackNum(stacks, HERO_EXP),
     });
+    clearByIdx.set(idx, parseStacks(row.first_reward));
   }
+}
+
+function pickIdleIdx(stageIdx: number): number | null {
+  if (idleByIdx.size === 0) return null;
+  let idx = Math.floor(stageIdx);
+  if (!isFinite(stageIdx) || idx < 1) idx = 1;
+  if (idleByIdx.has(idx)) return idx;
+  let best = 0;
+  let lower = 0;
+  idleByIdx.forEach((_row, key) => {
+    if (key > best) best = key;
+    if (key <= idx && key > lower) lower = key;
+  });
+  const pick = idx > best ? best : lower || best;
+  return pick > 0 ? pick : null;
 }
 
 function bindSystem(table: Table): void {
