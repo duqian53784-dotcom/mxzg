@@ -2085,8 +2085,12 @@ function memoryStore(seed?: Record<string, string>): PrefStore & { data: Record<
 function checkGameStore(): void {
   GameStore.reset();
   const plain = parseTransportSearch("");
-  assert(plain.kind === "mock" && plain.explicit === false, "empty search is not explicit");
-  assert(!resolveBootTransport(plain, null).useWs && !resolveBootTransport(plain, null).autoFallback, "empty plus null stays mock");
+  assert(plain.kind === "ws" && plain.explicit === false, "empty search is not explicit");
+  assert(resolveBootTransport(plain, null).useWs && !resolveBootTransport(plain, null).autoFallback, "empty plus null uses the real server");
+  assert(resolveBootTransport(plain, "mock").useWs, "saved mock does not override the real server");
+  const devMock = parseTransportSearch("?dev=mock");
+  assert(devMock.kind === "mock" && devMock.explicit, "dev=mock is explicit and off unless requested");
+  assert(!resolveBootTransport(devMock, "ws").useWs, "dev=mock stays offline");
   const savedWs = resolveBootTransport(plain, "ws");
   assert(savedWs.useWs && !savedWs.autoFallback, "empty plus saved ws uses the bridge");
   const forced = parseTransportSearch("?transport=mock");
@@ -4507,9 +4511,9 @@ function sawWire(part: string): boolean {
 async function checkWs(): Promise<void> {
   assert(CmdId.login === 1001 && CmdId.heartbeat === 1002, "placeholder ids stay put");
   assert(DEFAULT_WS_URL === "ws://127.0.0.1:13111/game", "default ws url is the local bridge");
-  assert(TransportConfig.defaultKind === "mock", "config default is mock");
+  assert(TransportConfig.defaultKind === "ws", "config default is the real server");
   const plain = parseTransportSearch("");
-  assert(plain.kind === "mock" && plain.wsUrl === DEFAULT_WS_URL, "empty search is mock");
+  assert(plain.kind === "ws" && plain.wsUrl === DEFAULT_WS_URL, "empty search is ws");
   const ws = parseTransportSearch("?transport=ws");
   assert(ws.kind === "ws" && ws.wsUrl === DEFAULT_WS_URL, "query ws");
   const mixed = parseTransportSearch("?safe=88,0,34,0&transport=WS&ws=wss://127.0.0.1:13101/game");
@@ -4519,7 +4523,7 @@ async function checkWs(): Promise<void> {
   const flagged = parseTransportSearch("", { defaultKind: "ws", wsUrl: "ws://127.0.0.1:9" });
   assert(flagged.kind === "ws" && flagged.wsUrl === "ws://127.0.0.1:9", "config flag without query");
   const junk = parseTransportSearch("?transport=tcp&ws=http://127.0.0.1:13101");
-  assert(junk.kind === "mock" && junk.wsUrl === DEFAULT_WS_URL, "bad scheme ignored");
+  assert(junk.kind === "ws" && junk.wsUrl === DEFAULT_WS_URL, "bad scheme ignored");
   assert(WS_DOWN_STATUS.indexOf("服未启动") >= 0 && WS_DOWN_LOG.indexOf("start-local-server.bat") >= 0, "down copy");
   assert(WS_DOWN_LOG.indexOf("start-ws-bridge.bat") >= 0 && WS_DOWN_LOG.indexOf("13111") >= 0 && WS_DOWN_LOG.indexOf("不要直连 13101") >= 0, "down copy names the bridge");
   assert(WS_OPEN_STATUS.indexOf("1004") >= 0, "open copy");
@@ -9869,6 +9873,26 @@ async function checkWs(): Promise<void> {
   assert(
     lineSave !== null && lineSave.cmdId === 3100 && bytesToHex(lineSave.bytes) === WIRE_LINEUP_SAVE_SAMPLE_FRAME,
     "hero 42 position 2 is the MAIN save frame and is not 3101"
+  );
+  const lineSaveMany = encodeWireMessage({
+    cmd: "wire.3100",
+    data: {
+      heroes: [
+        { heroId: 42, position: 2 },
+        { heroId: 43, position: 3 },
+      ],
+    },
+  });
+  assert(
+    lineSaveMany !== null &&
+      lineSaveMany.cmdId === 3100 &&
+      bytesToHex(lineSaveMany.bytes) === "180000001c0c00000a12080018002204082a18022204082b18032801" &&
+      lineSaveMany.note.indexOf("formation_id=1") >= 0,
+    "multi hero 3100 repeats field 4 and writes formation_id in field 5"
+  );
+  assert(
+    encodeWireMessage({ cmd: "wire.3100", data: { heroes: [{ heroId: 42, position: 1 }] } }) === null,
+    "multi hero save rejects formation 1 position 1"
   );
   const heroAdded = decodeWireHeroAdd(hexToBytes("0a04082a1009"));
   assert(heroAdded !== null && heroAdded.heroIds.length === 1 && heroAdded.heroIds[0] === 42, "4030 stores instance 42 and not the type");

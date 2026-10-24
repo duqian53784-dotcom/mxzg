@@ -7,14 +7,12 @@
  * 改成 false 仍走 USE_LOGIN_PREFAB / buildLoginPanel。创角仍是 USE_CREATE_ROLE_PREFAB。
  * 这两套关掉后仍走 buildLoginPanel / buildCreateRolePanel，代码 UI 不删。
  * 账号走 Proto.login / Proto.roleEnter；没有角色或点「创角」时再 Proto.roleCreate。
- * 默认仍是 NetClient → MockTransport，不需要服务器。
- * 预览地址加 ?transport=ws 才连本机桥 ws://127.0.0.1:13111/game（转到 TCP 9902）。
- * 登录页 Mock 下可点「连本机服」。?transport=auto 会短连一次，桥没开就回到 Mock。
- * 上次成功连上桥会记住 transport=ws，下次预览不加查询也会再试。?transport=mock 仍强制离线。
+ * 默认连本机桥 ws://127.0.0.1:13111/game（转到 TCP 9902），不必加 ?transport=ws。
+ * Mock 只在地址带 ?dev=mock 时打开。?transport=auto 短连失败停在「服未启动」，不进 Mock。
  * 打开后发心跳 1004，点登录再发 1001。s2c 1001 有角色就进同一套主城壳。
- * 进主城后角色数据进 GameStore，界面读那一份。Mock 进度写在本机，不含密码。
+ * 进主城后角色数据只从 s2c 进 GameStore。
  * 空回包仍走创角 1002，再发一次 1001。金币钻石不从 Mock 填。
- * 连不上会提示检查 start-local-all.bat（或分拆的启服 / 桥脚本），并可改走 Mock。
+ * 连不上会提示检查 start-local-all.bat（或分拆的启服 / 桥脚本）。
  *
  * Creator 里怎么挂（仓库不改 .scene，避免脚本 uuid 对不上）：
  * 1. 用 Creator 3.8.8 打开 client 工程
@@ -23,11 +21,11 @@
  * 4. 属性检查器 → 添加组件 → 自定义脚本 → Boot
  * 5. 保存场景。项目启动场景保持 Boot，再点预览
  * 6. 控制台应出现 [Boot] stage=version / hot-update / config / login
- * 7. 选服后点「进入游戏」：Mock 登录成功后 director.loadScene("Main")
- *    地址带 ?transport=ws 时连本机桥 13111/game，发心跳 1004，点登录发 1001。有角色则进主城
+ * 7. 选服后点「进入游戏」：默认连本机桥 13111/game，发心跳 1004，点登录发 1001。有角色则进主城
+ *    ?dev=mock 才走 Mock 登录，成功后 director.loadScene("Main")
  *    账号不是 mock、或点「创角」时先出创角面板（Proto.roleCreate）
  *    Main 场景可以是空的。若 Canvas 上没有 MainApp，这里会补挂
- * 8. 勾选 skipLogin 可跳过面板，仍用检查器里的账号进 Main
+ * 8. 勾选 skipLogin 只在 ?dev=mock 时跳过面板。默认真服仍显示登录
  *
  * 只预览 Main 时：给 Main 的 Canvas 手动挂 MainApp。
  * 安全区：启动和窗口变化时，登录面板挂在 SafeFrame 上，按可见区域缩进。不改场景。
@@ -52,6 +50,7 @@ import {
   explainWireTimeout,
   readPreviewTransport,
   resolveBootTransport,
+  setMockRuntime,
   TransportChoice,
   WS_CLOSE_STATUS,
   WS_DOWN_LOG,
@@ -97,7 +96,7 @@ export class Boot extends Component {
   @property
   account = "mock";
 
-  /** 勾选后不显示登录面板，仍走 Mock 登录再进 Main。 */
+  /** 勾选后，仅 ?dev=mock 不显示登录面板。默认真服仍显示登录。 */
   @property
   skipLogin = false;
 
@@ -115,8 +114,10 @@ export class Boot extends Component {
   private authEpoch = 0;
   private alive = true;
   private useWs = false;
-  /** ?transport=auto 时先短连。失败就回到 Mock 登录，不把预览卡住。 */
+  /** ?transport=auto 时先短连。没带 ?dev=mock 时失败停在服未启动。 */
   private autoFallback = false;
+  /** 地址显式 ?dev=mock 或 ?transport=mock。没写就关。 */
+  private devMock = false;
   /** 只有 mock / ws 才会写进下次预览。没选过就保持上次的键。 */
   private transportPref?: TransportPref;
   /** 短连失败后，下一帧登录页用这句，而不是「账号」。 */
@@ -158,8 +159,9 @@ export class Boot extends Component {
     const resolved = resolveBootTransport(this.wsChoice, stored?.transport);
     this.useWs = resolved.useWs;
     this.autoFallback = resolved.autoFallback;
+    this.devMock = this.wsChoice.kind === "mock" && this.wsChoice.explicit;
+    setMockRuntime(this.devMock && !this.useWs);
     if (stored?.transport === "mock" || stored?.transport === "ws") this.transportPref = stored.transport;
-    const remembered = !this.wsChoice.explicit && stored?.transport === "ws";
     GameLog.shared.info(
       "Boot",
       this.useWs
@@ -167,9 +169,8 @@ export class Boot extends Component {
             (this.autoFallback ? "auto" : "ws") +
             " " +
             this.wsChoice.wsUrl +
-            (remembered ? " 上次记住 transport=ws" : " 真服预览") +
-            "。去掉 ?transport=ws 仍可走 Mock"
-        : "transport=mock 默认 Mock。真服预览加 ?transport=ws ，或点连本机服。桥 ws://127.0.0.1:13111/game"
+            " 默认连真服。Mock 仅 ?dev=mock"
+        : "transport=mock 已开 ?dev=mock。关掉该参数即回真服 " + this.wsChoice.wsUrl
     );
     const canvas = this.resolveCanvas();
     this.canvas = canvas;
@@ -261,10 +262,12 @@ export class Boot extends Component {
         const panel = slot.panel;
         if (panel) void this.onLoginClicked(panel, true);
       },
-      onMock: () => {
-        const panel = slot.panel;
-        if (panel) this.onUseMock(panel);
-      },
+      onMock: this.devMock
+        ? () => {
+            const panel = slot.panel;
+            if (panel) this.onUseMock(panel);
+          }
+        : undefined,
       onLive: () => this.onUseLive(),
     };
     if (USE_P1_LOGIN_PREFAB) {
@@ -343,7 +346,7 @@ export class Boot extends Component {
     }
     if (this.pendingStatus) {
       panel.setStatus(this.pendingStatus);
-      panel.setDetail("服未启动。可点进入游戏走 Mock，或点连本机服再试");
+      panel.setDetail(this.devMock ? "服未启动。可点进入游戏走 Mock" : "服未启动。请先双击 scripts/start-local-all.bat");
       this.pendingStatus = null;
       return;
     }
@@ -392,11 +395,16 @@ export class Boot extends Component {
     await this.onMockLoginClicked(panel, create);
   }
 
-  /** 关掉桥上的套接字，再用原来的 Mock 登录进主城。失败不把预览打崩。 */
+  /** 仅 ?dev=mock 时关掉桥，改走 Mock。默认路径不进 Mock。 */
   private onUseMock(panel: LoginPanelView): void {
     if (!this.alive || this.entering || this.authBusy) return;
+    if (!this.devMock) {
+      GameLog.shared.info("Boot", "Mock 已关闭。地址加 ?dev=mock 才打开");
+      return;
+    }
     this.autoFallback = false;
     this.useWs = false;
+    setMockRuntime(true);
     this.transportPref = "mock";
     this.pendingStatus = null;
     this.dropWs();
@@ -430,6 +438,8 @@ export class Boot extends Component {
     if (!this.alive || this.entering || this.authBusy) return;
     this.useWs = true;
     this.autoFallback = false;
+    this.devMock = false;
+    setMockRuntime(false);
     this.pendingStatus = null;
     const parent = this.loginPanel && this.loginPanel.root.parent;
     if (parent && parent.isValid) this.showLogin(parent);
@@ -448,9 +458,10 @@ export class Boot extends Component {
       if (!already) await net.connect(url);
     } catch (err) {
       if (!this.alive || epoch !== this.wsEpoch) return false;
-      if (this.autoFallback) {
+      if (this.autoFallback && this.devMock) {
         this.autoFallback = false;
         this.useWs = false;
+        setMockRuntime(true);
         GameLog.shared.warn("Boot", "本机桥没接上，已改走 Mock。" + messageOf(err));
         this.dropWs();
         this.pendingStatus = "已改走 Mock";
@@ -460,10 +471,11 @@ export class Boot extends Component {
         else this.showBootToast(this.pendingStatus);
         return false;
       }
+      this.autoFallback = false;
       GameLog.shared.error("Boot", "WebSocket 连接失败 " + messageOf(err) + "。" + WS_DOWN_LOG);
       if (this.loginPanel) {
         this.loginPanel.setStatus(WS_DOWN_STATUS);
-        this.loginPanel.setDetail("可改走 Mock 继续预览");
+        this.loginPanel.setDetail("请先双击 scripts/start-local-all.bat");
         this.loginPanel.setBusy(false);
       }
       this.authBusy = false;
@@ -522,7 +534,7 @@ export class Boot extends Component {
         GameLog.shared.error("Boot", "登录 1001 " + text);
         if (this.loginPanel) {
           this.loginPanel.setStatus(text);
-          this.loginPanel.setDetail("可再点一次，或改走 Mock");
+          this.loginPanel.setDetail("可再点一次");
           this.loginPanel.setBusy(false);
         }
       }
@@ -590,7 +602,7 @@ export class Boot extends Component {
       GameLog.shared.warn("Boot", WS_CLOSE_STATUS);
       if (panel) {
         panel.setStatus(WS_CLOSE_STATUS);
-        panel.setDetail("可点进入游戏重试，或改走 Mock");
+        panel.setDetail("可点进入游戏重试");
         panel.setBusy(false);
       }
       this.authBusy = false;

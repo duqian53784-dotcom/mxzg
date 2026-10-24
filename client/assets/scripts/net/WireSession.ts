@@ -72,6 +72,7 @@ import {
   decodeWireLineUpSave,
   readWireLineUpSave,
   WIRE_LINEUP_SAVE_CMD,
+  WIRE_LINEUP_SAVE_POSITIONS,
   WIRE_MAIN_POSITION,
 } from "./protocol/wireLineUpSave";
 import {
@@ -2305,6 +2306,39 @@ export class WireSession {
     return true;
   }
 
+  /**
+   * 出阵确认。一帧 c2s 3100，type=0，formation_id 字段 5 = 1。
+   * 站位按阵法 1 的 2/3/5/6/7/8/9 依次填，多出来的不发。
+   * 成功的空 s2c 3100 之后再拉 3101，阵容只从那包进 GameStore。
+   */
+  static saveMainFormation(heroIds: readonly number[]): boolean {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return false;
+    const heroes: { heroId: number; position: number }[] = [];
+    for (let i = 0; i < heroIds.length && heroes.length < WIRE_LINEUP_SAVE_POSITIONS.length; i++) {
+      const id = heroIds[i];
+      if (!Number.isSafeInteger(id) || id < 1) continue;
+      heroes.push({ heroId: id, position: WIRE_LINEUP_SAVE_POSITIONS[heroes.length] });
+    }
+    if (heroes.length === 0) return false;
+    net.send(WIRE_LINEUP_SAVE_CMD, { heroes });
+    return true;
+  }
+
+  /**
+   * 写操作之后再拉角色、背包、挂机时间和关卡。
+   * 不重拉 4001：pullHero(1) 会先清掉还没收齐的名册。
+   * 英雄变更仍等服上的 4001 / 4030。界面只吃随后的 s2c。
+   */
+  static refreshPersisted(): void {
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return;
+    if (Session.source !== "wire") return;
+    this.pullRoleProfile();
+    net.send(WIRE_IDLE_CMD);
+    this.pullChapter();
+  }
+
   private static resetGmProbe(): void {
     this.gmHeroId = null;
     this.gmHeroIds = [];
@@ -3424,6 +3458,7 @@ export class WireSession {
     this.lineUpSaveSerial += 1;
     this.mainLineReady = true;
     GameLog.shared.info("Wire", "s2c 3100 空包，MAIN 已保存");
+    this.pullLineUp();
     this.emit();
   }
 
@@ -3496,6 +3531,7 @@ export class WireSession {
     const note = "s2c 3005 " + wireIdleClaimNote(claim);
     GameLog.shared.info("Wire", note);
     this.finishClaim(note);
+    this.refreshPersisted();
   }
 
   private static onBag(data: unknown): void {

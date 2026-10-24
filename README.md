@@ -13,7 +13,7 @@
 `server/` 仍用 junction 复用服代码。策划表在仓库 `config/gameconfig`。`ip2region.db` 留在本机。  
 导出与服的 `config.path` 见 [`docs/config-pipeline.md`](docs/config-pipeline.md)。
 
-预览默认 Mock。真服加 `?transport=ws`，连 `ws://127.0.0.1:13111/game`。日常启动见 `scripts/start-local-all.bat`。
+预览默认连真服 `ws://127.0.0.1:13111/game`，不必加 `?transport=ws`。Mock 只在 `?dev=mock`。日常启动见 `scripts/start-local-all.bat`。
 
 ## 打开方式
 

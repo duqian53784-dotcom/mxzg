@@ -44,7 +44,7 @@ function Start-BatWindow {
 Write-Host '============================================================'
 Write-Host '  mxzg 游戏服 + WebSocket 桥'
 Write-Host ('  ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
-Write-Host '  客户端默认 Mock。真服预览加 ?transport=ws ，桥 ws://127.0.0.1:13111/game'
+Write-Host '  客户端默认连真服。桥 ws://127.0.0.1:13111/game 。Mock 仅 ?dev=mock'
 Write-Host '============================================================'
 Write-Host ''
 
@@ -84,8 +84,8 @@ Write-Host ''
 if ($bridgeUp) {
     Write-Host '[就绪] TCP 9902 和 WS 13111 都在听。'
     Write-Host '游戏服窗口和桥窗口请留着。只拉了客户端代码时，刷新预览即可，不必重启这两边。'
-    Write-Host '预览：http://127.0.0.1:7456/?transport=ws'
-    Write-Host '不加 transport=ws 仍是 Mock。不要直连 13101。'
+    Write-Host '预览：http://127.0.0.1:7456/  （不必加 ?transport=ws）'
+    Write-Host 'Mock 仅 ?dev=mock。不要直连 13101。'
     Write-Host '停桥并查看游戏服怎么停：双击 scripts\stop-local-all.bat'
     exit 0
 }

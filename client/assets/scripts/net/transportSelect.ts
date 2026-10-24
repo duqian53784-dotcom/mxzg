@@ -1,8 +1,8 @@
 /**
- * 预览选传输。默认 Mock，不加参数时 Creator 预览照旧可玩。
- * 要连本机游戏服：http://127.0.0.1:7456/?transport=ws
- * 默认地址是本机桥 ws://127.0.0.1:13111/game ，由 scripts/start-ws-bridge.bat 转到 TCP 9902。
+ * 预览选传输。默认连本机游戏服，不必加 ?transport=ws。
+ * 地址是本机桥 ws://127.0.0.1:13111/game ，由 scripts/start-ws-bridge.bat 转到 TCP 9902。
  * 游戏服自带的 13101 能完成握手，但不回这套帧。不要把它当默认地址。
+ * Mock 只在地址显式带 ?dev=mock（或 ?transport=mock）时打开，默认关。
  * 查询和安全区的 ?safe= 可以同时放在地址上。
  */
 
@@ -18,16 +18,27 @@ export interface TransportChoice {
 /** 本机桥。先双击 start-ws-bridge.bat。不是游戏服自带的 13101。 */
 export const DEFAULT_WS_URL = "ws://127.0.0.1:13111/game";
 
-/** 安全默认是 mock。只有预览地址写了 transport=ws，或把这里改成 ws，才会去连套接字。 */
+/** 安全默认是真服 WebSocket。Mock 必须地址显式打开，不跟上次记住的键走。 */
 export const TransportConfig = {
-  defaultKind: "mock" as TransportKind,
+  defaultKind: "ws" as TransportKind,
   wsUrl: DEFAULT_WS_URL,
 };
+
+/** 运行时是否允许 MockTransport 把会话种进 GameStore。Boot 只在 ?dev=mock 时打开。 */
+let mockRuntime = false;
+
+export function mockRuntimeEnabled(): boolean {
+  return mockRuntime;
+}
+
+export function setMockRuntime(on: boolean): void {
+  mockRuntime = on;
+}
 
 /** 登录页状态一行放得下。长说明写在 GameLog。 */
 export const WS_DOWN_STATUS = "服未启动，请检查启动 bat";
 export const WS_DOWN_LOG =
-  "服或桥没接上。请先双击 scripts/start-local-server.bat，确认 TCP 9902 在听，再双击 scripts/start-ws-bridge.bat，确认 ws://127.0.0.1:13111/game 在听。不要直连 13101。可改走 Mock。";
+  "服或桥没接上。请先双击 scripts/start-local-all.bat，或分拆双击 scripts/start-local-server.bat，确认 TCP 9902 在听，再双击 scripts/start-ws-bridge.bat，确认 ws://127.0.0.1:13111/game 在听。不要直连 13101。默认连真服。Mock 只在 ?dev=mock。";
 export const WS_OPEN_STATUS = "已打开，心跳 1004 已发送";
 export const WS_OPEN_TOAST = "心跳 1004 已发送";
 export const WS_CLOSE_STATUS = "连接已关闭";
@@ -38,10 +49,11 @@ export function parseTransportSearch(search: string, config: { defaultKind: Tran
   const wsRaw = queryParam(search, "ws");
   let kind: TransportKind = config.defaultKind === "auto" ? "mock" : config.defaultKind;
   let explicit = false;
+  const devRaw = queryParam(search, "dev");
   if (kindRaw === "ws" || kindRaw === "websocket" || kindRaw === "wss") {
     kind = "ws";
     explicit = true;
-  } else if (kindRaw === "mock") {
+  } else if (kindRaw === "mock" || devRaw === "mock") {
     kind = "mock";
     explicit = true;
   } else if (kindRaw === "auto") {
@@ -57,8 +69,8 @@ export function parseTransportSearch(search: string, config: { defaultKind: Tran
 }
 
 /**
- * 地址优先。没写 transport 时，上次成功连上桥会记住 ws，预览不用再加查询。
- * auto：先短连本机桥，失败就回到 Mock，服没开也不会把预览卡住。
+ * 地址优先。没写 transport 时走默认真服，不因上次记住的 mock 改回离线。
+ * auto：先短连本机桥。没带 ?dev=mock 时失败停在「服未启动」，不进 Mock。
  */
 export function resolveBootTransport(
   choice: TransportChoice,

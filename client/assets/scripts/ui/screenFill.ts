@@ -18,6 +18,7 @@ import { goldPerMin, itemEveryMs } from "../module/idle/rewards";
 import { hangSpineStem } from "./idleHangRoster";
 import { mountBattleSpine } from "./battleSpine";
 import { deployedHeroIds, setLocalLineup } from "./localLineup";
+import { mockRuntimeEnabled } from "../net/transportSelect";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 const INK = new Color(122, 71, 45, 255);
@@ -170,7 +171,7 @@ function countReward(resp: { rewards?: { id: number; count: number }[] }, id: nu
   return total;
 }
 
-/** 英雄出阵。确认只记在本局，再由调用方进入挂机上的战斗。 */
+/** 英雄出阵。真服发 3100（formation_id 字段 5），空包后再进战斗。Mock 只在 ?dev=mock 时记本局。 */
 export function bindFormationSheet(view: Node, onConfirm: () => void): void {
   silenceBigMenus(view);
   writeNamed(view, "lbl_title", "英雄出阵");
@@ -220,6 +221,30 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
     confirm.on(Button.EventType.CLICK, () => {
       if (selected.length === 0) {
         GameLog.shared.info("Mainline", "出阵没有英雄，仍留在挂机");
+        return;
+      }
+      if (Session.source === "wire") {
+        const before = WireSession.lineUpSaveSerial;
+        if (!WireSession.saveMainFormation(selected)) {
+          GameLog.shared.info("Mainline", "出阵未发出 3100，服未连接");
+          return;
+        }
+        GameLog.shared.info("Mainline", "出阵已发 3100，formation_id=1，等待空包");
+        let off = (): void => {};
+        const timer = setTimeout(() => {
+          off();
+          GameLog.shared.info("Mainline", "3100 无回包，不出战");
+        }, 5000);
+        off = WireSession.onSync(() => {
+          if (WireSession.lineUpSaveSerial === before) return;
+          clearTimeout(timer);
+          off();
+          onConfirm();
+        });
+        return;
+      }
+      if (!mockRuntimeEnabled()) {
+        GameLog.shared.info("Mainline", "未开 ?dev=mock，不记本地出阵");
         return;
       }
       setLocalLineup(selected);
@@ -301,7 +326,7 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
   if (up) {
     if (!up.getComponent(Button)) up.addComponent(Button);
     up.on(Button.EventType.CLICK, () => {
-      GameLog.shared.info("Hero", "升级仍走原来的英雄页，详情不新发协议");
+      GameLog.shared.info("Hero", "英雄升级没有服端写协议，按钮停用，不改等级");
     });
   }
   paint();
@@ -606,7 +631,12 @@ function paintStarUp(body: Node, hero: StoreHero, profile: HeroProfile | null): 
     place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 40 }), body, 0, 20);
     return;
   }
-  place(createLabel(text, 16, { color: INK, width: 460, height: 180, align: "left" }), body, 0, -20);
+  place(
+    createLabel(text + "\n升星没有服端写协议，不改星级", 16, { color: INK, width: 460, height: 200, align: "left" }),
+    body,
+    0,
+    -20
+  );
 }
 
 function paintGems(view: Node, body: Node, placeId: number, onPick: (id: number) => void): void {

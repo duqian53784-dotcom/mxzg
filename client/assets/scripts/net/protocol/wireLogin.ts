@@ -181,7 +181,13 @@ import { encodeWireBattleReportBody, readWireBattleReportQuery, WIRE_BATTLE_REPO
 import { encodeWirePreComputeBody, readWirePreComputeQuery, WIRE_PRECOMPUTE_CMD } from "./wirePreComputeStrength";
 import { encodeWireStudyBody, readWireStudyQuery, WIRE_STUDY_CMD } from "./wireStudy";
 import { encodeWireGmCommandBody, readWireGmAddHero, WIRE_GM_CMD } from "./wireGmCommand";
-import { encodeWireLineUpSaveBody, readWireLineUpSave, WIRE_LINEUP_SAVE_CMD } from "./wireLineUpSave";
+import {
+  encodeWireLineUpSaveBody,
+  encodeWireLineUpSaveHeroes,
+  readWireLineUpSave,
+  readWireLineUpSaveMany,
+  WIRE_LINEUP_SAVE_CMD,
+} from "./wireLineUpSave";
 import { WIRE_SPRING_OUTING_GRID_CMD } from "./wireSpringOutingGrid";
 import { encodeWireHeroListBody, readWireHeroPage, WIRE_HERO_CMD } from "./wireHero";
 
@@ -484,6 +490,18 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     };
   }
   if (cmd === WIRE_LINEUP_SAVE_CMD) {
+    const many = readWireLineUpSaveMany(msg.data);
+    if (many) {
+      const packed = encodeWireLineUpSaveHeroes(many);
+      if (!packed) return null;
+      const ids: string[] = [];
+      for (let i = 0; i < many.heroes.length; i++) ids.push(String(many.heroes[i].heroId));
+      return {
+        cmdId: WireCmd.lineUpSave,
+        bytes: encodeFrame(WireCmd.lineUpSave, packed),
+        note: "heroes=" + ids.join(",") + " formation_id=1",
+      };
+    }
     const query = readWireLineUpSave(msg.data);
     if (!query) return null;
     const body = encodeWireLineUpSaveBody(query);

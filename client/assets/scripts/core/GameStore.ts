@@ -1,7 +1,7 @@
 /**
  * 客户端这一局的角色数据。
  * 真服：WireSession 在 s2c 写入之后把同一份数抄到这里。界面读这里，不读 Mock 起步钱包。
- * Mock：MockTransport 每次回包后用 MockGameSession 填一份。离线预览仍走这条。
+ * Mock：仅 ?dev=mock 时 MockTransport 回包后填一份。默认运行时不走这条。
  * 刷新后真服角色在游戏服 MySQL 里，重新登录再由 s2c 灌回来。
  * 这里另存一份不含密码、不含 token 的快照，只为了 Mock 进度和登录页「上次角色」提示。
  */
@@ -46,7 +46,7 @@ export const STORE_PROTOCOLS: ReadonlyArray<{ proto: string; fields: string }> =
   { proto: "s2c 5001 / 5002", fields: "背包整表，5002 在已有表上改数量。不改钱包" },
   { proto: "s2c 3099", fields: "已解锁阵法 id" },
   { proto: "s2c 3101", fields: "MAIN 阵容。挂机站场读这里，不读 Mock 三名起步英雄" },
-  { proto: "Mock role.enter 及后续回包", fields: "同一份角色、钱包、关卡、英雄、背包。只在 MockTransport 里填" },
+  { proto: "Mock role.enter 及后续回包", fields: "仅 ?dev=mock。默认运行时 GameStore 只吃 s2c" },
 ];
 
 interface LineRow {

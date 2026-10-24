@@ -1,5 +1,6 @@
 import { ErrorCode, logErrorCode } from "../core/errors";
 import { GameStore } from "../core/GameStore";
+import { mockRuntimeEnabled } from "./transportSelect";
 import { MockGameSession } from "./MockGameSession";
 import { encodeRequest } from "./protocol/codec";
 import { Cmd } from "./protocol/cmds";
@@ -75,7 +76,7 @@ export class MockTransport implements ITransport {
     const session = this.session;
     if (msg.cmd === Cmd.login) {
       const resp = session.login(msg.data);
-      const seed = GameStore.mockSeedFor(resp.account);
+      const seed = mockRuntimeEnabled() ? GameStore.mockSeedFor(resp.account) : null;
       if (seed) {
         const heroes: { id: number; name: string; level: number; star: number; weaponLevel?: number }[] = [];
         for (let i = 0; i < seed.heroes.length; i++) {
@@ -338,6 +339,7 @@ export class MockTransport implements ITransport {
       if (!isFinite(id) || id < 1 || typeof count !== "number" || count <= 0) continue;
       items.push({ id: Math.floor(id), count: Math.floor(count) });
     }
+    if (!mockRuntimeEnabled()) return;
     GameStore.fillFromMock({
       account: session.account,
       serverId: session.serverId,

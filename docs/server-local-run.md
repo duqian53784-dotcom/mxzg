@@ -3,7 +3,7 @@
 > **来源：** 本文按 2026-10-19《项目分析与启动指南》写成。端口、密码、路径和命令只取那份分析，不另补。  
 > **D1 已在倩本机验证（2026-10-21，Asia/Shanghai）。** 双击 `scripts\start-local-server.bat`：`netstat` 见 TCP `11122`、TCP `9902`、WS `13101` 均在听，脚本打出「[启动成功]」。进度见本机 docs/mxzg-daily-progress.xlsx。  
 > **cross 默认不启。** 游戏服连 `127.0.0.1:11422` 失败、中心服「游戏服加载跨服失败」类日志是预期，不算启动失败。分析里 cross 曾因讨伐团（`CRUSADE_GROUP_WORKER`）周期数据缺失而失败；单机只需 center + gameserver。  
-> **客户端默认仍走 Mock。** 预览加 `?transport=ws` 走本机桥 `ws://127.0.0.1:13111/game`（转到 TCP 9902），不直连 13101。日常双击一次 `scripts\start-local-all.bat`。只拉了客户端就刷新预览，不必重启服和桥。步骤见 `docs/h5-websocket.md`。D2 已在倩本机验证。
+> **客户端默认连真服。** 预览不必加 `?transport=ws`，走本机桥 `ws://127.0.0.1:13111/game`（转到 TCP 9902），不直连 13101。`?dev=mock` 才打开 Mock。日常双击一次 `scripts\start-local-all.bat`。只拉了客户端就刷新预览，不必重启服和桥。步骤见 `docs/h5-websocket.md`。D2 已在倩本机验证。
 
 `server/` 仍是本机 junction，不在 Git 里。策划表在仓库 `config/gameconfig`（`F:\project\mxzg\config\gameconfig`）。`ip2region.db` 留在本机，不要推进 Git。
 
@@ -141,7 +141,7 @@ F:\project\mxzg\scripts\start-local-server.bat
 - 检查 `target\lib`，以及 `target\classes` 里的 properties 和启动类。中心服要有 `application.properties`、`database.properties`、`com\ayjs\mxzg\center\CenterBootstrap.class`。游戏服要有 `application.properties`、`database-game.properties`、`database-log.properties`、`com\ayjs\mxzg\gameserver\Bootstrap.class`。缺了就退出。不代做构建，不改配置，也不跑 `mvn`。
 - 端口已经在听就跳过，不另开一个进程。旧 `start-all.bat` 会 `taskkill`。这个 bat 默认不结束已有进程。窗口没了但仍占端口时用 Q7，脚本自己不执行。
 - `start "mxzg-center" cmd /k`，命令与第 5.1 节相同：`java -Xms512m -Xmx2048m -cp "target/classes;target/lib/*" com.ayjs.mxzg.center.CenterBootstrap`。等到 TCP `11122` 和 HTTP `9801`，再同样方式启动 `com.ayjs.mxzg.gameserver.Bootstrap`，等到 TCP `9902` 和 WS `13101`。分析没有写启动要等多久。两个端口共用最多约 180 秒（与 `start-local-server.ps1` 的上限相同）。
-- 默认不启 cross，不启 large-cross。不启旧 H5 的 `dev-platform.ps1` / `serve.ps1`，也不开浏览器。Creator 默认仍走 Mock。`?transport=ws` 才经 13111 桥接游戏服。
+- 默认不启 cross，不启 large-cross。不启旧 H5 的 `dev-platform.ps1` / `serve.ps1`，也不开浏览器。Creator 默认连真服，经 13111 桥接游戏服。`?dev=mock` 才打开 Mock。
 - 起来之后按第 7 节检查。调用 `curl.exe`，最多 10 秒，并执行 `netstat -ano | findstr "11122 9902 13101"`：
 
 ```

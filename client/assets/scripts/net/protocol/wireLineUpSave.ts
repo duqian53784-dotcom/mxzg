@@ -32,6 +32,16 @@ export interface WireLineUpSaveQuery {
   position: number;
 }
 
+export interface WireLineUpSaveHero {
+  heroId: number;
+  position: number;
+}
+
+/** 出阵一次写入 MAIN。heroes 按出现顺序，formation_id 仍是字段 5。 */
+export interface WireLineUpSaveMany {
+  heroes: WireLineUpSaveHero[];
+}
+
 export interface WireLineUpSaveAck {
   empty: true;
 }
@@ -49,19 +59,49 @@ export function readWireLineUpSave(data: unknown): WireLineUpSaveQuery | null {
 
 /** 缺实例或站位非法时返回 null。type=0、goddess_type=0、formation_id=1 照写。time 和 hp 不写。 */
 export function encodeWireLineUpSaveBody(query: WireLineUpSaveQuery): Uint8Array | null {
-  if (!legalPosition(query.position)) return null;
-  if (!Number.isSafeInteger(query.heroId) || query.heroId < 1) return null;
-  const hero: number[] = [];
-  pushVarintField(hero, 1, query.heroId);
-  pushVarintField(hero, 3, Math.floor(query.position));
+  return encodeWireLineUpSaveHeroes({ heroes: [{ heroId: query.heroId, position: query.position }] });
+}
+
+/**
+ * 多只英雄合成一帧 3100。
+ * PSLineUpData 字段 4 重复，字段 5 是 formation_id=1。站位必须落在 2/3/5/6/7/8/9。
+ */
+export function encodeWireLineUpSaveHeroes(query: WireLineUpSaveMany): Uint8Array | null {
+  if (!query.heroes.length) return null;
   const line: number[] = [];
   pushVarintField(line, 1, WIRE_MAIN_LINE_TYPE);
   pushVarintField(line, 3, WIRE_MAIN_GODDESS_TYPE);
-  pushBytes(line, 4, hero);
+  for (let i = 0; i < query.heroes.length; i++) {
+    const row = query.heroes[i];
+    if (!legalPosition(row.position)) return null;
+    if (!Number.isSafeInteger(row.heroId) || row.heroId < 1) return null;
+    const hero: number[] = [];
+    pushVarintField(hero, 1, row.heroId);
+    pushVarintField(hero, 3, Math.floor(row.position));
+    pushBytes(line, 4, hero);
+  }
   pushVarintField(line, 5, WIRE_MAIN_FORMATION_ID);
   const body: number[] = [];
   pushBytes(body, 1, line);
   return Uint8Array.from(body);
+}
+
+/** heroes 数组优先。空数组或站位非法返回 null，调用方再看单只 heroId。 */
+export function readWireLineUpSaveMany(data: unknown): WireLineUpSaveMany | null {
+  if (!data || typeof data !== "object") return null;
+  const raw = data as { heroes?: unknown };
+  if (!Array.isArray(raw.heroes) || raw.heroes.length === 0) return null;
+  const heroes: WireLineUpSaveHero[] = [];
+  for (let i = 0; i < raw.heroes.length; i++) {
+    const row = raw.heroes[i] as { heroId?: unknown; position?: unknown } | null;
+    if (!row) return null;
+    const heroId = positiveId(row.heroId);
+    if (heroId === null) return null;
+    const position = typeof row.position === "number" ? row.position : WIRE_MAIN_POSITION;
+    if (!legalPosition(position)) return null;
+    heroes.push({ heroId, position: Math.floor(position) });
+  }
+  return { heroes };
 }
 
 /** 空包体是成功。有字节、或缺包，都不是这次成功。 */
