@@ -85,6 +85,7 @@ export function bindGameCatalog(tables: Map<string, ConfigTableFile<Row>>): void
   bindHeroProfiles(tables.get("herotype"), skillNames);
   bindBases(tables.get("herobase"));
   bindItems(tables.get("item"), text);
+  fillHeroIconsFromItems();
   bindChapters(tables.get("chapter"));
   bindLevels(tables.get("mainlevel"));
   bindRosterCatalog(tables);
@@ -234,12 +235,31 @@ function bindItems(table: Table, text: Map<string, string>): void {
     const name = nameKey === null ? "" : text.get(String(nameKey)) || "";
     if (!name) continue;
     const iconField = typeof row.icon === "string" ? row.icon : "";
-    const icon = iconField.indexOf("backpack/") === 0 ? "ui/bag/backpack_" + idx : null;
+    const icon = resourceIcon(iconField, idx);
     const rare = num(row.rare_mark);
     const contentKey = num(row.content);
     const blurb = contentKey === null ? "" : plainLanguage(text.get(String(contentKey)) || "");
     items.set(idx, { idx, name, icon, rare: rare === null || rare < 0 ? 0 : rare, blurb });
   }
+}
+
+/** item_id 为 0 的英雄，用 item.idx = 类型号 上的 hero-icon/ 路径。 */
+function fillHeroIconsFromItems(): void {
+  profiles.forEach((profile) => {
+    if (profile.icon) return;
+    const item = items.get(profile.type);
+    if (!item || !item.icon || item.icon.indexOf("ui/hero/hero-icon_") !== 0) return;
+    profile.icon = item.icon;
+  });
+}
+
+function resourceIcon(field: string, idx: number): string | null {
+  if (field.indexOf("backpack/") === 0) return "ui/bag/backpack_" + idx;
+  if (field.indexOf("hero-icon/") === 0) {
+    const stem = field.slice("hero-icon/".length).trim();
+    if (stem) return "ui/hero/hero-icon_" + stem;
+  }
+  return null;
 }
 
 function bindChapters(table: Table): void {

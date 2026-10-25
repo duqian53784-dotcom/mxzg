@@ -3,8 +3,9 @@
  * 旧 Lua 不在仓库里。数字来自已导出的 JSON。
  * chapterreward.reward_base 是当前关每分钟的三项：900001 金币、900003 角色经验、900101 英雄经验。
  * 底栏 lbl_gold / lbl_exp / lbl_souls 旁边的图就是这三样。
- * system.idle_max_time 是秒，基础封顶。VIP 的 extra_idle_time 这里不加。
- * 随机掉落仍是 drop_group，每隔 idle_drop_frequency 秒掷一次，不写进这三格。
+ * system.idle_max_time 是秒，基础封顶。
+ * VIP 加成在 vip 表。没有角色 VIP 等级时不把某一档乘进三格。
+ * 随机掉落按 chapterreward.drop_group 经 droptrigger / dropgroup 列出可能物品，不掷随机数，也不写进三格。
  */
 import { ConfigTableFile } from "./types";
 
@@ -23,7 +24,11 @@ export interface StarStep {
   levelLimit: number;
   attackShow: number;
   hpShow: number;
+  /** herostar.skill1…skill4。这一星技能槽的等级，不是技能 id。 */
+  skillLevels: number[];
   cost: CostStack[];
+  /** herostar.need_item。和 upstar_cost 分开。 */
+  needItem: CostStack[];
 }
 
 export interface CostStack {
@@ -56,7 +61,26 @@ export interface GodGearFace {
 export interface DragonFace {
   name: string;
   level: number;
+  /**
+   * 四条龙共用的图鉴标。dragon_identify-0…11 是鉴定光效，不是物种立绘。
+   * 表上没有立绘列，不把光效按出现顺序安到斯摩格这四条上。
+   */
   portrait: string;
+}
+
+export interface DropFace {
+  itemType: number;
+  min: number;
+  max: number;
+}
+
+export interface VipIdleBonus {
+  level: number;
+  goldPct: number;
+  heroExpPct: number;
+  roleExpPct: number;
+  /** vip.extra_idle_time，秒。 */
+  extraIdleSec: number;
 }
 
 export interface RelicFace {
@@ -72,9 +96,16 @@ const GOLD = 900001;
 const ROLE_EXP = 900003;
 const HERO_EXP = 900101;
 
+const DRAGON_PLATE = "ui/dragon/dragon_btn-illustration";
+
 const idleByIdx = new Map<number, IdleMinute>();
 const clearByIdx = new Map<number, CostStack[]>();
+const dropGroupByIdx = new Map<number, number>();
+const triggersByGroup = new Map<number, number[]>();
+const itemsByTrigger = new Map<number, DropFace[]>();
+const vipRows = new Map<number, VipIdleBonus>();
 let idleMaxMs: number | null = null;
+let dropEverySec: number | null = null;
 let heroSpace = 300;
 const starSteps = new Map<number, StarStep>();
 const sacrifices = new Map<string, SacrificeNeed[]>();
@@ -86,7 +117,12 @@ const relics: RelicFace[] = [];
 export function clearRosterCatalog(): void {
   idleByIdx.clear();
   clearByIdx.clear();
+  dropGroupByIdx.clear();
+  triggersByGroup.clear();
+  itemsByTrigger.clear();
+  vipRows.clear();
   idleMaxMs = null;
+  dropEverySec = null;
   heroSpace = 300;
   starSteps.clear();
   sacrifices.clear();
@@ -100,7 +136,9 @@ export function bindRosterCatalog(tables: Map<string, ConfigTableFile<Row>>): vo
   clearRosterCatalog();
   const text = languageMap(tables.get("language"));
   bindIdle(tables.get("chapterreward"));
+  bindDrops(tables.get("droptrigger"), tables.get("dropgroup"));
   bindSystem(tables.get("system"));
+  bindVip(tables.get("vip"));
   bindStars(tables.get("herostar"));
   bindSacrifices(tables.get("herotype"));
   bindJewels(tables.get("jeweltype"));
@@ -125,9 +163,73 @@ export function chapterClearReward(stageIdx: number): CostStack[] | null {
   return row ? row.slice() : [];
 }
 
-/** system.idle_max_time，毫秒。表上没有这一项时是 null。 */
+/** system.idle_max_time，毫秒。表上没有这一项时是 null。不含 VIP extra_idle_time。 */
 export function idleCapMs(): number | null {
   return idleMaxMs;
+}
+
+/** system.idle_drop_frequency，秒。表上没有这一项时是 null。 */
+export function idleDropEverySec(): number | null {
+  return dropEverySec;
+}
+
+/**
+ * 当前关 drop_group 里的物品，按表顺序，同一 item_type 只留第一次。
+ * 数量是表内 min/max，不是掷出来的结果。表还没登记时是空数组。
+ */
+export function chapterDrops(stageIdx: number): DropFace[] {
+  const pick = pickIdleIdx(stageIdx);
+  if (pick === null) return [];
+  const group = dropGroupByIdx.get(pick);
+  if (group === undefined) return [];
+  const triggers = triggersByGroup.get(group);
+  if (!triggers) return [];
+  const out: DropFace[] = [];
+  const seen = new Set<number>();
+  for (let i = 0; i < triggers.length; i++) {
+    const items = itemsByTrigger.get(triggers[i]);
+    if (!items) continue;
+    for (let j = 0; j < items.length; j++) {
+      const row = items[j];
+      if (seen.has(row.itemType)) continue;
+      seen.add(row.itemType);
+      out.push({ itemType: row.itemType, min: row.min, max: row.max });
+    }
+  }
+  return out;
+}
+
+/** vip 表这一档。没有这一级，或没传入等级，是 null。不拿 0 代替缺省等级。 */
+export function vipIdleBonus(level: number | null | undefined): VipIdleBonus | null {
+  const key = whole(level);
+  if (key === null || key < 0) return null;
+  const row = vipRows.get(key);
+  if (!row) return null;
+  return {
+    level: row.level,
+    goldPct: row.goldPct,
+    heroExpPct: row.heroExpPct,
+    roleExpPct: row.roleExpPct,
+    extraIdleSec: row.extraIdleSec,
+  };
+}
+
+/** 挂机条上的 VIP 一行。没有等级时不写百分比。 */
+export function vipIdleLine(level: number | null | undefined): string {
+  const row = vipIdleBonus(level);
+  if (!row) return "VIP未同步";
+  return (
+    "VIP" +
+    row.level +
+    " 金币+" +
+    row.goldPct +
+    "% 英雄经验+" +
+    row.heroExpPct +
+    "% 角色经验+" +
+    row.roleExpPct +
+    "% 挂机+" +
+    idleHours(row.extraIdleSec)
+  );
 }
 
 /** system.hero_space_initial。没读到表时是 300，和旧底栏「空间 n/300」一致。 */
@@ -139,7 +241,17 @@ export function heroStarStep(star: number | null | undefined): StarStep | null {
   const key = whole(star);
   if (key === null) return null;
   const row = starSteps.get(key);
-  return row ? { star: row.star, levelLimit: row.levelLimit, attackShow: row.attackShow, hpShow: row.hpShow, cost: row.cost.slice() } : null;
+  return row
+    ? {
+        star: row.star,
+        levelLimit: row.levelLimit,
+        attackShow: row.attackShow,
+        hpShow: row.hpShow,
+        skillLevels: row.skillLevels.slice(),
+        cost: row.cost.slice(),
+        needItem: row.needItem.slice(),
+      }
+    : null;
 }
 
 /** herotype.to_N_star。N 是升上去的那一星。没有这条是空数组。 */
@@ -187,6 +299,43 @@ function bindIdle(table: Table): void {
       heroExp: stackNum(stacks, HERO_EXP),
     });
     clearByIdx.set(idx, parseStacks(row.first_reward));
+    const group = num(row.drop_group);
+    if (group !== null && group > 0) dropGroupByIdx.set(idx, group);
+  }
+}
+
+function bindDrops(triggers: Table, items: Table): void {
+  for (const row of rows(triggers)) {
+    const group = num(row.drop_group);
+    const id = num(row.drop_trigger_id);
+    if (group === null || id === null) continue;
+    const list = triggersByGroup.get(group);
+    if (!list) triggersByGroup.set(group, [id]);
+    else if (list.indexOf(id) < 0) list.push(id);
+  }
+  for (const row of rows(items)) {
+    const id = num(row.drop_trigger_id);
+    const itemType = num(row.item_type);
+    const min = num(row.item_min);
+    const max = num(row.item_max);
+    if (id === null || itemType === null || min === null || max === null || min < 0 || max < min) continue;
+    const list = itemsByTrigger.get(id);
+    const face: DropFace = { itemType, min, max };
+    if (!list) itemsByTrigger.set(id, [face]);
+    else list.push(face);
+  }
+}
+
+function bindVip(table: Table): void {
+  for (const row of rows(table)) {
+    const level = num(row.vip_level);
+    if (level === null || level < 0) continue;
+    const gold = num(row.gold_bonus);
+    const hero = num(row.heroes_exp_bonus);
+    const role = num(row.charater_exp_bonus);
+    const extra = num(row.extra_idle_time);
+    if (gold === null || hero === null || role === null || extra === null) continue;
+    vipRows.set(level, { level, goldPct: gold, heroExpPct: hero, roleExpPct: role, extraIdleSec: extra });
   }
 }
 
@@ -210,6 +359,9 @@ function bindSystem(table: Table): void {
     if (row.key === "idle_max_time") {
       const sec = num(row.value);
       if (sec !== null && sec > 0) idleMaxMs = sec * 1000;
+    } else if (row.key === "idle_drop_frequency") {
+      const sec = num(row.value);
+      if (sec !== null && sec > 0) dropEverySec = sec;
     } else if (row.key === "hero_space_initial") {
       const cap = num(row.value);
       if (cap !== null && cap > 0) heroSpace = cap;
@@ -227,7 +379,9 @@ function bindStars(table: Table): void {
       levelLimit,
       attackShow: num(row.attack_show) ?? 0,
       hpShow: num(row.hp_show) ?? 0,
+      skillLevels: [num(row.skill1) ?? 0, num(row.skill2) ?? 0, num(row.skill3) ?? 0, num(row.skill4) ?? 0],
       cost: parseStacks(row.upstar_cost),
+      needItem: parseStacks(row.need_item),
     });
   }
 }
@@ -275,7 +429,6 @@ function bindGears(table: Table): void {
 
 function bindDragons(table: Table, text: Map<string, string>): void {
   const seen = new Set<string>();
-  let portrait = 1;
   for (const row of rows(table)) {
     const nameKey = num(row.name);
     const name = nameKey === null ? "" : text.get(String(nameKey)) || "";
@@ -285,9 +438,8 @@ function bindDragons(table: Table, text: Map<string, string>): void {
     dragons.push({
       name,
       level: level === null || level < 1 ? 1 : level,
-      portrait: "ui/dragon/dragon_identify-" + portrait,
+      portrait: DRAGON_PLATE,
     });
-    portrait += 1;
   }
 }
 
@@ -329,6 +481,13 @@ function bindRelics(table: Table, items: Table, text: Map<string, string>): void
       if (named) face.name = named;
     }
   }
+}
+
+function idleHours(sec: number): string {
+  const hours = sec / 3600;
+  if (!isFinite(hours) || hours <= 0) return "0小时";
+  if (hours === Math.floor(hours)) return hours + "小时";
+  return hours + "小时";
 }
 
 function copyMinute(row: IdleMinute): IdleMinute {

@@ -488,7 +488,18 @@ import {
   itemIconResource,
   mainlevelExpLabel,
 } from "../assets/scripts/config/gameCatalog";
-import { chapterClearReward, chapterIdleMinute, heroSpaceCap, idleCapMs } from "../assets/scripts/config/rosterCatalog";
+import {
+  chapterClearReward,
+  chapterDrops,
+  chapterIdleMinute,
+  heroSpaceCap,
+  heroStarStep,
+  idleCapMs,
+  idleDropEverySec,
+  listDragons,
+  vipIdleBonus,
+  vipIdleLine,
+} from "../assets/scripts/config/rosterCatalog";
 import { formatStoreBagLine } from "../assets/scripts/module/bag/bagView";
 import { formatStoreHeroLine } from "../assets/scripts/module/hero/rosterView";
 import { replayFromStore } from "../assets/scripts/module/mainline/battleFromStore";
@@ -2243,7 +2254,22 @@ function checkGameStore(): void {
 
 function bindCheckCatalog(): void {
   const root = configDir();
-  const names = ["herotype", "herobase", "heroskill", "language", "item", "chapter", "mainlevel", "chapterreward", "system"];
+  const names = [
+    "herotype",
+    "herobase",
+    "heroskill",
+    "herostar",
+    "language",
+    "item",
+    "chapter",
+    "mainlevel",
+    "chapterreward",
+    "system",
+    "dragonlevel",
+    "dropgroup",
+    "droptrigger",
+    "vip",
+  ];
   const tables = new Map<string, { table: string; rows: Record<string, unknown>[] }>();
   for (let i = 0; i < names.length; i++) {
     tables.set(names[i], JSON.parse(readFileSync(join(root, names[i] + ".json"), "utf8")));
@@ -2260,6 +2286,52 @@ function checkStoreScreens(): void {
   const profile = heroProfile(10101001);
   assert(profile !== null && profile.name === "独眼梦魇", "herotype note is the hero name");
   assert(profile !== null && profile.icon === "ui/hero/hero-icon_20101001", "hero icon uses item_id");
+  const leyton = heroProfile(10701001);
+  const hecate = heroProfile(10701003);
+  const satan = heroProfile(10701004);
+  const abyss = heroProfile(10701006);
+  assert(
+    leyton !== null &&
+      leyton.name === "雷顿" &&
+      leyton.icon === "ui/hero/hero-icon_20701001" &&
+      hecate !== null &&
+      hecate.icon === "ui/hero/hero-icon_20701003" &&
+      satan !== null &&
+      satan.icon === "ui/hero/hero-icon_20701004" &&
+      abyss !== null &&
+      abyss.icon === "ui/hero/hero-icon_20701006",
+    "heroes with item_id 0 use item.icon hero-icon paths"
+  );
+  assert(itemIconResource(10701001, null) === "ui/hero/hero-icon_20701001", "shard icon follows item.icon");
+  const dragons = listDragons();
+  assert(
+    dragons.length === 4 &&
+      dragons[0].name === "斯摩格" &&
+      dragons[1].name === "迪斯莱尔" &&
+      dragons[2].name === "雷博尔" &&
+      dragons[3].name === "英菲尼迪" &&
+      dragons.every((row) => row.portrait === "ui/dragon/dragon_btn-illustration"),
+    "dragon names come from dragonlevel and do not use identify frames"
+  );
+  const drops = chapterDrops(1);
+  assert(
+    drops.some((row) => row.itemType === 900002 && row.min === 1 && row.max === 1) &&
+      drops.some((row) => row.itemType === 900401 && row.min === 11),
+    "stage 1 drop_group lists table amounts, not a roll"
+  );
+  assert(idleDropEverySec() === 60, "idle drop frequency is system.idle_drop_frequency");
+  const vip1 = vipIdleBonus(1);
+  assert(
+    vip1 !== null && vip1.goldPct === 10 && vip1.heroExpPct === 10 && vip1.roleExpPct === 10 && vip1.extraIdleSec === 7200,
+    "vip 1 idle bonuses come from the vip table"
+  );
+  assert(vipIdleBonus(null) === null && vipIdleLine(null) === "VIP未同步", "missing vip level is not treated as 0");
+  assert(vipIdleLine(1).indexOf("金币+10%") >= 0, "vip line shows the table percents");
+  const star6 = heroStarStep(6);
+  assert(
+    star6 !== null && star6.levelLimit === 140 && star6.skillLevels[0] === 2 && star6.cost.some((row) => row.itemType === 900102 && row.num === 1000),
+    "star 6 board reads herostar level, skill slot and cost"
+  );
   const idle1 = chapterIdleMinute(1);
   assert(idle1 !== null && idle1.gold === 200 && idle1.roleExp === 10 && idle1.heroExp === 25, "stage 1 idle rates per minute");
   const idle5 = chapterIdleMinute(5);
