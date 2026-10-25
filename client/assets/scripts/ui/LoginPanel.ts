@@ -98,10 +98,10 @@ export function buildLoginPanel(
   const picked = createLabel("已选 " + selected.name, 20, { color: new Color(255, 220, 160, 255), width: 480 });
   place(picked, root, 0, -108);
 
-  const status = createLabel("准备登录", 20, { color: new Color(240, 240, 240, 255), width: 520 });
+  const status = createLabel("", 20, { color: new Color(240, 240, 240, 255), width: 520 });
   place(status, root, 0, ws ? -148 : -156);
   const detail = place(
-    createLabel(ws ? "进入游戏发登录 1001。有角色就进主城" : "", 18, { color: new Color(180, 196, 220, 255), width: 520 }),
+    createLabel("", 18, { color: new Color(180, 196, 220, 255), width: 520 }),
     root,
     0,
     -186
@@ -202,7 +202,8 @@ function bindLoginPrefab(
   const picked = requireNode(root, "Card/Picked");
   const status = requireNode(root, "Card/Status");
   const detail = requireNode(root, "Card/Detail");
-  if (!ws) setText(detail, "");
+  setText(status, "");
+  setText(detail, "");
 
   let selected = findServer(options?.serverId ?? MOCK_SERVERS[0].id);
   const buttons: Array<{ server: GameServer; node: Node }> = [];

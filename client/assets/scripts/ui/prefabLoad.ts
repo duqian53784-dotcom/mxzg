@@ -20,6 +20,8 @@ export { BATTLE_PREFAB_PATH };
 
 /** 与 .prefab.meta 的 uuid 一致。只给 loadAny 兜底，不拿去 resources.load。 */
 const PREFAB_UUID: { [path: string]: string } = {
+  "prefabs/ui/login/LoadingLayer": "ed70957c-0e46-44db-a4a2-aacd73196fd1",
+  "prefabs/ui/login/UpdateLayer": "4371fa6e-a0d2-4932-ab57-bb085d572a06",
   "prefabs/ui/login/LoginPanel": "196fd024-dd83-4ee7-9783-1617ce3279a8",
   "prefabs/ui/login/CreateRolePanel": "d2eb0e48-bc58-4e09-b95f-ce45350461b1",
   "prefabs/ui/city/CityChrome": "c97efb56-db67-4c93-84d5-e29436794e86",

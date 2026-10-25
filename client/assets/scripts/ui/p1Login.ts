@@ -32,7 +32,7 @@ export async function mountP1LoginPrefab(
   host.parent = parent;
 
   const accountField = { current: null as TextField | null };
-  const statusNode = place(createLabel("准备登录", 20, { color: new Color(255, 244, 210, 255), width: 640 }), host, 0, -400);
+  const statusNode = place(createLabel("", 20, { color: new Color(255, 244, 210, 255), width: 640 }), host, 0, -400);
   const detailNode = place(createLabel("", 16, { color: new Color(190, 205, 225, 255), width: 640, height: 48 }), host, 0, -448);
   let selected = findServer(options?.serverId ?? MOCK_SERVERS[0].id);
   let serverLabel: Node | null = null;
