@@ -45,6 +45,33 @@ const VFX_SCALE: { [stem: string]: number } = {
   act: 0.4,
 };
 
+/** 进度条这类单节点特效。失败只留空节点，不抛。 */
+export function mountNamedSpine(host: Node, stem: string, clip: string): void {
+  try {
+    resources.load("spine/" + stem, sp.SkeletonData, (err, asset) => {
+      if (!host.isValid || err || !asset) return;
+      try {
+        const view = host.getComponent(sp.Skeleton) || host.addComponent(sp.Skeleton);
+        view.premultipliedAlpha = false;
+        view.skeletonData = runtimeSpineData(stem, asset);
+        const skinned = view as sp.Skeleton & { setSkin?: (name: string) => void };
+        if (typeof skinned.setSkin === "function") {
+          try {
+            skinned.setSkin("default");
+          } catch (_skinErr) {
+            /* 没有 default 皮也播 */
+          }
+        }
+        view.setAnimation(0, clip, true);
+      } catch (_err) {
+        /* 3.7 套播不了时进度条仍用底下的填充图 */
+      }
+    });
+  } catch (_err) {
+    /* resources 不可用时不挡启动 */
+  }
+}
+
 export function mountBattleSpine(parent: Node, stem: string, onFail: () => void, options?: SpineMountOptions): SpineActor {
   const effect = !!(options && options.effect);
   const node = uiNode("spine-" + stem);

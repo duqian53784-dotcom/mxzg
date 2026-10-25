@@ -14,9 +14,9 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 
 1. Creator 3.8.8 打开 `client`。
 2. 启动场景保持 Boot，点预览。
-3. 屏幕上是 Mock 登录面板：账号、密码（可留空）、三个服务器（本地Mock / 提审 / 正式占位）。账号默认 `mock`（或上次记下的账号）。点一个服务器，再点 **进入游戏**。
+3. 先是 logo，再是加载条（版本、资源、配置）。不加参数时连真服，加载条盖住登录，连上后才露出选服。`?dev=mock` 才是 Mock 登录面板：账号、密码（可留空）、三个服务器（本地Mock / 提审 / 正式占位）。账号默认 `mock`（或上次记下的账号）。点一个服务器，再点 **进入游戏**。
 4. 应进入 Main。顶栏左侧是角色名、等级、所选服务器和开服天，右侧是金币、钻石，例如 `MockHero Lv1`、`本地Mock · 开服D1`、`金币 100`、`钻石 20`。底栏是国服七项：主城 / 英雄 / 背包 / 战斗 / 副本 / 公会 / 羁绊。主城中间是 CityHub Prefab：视差地图（`map-bg-city-*`）和可点建筑，不是一排调试矩形，也不被页面壳盖住。点建筑走原来的 PanelNav。底栏「战斗」和左下任务剑打开主线，挑战仍进原来的主线页。底栏「英雄」在 Mock 下打开对应 Prefab。召唤仍从城内召唤法阵进。主屏只留「活动」和「更多」：黑五、万圣、圣诞、福利和任务等活动只读入口在「活动」里；挂机、背包、邮件、日志、公告、模拟断线、商店和皮肤、阵法等系统钮在「更多」里，没有删。Main 场景不用事先摆 UI；Boot 发现 Canvas 上没有 MainApp 会自己补上。
-5. 控制台标记：`[Boot] stage=version` → `hot-update` → `config` → `login` → `enter-main`，以及 `[Net] connect mock://local`、`[Config] loaded`。这些行现在带 `[mxzg]` 前缀，例如 `[mxzg][info][Boot] stage=version`。
+5. 控制台标记：`[Boot] stage=version` → `hot-update` → `assets` → `config` → `login` → `sync`（真服等 2001/5001/3007/3004/4001/15000/3101/3099）→ `enter-main`。`?dev=mock` 才有 `[Net] connect mock://local`。这些行现在带 `[mxzg]` 前缀，例如 `[mxzg][info][Boot] stage=version`。启动画面见 `docs/boot-loading.md`。
 
 可选：
 
@@ -27,7 +27,7 @@ Boot 场景的 Canvas 上已经挂了 **Boot**。拉最新代码后直接预览�
 - 主线：打开「更多」，点「主线 · 第N关」打开关卡列表，挑战后看战报再结算。详见下面 C3。
 - 发布构建前，构建场景列表要包含 Boot 和 Main，启动场景为 Boot。
 
-热更不在这一步。不加参数时网络仍是 `mock://local`。
+启动链（logo、版本比较、热更层、加载条、进主城前同步）见 `docs/boot-loading.md`。不加参数时连真服 `ws://127.0.0.1:13111/game`。Mock 只在地址带 `?dev=mock` 时打开。
 
 ## 本机 WebSocket（D2 已验证，D3 主城壳）
 

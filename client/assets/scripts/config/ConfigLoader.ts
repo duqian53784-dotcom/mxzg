@@ -15,6 +15,11 @@ export const CONFIG_PATHS = {
 
 const LOAD_BATCH = 24;
 
+/** 缺任何一张就整次 loadAll 失败，不把半套表交给后面的界面。 */
+export const CORE_CONFIG_TABLES = ["opencondition", "system_gate", "language", "chapter", "version", "loadingtips"];
+
+export type ConfigLoadProgress = (loaded: number, total: number) => void;
+
 export class ConfigDb {
   static current: ConfigDb | null = null;
   opencondition: OpenConditionRow[] = [];
@@ -37,13 +42,20 @@ export class ConfigLoader {
     });
   }
 
-  static async loadAll(): Promise<ConfigDb> {
+  static async loadAll(onProgress?: ConfigLoadProgress): Promise<ConfigDb> {
     const manifest = await ConfigLoader.loadJson<{ tables?: unknown }>(CONFIG_PATHS.manifest);
     const names = Array.isArray(manifest.tables)
       ? manifest.tables.filter((name): name is string => typeof name === "string" && name.length > 0)
       : [];
     const db = new ConfigDb();
+    const coreFailed: string[] = [];
     let failed = 0;
+    let finished = 0;
+    const total = names.length;
+    if (onProgress) onProgress(0, total);
+    for (let i = 0; i < CORE_CONFIG_TABLES.length; i++) {
+      if (names.indexOf(CORE_CONFIG_TABLES[i]) < 0) coreFailed.push(CORE_CONFIG_TABLES[i]);
+    }
     for (let i = 0; i < names.length; i += LOAD_BATCH) {
       const slice = names.slice(i, i + LOAD_BATCH);
       const loaded = await Promise.all(
@@ -53,8 +65,12 @@ export class ConfigLoader {
             return { name, file };
           } catch (err) {
             failed += 1;
-            console.warn("[Config] skip " + name);
+            if (CORE_CONFIG_TABLES.indexOf(name) >= 0) coreFailed.push(name);
+            else console.warn("[Config] skip " + name);
             return null;
+          } finally {
+            finished += 1;
+            if (onProgress) onProgress(finished, total);
           }
         })
       );
@@ -65,10 +81,13 @@ export class ConfigLoader {
         db.rowCount += Array.isArray(item.file.rows) ? item.file.rows.length : 0;
       }
     }
+    if (coreFailed.length > 0) {
+      throw new Error("核心配置读取失败：" + coreFailed.join("、"));
+    }
     const opencondition = db.tables.get("opencondition");
     const systemGate = db.tables.get("system_gate");
     if (!opencondition || !systemGate) {
-      throw new Error("missing opencondition or system_gate");
+      throw new Error("核心配置读取失败：opencondition、system_gate");
     }
     db.opencondition = Array.isArray(opencondition.rows) ? (opencondition.rows as unknown as OpenConditionRow[]) : [];
     db.systemGate = Array.isArray(systemGate.rows) ? (systemGate.rows as unknown as SystemGateRow[]) : [];

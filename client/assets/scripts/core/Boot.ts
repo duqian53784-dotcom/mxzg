@@ -1,7 +1,8 @@
 ﻿/**
  * Boot 启动流（B1）。
  *
- * 阶段：version → hot-update 占位 → 读表 → 登录门（或跳过）→ Main。
+ * 阶段：logo → version → hot-update → assets → 读表 → 登录门 → 同步角色包 → Main。
+ * 画面是 LoadingLayer / UpdateLayer，不再写一行状态字。流程见 docs/boot-loading.md。
  * 登录是本组件在 Canvas 上生成的面板，不另建 Login 场景。
  * 默认 USE_P1_LOGIN_PREFAB 挂 1:1 的 UserLoginLayer（选服、公告、语言、错误壳）。
  * 改成 false 仍走 USE_LOGIN_PREFAB / buildLoginPanel。创角仍是 USE_CREATE_ROLE_PREFAB。
@@ -20,7 +21,7 @@
  * 3. 层级管理器选中 Canvas（不要挂到 Camera）
  * 4. 属性检查器 → 添加组件 → 自定义脚本 → Boot
  * 5. 保存场景。项目启动场景保持 Boot，再点预览
- * 6. 控制台应出现 [Boot] stage=version / hot-update / config / login
+ * 6. 控制台应出现 [Boot] stage=version / hot-update / assets / config / login / sync / enter-main
  * 7. 选服后点「进入游戏」：默认连本机桥 13111/game，发心跳 1004，点登录发 1001。有角色则进主城
  *    ?dev=mock 才走 Mock 登录，成功后 director.loadScene("Main")
  *    账号不是 mock、或点「创角」时先出创角面板（Proto.roleCreate）
@@ -30,8 +31,17 @@
  * 只预览 Main 时：给 Main 的 Canvas 手动挂 MainApp。
  * 安全区：启动和窗口变化时，登录面板挂在 SafeFrame 上，按可见区域缩进。不改场景。
  */
-import { _decorator, Component, director, Node, sys, UITransform } from "cc";
+import { _decorator, AudioClip, Component, director, Node, sp, SpriteFrame, sys, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
+import {
+  ClientVersion,
+  downloadWithProgress,
+  fetchRemoteVersion,
+  hotUpdateUrl,
+  isH5Client,
+  readClientVersion,
+  versionNeedsUpdate,
+} from "./clientVersion";
 import { listOpenEntries } from "../config/gates";
 import { NetClient } from "../net/NetClient";
 import { WireSession } from "../net/WireSession";
@@ -57,7 +67,6 @@ import {
   WS_DOWN_STATUS,
   WS_MOCK_STATUS,
   WS_OPEN_STATUS,
-  WS_OPEN_TOAST,
 } from "../net/transportSelect";
 import { Proto } from "../net/protocol";
 import { RoleEnterResp } from "../net/protocol/types";
@@ -65,10 +74,12 @@ import { buildCreateRolePanel, CreateRolePanelView, mountCreateRolePrefab } from
 import { buildLoginPanel, LoginHandlers, LoginPanelView, mountLoginPrefab } from "../ui/LoginPanel";
 import { mountP1LoginPrefab, USER_LOGIN_PREFAB_PATH } from "../ui/p1Login";
 import { CREATE_ROLE_PREFAB_PATH, LOGIN_PREFAB_PATH } from "../ui/prefabLoad";
+import { BootChrome, BootCopy, loadBootCopy, preloadBootAsset } from "../ui/bootChrome";
+import { playLogoSplash, LogoSplashHandle } from "../ui/logoSplash";
 import { MainApp } from "../ui/MainApp";
 import { bindSafeArea, SafeAreaBinding } from "../ui/SafeArea";
 import { Toast } from "../ui/Toast";
-import { createLabel, place, setText, uiNode } from "../ui/UiKit";
+import { uiNode } from "../ui/UiKit";
 import { ErrorCode, errorText, GameError, messageOf } from "./errors";
 import { GameLog } from "./GameLog";
 import { GameStore } from "./GameStore";
@@ -77,7 +88,24 @@ import { Session } from "./Session";
 
 const { ccclass, property } = _decorator;
 
-const CLIENT_VERSION = "0.1.0-mock";
+const STAGE_VERSION = "检查版本";
+const STAGE_UPDATE = "更新资源";
+const STAGE_ASSETS = "加载资源";
+const STAGE_CONFIG = "读取配置";
+const STAGE_LOGIN = "登录";
+const STAGE_SYNC = "同步角色";
+const SYNC_TIMEOUT_MS = 18000;
+const SYNC_POLL_MS = 200;
+
+const BOOT_SPRITE_FRAMES = [
+  "ui/login/logo-scene_spr-logo/spriteFrame",
+  "ui/login/bg-loading/spriteFrame",
+  "ui/common/loading_spr-bg-2/spriteFrame",
+  "ui/common/loading_progress-bg/spriteFrame",
+  "ui/common/loading_progress/spriteFrame",
+  "ui/common/loading_spr-progress-1/spriteFrame",
+  "ui/common/loading_text-bg/spriteFrame",
+];
 
 /**
  * 默认挂 1:1 UserLoginLayer / ChooseServerLayer。
@@ -129,6 +157,12 @@ export class Boot extends Component {
   private wsStateOff: (() => void) | null = null;
   /** 最近一次点登录时的账号。创角 1002 之后再发 1001 用它，不猜平台 uid。 */
   private wsAccount = "";
+  private chrome: BootChrome | null = null;
+  private logo: LogoSplashHandle | null = null;
+  private syncEpoch = 0;
+  private copyPromise: Promise<BootCopy> | null = null;
+  /** 进主城前等包。这段时间断线不把加载层掀开。 */
+  private syncing = false;
 
   start() {
     if (this.started) return;
@@ -138,7 +172,17 @@ export class Boot extends Component {
 
   onDestroy() {
     this.alive = false;
+    this.syncEpoch += 1;
     this.wsEpoch += 1;
+    if (this.logo) {
+      this.logo.stop();
+      this.logo.stopMusic();
+      this.logo = null;
+    }
+    if (this.chrome) {
+      this.chrome.destroy();
+      this.chrome = null;
+    }
     if (this.wsStateOff) {
       this.wsStateOff();
       this.wsStateOff = null;
@@ -175,66 +219,238 @@ export class Boot extends Component {
     const canvas = this.resolveCanvas();
     this.canvas = canvas;
     const frame = this.mountSafeFrame(canvas);
-    const status = createLabel("启动中…", 28);
-    place(status, frame, 0, 40);
+    this.logo = playLogoSplash(frame, canvas);
+    await this.logo.done;
+    if (!this.alive || !this.isValid) return;
 
-    this.runVersionCheck();
-    setText(status, "检查版本…");
-    this.runHotUpdatePlaceholder();
-    setText(status, "热更占位，已跳过");
-    setText(status, "读取配置…");
-    await this.loadConfig();
-    if (!this.isValid) return;
+    const chrome = new BootChrome(frame);
+    this.chrome = chrome;
+    await chrome.open("loading");
+    if (!this.alive || !this.isValid) return;
+    void this.bootCopy();
+
+    const versionOk = await this.runVersionStage();
+    if (!versionOk || !this.alive || !this.isValid) return;
+    await this.runAssetStage();
+    if (!this.alive || !this.isValid) return;
+    const configOk = await this.loadConfig();
+    if (!configOk || !this.alive || !this.isValid) return;
 
     if (this.skipLogin && !this.useWs) {
-      setText(status, "跳过登录，Mock 进入…");
-      try {
-        await this.skipIntoMain();
-        if (!this.isValid) return;
-        status.destroy();
-        this.enterMain();
-      } catch (err) {
-        const text = messageOf(err);
-        GameLog.shared.error("Boot", "mock login " + text);
-        setText(status, text);
-        this.showBootToast(text);
-      }
+      this.face(STAGE_LOGIN);
+      const skipped = await this.skipIntoMainLoop();
+      if (skipped && this.alive && this.isValid) this.enterMain();
       return;
     }
 
-    status.destroy();
     if (!this.isValid) return;
     this.showLogin(frame);
   }
 
-  private runVersionCheck(): void {
-    GameLog.shared.info("Boot", "stage=version " + CLIENT_VERSION);
+  private bootCopy(): Promise<BootCopy> {
+    if (this.copyPromise) {
+      return this.copyPromise.then((cached) => {
+        if (cached.tips.length > 0) return cached;
+        this.copyPromise = null;
+        return this.bootCopy();
+      });
+    }
+    const pending = loadBootCopy().then((copy) => {
+      if (this.alive && this.chrome && copy.tips.length > 0) this.chrome.setTips(copy.tips);
+      return copy;
+    });
+    this.copyPromise = pending;
+    return pending;
   }
 
-  /** H5 预览不做远程包。热更留到阶段 F。 */
-  private runHotUpdatePlaceholder(): void {
-    GameLog.shared.info("Boot", "stage=hot-update skip");
+  /** 版本对不上就停在热更层。返回 false 表示这一页已经被拆掉。 */
+  private async runVersionStage(): Promise<boolean> {
+    const chrome = this.chrome;
+    if (!chrome) return false;
+    for (;;) {
+      if (!this.alive) return false;
+      chrome.setRatio(0);
+      await chrome.open("loading");
+      this.face(STAGE_VERSION);
+      try {
+        const local = await readClientVersion();
+        if (!this.alive) return false;
+        GameLog.shared.info("Boot", "stage=version " + local.version);
+        const remote = await fetchRemoteVersion(local);
+        if (!this.alive) return false;
+        chrome.setRatio(1);
+        if (!versionNeedsUpdate(local.version, remote)) {
+          GameLog.shared.info("Boot", "stage=hot-update skip local=" + local.version + " remote=" + remote);
+          return true;
+        }
+        GameLog.shared.info("Boot", "stage=hot-update remote=" + remote + " local=" + local.version);
+        return await this.runHotUpdate(local);
+      } catch (err) {
+        if (!this.alive) return false;
+        const text = messageOf(err);
+        GameLog.shared.error("Boot", "stage=version " + text);
+        const copy = await this.bootCopy();
+        chrome.setRatio(0);
+        await chrome.open("update");
+        const again = await chrome.prompt(text || copy.versionFail, copy.retry);
+        if (!again || !this.alive) return false;
+      }
+    }
   }
 
-  private async loadConfig(): Promise<void> {
+  /**
+   * 远程版本更高时走 UpdateLayer。
+   * H5 只把进度条走完，不拉字节。其它平台下载 version.manifest，不改原生搜索路径。
+   */
+  private async runHotUpdate(local: ClientVersion): Promise<boolean> {
+    const chrome = this.chrome;
+    if (!chrome) return false;
+    const copy = await this.bootCopy();
+    chrome.setRatio(0);
+    await chrome.open("update");
+    const intro = copy.newVersion + "\n" + copy.wifi;
+    let prompted = false;
+    for (;;) {
+      if (!this.alive) return false;
+      chrome.setRatio(0);
+      if (!prompted) {
+        const go = await chrome.prompt(intro, "下载");
+        if (!go || !this.alive) return false;
+        prompted = true;
+      }
+      this.face(STAGE_UPDATE);
+      try {
+        if (isH5Client()) {
+          GameLog.shared.info("Boot", "stage=hot-update h5 skip download");
+          await this.animateChrome(900);
+        } else {
+          const url = hotUpdateUrl(local);
+          if (!url) throw new Error("没有下载地址");
+          await downloadWithProgress(url, (ratio) => {
+            if (this.chrome) this.chrome.setRatio(ratio);
+          });
+          GameLog.shared.info("Boot", "stage=hot-update downloaded " + url);
+        }
+        if (!this.alive) return false;
+        chrome.setRatio(1);
+        return true;
+      } catch (err) {
+        if (!this.alive) return false;
+        const text = messageOf(err);
+        GameLog.shared.error("Boot", "stage=hot-update " + text);
+        const again = await chrome.prompt(text, copy.retry);
+        if (!again || !this.alive) return false;
+      }
+    }
+  }
+
+  private async animateChrome(ms: number): Promise<void> {
+    const started = Date.now();
+    while (this.alive && Date.now() - started < ms) {
+      if (this.chrome) this.chrome.setRatio((Date.now() - started) / ms);
+      await waitMs(16);
+    }
+    if (this.chrome) this.chrome.setRatio(1);
+  }
+
+  private async runAssetStage(): Promise<void> {
+    const chrome = this.chrome;
+    if (!chrome) return;
+    GameLog.shared.info("Boot", "stage=assets");
+    chrome.setRatio(0);
+    await chrome.open("loading");
+    this.face(STAGE_ASSETS);
+    const jobs: Array<Promise<void>> = [];
+    for (let i = 0; i < BOOT_SPRITE_FRAMES.length; i++) {
+      jobs.push(preloadBootAsset(BOOT_SPRITE_FRAMES[i], SpriteFrame));
+    }
+    jobs.push(preloadBootAsset("spine/jindutiao", sp.SkeletonData));
+    jobs.push(preloadBootAsset("audio/bgm-logo", AudioClip));
+    let finished = 0;
+    const total = jobs.length;
+    await Promise.all(
+      jobs.map(async (job) => {
+        await job;
+        finished += 1;
+        if (this.chrome && total > 0) this.chrome.setRatio(finished / total);
+      })
+    );
+  }
+
+  private async loadConfig(): Promise<boolean> {
+    const chrome = this.chrome;
     GameLog.shared.info("Boot", "stage=config");
-    try {
-      const db = ConfigDb.current ?? (await ConfigLoader.loadAll());
-      const open = listOpenEntries(db.opencondition, 1, 1).map((row) => row.id);
-      const shown = open.slice(0, 12);
-      const more = open.length > shown.length ? " +" + (open.length - shown.length) : "";
-      GameLog.shared.info(
-        "Boot",
-        "config tables=" +
-          db.tableCount +
-          " rows=" +
-          db.rowCount +
-          " open@Lv1/D1 " +
-          shown.join(",") +
-          more
-      );
-    } catch (err) {
-      GameLog.shared.error("Boot", "config load failed " + messageOf(err));
+    if (chrome) {
+      this.face(STAGE_CONFIG);
+      chrome.setRatio(0);
+    }
+    for (;;) {
+      if (!this.alive) return false;
+      try {
+        const db =
+          ConfigDb.current ??
+          (await ConfigLoader.loadAll((loaded, total) => {
+            if (this.chrome && total > 0) this.chrome.setRatio(loaded / total);
+          }));
+        const open = listOpenEntries(db.opencondition, 1, 1).map((row) => row.id);
+        const shown = open.slice(0, 12);
+        const more = open.length > shown.length ? " +" + (open.length - shown.length) : "";
+        GameLog.shared.info(
+          "Boot",
+          "config tables=" +
+            db.tableCount +
+            " rows=" +
+            db.rowCount +
+            " open@Lv1/D1 " +
+            shown.join(",") +
+            more
+        );
+        if (chrome) chrome.setRatio(1);
+        return true;
+      } catch (err) {
+        if (!this.alive) return false;
+        const text = messageOf(err);
+        GameLog.shared.error("Boot", "config load failed " + text);
+        if (!chrome) return false;
+        const copy = await this.bootCopy();
+        const again = await chrome.prompt(text, copy.retry);
+        if (!again || !this.alive) return false;
+        this.face(STAGE_CONFIG);
+        chrome.setRatio(0);
+      }
+    }
+  }
+
+  private face(stage: string): void {
+    if (!this.chrome) return;
+    this.chrome.show();
+    this.chrome.setStage(stage);
+    this.raiseToast();
+  }
+
+  private raiseToast(): void {
+    if (this.toastLayer && this.toastLayer.isValid && this.toastLayer.parent) {
+      this.toastLayer.setSiblingIndex(Math.max(0, this.toastLayer.parent.children.length - 1));
+    }
+  }
+
+  private async skipIntoMainLoop(): Promise<boolean> {
+    for (;;) {
+      if (!this.alive) return false;
+      try {
+        await this.skipIntoMain();
+        return this.alive && this.isValid;
+      } catch (err) {
+        if (!this.alive) return false;
+        const text = messageOf(err);
+        GameLog.shared.error("Boot", "mock login " + text);
+        this.showBootToast(text);
+        if (!this.chrome) return false;
+        const copy = await this.bootCopy();
+        const again = await this.chrome.prompt(text, copy.retry);
+        if (!again || !this.alive) return false;
+        this.face(STAGE_LOGIN);
+      }
     }
   }
 
@@ -243,6 +459,7 @@ export class Boot extends Component {
     this.destroyAuthPanels();
     const epoch = this.authEpoch;
     GameLog.shared.info("Boot", "stage=login");
+    this.face(STAGE_LOGIN);
     const stored = loadLoginPrefs(this.prefStore());
     const account = resolveAccount(stored?.account, this.account);
     const serverId = stored?.serverId ?? Session.serverId;
@@ -289,8 +506,6 @@ export class Boot extends Component {
     slot: { panel: LoginPanelView | null },
     account: string
   ): Promise<void> {
-    const loading = createLabel("加载登录界面…", 28);
-    place(loading, parent, 0, 40);
     let panel: LoginPanelView | null = null;
     try {
       panel = await mountP1LoginPrefab(parent, handlers, options);
@@ -303,8 +518,6 @@ export class Boot extends Component {
       if (!this.isValid || epoch !== this.authEpoch) return;
       GameLog.shared.error("Boot", "login prefab p1 " + messageOf(err) + "，改用原来的登录");
       panel = await this.fallbackLogin(parent, handlers, options);
-    } finally {
-      if (loading.isValid) loading.destroy();
     }
     if (!panel || !this.isValid || epoch !== this.authEpoch) {
       if (panel) panel.root.destroy();
@@ -337,22 +550,19 @@ export class Boot extends Component {
   ): void {
     slot.panel = panel;
     this.loginPanel = panel;
+    const hint = GameStore.hintFor(account);
+    if (hint) panel.setDetail(hint);
     if (this.useWs) {
-      panel.setStatus("正在连接 " + this.wsChoice.wsUrl);
-      const hint = GameStore.hintFor(account);
-      panel.setDetail(hint || "打开后发心跳 1004");
+      this.face(STAGE_LOGIN);
       void this.probeLocalWs();
       return;
     }
+    if (this.chrome) this.chrome.hide();
     if (this.pendingStatus) {
       panel.setStatus(this.pendingStatus);
       panel.setDetail(this.devMock ? "服未启动。可点进入游戏走 Mock" : "服未启动。请先双击 scripts/start-local-all.bat");
       this.pendingStatus = null;
-      return;
     }
-    panel.setStatus("账号 " + account);
-    const hint = GameStore.hintFor(account);
-    if (hint) panel.setDetail(hint);
   }
 
   private async mountLoginFromPrefab(
@@ -363,8 +573,6 @@ export class Boot extends Component {
     slot: { panel: LoginPanelView | null },
     account: string
   ): Promise<void> {
-    const loading = createLabel("加载登录界面…", 28);
-    place(loading, parent, 0, 40);
     let panel: LoginPanelView | null = null;
     try {
       panel = await mountLoginPrefab(parent, handlers, options);
@@ -377,8 +585,6 @@ export class Boot extends Component {
       if (!this.isValid || epoch !== this.authEpoch) return;
       GameLog.shared.error("Boot", "login prefab " + messageOf(err) + "，改用代码 UI");
       panel = buildLoginPanel(parent, handlers, options);
-    } finally {
-      if (loading.isValid) loading.destroy();
     }
     if (!panel || !this.isValid || epoch !== this.authEpoch) {
       if (panel) panel.root.destroy();
@@ -424,13 +630,10 @@ export class Boot extends Component {
     const opened = await this.openWs(epoch);
     if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
     if (!opened) return;
-    if (this.loginPanel) {
-      this.loginPanel.setStatus(WS_OPEN_STATUS);
-      this.loginPanel.setDetail("点进入游戏发登录 1001。登录前可以没有 s2c 1004。有角色就进主城。");
-      this.loginPanel.setBusy(false);
-    }
+    if (this.loginPanel) this.loginPanel.setBusy(false);
     this.authBusy = false;
-    this.showBootToast(WS_OPEN_TOAST);
+    GameLog.shared.info("Boot", WS_OPEN_STATUS);
+    if (this.chrome) this.chrome.hide();
   }
 
   /** 登录页上的「连本机服」。不立刻进主城，先打开桥再等用户点进入游戏。 */
@@ -450,10 +653,7 @@ export class Boot extends Component {
     const url = this.wsChoice.wsUrl;
     const net = this.ensureWsNet();
     const already = net.state === "connected" && net.url === url;
-    if (this.loginPanel && !already) {
-      this.loginPanel.setStatus("正在连接 " + url);
-      this.loginPanel.setDetail("请稍候");
-    }
+    if (!already) this.face(STAGE_LOGIN);
     try {
       if (!already) await net.connect(url);
     } catch (err) {
@@ -473,6 +673,7 @@ export class Boot extends Component {
       }
       this.autoFallback = false;
       GameLog.shared.error("Boot", "WebSocket 连接失败 " + messageOf(err) + "。" + WS_DOWN_LOG);
+      if (this.chrome) this.chrome.hide();
       if (this.loginPanel) {
         this.loginPanel.setStatus(WS_DOWN_STATUS);
         this.loginPanel.setDetail("请先双击 scripts/start-local-all.bat");
@@ -512,8 +713,7 @@ export class Boot extends Component {
       );
     }
     GameLog.shared.info("Ws", "选服 " + serverId + " 不写入登录包。两例 1001 的字段1都是 7、字段3都是 2。");
-    panel.setStatus("正在发送登录 1001");
-    panel.setDetail(uid === null ? "字段2未写，看回包" : "uid " + uid);
+    this.face(STAGE_LOGIN);
     const nowSec = Math.floor(Date.now() / 1000);
     let body: Uint8Array;
     try {
@@ -523,6 +723,7 @@ export class Boot extends Component {
       if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
       const kind = wireTimeoutKind(err);
       const text = kind ? kind + " 请求超时" : messageOf(err);
+      if (this.chrome) this.chrome.hide();
       if (kind) {
         const detail = this.noteWsTimeout(kind);
         if (this.loginPanel) {
@@ -547,7 +748,7 @@ export class Boot extends Component {
     GameLog.shared.info("Boot", summary.status + " " + summary.detail);
     if (wireRoleReady(summary) && summary.roleId !== null) {
       if (create) GameLog.shared.info("Boot", "已有角色，未发创角 1002");
-      this.enterWireCity(account, serverId, summary.roleId, null, summary);
+      void this.enterWireCity(account, serverId, summary.roleId, null, summary);
       return;
     }
     if (create && summary.empty) {
@@ -560,6 +761,7 @@ export class Boot extends Component {
       }, 0);
       return;
     }
+    if (this.chrome) this.chrome.hide();
     if (this.loginPanel) {
       const extra = create && !summary.empty ? "已有回包，未发创角 1002。" : "";
       this.loginPanel.setStatus(summary.status);
@@ -588,7 +790,7 @@ export class Boot extends Component {
     if (!this.alive || !this.useWs) return;
     const panel = this.loginPanel;
     if (state === "connecting") {
-      if (panel) panel.setStatus("正在连接 " + this.wsChoice.wsUrl);
+      if (!this.syncing) this.face(STAGE_LOGIN);
       return;
     }
     if (state === "reconnecting") {
@@ -600,6 +802,7 @@ export class Boot extends Component {
     if (state === "closed" && this.wsLive) {
       this.wsLive = false;
       GameLog.shared.warn("Boot", WS_CLOSE_STATUS);
+      if (!this.syncing && this.chrome) this.chrome.hide();
       if (panel) {
         panel.setStatus(WS_CLOSE_STATUS);
         panel.setDetail("可点进入游戏重试");
@@ -614,7 +817,7 @@ export class Boot extends Component {
     if (this.entering || this.authBusy) return;
     this.authBusy = true;
     panel.setBusy(true);
-    panel.setStatus("连接 Mock…");
+    this.face(STAGE_LOGIN);
     const account = resolveAccount(panel.account(), this.account);
     const serverId = panel.serverId();
     try {
@@ -634,13 +837,13 @@ export class Boot extends Component {
         return;
       }
       this.applyEntered(role);
-      panel.setStatus("进入主城…");
       this.logEntered("mock login ok");
       this.enterMain();
     } catch (err) {
       const text = messageOf(err);
       GameLog.shared.error("Boot", "mock login " + text);
       if (!this.isValid) return;
+      if (this.chrome) this.chrome.hide();
       panel.setStatus(text);
       panel.setBusy(false);
       this.authBusy = false;
@@ -673,12 +876,15 @@ export class Boot extends Component {
   private showCreate(parent: Node, account: string, hadRole: boolean, wire = false): void {
     this.authBusy = false;
     const epoch = this.authEpoch;
-    GameLog.shared.info("Boot", "stage=create account=" + account + " server=" + Session.serverName);
+    GameLog.shared.info(
+      "Boot",
+      "stage=create account=" + account + " server=" + Session.serverName + (wire ? " wire" : "")
+    );
+    if (this.chrome) this.chrome.hide();
     const options = {
       account,
       serverName: Session.serverName,
       hadRole,
-      hint: wire ? "登录 1001 回包是空的。确认后发创角 1002，再发一次 1001。有角色才进主城。" : undefined,
     };
     const slot: { panel: CreateRolePanelView | null } = { panel: null };
     const handlers = {
@@ -711,8 +917,6 @@ export class Boot extends Component {
     epoch: number,
     slot: { panel: CreateRolePanelView | null }
   ): Promise<void> {
-    const loading = createLabel("加载创角界面…", 28);
-    place(loading, parent, 0, 40);
     let panel: CreateRolePanelView | null = null;
     try {
       panel = await mountCreateRolePrefab(parent, handlers, options);
@@ -725,8 +929,6 @@ export class Boot extends Component {
       if (!this.isValid || epoch !== this.authEpoch) return;
       GameLog.shared.error("Boot", "create prefab " + messageOf(err) + "，改用代码 UI");
       panel = buildCreateRolePanel(parent, handlers, options);
-    } finally {
-      if (loading.isValid) loading.destroy();
     }
     if (!panel || !this.isValid || epoch !== this.authEpoch) {
       if (panel) panel.root.destroy();
@@ -744,13 +946,14 @@ export class Boot extends Component {
     if (this.entering || this.authBusy) return;
     this.authBusy = true;
     panel.setBusy(true);
-    panel.setStatus("创建角色…");
+    this.face(STAGE_LOGIN);
     try {
       const net = NetClient.shared;
       const resp = await Proto.roleCreate({ account: Session.account, name: panel.name() }, net);
       if (!this.isValid) return;
       if (!resp.ok) {
         const text = errorText(resp.code ?? ErrorCode.ROLE_NAME_EMPTY);
+        if (this.chrome) this.chrome.hide();
         panel.setStatus(text);
         panel.setBusy(false);
         this.authBusy = false;
@@ -760,13 +963,13 @@ export class Boot extends Component {
       const role = await Proto.roleEnter({ account: Session.account }, net);
       if (!role.ok || !role.hasRole) throw new GameError(role.code ?? ErrorCode.ROLE_ENTER_FAILED, "role.enter");
       this.applyEntered(role);
-      panel.setStatus("进入主城…");
       this.logEntered("create ok");
       this.enterMain();
     } catch (err) {
       const text = messageOf(err);
       GameLog.shared.error("Boot", "create " + text);
       if (!this.isValid) return;
+      if (this.chrome) this.chrome.hide();
       panel.setStatus(text);
       panel.setBusy(false);
       this.authBusy = false;
@@ -791,7 +994,7 @@ export class Boot extends Component {
     this.authBusy = true;
     panel.setBusy(true);
     const epoch = this.wsEpoch;
-    panel.setStatus("正在发送创角 1002");
+    this.face(STAGE_LOGIN);
     try {
       const createdMsg = await net.request("role.create", { name }, 5000);
       if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
@@ -802,9 +1005,10 @@ export class Boot extends Component {
       const again = summarizeLoginReply(wireBody(againMsg.data));
       GameLog.shared.info("Boot", "创角后 " + again.status + " " + again.detail);
       if (wireRoleReady(again) && again.roleId !== null) {
-        this.enterWireCity(this.wsAccount, Session.serverId, again.roleId, name, again);
+        void this.enterWireCity(this.wsAccount, Session.serverId, again.roleId, name, again);
         return;
       }
+      if (this.chrome) this.chrome.hide();
       panel.setStatus(again.status);
       panel.setBusy(false);
       this.authBusy = false;
@@ -813,6 +1017,7 @@ export class Boot extends Component {
       if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
       const kind = wireTimeoutKind(err);
       const text = kind ? kind + " 请求超时" : messageOf(err);
+      if (this.chrome) this.chrome.hide();
       if (kind) {
         panel.setStatus(text);
         this.noteWsTimeout(kind);
@@ -863,13 +1068,13 @@ export class Boot extends Component {
   }
 
   /** 真服有角色：只记角色 id（创角时加上刚填的名字），然后走和 Mock 一样的进主城。 */
-  private enterWireCity(
+  private async enterWireCity(
     account: string,
     serverId: number,
     roleId: number,
     name: string | null,
     summary: LoginReplySummary
-  ): void {
+  ): Promise<void> {
     Session.applyWireRole({ account, serverId, roleId, name });
     if (this.wsNet) {
       WireSession.hold(this.wsNet);
@@ -879,19 +1084,85 @@ export class Boot extends Component {
       WireSession.pullChapter();
       WireSession.pullIdle();
     }
-    if (this.loginPanel) {
-      this.loginPanel.setStatus("进入主城…");
-      this.loginPanel.setDetail(summary.detail);
-      this.loginPanel.setBusy(false);
-    }
-    if (this.createPanel) {
-      this.createPanel.setStatus("进入主城…");
-      this.createPanel.setBusy(false);
-    }
-    this.showBootToast(summary.status);
+    GameLog.shared.info("Boot", summary.status + " " + summary.detail);
     this.logEntered("wire login ok");
+    this.syncing = true;
+    this.face(STAGE_SYNC);
+    if (this.chrome) this.chrome.setRatio(0);
+    GameLog.shared.info("Boot", "stage=sync");
+    const ready = await this.waitCityPackets();
+    this.syncing = false;
+    if (!ready || !this.alive) {
+      this.authBusy = false;
+      if (this.chrome) this.chrome.hide();
+      if (this.loginPanel) this.loginPanel.setBusy(false);
+      if (this.createPanel) this.createPanel.setBusy(false);
+      return;
+    }
     this.authBusy = false;
     this.enterMain();
+  }
+
+  /** 等主城要的包。超时只重发三次拉取，不调用 prepareCity，已到的包留着。 */
+  private waitCityPackets(): Promise<boolean> {
+    const epoch = (this.syncEpoch += 1);
+    const total = 8;
+    return new Promise((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      let off = (): void => undefined;
+      let waitingRetry = false;
+      const started = { t: Date.now() };
+      const finish = (ok: boolean) => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+        off();
+        resolve(ok);
+      };
+      const repull = () => {
+        WireSession.pullRoleProfile();
+        WireSession.pullChapter();
+        WireSession.pullIdle();
+      };
+      const tick = () => {
+        if (waitingRetry) return;
+        if (timer) clearTimeout(timer);
+        timer = null;
+        if (!this.alive || epoch !== this.syncEpoch) {
+          finish(false);
+          return;
+        }
+        const missing = WireSession.citySyncMissing();
+        if (this.chrome) this.chrome.setRatio((total - missing.length) / total);
+        if (missing.length === 0) {
+          if (this.chrome) this.chrome.setRatio(1);
+          finish(true);
+          return;
+        }
+        if (Date.now() - started.t >= SYNC_TIMEOUT_MS) {
+          off();
+          waitingRetry = true;
+          const text = "同步超时，还缺 " + missing.join("、");
+          GameLog.shared.warn("Boot", "stage=sync " + text);
+          const ask = this.chrome ? this.chrome.prompt(text, "重试") : Promise.resolve(false);
+          void ask.then((again) => {
+            waitingRetry = false;
+            if (!again || !this.alive || epoch !== this.syncEpoch) {
+              finish(false);
+              return;
+            }
+            repull();
+            started.t = Date.now();
+            this.face(STAGE_SYNC);
+            off = WireSession.onSync(tick);
+            timer = setTimeout(tick, SYNC_POLL_MS);
+          });
+          return;
+        }
+        timer = setTimeout(tick, SYNC_POLL_MS);
+      };
+      off = WireSession.onSync(tick);
+      tick();
+    });
   }
 
   /** 改走 Mock 时关掉桥。进主城后的连接在 WireSession 里，这里也放下。 */
@@ -979,6 +1250,7 @@ export class Boot extends Component {
   private enterMain(): void {
     if (this.entering) return;
     this.entering = true;
+    if (this.logo) this.logo.stopMusic();
     GameLog.shared.info("Boot", "stage=enter-main");
     director.loadScene("Main", (err, scene) => {
       if (err || !scene) {
@@ -1007,6 +1279,12 @@ export class Boot extends Component {
     GameLog.shared.warn("Boot", "Canvas not found, parent UI on " + this.node.name);
     return this.node;
   }
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 /** NetClient 把 cmd 放在 GameError.detail。只有超时才换成长说明。 */

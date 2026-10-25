@@ -273,3 +273,23 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 | 圣物 | 每种 `kind` 用 1 星那条的名字、图标和特性。任一星的 id 在背包里就算持有 | 不发升星 |
 | 说明卡 | 按 BackpackInfoLayer 的 390×300 在运行时拼。不挂那个 prefab，也不发使用 / 出售 / 来源 | 关闭只关这张卡 |
 | 空名册 / 空背包 | 4001 还没到：英雄页写「真服英雄未同步」，格子改画 `herotype` 图鉴（灰、锁），不造英雄。4001 是空数组：写「空名册」，同样改画图鉴。有英雄仍只画名册。背包没到写「真服未同步」，空表写「空背包」，格子仍是空框。出阵没有英雄写「空名册，没有可上阵的英雄」。收到后续 s2c 会重画 | 图鉴不是角色进度。不把配置表行写进 `GameStore` |
+
+## 启动加载 / 热更
+
+清单和 `docs/mxzg-prefab-1to1-inventory.md` 里没有 Loading、Update、logo 的 ccbi。logo 和主城原先是代码搭的。`LoadingLayer` / `UpdateLayer` 因此按资源裁切摆在 720×1280 上，不是 ccbi 坐标换算。两套 Prefab 节点相同，只引用 `resources` 的 sprite-frame（`@f9941`）。生成脚本是 `client/tools/gen_loading_prefab.py`。
+
+| 项 | 现在怎么做 | 依据 / 还差什么 |
+|---|---|---|
+| logo 图 | `resources/ui/login/logo-scene_spr-logo.png`，原始尺寸显示 | 文件 69 字节，IHDR 3×3，是失败的图集抽出。仍用这张 |
+| logo 时间 | 淡入 1 秒、停 1 秒、淡出 0.5 秒。点一下跳过停留和淡出 | 旧 lua 不在仓库。常量在 `logoSplash.ts` |
+| logo 音乐 | `resources/audio/bgm-logo.mp3` 从淡入循环到进 Main | |
+| 背景 | `ui/login/bg-loading.jpg` 768×1300。cover 到 720×1280：scale = max(720/768, 1280/1300) ≈ 0.9846，画出 756×1280 | 左右被裁一点，不留黑边 |
+| 进度框 | `loading_spr-bg-2` 用裁切 617×37（原图 638×37，offsetX -1.5），y = -500 | 没有 ccbi 的条位置 |
+| 进度槽 / 填充 | 槽 532×32，填充 524×24，都在 y = -500 | 静态图垫在 spine 下面 |
+| 进度头 | `loading_spr-progress-1` 裁切 18×27，从 x = -262 跟着填充走 | |
+| spine | `spine/jindutiao` 动画 `stand`。原生宽 275，scaleX = 524/275 ≈ 1.9055，放在遮罩里。遮罩锚点在左，宽度从 0 长到 524 | Spine 3.7.94，播放前走 `runtimeSpineData`。播不了时仍能看见底下的填充图 |
+| 百分比 | `loading_text-bg` 84×84，字在 y = -448，格式 `N%` | |
+| 提示 | y = -580，宽 660。`loadingtips` 3701–3705 对 language，去掉 font 标签，约 3.5 秒随机换，不重复上一条 | 字色 `#ffeeb2` |
+| 阶段字 | y = -390。检查版本 / 更新资源 / 加载资源 / 读取配置 / 登录 / 同步角色 | |
+| 重试 | 默认隐藏，y = -280。图是 `button_btn-orange-big-1`，按下 `orange-big-2`，九宫边距沿用 meta（左 64、右 59） | 热更确认时把字改成「下载」 |
+| 热更层 | 和加载层同一棵节点。H5 只走界面和进度。其它平台下载 `version.manifest`，不改搜索路径 | 没有热更 ccbi，也没有 AssetsManager |

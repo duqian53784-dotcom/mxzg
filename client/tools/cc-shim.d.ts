@@ -169,6 +169,14 @@ declare module "cc" {
   };
 
   export const sys: {
+    isBrowser: boolean;
+    platform: string;
+    Platform: {
+      MOBILE_BROWSER: string;
+      DESKTOP_BROWSER: string;
+      ANDROID: string;
+      IOS: string;
+    };
     getSafeAreaRect(): { x: number; y: number; width: number; height: number };
     localStorage?: {
       getItem(key: string): string | null;
@@ -182,6 +190,20 @@ declare module "cc" {
 
   export class SpriteFrame {
     originalSize: { width: number; height: number };
+  }
+
+  export class AudioClip {}
+
+  export class AudioSource extends Component {
+    clip: AudioClip | null;
+    loop: boolean;
+    volume: number;
+    play(): void;
+    stop(): void;
+  }
+
+  export class UIOpacity extends Component {
+    opacity: number;
   }
 
   export const resources: {

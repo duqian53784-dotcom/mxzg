@@ -1,6 +1,6 @@
 # 读表
 
-运行时只读 `assets/resources/config/*.json`。`ConfigLoader.loadAll()` 先读 `config/manifest`，再 `resources.load`，路径不带扩展名。不在运行时打开 xlsx。
+运行时只读 `assets/resources/config/*.json`。`ConfigLoader.loadAll(onProgress?)` 先读 `config/manifest`，再按批 `resources.load`，每批结束回调已完成张数。`opencondition`、`system_gate`、`language`、`chapter`、`version`、`loadingtips` 任一失败则整次失败，并且不写入 `ConfigDb.current`。路径不带扩展名。不在运行时打开 xlsx。
 
 源表在仓库 `config/gameconfig/*.xlsx`（本机 `F:\project\mxzg\config\gameconfig`）。重新导出：
 
