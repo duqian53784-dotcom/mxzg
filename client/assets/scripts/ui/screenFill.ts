@@ -13,7 +13,7 @@ import { Proto } from "../net/protocol/Proto";
 import { WireSession } from "../net/WireSession";
 import { applyIdleClaim, claimToast, IDLE_HERO_EXP_ID, IDLE_ITEM_ID, IDLE_ROLE_EXP_ID } from "../module/idle/rewards";
 import { heroBaseStats, heroProfile, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles } from "../config/gameCatalog";
-import { chapterIdleMinute, CostStack, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed } from "../config/rosterCatalog";
+import { chapterDrops, chapterIdleMinute, DropFace, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, idleDropEverySec, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleLine } from "../config/rosterCatalog";
 import { goldPerMin, itemEveryMs } from "../module/idle/rewards";
 import { hangSpineStem } from "./idleHangRoster";
 import { mountBattleSpine } from "./battleSpine";
@@ -77,7 +77,7 @@ export function dressHangPanel(view: Node): void {
     const frame = plate.getChildByName("CCSprite_1");
     if (frame) frame.active = false;
     const drop = sprite("HangDrop", 150, 110, "ui/city/main-scene_spr-drop-1");
-    place(drop, plate, 2, 28);
+    place(drop, plate, 2, 48);
   }
   fitButton(findNamed(view, "btn_lineup"), "战力UP", 22);
   fitButton(findNamed(view, "btn_battle"), "战斗", 22);
@@ -86,6 +86,7 @@ export function dressHangPanel(view: Node): void {
   let claimNote = "";
   const tick = () => {
     if (!view.isValid) return;
+    paintHangExtras(view, plate);
     let elapsed = idleElapsedMs();
     const cap = idleCapMs();
     if (cap !== null && elapsed > cap) elapsed = cap;
@@ -116,6 +117,42 @@ export function dressHangPanel(view: Node): void {
     if (resetClock) dressClock.t = Date.now();
     tick();
   });
+}
+
+/**
+ * 掉落堆下面画当前关 drop_group 的物品图标。数量留在说明卡里，不写成已经掉到的数。
+ * VIP 一行没有角色等级时写「VIP未同步」，不把 vip 表某一档乘进三格。
+ */
+function paintHangExtras(view: Node, plate: Node | null): void {
+  const host = plate || view;
+  let vip = host.getChildByName("HangVip");
+  if (!vip) {
+    vip = createLabel(vipIdleLine(null), 14, { color: INK, width: 280, height: 36 });
+    vip.name = "HangVip";
+    place(vip, host, 0, plate ? -78 : 120);
+  }
+  const drops = chapterDrops(currentStageIdx());
+  const every = idleDropEverySec();
+  const key = currentStageIdx() + ":" + every + ":" + drops.map((row) => row.itemType + ":" + row.min + ":" + row.max).join(",");
+  const mark = host as Node & { mxzgDrops?: string };
+  if (mark.mxzgDrops === key) return;
+  mark.mxzgDrops = key;
+  const old = host.getChildByName("HangDrops");
+  if (old) old.destroy();
+  if (drops.length === 0) return;
+  const row = uiNode("HangDrops");
+  place(row, host, 0, plate ? -28 : 168);
+  const shown = drops.length < 6 ? drops.length : 6;
+  const freq = every === null ? "可能掉落" : "可能掉落 每" + every + "秒";
+  place(createLabel(freq, 12, { color: INK, width: 220, height: 18 }), row, 0, 28);
+  for (let i = 0; i < shown; i++) {
+    const face = drops[i];
+    const icon = itemIconResource(face.itemType, null) || "ui/bag/backpack_" + face.itemType;
+    const cell = sprite("drop" + i, 36, 36, icon, "ui/bag/backpack_spr-default");
+    place(cell, row, (i - (shown - 1) / 2) * 40, 0);
+    if (!cell.getComponent(Button)) cell.addComponent(Button);
+    cell.on(Button.EventType.CLICK, () => showInfoCard(view, dropCard(face, every)));
+  }
 }
 
 /** 底栏宝箱。Mock 走 idle.claim，真服只发已有的空 3005。 */
@@ -197,7 +234,12 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
       selected = toggleId(selected, heroId);
       paint();
     });
-    writeNamed(view, "lbl_tip", selected.length >= 8 ? "上阵 8/8" : "已选 " + selected.length + "/8");
+    const owned = GameStore.heroes();
+    const roster = rosterOf(elem);
+    if (!owned) writeNamed(view, "lbl_tip", "真服英雄未同步");
+    else if (owned.length === 0) writeNamed(view, "lbl_tip", "空名册，没有可上阵的英雄");
+    else if (roster.length === 0) writeNamed(view, "lbl_tip", "这个元素没有");
+    else writeNamed(view, "lbl_tip", selected.length >= 8 ? "上阵 8/8" : "已选 " + selected.length + "/8");
   };
   for (let i = 0; i <= 5; i++) {
     const button = findNamed(view, "btn_elem" + i);
@@ -252,6 +294,8 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
     });
   }
   paint();
+  const offForm = WireSession.onSync(() => paint());
+  view.once(Node.EventType.NODE_DESTROYED, () => offForm());
 }
 
 /** 英雄详情：装备圈、属性、技能、育成页签。不发升级协议。 */
@@ -349,44 +393,30 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     const all = GameStore.heroes();
     writeNamed(view, "lbl_capacity", "空间 " + (all ? all.length : 0) + "/" + heroSpaceCap());
     if (tab === "dragon") {
-      writeNamed(view, "lbl_go", "圣龙和圣物");
+      writeNamed(view, "lbl_go", dragonHeadLine());
       paintDragonBoard(view, content);
       return;
     }
-    writeNamed(view, "lbl_go", tab === "book" ? "灰头像是还没有" : "点头像看详情");
     const deployed = deployedSet();
     if (tab === "hero") {
       const roster = rosterOf(elem);
-      const shown = paddedSlots(roster.length);
-      for (let i = 0; i < shown; i++) {
-        const hero = i < roster.length ? roster[i] : null;
-        const cell = heroCell(hero, hero ? deployed.has(hero.heroId || 0) : false, hero ? () => openHero(hero) : null, false);
-        place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+      if (all && all.length > 0) {
+        writeNamed(view, "lbl_go", roster.length > 0 ? "点头像看详情" : "这个元素没有");
+        const shown = paddedSlots(roster.length);
+        for (let i = 0; i < shown; i++) {
+          const hero = i < roster.length ? roster[i] : null;
+          const cell = heroCell(hero, hero ? deployed.has(hero.heroId || 0) : false, hero ? () => openHero(hero) : null, false);
+          place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+        }
+        sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 400);
+        return;
       }
-      sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 400);
+      writeNamed(view, "lbl_go", all === null ? "真服英雄未同步，灰的是图鉴" : "空名册，灰的是图鉴");
+      paintHeroBook(view, content, elem, deployed, openHero);
       return;
     }
-    const book = bookOf(elem);
-    const shown = paddedSlots(book.length);
-    for (let i = 0; i < shown; i++) {
-      const profile = i < book.length ? book[i] : null;
-      if (!profile) {
-        place(heroCell(null, false, null, false), content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
-        continue;
-      }
-      const owned = heroByType(profile.type);
-      const cell = heroCell(
-        owned || { heroId: null, heroType: profile.type, name: profile.name, level: null, star: profile.star, fighting: null },
-        owned ? deployed.has(owned.heroId || 0) : false,
-        () => {
-          if (owned) openHero(owned);
-          else showInfoCard(view, profileCard(profile));
-        },
-        !owned
-      );
-      place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
-    }
-    sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 400);
+    writeNamed(view, "lbl_go", "灰头像是还没有");
+    paintHeroBook(view, content, elem, deployed, openHero);
   };
   const filters = [0, 1, 2, 3, 4, 5];
   for (let i = 0; i < filters.length; i++) {
@@ -416,10 +446,11 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
   place(skin, host, 130, 168);
   place(createLabel("永久技能", 16, { color: CREAM, width: 130, height: 28 }), skin, 0, 0);
   paint();
+  const offHero = WireSession.onSync(() => paint());
+  view.once(Node.EventType.NODE_DESTROYED, () => offHero());
 }
 
 function fillBag(view: Node): void {
-  writeNamed(view, "lbl_title", "背包");
   let tab: BagTab = "item";
   const host = uiNode("BagFill");
   place(host, view, 0, 0);
@@ -431,6 +462,10 @@ function fillBag(view: Node): void {
     for (let i = 0; i < tabs.length; i++) {
       paintSprite(tabs[i], BAG_TABS[i].id === tab ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
     }
+    const all = GameStore.bag();
+    if (all === null) writeNamed(view, "lbl_title", "背包 · 真服未同步");
+    else if (countBag(all) === 0) writeNamed(view, "lbl_title", "背包 · 空背包");
+    else writeNamed(view, "lbl_title", "背包");
     const rows = bagRows(tab);
     const shown = paddedSlots(rows.length);
     for (let i = 0; i < shown; i++) {
@@ -459,6 +494,8 @@ function fillBag(view: Node): void {
     place(tip, bubble.parent, 150, 90);
   }
   paint();
+  const offBag = WireSession.onSync(() => paint());
+  view.once(Node.EventType.NODE_DESTROYED, () => offBag());
 }
 
 function paintFormationGrid(view: Node, elem: number, selected: number[], toggle: (id: number) => void): void {
@@ -626,17 +663,85 @@ function paintGrow(
 }
 
 function paintStarUp(body: Node, hero: StoreHero, profile: HeroProfile | null): void {
-  const text = starText(hero, profile);
-  if (!text) {
+  const star = hero.star ?? ((profile && profile.star) || 1);
+  const cur = heroStarStep(star);
+  const nxt = heroStarStep(star + 1);
+  if (!cur && !nxt) {
     place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 40 }), body, 0, 20);
     return;
   }
+  const maxed = star >= 14 || !nxt;
+  place(createLabel(star + "星" + (maxed ? "  已满星" : "  →  " + (star + 1) + "星"), 18, { color: INK, width: 280, height: 28 }), body, 0, 92);
+  const limitNow = cur ? String(cur.levelLimit) : "—";
+  const limitNext = nxt ? String(nxt.levelLimit) : "—";
+  place(createLabel("等级上限  " + limitNow + (maxed ? "" : "  →  " + limitNext), 16, { color: INK, width: 420, height: 24 }), body, 0, 64);
+  const atkNow = cur ? String(cur.attackShow) : "—";
+  const hpNow = cur ? String(cur.hpShow) : "—";
+  const atkNext = nxt ? String(nxt.attackShow) : "—";
+  const hpNext = nxt ? String(nxt.hpShow) : "—";
   place(
-    createLabel(text + "\n升星没有服端写协议，不改星级", 16, { color: INK, width: 460, height: 200, align: "left" }),
+    createLabel(
+      "攻击 " + atkNow + (maxed ? "" : " → " + atkNext) + "    生命 " + hpNow + (maxed ? "" : " → " + hpNext),
+      16,
+      { color: INK, width: 440, height: 24 }
+    ),
     body,
     0,
-    -20
+    38
   );
+  paintStarSkills(body, profile, cur, nxt, maxed);
+  if (!maxed && nxt) paintStarCosts(body, hero, nxt);
+  const button = sprite("UpStar", 120, 36, "ui/common/button_btn-tab-24");
+  place(button, body, -40, -112);
+  place(createLabel(maxed ? "已满星" : "升星", 16, { color: INK, width: 100, height: 24 }), button, 0, 0);
+  if (!button.getComponent(Button)) button.addComponent(Button);
+  button.on(Button.EventType.CLICK, () => {
+    GameLog.shared.info("Hero", "升星没有服端写协议，不改星级");
+  });
+  place(createLabel("不发升星协议", 12, { color: INK, width: 160, height: 18 }), body, 140, -112);
+}
+
+function paintStarSkills(body: Node, profile: HeroProfile | null, cur: StarStep | null, nxt: StarStep | null, maxed: boolean): void {
+  const skills = profile ? profile.skills : [];
+  const n = skills.length < 4 ? skills.length : 4;
+  if (n === 0) {
+    place(createLabel("无技能", 14, { color: INK, width: 200, height: 22 }), body, 0, 8);
+    return;
+  }
+  for (let i = 0; i < n; i++) {
+    const skill = skills[i];
+    const x = (i - (n - 1) / 2) * 108;
+    const icon = sprite("skill" + i, 36, 36, "ui/hero/skill-icon_" + skill.id, "ui/hero/hero-icon_spr-default");
+    place(icon, body, x, 4);
+    const from = cur && cur.skillLevels.length > i ? cur.skillLevels[i] : null;
+    const to = nxt && nxt.skillLevels.length > i ? nxt.skillLevels[i] : null;
+    const line = "Lv" + (from === null ? "—" : from) + (maxed ? "" : "→" + (to === null ? "—" : to));
+    place(createLabel(shortName(skill.name), 12, { color: INK, width: 96, height: 16 }), body, x, -22);
+    place(createLabel(line, 12, { color: INK, width: 96, height: 16 }), body, x, -38);
+  }
+}
+
+function paintStarCosts(body: Node, hero: StoreHero, nxt: StarStep): void {
+  const stacks = nxt.cost.concat(nxt.needItem);
+  const needs = heroStarNeeds(hero.heroType, nxt.star);
+  if (stacks.length === 0 && needs.length === 0) {
+    place(createLabel("升星材料 无", 14, { color: INK, width: 240, height: 22 }), body, 0, -62);
+    return;
+  }
+  const icons = stacks.length < 4 ? stacks.length : 4;
+  for (let i = 0; i < icons; i++) {
+    const stack = stacks[i];
+    const face = itemProfile(stack.itemType, null);
+    const icon = face && face.icon ? face.icon : "ui/bag/backpack_" + stack.itemType;
+    const cell = sprite("cost" + i, 32, 32, icon, "ui/bag/backpack_spr-default");
+    place(cell, body, -120 + i * 44, -58);
+    place(createLabel("×" + stack.num, 11, { color: INK, width: 40, height: 14 }), body, -120 + i * 44, -80);
+  }
+  if (needs.length > 0) {
+    const bits: string[] = [];
+    for (let i = 0; i < needs.length && bits.length < 2; i++) bits.push(sacrificeLine(needs[i]));
+    place(createLabel(bits.join("  "), 12, { color: INK, width: 220, height: 32 }), body, 120, -62);
+  }
 }
 
 function paintGems(view: Node, body: Node, placeId: number, onPick: (id: number) => void): void {
@@ -701,9 +806,9 @@ function paintDragonBoard(view: Node, content: Node): void {
     const card = dragonCard(face, () => showInfoCard(view, {
       icon: face.portrait,
       title: face.name,
-      typeLine: "圣龙",
-      body: "未解锁",
-      fallback: "ui/dragon/dragon_identify-0",
+      typeLine: "圣龙图鉴",
+      body: dragonBlurb(),
+      fallback: "ui/dragon/dragon_btn-illustration",
     }));
     place(card, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -70, 140));
   }
@@ -728,13 +833,11 @@ function dragonCard(face: { name: string; portrait: string }, onTap: () => void)
   const root = uiNode("DragonCard");
   const ui = root.addComponent(UITransform);
   ui.setContentSize(100, 130);
-  const portrait = sprite("face", 84, 84, face.portrait, "ui/dragon/dragon_identify-0");
+  const portrait = sprite("face", 64, 64, face.portrait, "ui/dragon/dragon_btn-illustration");
   place(portrait, root, 0, 18);
-  const image = portrait.getComponent(Sprite);
-  if (image) image.grayscale = true;
   place(sprite("lock", 32, 32, "ui/dragon/dragon_spr-lock"), root, 26, 42);
   place(createLabel(face.name, 14, { color: INK, width: 96, height: 22 }), root, 0, -36);
-  place(createLabel("未解锁", 12, { color: INK, width: 80, height: 18 }), root, 0, -54);
+  place(createLabel("图鉴", 12, { color: INK, width: 80, height: 18 }), root, 0, -54);
   if (!root.getComponent(Button)) root.addComponent(Button);
   root.on(Button.EventType.CLICK, onTap);
   return root;
@@ -769,6 +872,68 @@ function rosterOf(elem: number): StoreHero[] {
     if (profile && profile.elem === elem) rows.push(all[i]);
   }
   return rows;
+}
+
+function paintHeroBook(
+  view: Node,
+  content: Node,
+  elem: number,
+  deployed: Set<number>,
+  openHero: (hero: StoreHero) => void
+): void {
+  const book = bookOf(elem);
+  if (book.length === 0) {
+    place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 36 }), content, 0, -40);
+    sizeScroll(content, 400, 400);
+    return;
+  }
+  const shown = paddedSlots(book.length);
+  for (let i = 0; i < shown; i++) {
+    const profile = i < book.length ? book[i] : null;
+    if (!profile) {
+      place(heroCell(null, false, null, false), content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+      continue;
+    }
+    const owned = heroByType(profile.type);
+    const cell = heroCell(
+      owned || { heroId: null, heroType: profile.type, name: profile.name, level: null, star: profile.star, fighting: null },
+      owned ? deployed.has(owned.heroId || 0) : false,
+      () => {
+        if (owned) openHero(owned);
+        else showInfoCard(view, profileCard(profile));
+      },
+      !owned
+    );
+    place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+  }
+  sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 400);
+}
+
+function countBag(all: StoreBagItem[]): number {
+  let n = 0;
+  for (let i = 0; i < all.length; i++) {
+    const item = all[i];
+    if (item.num !== null && item.num <= 0) continue;
+    if (itemIsWallet(item.itemType, item.itemId)) continue;
+    n += 1;
+  }
+  return n;
+}
+
+function dragonHeadLine(): string {
+  const snap = WireSession.dragon;
+  if (!snap) return "圣龙图鉴";
+  if (snap.attrLevel !== null) return "圣龙等级 " + snap.attrLevel;
+  return "圣龙已同步";
+}
+
+function dragonBlurb(): string {
+  const snap = WireSession.dragon;
+  const bits = ["图鉴。没有单独的物种立绘。"];
+  if (snap && snap.attrLevel !== null) bits.push("服务器圣龙等级 " + snap.attrLevel);
+  else if (!snap) bits.push("圣龙数据未同步");
+  else bits.push("等级未带");
+  return bits.join("\n");
 }
 
 function bagRows(tab: BagTab): StoreBagItem[] {
@@ -1089,44 +1254,6 @@ function relicOwned(relic: RelicFace): number {
   return n;
 }
 
-function starText(hero: StoreHero, profile: HeroProfile | null): string {
-  const star = hero.star ?? (profile && profile.star) ?? 1;
-  const next = star + 1;
-  const cur = heroStarStep(star);
-  const nxt = heroStarStep(next);
-  if (!cur && !nxt) return "";
-  if (star >= 14 || !nxt) {
-    const limit = cur ? "等级上限 " + cur.levelLimit : "";
-    return star + "星\n已满星" + (limit ? "\n" + limit : "");
-  }
-  const lines: string[] = [];
-  lines.push(star + "星 → " + next + "星");
-  if (cur) lines.push("等级上限 " + cur.levelLimit + " → " + nxt.levelLimit);
-  else lines.push("等级上限 " + nxt.levelLimit);
-  lines.push("攻击展示 " + (cur ? cur.attackShow : 0) + " → " + nxt.attackShow);
-  lines.push("生命展示 " + (cur ? cur.hpShow : 0) + " → " + nxt.hpShow);
-  lines.push("进阶消耗 " + costLine(nxt.cost));
-  const needs = heroStarNeeds(hero.heroType, next);
-  if (needs.length === 0) lines.push("升星材料 无");
-  else {
-    const bits: string[] = [];
-    for (let i = 0; i < needs.length; i++) bits.push(sacrificeLine(needs[i]));
-    lines.push("升星材料 " + bits.join("，"));
-  }
-  return lines.join("\n");
-}
-
-function costLine(costs: CostStack[]): string {
-  if (costs.length === 0) return "无";
-  const bits: string[] = [];
-  for (let i = 0; i < costs.length; i++) {
-    const face = itemProfile(costs[i].itemType, null);
-    const name = face && face.name ? face.name : String(costs[i].itemType);
-    bits.push(name + " ×" + costs[i].num);
-  }
-  return bits.join("  ");
-}
-
 function sacrificeLine(need: SacrificeNeed): string {
   if (need.type > 0) {
     const profile = heroProfile(need.type);
@@ -1150,6 +1277,20 @@ function profileCard(profile: HeroProfile): InfoCard {
     title: profile.name,
     typeLine: elemLabel(profile.elem) + "  " + (profile.star === null ? "—" : profile.star + "星"),
     body: (names.length > 0 ? names.join("  ") : "无技能") + (statLine ? "\n" + statLine : "") + "\n未获得",
+  };
+}
+
+function dropCard(face: DropFace, every: number | null): InfoCard {
+  const profile = itemProfile(face.itemType, null);
+  const count = face.min === face.max ? "表内数量 " + face.min : "表内 " + face.min + "–" + face.max;
+  const freq = every === null ? "" : "每 " + every + " 秒判定一次。";
+  return {
+    icon: (profile && profile.icon) || "ui/bag/backpack_" + face.itemType,
+    fallback: "ui/bag/backpack_spr-default",
+    frame: rareFrame(profile ? profile.rare : 0),
+    title: profile && profile.name ? profile.name : "掉落 " + face.itemType,
+    typeLine: "可能掉落",
+    body: freq + count + "。不在这里掷随机数，也不写进每分钟三格。",
   };
 }
 

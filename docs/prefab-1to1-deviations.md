@@ -260,15 +260,16 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 | 下一关 | 胜利时把已有 `btn_report` 改成「下一关」。Mock 再进当前关，真服先回挂机再走原来的 3001 | 不新开协议。失败不显示这颗钮 |
 | 快速战斗 | `QuickBattleLayer` 用 `idle_speed_up`（7200 秒）预览两小时 `reward_base`，并读已有 3012 | 不发 3013，不发奖励。说明和跳转只改提示字 |
 | 我要变强 | 打开已有 `HeroSuggestLayer`。四个页签只切换 `node_strong` / `resource` / `hero` / `lineup` | 不发协议。名字最多写名册前三名 |
-| VIP | 不加 `extra_idle_time`、金币 / 英雄经验 / 角色经验加成 | 表里有，名册上没有 VIP 等级可用 |
-| 随机掉落 | 不画进三格 | `idle_drop_frequency` = 60 秒，走 `drop_group` |
+| VIP | 挂机条写「VIP未同步」。`vipIdleLine(level)` 能按 `vip` 表写出金币 / 英雄经验 / 角色经验百分比和 `extra_idle_time`。三格和封顶仍是 `reward_base` + `idle_max_time`，不乘某一档 | s2c 2001 已核对的字段没有 `vip_level`。字段 15 按旧说明不读。没有等级就不把表里的 10% 或 0% 当成这名角色的加成 |
+| 随机掉落 | 掉落堆下面画当前关 `drop_group` 的物品图标，最多 6 个。点开写表内 min/max 和「每 60 秒」。不写进三格，不掷随机数 | `chapterreward.drop_group` → `droptrigger` → `dropgroup`。`idle_drop_frequency` = 60 |
 | 时钟 | 超过 1 小时写成 `hh:mm:ss`。读到 `idle_max_time` 就停在 06:00:00 | 没读到表时不封顶 |
-| 头像 | `ui/hero/hero-icon_<item_id>`。没有 `item_id` 的用 `hero-icon_spr-default` | 雷顿 10701001、赫卡忒·幽魂 10701003、撒旦·赫莱 10701004、深渊终结者 10701006 没有图标 |
+| 头像 | `ui/hero/hero-icon_<item_id>`。`item_id` 为 0 时用 `item.idx` = 英雄类型号上的 `hero-icon/` 路径 | 雷顿、赫卡忒·幽魂、撒旦·赫莱、深渊终结者的图是 `hero-icon_20701001` / `20701003` / `20701004` / `20701006` |
 | 图鉴顺序 | `herotype` 表的顺序。同类型多只英雄打开名册里的第一只 | 旧排序没对上 |
 | 元素名 | 1 火、2 水、3 木、4 光、5 暗 | 对 language 2101–2105。不是 Lua 实证 |
-| 星UP | 只写等级上限、展示攻血、进阶石和 `to_N_star` 材料。升到 N 星的消耗用 `herostar` 里这一星那一行 | 不发升级协议。满星写「已满星」 |
+| 星UP | 详情页按 `herostar` 画等级上限、攻击 / 生命展示、技能槽等级（`skill1`…`skill4`）和 `upstar_cost` / `need_item` 图标，再加上 `to_N_star`。升星钮只记日志 | 不发升级协议。满星写「已满星」。表上没有速度展示列，这一行不写速度 |
 | 宝石 / 神装 | 按部位筛，图标 `backpack_<id>`，持有数是背包里 `itemType` 或 `itemId` 等于这条 idx 的数量。0 就灰掉加锁 | `StoreHero` 没有已穿装备。这是图鉴，不是「这名英雄身上穿着什么」 |
 | 稀有框 | 只有 2 / 3 / 4 用 `backpack_spr-rare-*` | 没有 `spr-rare-1` 或 `spr-rare-5`，其余用 `backpack_item-frame-1` |
-| 圣龙立绘 | `dragon_identify-1`…`4` 按名字第一次出现的顺序：斯摩格、迪斯莱尔、雷博尔、英菲尼迪。全部灰掉，写未解锁 | 表上没有立绘列。这四张图未必就是这四条龙 |
+| 圣龙立绘 | 四个名字仍按 `dragonlevel` 第一次出现：斯摩格、迪斯莱尔、雷博尔、英菲尼迪。格子用同一张 `dragon_btn-illustration`，写「图鉴」，不再把 `dragon_identify-1`…`4` 安到这四条上。标题在 s2c 59001 有 `attr_level` 时写「圣龙等级 N」 | `dragon_identify-0`…`11` 是鉴定光效，不是物种立绘。表上没有立绘列。不发 59007 升等级 |
 | 圣物 | 每种 `kind` 用 1 星那条的名字、图标和特性。任一星的 id 在背包里就算持有 | 不发升星 |
 | 说明卡 | 按 BackpackInfoLayer 的 390×300 在运行时拼。不挂那个 prefab，也不发使用 / 出售 / 来源 | 关闭只关这张卡 |
+| 空名册 / 空背包 | 4001 还没到：英雄页写「真服英雄未同步」，格子改画 `herotype` 图鉴（灰、锁），不造英雄。4001 是空数组：写「空名册」，同样改画图鉴。有英雄仍只画名册。背包没到写「真服未同步」，空表写「空背包」，格子仍是空框。出阵没有英雄写「空名册，没有可上阵的英雄」。收到后续 s2c 会重画 | 图鉴不是角色进度。不把配置表行写进 `GameStore` |
