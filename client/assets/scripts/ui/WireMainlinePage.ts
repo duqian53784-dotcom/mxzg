@@ -153,7 +153,7 @@ import { armBattleDelay } from "./battleClock";
 import { battleFrameStep, FrameReel, mountFrameReel, warmBattleFrames } from "./battleFramePlay";
 import { battleCastFrameCount, effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
 import { battleCastWait, battleRoundNumber, BattlePresentation, fallbackAttackTitle, formatBattleRound, nextBattleSpeed, planBattlePresentation, playbackBeats, signedHitFloats, signedHpDeltas } from "./battlePresentation";
-import { barsFromSides, beginHangBattle, bindHangSkip, bindHangSpeed, finishHangBattle, setHangSpeed, showHangStrike, stopHangBattle } from "./hangBattle";
+import { barsFromSides, beginHangBattle, bindHangSkip, bindHangSpeed, dropHangReplay, finishHangBattle, liftHangReplay, setHangSpeed, showHangStrike, stopHangBattle } from "./hangBattle";
 import {
   BattlePresentMount,
   clearBattleOverhead,
@@ -337,7 +337,7 @@ class WireMainlineController implements WireMainlinePage {
     this.body.parent = this.node;
     this.node.on(PAGE_SHELL_FIGHT, () => {
       this.challenge();
-      setPagePrefabShellVisible(this.node, this.phase !== "battle");
+      if (this.phase !== "battle" && !this.waiting) stopHangBattle(this.node);
     });
     this.node.on(HANG_PROBE_EVENT, () => this.openProbe());
     this.seenSerial = WireSession.battleSerial;
@@ -522,6 +522,7 @@ class WireMainlineController implements WireMainlinePage {
       const errText = WireSession.wireErrorText || "服端错误";
       this.host.showToast(errText);
       this.write(this.statusLabel, errText);
+      stopHangBattle(this.node);
       return;
     }
     if (this.waitKind === "3100") {
@@ -548,6 +549,7 @@ class WireMainlineController implements WireMainlinePage {
       const errText = WireSession.wireErrorText || "服端错误";
       this.host.showToast(errText);
       this.write(this.statusLabel, errText);
+      stopHangBattle(this.node);
       return;
     }
     if (this.waitKind !== "3102") return;
@@ -583,6 +585,7 @@ class WireMainlineController implements WireMainlinePage {
 
   private showInfo(): void {
     this.phase = "info";
+    stopHangBattle(this.node);
     this.clearBody();
     if (!this.probeOn()) {
       setPagePrefabShellVisible(this.node, true);
@@ -796,6 +799,7 @@ class WireMainlineController implements WireMainlinePage {
       this.resumeChallenge = false;
       this.host.showToast(WIRE_GM_CLOSED_TOAST);
       this.write(this.statusLabel, this.statusText());
+      stopHangBattle(this.node);
     });
     GameLog.shared.info("Mainline", "wire gm 2015 ADD_HERO type=" + this.gmTypeId);
   }
@@ -842,6 +846,7 @@ class WireMainlineController implements WireMainlinePage {
       this.waitKind = null;
       this.resumeChallenge = false;
       this.write(this.statusLabel, "3100 无回包");
+      stopHangBattle(this.node);
     });
     GameLog.shared.info("Mainline", "wire lineup save 3100 hero_id=" + id + " position=2");
   }
@@ -1189,11 +1194,15 @@ class WireMainlineController implements WireMainlinePage {
         }
         this.battleShell = shell;
         this.mountPrefabBattle(plan, shell);
+        const layerVfx = shell.root.getChildByName("LayerVfx");
+        if (!layerVfx) GameLog.shared.warn("Mainline", "战斗 LayerVfx 没有抬上挂机壳");
+        liftHangReplay(this.node, shell.layerField, layerVfx);
         GameLog.shared.info("Mainline", "battle prefab " + shell.root.name);
         return true;
       } catch (err) {
         if (this.disposed || this.phase !== "battle") return false;
         GameLog.shared.warn("Mainline", "battle prefab " + messageOf(err) + "，改用代码 UI");
+        GameLog.shared.warn("Mainline", "战斗代码 UI 留在壳下，挂机条仍显示回合和飘字");
         this.host.showToast("战斗 Prefab 未加载，改用代码 UI");
         this.clearBody();
         this.present = present;
@@ -2150,6 +2159,7 @@ class WireMainlineController implements WireMainlinePage {
 
   private clearBody(): void {
     this.stopFrameReels();
+    dropHangReplay(this.node);
     this.detachInfoScroll();
     this.battleShell = null;
     this.speedButton = null;

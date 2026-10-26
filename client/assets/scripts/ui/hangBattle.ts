@@ -4,9 +4,11 @@
  * 血条跟站位。战报没有怒气字段时，怒气条按当前回合 / 15 填充，只标位置。
  * 伤害红字，治疗绿字，暴击用更大的金字。数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
  */
-import { Button, Color, Label, Node, Overflow, Sprite, UITransform } from "cc";
+import { Button, Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { GameLog } from "../core/GameLog";
 import { BattleRound, BattleUnit } from "../module/mainline/battle";
 import { paintSpeedIcon } from "./BattlePage";
+import { mountNamedSpine } from "./battleSpine";
 import { placeHangFloats, type HangFloat } from "./hangFloat";
 import { pauseIdleSkirmishes, resumeIdleSkirmishes } from "./idleHangSkirmish";
 import { IDLE_SKIRMISH_SPOTS } from "./idleHangSkirmishPlan";
@@ -89,6 +91,7 @@ export function beginHangBattle(page: Node, left: string, right: string): void {
     flash.active = true;
     setText(flash, "战斗开始");
   }
+  playOpenVfx(layer);
   paintVs(layer, hold);
   const round = layer.getChildByName("HangRound");
   if (round) setText(round, "1/15");
@@ -164,9 +167,39 @@ export function stopHangBattle(page: Node): void {
   holds.delete(page);
   const layer = layerOf(page);
   if (layer) layer.destroy();
+  dropHangReplay(page);
   setTalk(page, true);
   setCaption(page, "战斗");
   resumeIdleSkirmishes();
+}
+
+/**
+ * 把战报的站场和特效抬到挂机壳上，大理石留在下面。
+ * 不抬整页 BattlePage，它的森林底会盖住殿堂。也不抬飘字层，挂机条已经在画飘字。
+ * 演武英雄先藏起来，避免和战报站位叠两套人。
+ */
+export function liftHangReplay(page: Node, field: Node | null, vfx: Node | null): void {
+  const host = shellOf(page) || page;
+  if (!host.isValid) return;
+  setIdleCast(host, false);
+  const hang = host.getChildByName("IdleHang");
+  seatLifted(host, field, hang);
+  seatLifted(host, vfx, field && field.parent === host ? field : hang);
+  const hud = host.getChildByName("HangBattle");
+  if (hud && hud.isValid) hud.setSiblingIndex(Math.max(0, host.children.length - 1));
+}
+
+/** 拆掉抬上来的站场和特效。战斗 HUD 还在时不把演武英雄放回来。 */
+export function dropHangReplay(page: Node): void {
+  const host = shellOf(page) || page;
+  if (!host.isValid) return;
+  const kids = host.children.slice();
+  for (let i = 0; i < kids.length; i++) {
+    const kid = kids[i] as Node & { mxzgLifted?: boolean };
+    if (kid.mxzgLifted && kid.isValid) kid.destroy();
+  }
+  const fighting = holds.has(page) || !!host.getChildByName("HangBattle");
+  if (!fighting) setIdleCast(host, true);
 }
 
 function ensureHold(page: Node): HangHold {
@@ -186,9 +219,68 @@ function layerOf(page: Node): Node | null {
 }
 
 function battleHost(page: Node): Node {
-  const shell = page.getChildByName("PagePrefabShell");
-  if (shell && shell.isValid && shell.active) return shell;
+  const shell = shellOf(page);
+  if (shell && shell.active) return shell;
   return page;
+}
+
+function shellOf(page: Node): Node | null {
+  const shell = page.getChildByName("PagePrefabShell");
+  return shell && shell.isValid ? shell : null;
+}
+
+function seatLifted(host: Node, node: Node | null, after: Node | null): void {
+  if (!node || !node.isValid) return;
+  const lifted = node as Node & { mxzgLifted?: boolean };
+  lifted.mxzgLifted = true;
+  if (node.parent !== host) node.parent = host;
+  const at = after && after.isValid && after.parent === host ? after.getSiblingIndex() + 1 : 0;
+  node.setSiblingIndex(Math.min(at, Math.max(0, host.children.length - 1)));
+}
+
+function setIdleCast(host: Node, active: boolean): void {
+  const hang = host.getChildByName("IdleHang");
+  if (!hang || !hang.isValid) return;
+  const heroes = hang.getChildByName("IdleHeroes");
+  if (heroes) heroes.active = active;
+  const foes = hang.getChildByName("IdleFoes");
+  if (foes) foes.active = active;
+}
+
+let openVfxMiss = false;
+
+function playOpenVfx(layer: Node): void {
+  let host = layer.getChildByName("HangOpenVfx");
+  if (!host || !host.isValid) {
+    host = uiNode("HangOpenVfx");
+    host.addComponent(UITransform).setContentSize(220, 220);
+    place(host, layer, 0, 180);
+  }
+  mountNamedSpine(host, "ZDKS", "stand", {
+    loop: false,
+    onFail: () => {
+      if (openVfxMiss) return;
+      openVfxMiss = true;
+      GameLog.shared.warn("Mainline", "开战特效 spine/ZDKS 没有挂上，仍写战斗开始");
+    },
+  });
+}
+
+function paintHangSprite(node: Node, path: string, miss: string): void {
+  const sprite = node.getComponent(Sprite);
+  if (!sprite) return;
+  try {
+    resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
+      if (!node.isValid) return;
+      if (err || !asset) {
+        GameLog.shared.warn("Mainline", miss);
+        return;
+      }
+      sprite.spriteFrame = asset;
+    });
+  } catch (err) {
+    GameLog.shared.warn("Mainline", miss);
+  }
 }
 
 function ensureLayer(page: Node): Node {
@@ -208,8 +300,15 @@ function ensureLayer(page: Node): Node {
   flash.name = "HangFlash";
   place(flash, layer, 0, 250);
 
-  const roundBg = createRect("HangRoundBg", 120, 36, new Color(16, 18, 28, 180));
+  const roundBg = createRect("HangRoundBg", 160, 36, new Color(16, 18, 28, 180));
   place(roundBg, layer, 0, 560);
+  const roundPlate = uiNode("HangRoundPlate");
+  const plateUi = roundPlate.addComponent(UITransform);
+  plateUi.setContentSize(160, 36);
+  const plateSprite = roundPlate.addComponent(Sprite);
+  plateSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  place(roundPlate, roundBg, 0, 0);
+  paintHangSprite(roundPlate, "ui/battle/battle-end_spr-round-bg", "回合牌 battle-end_spr-round-bg 没有挂上，仍用色块");
   const round = createLabel("1/15", 26, { color: INK, width: 110, height: 32 });
   round.name = "HangRound";
   place(round, layer, 0, 560);
@@ -242,8 +341,15 @@ function ensureLayer(page: Node): Node {
 
   const skip = createLabel("跳过", 22, { color: INK, width: 88, height: 40 });
   skip.name = "HangSkip";
-  const skipBg = createRect("HangSkipBg", 96, 44, new Color(46, 110, 190, 230));
+  const skipBg = createRect("HangSkipBg", 74, 76, new Color(46, 110, 190, 230));
   place(skipBg, layer, 300, 540);
+  const skipPlate = uiNode("HangSkipPlate");
+  const skipUi = skipPlate.addComponent(UITransform);
+  skipUi.setContentSize(74, 76);
+  const skipSprite = skipPlate.addComponent(Sprite);
+  skipSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  place(skipPlate, skipBg, 0, 0);
+  paintHangSprite(skipPlate, "ui/battle/battle-scene_btn-speed-11", "跳过钮 battle-scene_btn-speed-11 没有挂上，仍写跳过");
   place(skip, skipBg, 0, 0);
   if (!skipBg.getComponent(Button)) skipBg.addComponent(Button);
   skipBg.on(Button.EventType.CLICK, () => tapSkip(page));

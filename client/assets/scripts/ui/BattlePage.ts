@@ -187,6 +187,10 @@ function bindBattlePrefab(root: Node): BattlePrefabShell {
   const skip = requireNode(root, "LayerHud/BtnSkip");
   const retreat = requireNode(root, "LayerHud/BtnRetreat");
   const close = requireNode(root, "LayerHud/TopBar/BtnClose");
+  const vfxSkill = requireNode(root, battleVfxPath("skill"));
+  const vfxHit = requireNode(root, battleVfxPath("hit"));
+  const vfxScreen = requireNode(root, battleVfxPath("screen"));
+  const vfxOf = (role: BattleVfxRole): Node => (role === "skill" ? vfxSkill : role === "hit" ? vfxHit : vfxScreen);
 
   return {
     root,
@@ -217,10 +221,10 @@ function bindBattlePrefab(root: Node): BattlePrefabShell {
       setText(requireNode(root, path), text);
     },
     vfxAnchor(role: BattleVfxRole): Node {
-      return requireNode(root, battleVfxPath(role));
+      return vfxOf(role);
     },
     placeVfx(holder: Node, role: "skill" | "hit", pageX: number, pageY: number): void {
-      const anchor = requireNode(root, battleVfxPath(role));
+      const anchor = vfxOf(role);
       if (holder.parent !== anchor) holder.parent = anchor;
       const local = vfxLocal(role, pageX, pageY);
       holder.setPosition(local.x, local.y, 0);

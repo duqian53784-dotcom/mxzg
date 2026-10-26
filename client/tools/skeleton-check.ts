@@ -1255,6 +1255,7 @@ import {
 } from "../assets/scripts/net/protocol/wireGmCommand";
 import {
   decodeWireLineUpSave,
+  formationFaceSlot,
   WIRE_LINEUP_SAVE_SAMPLE_FRAME,
 } from "../assets/scripts/net/protocol/wireLineUpSave";
 import {
@@ -26882,6 +26883,47 @@ function checkCityHub(): void {
       shellSrc.indexOf("TOUCH_END") >= 0 &&
       shellSrc.indexOf("bindFightChrome") >= 0,
     "hang fight button rebinds after the page is in the scene and the fullscreen menu is not the hit target"
+  );
+  assert(
+    formationFaceSlot(0) === 2 &&
+      formationFaceSlot(1) === 3 &&
+      formationFaceSlot(2) === 5 &&
+      formationFaceSlot(6) === 9 &&
+      formationFaceSlot(7) === null &&
+      formationFaceSlot(-1) === null &&
+      formationFaceSlot(1.5) === null,
+    "formation faces sit on legal positions 2/3/5/6/7/8/9"
+  );
+  assert(
+    fillSrc.indexOf("formationFaceSlot") >= 0 &&
+      fillSrc.indexOf("hangMissionCaption") >= 0 &&
+      fillSrc.indexOf("dressChapterPreview") >= 0 &&
+      fillSrc.indexOf("这一关没有掉落表") >= 0 &&
+      fillSrc.indexOf("出战") >= 0 &&
+      shellSrc.indexOf("ChapterPreviewLayer") >= 0 &&
+      shellSrc.indexOf("startShellFight") >= 0 &&
+      shellSrc.indexOf("HangMissionChip") >= 0 &&
+      shellSrc.indexOf("main-city_icon-main_mission") >= 0,
+    "hang mission chip opens the existing chapter preview and fight still goes through the battle button"
+  );
+  const hangBattleSrc = readFileSync(uiSource("hangBattle.ts"), "utf8");
+  assert(
+    hangBattleSrc.indexOf("export function liftHangReplay") >= 0 &&
+      hangBattleSrc.indexOf("export function dropHangReplay") >= 0 &&
+      hangBattleSrc.indexOf("ZDKS") >= 0 &&
+      hangBattleSrc.indexOf("开战特效 spine/ZDKS 没有挂上，仍写战斗开始") >= 0 &&
+      hangBattleSrc.indexOf("battle-end_spr-round-bg") >= 0 &&
+      hangBattleSrc.indexOf("battle-scene_btn-speed-11") >= 0 &&
+      hangSrc.indexOf("挂机掉落堆 spine/res-block 没有挂上，仍用图标堆") >= 0,
+    "battle replay lifts onto the hang shell and missing open/loot effects stay visible"
+  );
+  const wireMainlineSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
+  assert(
+    wireMainlineSrc.indexOf("liftHangReplay") >= 0 &&
+      wireMainlineSrc.indexOf("dropHangReplay") >= 0 &&
+      wireMainlineSrc.indexOf('setPagePrefabShellVisible(this.node, this.phase !== "battle")') < 0 &&
+      wireMainlineSrc.indexOf("战斗代码 UI 留在壳下") >= 0,
+    "tapping fight keeps the hang shell up and lifts the prefab field instead of hiding it"
   );
   const framePlaySrc = readFileSync(uiSource("battleFramePlay.ts"), "utf8");
   const castPresentSrc = readFileSync(uiSource("battlePresentation.ts"), "utf8");

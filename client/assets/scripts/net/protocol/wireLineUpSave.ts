@@ -24,6 +24,13 @@ export const WIRE_MAIN_POSITION = 2;
 /** 阵法 1。不要把 1 或 4 编出去。 */
 export const WIRE_LINEUP_SAVE_POSITIONS = [2, 3, 5, 6, 7, 8, 9] as const;
 
+/** 出阵列表下标对应的 node_icon_ 号。越界是 null，格子 1 和 4 不在这张表里。 */
+export function formationFaceSlot(index: number): number | null {
+  if (!isFinite(index) || index < 0 || index !== Math.floor(index)) return null;
+  if (index >= WIRE_LINEUP_SAVE_POSITIONS.length) return null;
+  return WIRE_LINEUP_SAVE_POSITIONS[index];
+}
+
 /** hero_id=42、position=2 的整帧。formation_id 在字段 5，position 在字段 3。用来对照，不是默认发出的实例。 */
 export const WIRE_LINEUP_SAVE_SAMPLE_FRAME = "120000001c0c00000a0c080018002204082a18022801";
 
