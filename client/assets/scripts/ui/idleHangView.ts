@@ -7,7 +7,7 @@
  * 阵容是空的才用三套默认。加载失败把格子藏起来，不写套名。
  * 不给每个站位写「待命」。计时泡只有 Prefab 里那一个，挪到掉落堆上。
  * main-scene_spr-drop-1 是空的蓝金匾，不拿来当掉落堆。
- * 站场站好之后演武自己打：怪出现、挨打、收掉。点「战斗」才进真战报。
+ * 站场一次铺上 idleHangStems 返回的每一只（最多三格），演武不拆它们。点「战斗」才进真战报。
  */
 import { Color, Node, resources, sp, Sprite, SpriteFrame, UITransform } from "cc";
 import { GameLog } from "../core/GameLog";

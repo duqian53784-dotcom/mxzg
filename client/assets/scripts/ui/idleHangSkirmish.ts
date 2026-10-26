@@ -1,11 +1,13 @@
 /**
  * 挂机舞台上的演武。阵容站好之后一直打，不点「战斗」也打。
- * 敌人按当前关 chapter 里有 stand 的 hero_type 轮流出现，对不上就用敌方默认套。
- * 两波之间英雄留在地砖格上播 run，天和大理石往后滑。怪显示之后才攻击。套里没有 die 就打完收掉。
+ * 我方是挂机页铺上的那几只（最多三格），整段行军和战斗都留在地砖上，不拆、不重刷。
+ * 行军时大家播 run，天和大理石往左循环。遇到怪就改站立，背景停。
+ * 怪从右侧滑进格子。滑到位并且骨架出来之后才出刀。受击只打在被打的那只怪上。
+ * 怪收掉之后我方接着跑。不把我方当成新刷出来的人。
  * 飘字只是演出，不写钱包，不发 3001 / 3004 / 3005。
  * 点中间「战斗」进入真战报时暂停，回到挂机再继续。
  */
-import { Node } from "cc";
+import { director, Director, Node, Sprite, SpriteFrame, UITransform } from "cc";
 import { chapterEnemies } from "../config/gameCatalog";
 import { GameLog } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
@@ -15,32 +17,46 @@ import { mountFrameReel } from "./battleFramePlay";
 import { mountBattleSpine, SpineActor } from "./battleSpine";
 import { placeHangFloats } from "./hangFloat";
 import {
+  IDLE_FOE_ENTER_MS,
+  IDLE_HALL_SCROLL_PX,
   IDLE_HANG_SPOTS,
+  IDLE_MARCH_MS,
   IDLE_SKIRMISH_APPEAR_MS,
   IDLE_SKIRMISH_GAP_MS,
   IDLE_SKIRMISH_KILL_MS,
   IDLE_SKIRMISH_OPEN_MS,
   IDLE_SKIRMISH_SPOTS,
   IDLE_SKIRMISH_STRIKE_MS,
+  IDLE_SKY_SCROLL_PX,
   IdleFoePlan,
-  idleMarchScroll,
+  idleFoeEnterX,
+  idleHangLoopOffset,
   idleSkirmishHurt,
   idleSkirmishKillClip,
   idleSkirmishMayStrike,
   idleSkirmishStageIdx,
   idleSkirmishSwingClip,
   idleSkirmishSwings,
-  planIdleFoe,
+  planIdleWave,
 } from "./idleHangSkirmishPlan";
 import { place, uiNode } from "./UiKit";
 
-const MARCH_MS = 720;
-const MARCH_STEPS = 8;
 const FOE_LATE_MS = 2600;
+const ENTER_STEPS = 8;
 
 export interface IdleSkirmish {
   retarget(actors: SpineActor[]): void;
   stop(): void;
+}
+
+interface WaveFoe {
+  node: Node;
+  actor: SpineActor | null;
+  plan: IdleFoePlan;
+  entered: boolean;
+  ready: boolean;
+  hits: number;
+  dead: boolean;
 }
 
 const controls: { pause(): void; resume(): void }[] = [];
@@ -68,25 +84,24 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
   let generation = 0;
   let paused = false;
   let stopped = false;
-  let foeNode: Node | null = null;
-  let foeActor: SpineActor | null = null;
-  let foe: IdleFoePlan | null = null;
-  let foeShown = false;
   let waveGen = 0;
+  let fightStarted = false;
+  let waveFoes: WaveFoe[] = [];
   let puffNode: Node | null = null;
   let puffActor: SpineActor | null = null;
   const standGen = new Map<SpineActor, number>();
-  let skyBase: { x: number; y: number } | null = null;
-  let hallBase: { x: number; y: number } | null = null;
+  let scrolling = false;
+  let scrollMs = 0;
+  let haltTick: (() => void) | null = null;
 
   const control = {
     pause(): void {
       if (stopped) return;
       paused = true;
       generation += 1;
-      clearFoe();
-      restoreHomes();
-      restoreScroll();
+      setScrolling(false);
+      clearFoes();
+      plantAllies();
       standAll();
     },
     resume(): void {
@@ -100,21 +115,49 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
   const api: IdleSkirmish = {
     retarget(next: SpineActor[]): void {
       actors = next.slice();
+      plantAllies();
     },
     stop(): void {
       if (stopped) return;
       stopped = true;
       paused = true;
       generation += 1;
-      clearFoe();
+      setScrolling(false);
+      if (haltTick) haltTick();
+      haltTick = null;
+      clearFoes();
       const index = controls.indexOf(control);
       if (index >= 0) controls.splice(index, 1);
     },
   };
 
   hang.once(Node.EventType.NODE_DESTROYED, () => api.stop());
+  ensureTick();
   arm(IDLE_SKIRMISH_OPEN_MS, beginCycle);
   return api;
+
+  function ensureTick(): void {
+    if (haltTick) return;
+    haltTick = armHangTicker((dt) => {
+      if (stopped || !hang.isValid) {
+        if (haltTick) haltTick();
+        haltTick = null;
+        return;
+      }
+      if (!scrolling || !hang.active) return;
+      const parent = hang.parent;
+      if (parent && !parent.active) return;
+      scrollMs += dt;
+      applyLoop(scrollMs);
+    });
+  }
+
+  function setScrolling(on: boolean): void {
+    scrolling = on;
+    if (!on) return;
+    ensureTick();
+    applyLoop(scrollMs);
+  }
 
   function arm(ms: number, fn: () => void): void {
     const gen = generation;
@@ -135,8 +178,28 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     return !!(battle && battle.isValid && battle.active);
   }
 
+  function plantAllies(): void {
+    const n = actors.length < IDLE_HANG_SPOTS.length ? actors.length : IDLE_HANG_SPOTS.length;
+    for (let i = 0; i < n; i++) {
+      const spot = IDLE_HANG_SPOTS[i];
+      const home = actors[i].node.parent;
+      if (!home || !home.isValid) continue;
+      home.active = true;
+      home.setPosition(spot.x, spot.y, 0);
+    }
+  }
+
   function standAll(): void {
     for (let i = 0; i < actors.length; i++) actors[i].play("stand");
+  }
+
+  function playMarch(): void {
+    for (let i = 0; i < actors.length; i++) {
+      const actor = actors[i];
+      if (actor.gesture("run")) continue;
+      if (actor.gesture("walk")) continue;
+      actor.play("stand");
+    }
   }
 
   function armStand(actor: SpineActor): void {
@@ -150,22 +213,28 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     if (typeof maybe.unref === "function") maybe.unref();
   }
 
-  function clearFoe(): void {
-    waveGen += 1;
-    foeShown = false;
-    foe = null;
-    foeActor = null;
-    if (foeNode && foeNode.isValid) foeNode.destroy();
-    foeNode = null;
-    placeHangFloats(floats, []);
+  function stopStrikeFx(): void {
     skillReel.stop();
     hitReel.stop();
     if (puffNode && puffNode.isValid) puffNode.active = false;
+    placeHangFloats(floats, []);
+  }
+
+  function clearFoes(): void {
+    waveGen += 1;
+    fightStarted = false;
+    stopStrikeFx();
+    for (let i = 0; i < waveFoes.length; i++) {
+      const node = waveFoes[i].node;
+      if (node && node.isValid) node.destroy();
+    }
+    waveFoes = [];
   }
 
   function beginCycle(): void {
     if (blocked()) {
-      clearFoe();
+      setScrolling(false);
+      clearFoes();
       arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
       return;
     }
@@ -173,70 +242,23 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
       arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
       return;
     }
-    march(0);
+    plantAllies();
+    playMarch();
+    setScrolling(true);
+    arm(IDLE_MARCH_MS, endMarch);
   }
 
-  /** 先原地跑，背景平移。跑完再刷怪，怪看得见才出刀。 */
-  function march(step: number): void {
+  function endMarch(): void {
     if (blocked()) {
-      restoreHomes();
-      restoreScroll();
-      clearFoe();
+      setScrolling(false);
+      clearFoes();
       arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
       return;
     }
-    if (step === 0) {
-      restoreHomes();
-      playMarch();
-    }
-    scrollLayers(step);
-    if (step < MARCH_STEPS) {
-      arm(Math.round(MARCH_MS / MARCH_STEPS), () => march(step + 1));
-      return;
-    }
-    restoreScroll();
-    restoreHomes();
+    setScrolling(false);
+    plantAllies();
     standAll();
     openWave();
-  }
-
-  function playMarch(): void {
-    for (let i = 0; i < actors.length; i++) {
-      const actor = actors[i];
-      if (actor.gesture("run")) continue;
-      if (actor.gesture("walk")) continue;
-      actor.play("stand");
-    }
-  }
-
-  function scrollLayers(step: number): void {
-    const shift = idleMarchScroll(step, MARCH_STEPS);
-    const sky = hang.getChildByName("IdleSky");
-    const hall = hang.getChildByName("IdleFloor");
-    if (sky && sky.isValid) {
-      if (!skyBase) skyBase = { x: sky.position.x, y: sky.position.y };
-      sky.setPosition(skyBase.x + shift.skyX, skyBase.y + shift.skyY, 0);
-    }
-    if (hall && hall.isValid) {
-      if (!hallBase) hallBase = { x: hall.position.x, y: hall.position.y };
-      hall.setPosition(hallBase.x + shift.hallX, hallBase.y + shift.hallY, 0);
-    }
-  }
-
-  function restoreScroll(): void {
-    const sky = hang.getChildByName("IdleSky");
-    const hall = hang.getChildByName("IdleFloor");
-    if (sky && sky.isValid && skyBase) sky.setPosition(skyBase.x, skyBase.y, 0);
-    if (hall && hall.isValid && hallBase) hall.setPosition(hallBase.x, hallBase.y, 0);
-  }
-
-  function restoreHomes(): void {
-    const n = actors.length < IDLE_HANG_SPOTS.length ? actors.length : IDLE_HANG_SPOTS.length;
-    for (let i = 0; i < n; i++) {
-      const spot = IDLE_HANG_SPOTS[i];
-      const home = actors[i].node.parent;
-      if (home && home.isValid) home.setPosition(spot.x, spot.y, 0);
-    }
   }
 
   function raiseFx(): void {
@@ -246,9 +268,13 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     if (heroes && foes.isValid) foes.setSiblingIndex(heroes.getSiblingIndex());
   }
 
+  function foeCanFight(foe: WaveFoe): boolean {
+    return !foe.dead && foe.entered && foe.ready && !!foe.actor && foe.node.isValid && foe.node.active;
+  }
+
   function openWave(): void {
     if (blocked()) {
-      clearFoe();
+      clearFoes();
       arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
       return;
     }
@@ -256,73 +282,188 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
       arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
       return;
     }
+    stopStrikeFx();
     const chapter = GameStore.chapter();
     const stage = idleSkirmishStageIdx(GameStore.mockStageId(), chapter.nowIdx, chapter.maxIdx);
     const monsters = chapterEnemies(stage);
-    foe = planIdleFoe(wave, monsters, (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
-    const spot = IDLE_SKIRMISH_SPOTS[foe.spot];
-    const node = place(uiNode("IdleFoe"), foes, spot.x, spot.y);
-    const plan = foe;
+    const plans = planIdleWave(monsters, (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
     const gen = waveGen;
-    foeNode = node;
-    foeShown = false;
-    foeActor = mountBattleSpine(node, plan.stem, () => {
-      if (gen !== waveGen) return;
-      GameLog.shared.warn("IdleHang", "foe miss spine/" + plan.stem);
-      if (node.isValid) node.active = false;
-      clearFoe();
-      arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
-    }, {
-      face: plan.face,
-      onReady: () => {
-        if (gen !== waveGen || !node.isValid) return;
-        foeShown = true;
-        node.active = true;
-        standAll();
-        arm(IDLE_SKIRMISH_APPEAR_MS, () => strike(0, gen));
-      },
-    });
+    fightStarted = false;
+    waveFoes = [];
+    for (let i = 0; i < plans.length; i++) {
+      const plan = plans[i];
+      const spot = IDLE_SKIRMISH_SPOTS[plan.spot];
+      const node = place(uiNode("IdleFoe"), foes, idleFoeEnterX(spot.x, 0), spot.y);
+      const foe: WaveFoe = {
+        node,
+        actor: null,
+        plan,
+        entered: false,
+        ready: false,
+        hits: 0,
+        dead: false,
+      };
+      foe.actor = mountBattleSpine(node, plan.stem, () => {
+        if (gen !== waveGen) return;
+        GameLog.shared.warn("IdleHang", "foe miss spine/" + plan.stem);
+        foe.dead = true;
+        if (node.isValid) node.active = false;
+        maybeFight(gen);
+      }, {
+        face: plan.face,
+        onReady: () => {
+          if (gen !== waveGen || !node.isValid || foe.dead) return;
+          foe.ready = true;
+          node.active = true;
+          if (foe.actor) foe.actor.play("stand");
+          maybeFight(gen);
+        },
+      });
+      waveFoes.push(foe);
+    }
     raiseFx();
-    arm(FOE_LATE_MS, () => {
-      if (gen !== waveGen || foeShown) return;
-      GameLog.shared.warn("IdleHang", "foe late spine/" + plan.stem);
-      clearFoe();
-      arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
-    });
+    slideFoes(0, gen);
+    arm(FOE_LATE_MS, () => lateFoes(gen));
   }
 
-  function strike(index: number, gen: number): void {
-    if (gen !== waveGen || blocked() || !foe || !foeActor || !foeNode || !foeNode.isValid) {
+  function slideFoes(step: number, gen: number): void {
+    if (gen !== waveGen) return;
+    const t = step / ENTER_STEPS;
+    for (let i = 0; i < waveFoes.length; i++) {
+      const foe = waveFoes[i];
+      if (foe.dead || !foe.node.isValid) continue;
+      const spot = IDLE_SKIRMISH_SPOTS[foe.plan.spot];
+      foe.node.setPosition(idleFoeEnterX(spot.x, t), spot.y, 0);
+    }
+    if (step < ENTER_STEPS) {
+      arm(Math.round(IDLE_FOE_ENTER_MS / ENTER_STEPS), () => slideFoes(step + 1, gen));
+      return;
+    }
+    for (let i = 0; i < waveFoes.length; i++) {
+      const foe = waveFoes[i];
+      if (!foe.dead) foe.entered = true;
+    }
+    maybeFight(gen);
+  }
+
+  function maybeFight(gen: number): void {
+    if (gen !== waveGen || fightStarted) return;
+    let waiting = false;
+    let shown = 0;
+    for (let i = 0; i < waveFoes.length; i++) {
+      const foe = waveFoes[i];
+      if (foe.dead) continue;
+      if (foeCanFight(foe)) shown += 1;
+      else waiting = true;
+    }
+    if (shown === 0 || waiting) return;
+    startFight(gen);
+  }
+
+  function lateFoes(gen: number): void {
+    if (gen !== waveGen || fightStarted) return;
+    const shown: WaveFoe[] = [];
+    for (let i = 0; i < waveFoes.length; i++) {
+      if (foeCanFight(waveFoes[i])) shown.push(waveFoes[i]);
+    }
+    if (shown.length === 0) {
+      GameLog.shared.warn("IdleHang", "foe late");
+      clearFoes();
+      arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
+      return;
+    }
+    for (let i = 0; i < waveFoes.length; i++) {
+      const foe = waveFoes[i];
+      if (foeCanFight(foe)) continue;
+      foe.dead = true;
+      if (foe.node.isValid) foe.node.destroy();
+    }
+    startFight(gen);
+  }
+
+  function startFight(gen: number): void {
+    if (gen !== waveGen || fightStarted) return;
+    fightStarted = true;
+    plantAllies();
+    standAll();
+    arm(IDLE_SKIRMISH_APPEAR_MS, () => strike(gen));
+  }
+
+  function livingFoes(): WaveFoe[] {
+    const out: WaveFoe[] = [];
+    for (let i = 0; i < waveFoes.length; i++) {
+      if (foeCanFight(waveFoes[i])) out.push(waveFoes[i]);
+    }
+    return out;
+  }
+
+  function strike(gen: number): void {
+    if (gen !== waveGen || blocked()) {
       if (gen === waveGen) {
-        clearFoe();
+        clearFoes();
         arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
       }
       return;
     }
-    if (!idleSkirmishMayStrike(foeShown)) {
+    const targets = livingFoes();
+    if (targets.length === 0) {
+      finishWave(gen);
+      return;
+    }
+    const damaged = targets[swingCursor % targets.length];
+    const ally = actors.length > 0 ? actors[swingCursor % actors.length] : null;
+    swingCursor += 1;
+    if (!idleSkirmishMayStrike(foeCanFight(damaged))) {
       GameLog.shared.warn("IdleHang", "skip swing, foe not visible");
-      clearFoe();
+      clearFoes();
       arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
       return;
     }
-    const swings = idleSkirmishSwings(actors.length);
-    const ally = actors[swingCursor % actors.length];
-    swingCursor += 1;
-    const clip = idleSkirmishSwingClip(index);
+    const clip = idleSkirmishSwingClip(damaged.hits);
     if (ally) {
       const skilled = clip === "attack2" && ally.gesture("attack2");
       if (!skilled) ally.play("attack");
       armStand(ally);
     }
-    const blow = idleSkirmishHurt(foe.maxHp, index, swings);
-    if (wireSpineHasClip(foe.stem, "hit")) foeActor.play("hit");
-    const spot = IDLE_SKIRMISH_SPOTS[foe.spot];
+    const swings = idleSkirmishSwings(actors.length);
+    const blow = idleSkirmishHurt(damaged.plan.maxHp, damaged.hits, swings);
+    damaged.hits += 1;
+    if (damaged.actor && wireSpineHasClip(damaged.plan.stem, "hit")) damaged.actor.play("hit");
+    const spot = IDLE_SKIRMISH_SPOTS[damaged.plan.spot];
     placeHangFloats(floats, [{ text: "-" + blow.hurt, x: spot.x, y: spot.y + 108, heal: false }]);
     playSwingFx(clip, spot.x, spot.y);
     puff(spot.x, spot.y + 40);
     raiseFx();
-    if (blow.kill) arm(IDLE_SKIRMISH_STRIKE_MS, () => killFoe(gen));
-    else arm(IDLE_SKIRMISH_STRIKE_MS, () => strike(index + 1, gen));
+    plantAllies();
+    if (blow.kill) {
+      damaged.dead = true;
+      arm(IDLE_SKIRMISH_STRIKE_MS, () => fellFoe(damaged, gen));
+      return;
+    }
+    arm(IDLE_SKIRMISH_STRIKE_MS, () => strike(gen));
+  }
+
+  function fellFoe(damaged: WaveFoe, gen: number): void {
+    if (gen !== waveGen) return;
+    stopStrikeFx();
+    if (damaged.actor && damaged.node.isValid) {
+      const clip = idleSkirmishKillClip(damaged.plan.stem, wireSpineHasClip);
+      if (clip === "die") damaged.actor.play("die");
+    }
+    arm(IDLE_SKIRMISH_KILL_MS, () => {
+      if (gen !== waveGen) return;
+      if (damaged.node.isValid) damaged.node.destroy();
+      if (livingFoes().length === 0) finishWave(gen);
+      else strike(gen);
+    });
+  }
+
+  function finishWave(gen: number): void {
+    if (gen !== waveGen) return;
+    clearFoes();
+    wave += 1;
+    plantAllies();
+    arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
   }
 
   function playSwingFx(clip: "attack" | "attack2", x: number, y: number): void {
@@ -341,19 +482,6 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     });
   }
 
-  function killFoe(gen: number): void {
-    if (gen !== waveGen) return;
-    if (foe && foeActor && foeNode && foeNode.isValid) {
-      foeActor.play(idleSkirmishKillClip(foe.stem, wireSpineHasClip));
-    }
-    arm(IDLE_SKIRMISH_KILL_MS, () => {
-      if (gen !== waveGen) return;
-      clearFoe();
-      wave += 1;
-      arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
-    });
-  }
-
   function puff(x: number, y: number): void {
     if (!puffNode || !puffNode.isValid) {
       puffNode = place(uiNode("IdleHit"), fx, x, y);
@@ -366,4 +494,108 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     puffNode.setPosition(x, y, 0);
     if (puffActor) puffActor.burst(wireSpineVfxClip(WIRE_SPINE_HIT_STEM));
   }
+
+  function applyLoop(elapsed: number): void {
+    layoutLoop(hang.getChildByName("IdleSky"), elapsed, IDLE_SKY_SCROLL_PX);
+    layoutLoop(hang.getChildByName("IdleFloor"), elapsed, IDLE_HALL_SCROLL_PX);
+  }
+}
+
+function layoutLoop(layer: Node | null, elapsed: number, speed: number): void {
+  if (!layer || !layer.isValid) return;
+  const width = layerWidth(layer);
+  const pair = ensurePair(layer, width);
+  const src = layer.getComponent(Sprite);
+  const frame = src ? src.spriteFrame : null;
+  if (src && frame) {
+    copyFrame(pair.a, frame);
+    copyFrame(pair.b, frame);
+    const painted = pair.a.getComponent(Sprite);
+    if (painted && painted.spriteFrame) src.enabled = false;
+  }
+  const offset = idleHangLoopOffset(elapsed, width, speed);
+  pair.a.setPosition(offset, 0, 0);
+  pair.b.setPosition(offset + width, 0, 0);
+}
+
+function layerWidth(layer: Node): number {
+  const ui = layer.getComponent(UITransform);
+  const width = ui ? ui.contentSize.width : 0;
+  return width >= 2 ? width : 720;
+}
+
+function ensurePair(layer: Node, width: number): { a: Node; b: Node } {
+  let a = layer.getChildByName("LoopA");
+  let b = layer.getChildByName("LoopB");
+  if (!a || !a.isValid) a = loopChild(layer, "LoopA");
+  if (!b || !b.isValid) b = loopChild(layer, "LoopB");
+  sizeLoop(a, layer, width);
+  sizeLoop(b, layer, width);
+  return { a, b };
+}
+
+function loopChild(layer: Node, name: string): Node {
+  const node = uiNode(name);
+  const ui = node.addComponent(UITransform);
+  ui.setAnchorPoint(0.5, 0.5);
+  const sprite = node.addComponent(Sprite);
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  sprite.type = Sprite.Type.SIMPLE;
+  return place(node, layer, 0, 0);
+}
+
+function sizeLoop(node: Node, layer: Node, width: number): void {
+  const ui = node.getComponent(UITransform);
+  const parent = layer.getComponent(UITransform);
+  const height = parent && parent.contentSize.height > 0 ? parent.contentSize.height : 1280;
+  if (ui) ui.setContentSize(width, height);
+}
+
+function copyFrame(node: Node, frame: SpriteFrame): void {
+  const sprite = node.getComponent(Sprite);
+  if (sprite && sprite.spriteFrame !== frame) sprite.spriteFrame = frame;
+}
+
+function armHangTicker(onFrame: (dt: number) => void): () => void {
+  let dead = false;
+  let last = Date.now();
+  const tick = (): void => {
+    if (dead) return;
+    const now = Date.now();
+    let step = now - last;
+    last = now;
+    if (step < 0) step = 0;
+    if (step > 50) step = 50;
+    onFrame(step);
+  };
+  const eventName = Director && Director.EVENT_AFTER_UPDATE;
+  let armed = false;
+  if (eventName && director && typeof director.on === "function") {
+    try {
+      director.on(eventName, tick);
+      armed = true;
+    } catch (err) {
+      armed = false;
+    }
+  }
+  let raf = 0;
+  if (!armed && typeof requestAnimationFrame === "function") {
+    const frame = (): void => {
+      if (dead) return;
+      tick();
+      if (!dead) raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+  }
+  const timer = armed ? null : setInterval(tick, 32);
+  if (timer) {
+    const maybe = timer as { unref?: () => void };
+    if (typeof maybe.unref === "function") maybe.unref();
+  }
+  return () => {
+    dead = true;
+    if (armed && director && typeof director.off === "function") director.off(eventName, tick);
+    if (raf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(raf);
+    if (timer) clearInterval(timer);
+  };
 }
