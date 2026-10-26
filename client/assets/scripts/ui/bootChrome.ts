@@ -5,9 +5,15 @@
  */
 import { BlockInputEvents, Button, Color, Label, Mask, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
 import { ConfigLoader } from "../config/ConfigLoader";
+import { GameLog } from "../core/GameLog";
 import { mountNamedSpine } from "./battleSpine";
 import { findNode, loadPrefab, spawnPrefab } from "./prefabLoad";
+import { bindVisibleRefresh, fitVisibleRoot } from "./visibleFit";
 import { createButton, createLabel, place, setText, uiNode } from "./UiKit";
+
+/** 登陆界面人物簇。spine/jiemian，动作 stand。 */
+const BOOT_CAST_STEM = "jiemian";
+const BOOT_CAST_CLIP = "stand";
 
 export const LOADING_PREFAB_PATH = "prefabs/ui/login/LoadingLayer";
 export const UPDATE_PREFAB_PATH = "prefabs/ui/login/UpdateLayer";
@@ -114,6 +120,8 @@ export class BootChrome {
     this.bindRetry();
     this.apply();
     this.mountSpine();
+    this.mountCast();
+    this.bindFill();
     this.raise();
   }
 
@@ -227,6 +235,47 @@ export class BootChrome {
     const host = this.child("BarMask/Spine");
     if (!host) return;
     mountNamedSpine(host, SPINE_STEM, SPINE_CLIP);
+  }
+
+  /** 正式服加载画面中间的人物特效。缺套只打日志，底图和进度条仍在。 */
+  private mountCast(): void {
+    const root = this.root;
+    if (!root) return;
+    const host = uiNode("BootCast");
+    host.addComponent(UITransform).setContentSize(720, 972);
+    place(host, root, 0, 36);
+    host.setScale(0.7, 0.7, 1);
+    const bg = root.getChildByName("Bg");
+    if (bg) host.setSiblingIndex(bg.getSiblingIndex() + 1);
+    mountNamedSpine(host, BOOT_CAST_STEM, BOOT_CAST_CLIP, {
+      onFail: () => GameLog.shared.warn("Boot", "loading cast miss spine/" + BOOT_CAST_STEM + " clip=" + BOOT_CAST_CLIP),
+    });
+  }
+
+  /**
+   * 抵消 SafeFrame 在窄屏上的缩小，加载层铺满可见高。
+   * 背景按 cover 放大，避免上下或左右留黑边。
+   */
+  private bindFill(): void {
+    const root = this.root;
+    if (!root) return;
+    const apply = () => this.fitRoot();
+    bindVisibleRefresh(root, apply);
+    const later = setTimeout(apply, 160);
+    root.once(Node.EventType.NODE_DESTROYED, () => clearTimeout(later));
+  }
+
+  private fitRoot(): void {
+    const root = this.root;
+    if (!root || !root.isValid) return;
+    const box = fitVisibleRoot(root);
+    const bg = root.getChildByName("Bg");
+    if (!bg) return;
+    const ui = bg.getComponent(UITransform);
+    const width = ui && ui.contentSize.width > 0 ? ui.contentSize.width : 756;
+    const height = ui && ui.contentSize.height > 0 ? ui.contentSize.height : 1280;
+    const cover = Math.max(box.width / width, box.height / height);
+    if (cover > 0) bg.setScale(cover, cover, 1);
   }
 
   private bindRetry(): void {

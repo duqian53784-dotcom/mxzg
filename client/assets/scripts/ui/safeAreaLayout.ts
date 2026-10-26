@@ -162,6 +162,24 @@ export function formatAdapt(metrics: AdaptMetrics, frame: SafeFrame): string {
   );
 }
 
+/**
+ * 左上角分辨率行默认不画。预览要看时加 ?safeDebug=1，或 localStorage mxzg.safeDebug=1。
+ * 控制台 debug 日志不受这一行开关影响。
+ */
+export function wantsSafeDebug(search: string | null | undefined, stored: string | null | undefined): boolean {
+  if (stored === "1") return true;
+  if (!search) return false;
+  const query = search.charAt(0) === "?" ? search.slice(1) : search;
+  const parts = query.split("&");
+  for (let i = 0; i < parts.length; i++) {
+    const eq = parts[i].indexOf("=");
+    const key = eq >= 0 ? parts[i].slice(0, eq) : parts[i];
+    const value = eq >= 0 ? parts[i].slice(eq + 1) : "";
+    if (key === "safeDebug" && value === "1") return true;
+  }
+  return false;
+}
+
 /** 左上角一行，比控制台短，避免被 Label 裁掉。 */
 export function formatAdaptShort(metrics: AdaptMetrics, frame: SafeFrame): string {
   const n = (value: number) => String(Math.round(value));

@@ -34,6 +34,12 @@ export function placeHangFloats(host: Node, floats: HangFloat[]): void {
       labelNode.isBold = true;
       labelNode.overflow = Overflow.SHRINK;
     }
-    place(node, host, row.x, row.y + (crit ? 18 : 0));
+    const y = row.y + (crit ? 18 : 0);
+    place(node, host, row.x, y);
+    const rise = setTimeout(() => {
+      if (node.isValid) node.setPosition(row.x, y + 28, 0);
+    }, 90);
+    const maybe = rise as { unref?: () => void };
+    if (typeof maybe.unref === "function") maybe.unref();
   }
 }

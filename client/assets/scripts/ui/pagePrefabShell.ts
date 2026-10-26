@@ -12,7 +12,7 @@ import { GameStore } from "../core/GameStore";
 import { chapterIdleMinute } from "../config/rosterCatalog";
 import { WireSession } from "../net/WireSession";
 import { formatWireQuickBattle } from "../net/protocol/wireQuickBattle";
-import { mountIdleHang } from "./idleHangView";
+import { bindHangFill, mountIdleHang } from "./idleHangView";
 import { beginHangBattle } from "./hangBattle";
 import { hangLineupReady } from "./localLineup";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
@@ -96,7 +96,10 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     root.active = hold.want;
     hold.root = root;
     raise();
-    if (spec.fight) bindFightChrome(view, root, page);
+    if (spec.fight) {
+      bindHangFill(root);
+      bindFightChrome(view, root, page);
+    }
     page.once(Node.EventType.NODE_DESTROYED, () => {
       holds.delete(page);
     });
@@ -135,6 +138,7 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
   root.active = hold.want;
   hold.root = root;
   raise();
+  bindHangFill(root);
   page.once(Node.EventType.NODE_DESTROYED, () => {
     holds.delete(page);
   });

@@ -82,7 +82,10 @@ export function fillPageShell(id: string, view: Node, openHero: (hero: StoreHero
   else if (id === "bag") fillBag(view);
 }
 
-/** 藏掉地图球和空蓝金匾。四条收益用进度填充，三钮文案改成战力UP / 战斗 / 高速战斗。 */
+/**
+ * 藏掉殿堂缩略图和「地图 / 999」字。地图框 main-scene_spr-map-frame-1 留着，
+ * 它是底栏中间的金环水晶，盖住奶油色空板。四条收益用进度填充，三钮改成战力UP / 战斗 / 高速战斗。
+ */
 export function dressHangPanel(view: Node): void {
   const mark = view as Node & { mxzgHang?: boolean };
   if (mark.mxzgHang) return;
@@ -92,10 +95,8 @@ export function dressHangPanel(view: Node): void {
   hideNamed(view, "lbl_map");
   hideNamed(view, "spr_world_icon");
   hideNamed(view, "lbl_mission_name");
-  if (plate) {
-    const frame = plate.getChildByName("CCSprite_1");
-    if (frame) frame.active = false;
-  }
+  const frame = plate ? plate.getChildByName("CCSprite_1") : null;
+  if (frame) frame.active = true;
   fitButton(findNamed(view, "btn_lineup"), "战力UP", 22);
   fitButton(findNamed(view, "btn_battle"), "战斗", 22);
   fitButton(findNamed(view, "btn_speed_battle"), "高速战斗", 20);
