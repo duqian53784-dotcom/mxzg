@@ -38,6 +38,7 @@ const PREFAB_UUID: { [path: string]: string } = {
   "prefabs/ui/login/CreateNickRewardLayer": "b426d636-083f-58c1-b9ed-c4aa1986cf02",
   "prefabs/ui/battle/BattlePanelLayer": "ac146bb3-359f-4506-8fcf-32f8c56ef4d3",
   "prefabs/ui/battle/BattleEndLayer": "20fbcf65-e7c1-4d82-8b20-59a1c93372bc",
+  "prefabs/ui/chapter/ChapterPreviewLayer": "9b27aa5f-aed6-4237-be28-f887c7269fd8",
   "prefabs/ui/hero/HeroSuggestLayer": "985faa05-ddbb-4f27-8d0f-9a6d5b709750",
   "prefabs/ui/hero/HeroListLayer": "95a097b8-9964-4ac3-8b3d-b4f568b1eb53",
   "prefabs/ui/hero/HeroListHeroLayer": "d3a470c0-fa13-47fa-811e-f38c7317e9d8",

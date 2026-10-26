@@ -10,6 +10,7 @@
  * 站场站好之后演武自己打：怪出现、挨打、收掉。点「战斗」才进真战报。
  */
 import { Color, Node, resources, sp, Sprite, SpriteFrame, UITransform } from "cc";
+import { GameLog } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
 import { mountBattleSpine, mountNamedSpine, SpineActor } from "./battleSpine";
@@ -176,7 +177,10 @@ export function playIdleHarvest(hang: Node): void {
   };
   // collect 大约 2.2 秒。没有播完回调时不要把堆停在收起。
   setTimeout(finish, 2800);
-  mountNamedSpine(host, "res-block", clip, { loop: false, onFail: finish, onComplete: finish });
+  mountNamedSpine(host, "res-block", clip, { loop: false, onFail: () => {
+    noteLootMiss();
+    finish();
+  }, onComplete: finish });
 }
 
 /** res-block：按掉落数量切 normal-0..4，数量为 0 时隐藏。收起过程中不改动作。 */
@@ -194,7 +198,15 @@ function paintIdleLootSpine(hang: Node, count: number): void {
   const mark = host as Node & { mxzgLootClip?: string };
   if (mark.mxzgLootClip === clip && host.getComponent(sp.Skeleton)) return;
   mark.mxzgLootClip = clip;
-  mountNamedSpine(host, "res-block", clip);
+  mountNamedSpine(host, "res-block", clip, { onFail: noteLootMiss });
+}
+
+let lootMissLogged = false;
+
+function noteLootMiss(): void {
+  if (lootMissLogged) return;
+  lootMissLogged = true;
+  GameLog.shared.warn("Mainline", "挂机掉落堆 spine/res-block 没有挂上，仍用图标堆");
 }
 
 function ensureLootSpine(hang: Node): Node {

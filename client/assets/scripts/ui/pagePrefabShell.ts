@@ -3,7 +3,7 @@
  * 关闭壳只是藏起来，下面的代码页 / 旧 Prefab / 协议探针还在。
  * 加载失败留原来的页面，不留空画面。
  */
-import { BlockInputEvents, Button, Color, director, Director, Label, Node, Overflow, Sprite, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, director, Director, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { labelCenterInParent, sliceAnchorShift } from "./ccbiPlace";
 import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
@@ -16,9 +16,9 @@ import { mountIdleHang } from "./idleHangView";
 import { beginHangBattle } from "./hangBattle";
 import { hangLineupReady } from "./localLineup";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
-import { bindFormationSheet, dressHangPanel, dressHeroDetail, fillPageShell } from "./screenFill";
+import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
-import { createButton, createRect, place, setText, uiNode } from "./UiKit";
+import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 /** 挂机底栏「快速战斗」。已有壳。3013 开战硬禁，只读 3012 次数。 */
 export const HANG_QUICK_PREFAB = "prefabs/ui/quick-battle/QuickBattleLayer";
@@ -26,6 +26,8 @@ export const HANG_QUICK_PREFAB = "prefabs/ui/quick-battle/QuickBattleLayer";
 export const HANG_GROW_PREFAB = "prefabs/ui/hero/HeroSuggestLayer";
 /** 挂机「战斗」先打开的出阵。确认不新发协议。 */
 export const HANG_FORMATION_PREFAB = "prefabs/ui/hero/HeroSelectLayer";
+/** 挂机关卡标打开的预览。出战仍走原来的挑战，不新发协议。 */
+export const HANG_CHAPTER_PREFAB = "prefabs/ui/chapter/ChapterPreviewLayer";
 /** 英雄格子点开的详情。 */
 export const HERO_INFO_PREFAB = "prefabs/ui/hero/HeroInfoLayer";
 
@@ -145,12 +147,14 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
     mountCcbiView(view);
     dressHangPanel(view);
     bindFightChrome(view, root, page);
+    mountHangMissionChip(root, page);
     raiseHangProbe(root);
     GameLog.shared.info("MainApp", "hang battle shell " + path);
   } catch (err) {
     GameLog.shared.error("MainApp", "hang battle shell " + messageOf(err) + "，站场仍在");
     if (!root.isValid) return;
     mountCodeHangBar(root, page);
+    mountHangMissionChip(root, page);
     raiseHangProbe(root);
   }
 }
@@ -199,6 +203,8 @@ function bindHangProbe(root: Node, page: Node): void {
 }
 
 function raiseHangProbe(root: Node): void {
+  const chip = root.getChildByName("HangMissionChip");
+  if (chip && chip.isValid) chip.setSiblingIndex(Math.max(0, root.children.length - 1));
   const spot = root.getChildByName("HangProbeHotspot");
   if (!spot || !spot.isValid) return;
   spot.setSiblingIndex(Math.max(0, root.children.length - 1));
@@ -210,11 +216,7 @@ function mountCodeHangBar(root: Node, page: Node): void {
   }, 180, 56);
   grow.name = "btn_lineup";
   place(grow, root, -220, -470);
-  const fight = createButton("战斗", () => {
-    if (!page.isValid) return;
-    beginHangBattle(page, "我方", "敌方");
-    page.emit(PAGE_SHELL_FIGHT);
-  }, 180, 64);
+  const fight = createButton("战斗", () => startShellFight(root, page), 180, 64);
   fight.name = "btn_battle";
   place(fight, root, 0, -470);
   const quick = createButton("高速战斗", () => {
@@ -374,29 +376,88 @@ function bindFightChrome(view: Node, root: Node, page: Node): void {
   });
 }
 
+const CHIP_INK = new Color(255, 236, 190, 255);
+
+/** 左上角关卡标。点开已有 ChapterPreviewLayer，不把整窗铺在地上。 */
+function mountHangMissionChip(root: Node, page: Node): void {
+  if (!root.isValid || root.getChildByName("HangMissionChip")) return;
+  const chip = uiNode("HangMissionChip");
+  const ui = chip.addComponent(UITransform);
+  ui.setContentSize(196, 64);
+  place(chip, root, -240, 220);
+  const icon = uiNode("icon");
+  const iconUi = icon.addComponent(UITransform);
+  iconUi.setContentSize(56, 56);
+  const iconSprite = icon.addComponent(Sprite);
+  iconSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  place(icon, chip, -64, 0);
+  paintChipIcon(icon);
+  const label = createLabel(hangMissionCaption(), 16, { color: CHIP_INK, width: 120, height: 40 });
+  label.name = "HangMissionLabel";
+  place(label, chip, 24, 0);
+  if (!chip.getComponent(Button)) chip.addComponent(Button);
+  chip.on(Button.EventType.CLICK, () => {
+    void openHangSheet(root, HANG_CHAPTER_PREFAB, (sheet) => {
+      dressChapterPreview(sheet, () => {
+        const host = sheet.parent;
+        if (host && host.isValid) host.destroy();
+        startShellFight(root, page);
+      });
+    });
+  });
+  const refresh = () => {
+    if (!label.isValid) return;
+    setText(label, hangMissionCaption());
+  };
+  refresh();
+  const off = WireSession.onSync(refresh);
+  chip.once(Node.EventType.NODE_DESTROYED, () => off());
+}
+
+function paintChipIcon(node: Node): void {
+  const sprite = node.getComponent(Sprite);
+  if (!sprite) return;
+  const path = "ui/city/main-city_icon-main_mission";
+  try {
+    resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
+      if (!node.isValid) return;
+      if (err || !asset) {
+        GameLog.shared.warn("Mainline", "关卡标 " + path + " 没有挂上，字仍在");
+        return;
+      }
+      sprite.spriteFrame = asset;
+    });
+  } catch (err) {
+    GameLog.shared.warn("Mainline", "关卡标 ui/city/main-city_icon-main_mission 没有挂上，字仍在");
+  }
+}
+
+/** MAIN 空着先出阵，已经有英雄就直接开战。出阵和关卡预览的「出战」都走这里。 */
+export function startShellFight(root: Node, page: Node): void {
+  if (!page.isValid) return;
+  const go = () => {
+    beginHangBattle(page, "我方", "敌方");
+    if (page.isValid) page.emit(PAGE_SHELL_FIGHT);
+  };
+  if (hangLineupReady()) {
+    go();
+    return;
+  }
+  void openHangSheet(root, HANG_FORMATION_PREFAB, (sheet) => {
+    bindFormationSheet(sheet, () => {
+      const host = sheet.parent;
+      if (host && host.isValid) host.destroy();
+      go();
+    });
+  });
+}
+
 /** 中间「战斗」和两侧底栏抬到壳根上。全屏 menu 不再当命中框。 */
 function wireFightButtons(view: Node, root: Node, page: Node, again: boolean): void {
   const battle = findDescendant(root, "btn_battle");
   if (battle) {
     liftNode(battle, root);
-    bindTapOnce(battle, () => {
-      if (!page.isValid) return;
-      const go = () => {
-        beginHangBattle(page, "我方", "敌方");
-        if (page.isValid) page.emit(PAGE_SHELL_FIGHT);
-      };
-      if (hangLineupReady()) {
-        go();
-        return;
-      }
-      void openHangSheet(root, HANG_FORMATION_PREFAB, (sheet) => {
-        bindFormationSheet(sheet, () => {
-          const host = sheet.parent;
-          if (host && host.isValid) host.destroy();
-          go();
-        });
-      });
-    });
+    bindTapOnce(battle, () => startShellFight(root, page));
     pokeButton(battle, again);
   }
   bindHangSheets(view, root, again);

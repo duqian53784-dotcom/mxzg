@@ -12,10 +12,10 @@ import { NetClient } from "../net/NetClient";
 import { Proto } from "../net/protocol/Proto";
 import { WireSession } from "../net/WireSession";
 import { applyIdleClaim, claimToast, IDLE_HERO_EXP_ID, IDLE_ITEM_ID, IDLE_ROLE_EXP_ID } from "../module/idle/rewards";
-import { heroBaseStats, heroProfile, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles } from "../config/gameCatalog";
+import { chapterPlaceLabel, heroBaseStats, heroProfile, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles } from "../config/gameCatalog";
 import { chapterDrops, chapterIdleMinute, DropFace, heroLevelNeed, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleBonus, vipIdleLine } from "../config/rosterCatalog";
 import { IDLE_UNIX_FLOOR, wireIdleCapMs, wireIdleElapsedMs } from "../net/protocol/wireIdle";
-import { WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/wireLineUpSave";
+import { formationFaceSlot, WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/wireLineUpSave";
 import { mainFormationHeroes } from "../net/protocol/starterLineup";
 import { formatHangClock, goldPerMin, itemEveryMs } from "../module/idle/rewards";
 import { hangSpineStem } from "./idleHangRoster";
@@ -780,19 +780,24 @@ function paintFormationGrid(view: Node, elem: number, selected: number[], toggle
 }
 
 function paintFormationSlots(view: Node, selected: number[], onRemove: (heroId: number) => void): void {
-  const order = [4, 3, 2, 1, 8, 7, 6, 5];
   const roster = GameStore.heroes() || [];
+  const placed: { [slot: number]: number } = {};
+  for (let i = 0; i < selected.length; i++) {
+    const slotNo = formationFaceSlot(i);
+    if (slotNo === null) continue;
+    placed[slotNo] = selected[i];
+  }
   let power = 0;
   let known = false;
-  for (let i = 0; i < order.length; i++) {
-    const slotNo = order[i];
+  for (let slotNo = 1; slotNo <= 9; slotNo++) {
     const slot = findNamed(view, "node_icon_" + slotNo);
     if (!slot) continue;
     const box = slot.getComponent(UITransform);
     if (box && (box.contentSize.width < 8 || box.contentSize.height < 8)) box.setContentSize(80, 80);
     const old = slot.getChildByName("SlotFace");
     if (old) old.destroy();
-    const hero = i < selected.length ? heroById(roster, selected[i]) : null;
+    const heroId = placed[slotNo];
+    const hero = heroId ? heroById(roster, heroId) : null;
     const label = findNamed(slot, "lbl_attr_add_" + slotNo);
     const front = slotNo <= 4;
     if (!hero || !hero.heroType) {
@@ -804,14 +809,21 @@ function paintFormationSlots(view: Node, selected: number[], onRemove: (heroId: 
     }
     const face = sprite("SlotFace", 64, 64, heroFace(hero), "ui/hero/hero-icon_spr-default");
     place(face, slot, 0, 0);
-    const heroId = hero.heroId;
-    if (heroId !== null) {
+    face.setSiblingIndex(Math.max(0, slot.children.length - 1));
+    if (hero.heroId !== null) {
+      const picked = hero.heroId;
       if (!face.getComponent(Button)) face.addComponent(Button);
-      face.on(Button.EventType.CLICK, () => onRemove(heroId));
+      face.on(Button.EventType.CLICK, () => onRemove(picked));
     }
     if (hero.fighting !== null) {
       power += hero.fighting;
       known = true;
+    }
+    if (slotNo === 9) {
+      const lock = findNamed(view, "spr_lock_9");
+      if (lock && slot.parent && lock.parent === slot.parent && lock.getSiblingIndex() > slot.getSiblingIndex()) {
+        lock.setSiblingIndex(slot.getSiblingIndex());
+      }
     }
     if (label) {
       const stats = heroBaseStats(hero.heroType, hero.star);
@@ -820,6 +832,67 @@ function paintFormationSlots(view: Node, selected: number[], onRemove: (heroId: 
     }
   }
   writeNamed(view, "lbl_battle_count", known ? String(power) : "—");
+}
+
+/** 挂机左上角的关卡字。没同步不写第 0 章。 */
+export function hangMissionCaption(): string {
+  const mock = GameStore.mockStageId();
+  const chapter = GameStore.chapter();
+  const synced = (mock !== null && mock >= 1) || chapter.nowIdx !== null || chapter.maxIdx !== null;
+  if (!synced) return "主线未同步";
+  const idx = currentStageIdx();
+  const place = chapterPlaceLabel(idx);
+  if (place) return place;
+  if (idx >= 1) return "第" + idx + "关";
+  return "主线未同步";
+}
+
+/** 已有 ChapterPreviewLayer。产出用当前关 reward_base，掉落用 drop_group。出战不新发协议。 */
+export function dressChapterPreview(view: Node, onFight: () => void): void {
+  const caption = hangMissionCaption();
+  writeKeep(view, "lbl_name", caption);
+  const synced = caption !== "主线未同步";
+  const idx = currentStageIdx();
+  const minute = synced ? chapterIdleMinute(idx) : null;
+  if (!minute) {
+    if (synced) GameLog.shared.info("Mainline", "关卡预览没有 chapterreward，产出写 —");
+    writeKeep(view, "lbl_res1", "—");
+    writeKeep(view, "lbl_res2", "—");
+    writeKeep(view, "lbl_res3", "—");
+  } else {
+    writeKeep(view, "lbl_res1", minute.gold + "/m");
+    writeKeep(view, "lbl_res2", minute.heroExp + "/m");
+    writeKeep(view, "lbl_res3", minute.roleExp + "/m");
+  }
+  paintPreviewDrops(view, synced ? chapterDrops(idx) : []);
+  fitButton(findNamed(view, "btn_confirm"), "出战", 28);
+  const confirm = findNamed(view, "btn_confirm");
+  if (!confirm) {
+    GameLog.shared.warn("Mainline", "关卡预览没有 btn_confirm，不能出战");
+    return;
+  }
+  if (!confirm.getComponent(Button)) confirm.addComponent(Button);
+  confirm.on(Button.EventType.CLICK, () => onFight());
+}
+
+function paintPreviewDrops(view: Node, drops: DropFace[]): void {
+  const scroll = findNamed(view, "scroll_view");
+  const host = scroll ? scroll.getChildByName("content") || scroll : view;
+  const old = host.getChildByName("PreviewDrops");
+  if (old) old.destroy();
+  const row = uiNode("PreviewDrops");
+  place(row, host, scroll ? 280 : 0, scroll ? -40 : 0);
+  if (drops.length === 0) {
+    place(createLabel("这一关没有掉落表", 18, { color: CREAM, width: 420, height: 36 }), row, 0, 0);
+    return;
+  }
+  const n = drops.length < 6 ? drops.length : 6;
+  for (let i = 0; i < n; i++) {
+    const face = drops[i];
+    const path = itemIconResource(face.itemType, null) || "ui/bag/backpack_" + face.itemType;
+    const icon = sprite("drop", 64, 64, path, "ui/bag/backpack_item-frame-1");
+    place(icon, row, (i - (n - 1) / 2) * 78, 0);
+  }
 }
 
 function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void) | null, locked: boolean): Node {
