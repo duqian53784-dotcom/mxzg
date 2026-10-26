@@ -7,12 +7,14 @@
  * 阵容是空的才用三套默认。加载失败把格子藏起来，不写套名。
  * 不给每个站位写「待命」。计时泡只有 Prefab 里那一个，挪到掉落堆上。
  * main-scene_spr-drop-1 是空的蓝金匾，不拿来当掉落堆。
+ * 站场站好之后演武自己打：怪出现、挨打、收掉。点「战斗」才进真战报。
  */
 import { Color, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
-import { mountBattleSpine } from "./battleSpine";
+import { mountBattleSpine, SpineActor } from "./battleSpine";
 import { hangStemsForFormation, idleHangStemsFrom } from "./idleHangRoster";
+import { mountIdleSkirmish } from "./idleHangSkirmish";
 import { localLineupIds, onLocalLineup } from "./localLineup";
 import { createRect, place, uiNode } from "./UiKit";
 
@@ -63,6 +65,7 @@ export function mountIdleHang(parent: Node): Node {
 
   const heroes = uiNode("IdleHeroes");
   place(heroes, root, 0, 0);
+  const skirmish = mountIdleSkirmish(root);
   let painted = "";
   const paint = () => {
     if (!heroes.isValid) return;
@@ -72,13 +75,15 @@ export function mountIdleHang(parent: Node): Node {
     painted = key;
     const kids = heroes.children.slice();
     for (let i = 0; i < kids.length; i++) kids[i].destroy();
+    const actors: SpineActor[] = [];
     for (let i = 0; i < stems.length; i++) {
       const spot = IDLE_HANG_SPOTS[i];
       const slot = place(uiNode("IdleHero"), heroes, spot.x, spot.y);
-      mountBattleSpine(slot, stems[i], () => {
+      actors.push(mountBattleSpine(slot, stems[i], () => {
         if (slot.isValid) slot.active = false;
-      }, { face: spot.face });
+      }, { face: spot.face }));
     }
+    skirmish.retarget(actors);
   };
   paint();
   let off = () => {};

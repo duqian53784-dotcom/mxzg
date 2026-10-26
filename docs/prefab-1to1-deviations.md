@@ -261,12 +261,13 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 | 快速战斗 | `QuickBattleLayer` 用 `idle_speed_up`（7200 秒）预览两小时 `reward_base`，并读已有 3012 | 不发 3013，不发奖励。说明和跳转只改提示字 |
 | 我要变强 | 打开已有 `HeroSuggestLayer`。四个页签只切换 `node_strong` / `resource` / `hero` / `lineup` | 不发协议。名字最多写名册前三名 |
 | VIP | 没有角色 VIP 等级时挂机条不写字，不再把「VIP未同步」画在战斗钮下面。`vipIdleLine(level)` 仍能按 `vip` 表写出百分比和 `extra_idle_time`。三格和封顶仍是 `reward_base` + `idle_max_time`，不乘某一档 | s2c 2001 已核对的字段没有 `vip_level`。字段 15 按旧说明不读。不能在客户端加 VIP% / 3013 / GM。没有等级就不把表里的 10% 或 0% 当成这名角色的加成 |
-| 掉落堆 | 不再把 `main-scene_spr-drop-1` 放在场地中央。那张是空的蓝金匾，不是金币堆。有当前关 `reward_base` 或 `drop_group` 时，用已有 `res-icon_res-1`、`res-icon_res-2`、`main-scene_spr-box-2`、`backpack_900101`、`backpack_900003` 和掉落物品图标叠一堆。没有这些数据时场地留空 | 仓库里没有单独的挂机掉落堆贴图。不新画。不掷随机数，不写进三格 |
-| 待命气泡 | 不再给每个站位写「待命」。场上最多留 Prefab 里那一个计时泡 `node_bubble`，挪到掉落堆上沿。没有对白数据就不另加对白 | 旧日服是一句对白。仓库里没有挂机对白表 |
+| 掉落堆 | 不再把 `main-scene_spr-drop-1` 放在场地中央。那张是空的蓝金匾，不是金币堆。有当前关 `reward_base` 或 `drop_group` 时，仍用已有 `res-icon_res-1`、`res-icon_res-2`、`main-scene_spr-box-2`、`backpack_900101`、`backpack_900003` 和掉落物品图标叠一堆。没有这些数据时场地留空 | `spine/res-block` 就是旧挂机宝箱金币堆（骨架注释路径「宝箱金币」）。`normal-0`…`normal-4` 从少到满，`normal-4` 是全件加光，`collect-1`…`collect-4` 是收起。本轮先做演武，这套 spine 还没挂上。不新画。不掷随机数，不写进三格 |
+| 待命气泡 | 不再给每个站位写「待命」。场上最多留 Prefab 里那一个计时泡 `node_bubble`，挪到掉落堆上沿。没有另挂对白泡 | 对白表在 `config/herotalk.json`，53 行，`lan` 70901–70953，language 都有，部分带 font 标签。气泡图是 `ui/common/other_spr-bubble-1.png`。本轮先做演武，这句对白还没挂上。不编新句子 |
+| 挂机演武 | 阵容站好后客户端自己打。`IdleFoes` 按当前关 `chapter` 里有 stand 的 `hero_type` 轮流出现在殿堂后侧三格（左 -180,230 朝右，中 8,268 朝左，右 188,226 朝左）。对不上 stand 就用 `10405006` / `10405007` / `10505010`。英雄播 attack，怪播 hit，受击再挂已有 `yanwu`。没有 die 的套打完收掉。飘字和战报同一套红字。点「战斗」会暂停，真战报结束再继续。不发协议，不改钱包 | 有表里的 hp 就按刀数分完，最后一刀是击杀。没有 hp 时演出数字是 48、64…。不掷随机数。伤害不进三格，也不进 3004 |
 | 时钟 | 真服只按 s2c 3004 的 `reward_time` 计一次。大于等于 10 亿才当时间戳，10^12 以上当毫秒，否则当 unix 秒。更小的数写「未同步」，不再从打开面板的时刻往上加。`max_reward_time` 小于 10 亿时按秒封顶（0 也封在 00:00）。像时间戳时退回 `system.idle_max_time`。挂机泡和宝箱条满 1 小时写成 `hh:mm`（封顶 21600 秒是 `06:00`），不满 1 小时是 `mm:ss`。`formatDuration` 仍是 `hh:mm:ss`，挂机页句子不用它。领取成功后第二行时钟不再停在「已发领取」 | 没读到表、也没有可用的 `max_reward_time` 时不封顶 |
 | 顶栏战力 | `PowerSlot/Value` 用名册 `fighting` 之和。优先 MAIN，对不上再加全名册里已经带数字的英雄。一个都没有就留空，不写 Prefab 默认的 0。3103 空探针的 fighting=0 不进顶栏 | s2c 2001 没有战力字段 |
 | 顶栏头像 | 有名册时用出阵或第一名英雄的 `hero-icon` 盖住 `main-scene_spr-head-frame-1` 的褐心。没有头像路径就关掉 `Avatar`。等级徽用已同步等级，未同步不显示占位 `1` | s2c 2001 没有 head_id。34001 是已解锁列表，不是当前头 |
-| 关卡条 | 不挂。日服挂机场地中间那张战斗测试 / 可领水晶 / n/15 没有对应的挂机条 Prefab。`ChapterPreviewLayer` 是 640×600 的关卡预览窗，`ChapterRewardLayer` 是通关奖励窗，`MainTaskLayer` 标题是咖啡馆 | 不把整窗盖到挂机地上，也不新画条 |
+| 关卡条 | 不挂。又对过一遍：language 没有「戦闘中」也没有「战斗测试」。`button_btn-battle-1` / `button_btn-battle-2` 是空的红钮和蓝钮，上面没有字。`main-scene-lang_lbl-battle` 是「战斗」，不是「戦闘中」。`ChapterPreviewLayer` 是 640×600 的关卡预览窗，`ChapterRewardLayer` 是 640×1040 的通关奖励窗，`ChapterExtraRewardCell` 是 150×180 的通关奖励格子（自带一条 `chapter-reward_spr-prog-1`），都不是场地中间那条可领水晶条 | 不把整窗或这颗奖励格子盖到挂机地上，也不新画条 |
 | 头像 | `ui/hero/hero-icon_<item_id>`。`item_id` 为 0 时用 `item.idx` = 英雄类型号上的 `hero-icon/` 路径 | 雷顿、赫卡忒·幽魂、撒旦·赫莱、深渊终结者的图是 `hero-icon_20701001` / `20701003` / `20701004` / `20701006` |
 | 图鉴顺序 | `herotype` 表的顺序。同类型多只英雄打开名册里的第一只 | 旧排序没对上 |
 | 元素名 | 1 火、2 水、3 木、4 光、5 暗 | 对 language 2101–2105。不是 Lua 实证 |

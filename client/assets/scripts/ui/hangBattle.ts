@@ -7,16 +7,13 @@
 import { Button, Color, Label, Node, Overflow, Sprite, UITransform } from "cc";
 import { BattleRound, BattleUnit } from "../module/mainline/battle";
 import { paintSpeedIcon } from "./BattlePage";
+import { placeHangFloats, type HangFloat } from "./hangFloat";
+import { pauseIdleSkirmishes, resumeIdleSkirmishes } from "./idleHangSkirmish";
+import { IDLE_SKIRMISH_SPOTS } from "./idleHangSkirmishPlan";
 import { IDLE_HANG_SPOTS } from "./idleHangView";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
-export interface HangFloat {
-  text: string;
-  x: number;
-  y: number;
-  heal: boolean;
-  crit?: boolean;
-}
+export type { HangFloat };
 
 export interface HangBar {
   x: number;
@@ -40,17 +37,9 @@ const speedFns = new Map<Node, () => void>();
 const skipFns = new Map<Node, () => void>();
 
 const INK = new Color(255, 236, 190, 255);
-const DMG = new Color(255, 70, 54, 255);
-const HEAL = new Color(90, 230, 120, 255);
-const CRIT = new Color(255, 214, 72, 255);
 const BAR_W = 78;
 
-/** 敌方站在殿堂后侧，和挂机三格错开。 */
-const ENEMY_SPOTS = [
-  { x: -180, y: 230 },
-  { x: 8, y: 268 },
-  { x: 188, y: 226 },
-];
+/** 敌方站在殿堂后侧，和挂机演武同一组三格。 */
 
 export function bindHangSpeed(page: Node, fn: () => void): void {
   speedFns.set(page, fn);
@@ -80,7 +69,7 @@ export function barsFromSides(
 ): HangBar[] {
   const out: HangBar[] = [];
   pushBars(out, allies, IDLE_HANG_SPOTS, true, rageRatio);
-  pushBars(out, enemies, ENEMY_SPOTS, false, rageRatio);
+  pushBars(out, enemies, IDLE_SKIRMISH_SPOTS, false, rageRatio);
   return out;
 }
 
@@ -92,6 +81,7 @@ export function beginHangBattle(page: Node, left: string, right: string): void {
   hold.right = right || "敌方";
   hold.allies = null;
   hold.enemies = null;
+  pauseIdleSkirmishes();
   const layer = ensureLayer(page);
   setCaption(page, "战斗中");
   const flash = layer.getChildByName("HangFlash");
@@ -144,22 +134,7 @@ export function showHangStrike(
   paintBars(layer, bars || []);
   const host = layer.getChildByName("HangFloats");
   if (!host) return;
-  const old = host.children.slice();
-  for (let i = 0; i < old.length; i++) old[i].destroy();
-  for (let i = 0; i < floats.length && i < 6; i++) {
-    const row = floats[i];
-    const crit = row.crit === true && !row.heal;
-    const color = crit ? CRIT : row.heal ? HEAL : DMG;
-    const size = crit ? 40 : row.heal ? 30 : 34;
-    const text = crit ? "暴击 " + row.text : row.text;
-    const node = createLabel(text, size, { color, width: crit ? 180 : 140, height: 44 });
-    const labelNode = node.getComponent(Label);
-    if (labelNode) {
-      labelNode.isBold = true;
-      labelNode.overflow = Overflow.SHRINK;
-    }
-    place(node, host, row.x, row.y + (crit ? 18 : 0));
-  }
+  placeHangFloats(host, floats);
 }
 
 export function finishHangBattle(page: Node, win: boolean | null): void {
@@ -191,6 +166,7 @@ export function stopHangBattle(page: Node): void {
   if (layer) layer.destroy();
   setTalk(page, true);
   setCaption(page, "战斗");
+  resumeIdleSkirmishes();
 }
 
 function ensureHold(page: Node): HangHold {

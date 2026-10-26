@@ -93,6 +93,16 @@ import {
 } from "../assets/scripts/ui/battlePresentation";
 import { SPINE_RUNTIME_VERSION, upgradeSpine37Json } from "../assets/scripts/ui/spineUpgrade";
 import {
+  IDLE_SKIRMISH_HITS,
+  IDLE_SKIRMISH_SPOTS,
+  idleSkirmishHurt,
+  idleSkirmishKillClip,
+  idleSkirmishStageIdx,
+  idleSkirmishSwings,
+  planIdleFoe,
+  IDLE_SKIRMISH_FALLBACK_STEMS,
+} from "../assets/scripts/ui/idleHangSkirmishPlan";
+import {
   EFFECT_RUNS,
   HIT_RUNS,
   SKILL_RUNS,
@@ -27107,6 +27117,54 @@ function mainAppFile(): string {
   return candidates[0];
 }
 
+function checkIdleSkirmish(): void {
+  assert(
+    IDLE_SKIRMISH_SPOTS.length === 3 &&
+      IDLE_SKIRMISH_SPOTS[0].x === -180 &&
+      IDLE_SKIRMISH_SPOTS[0].y === 230 &&
+      IDLE_SKIRMISH_SPOTS[0].face === 1 &&
+      IDLE_SKIRMISH_SPOTS[2].face === -1,
+    "idle skirmish uses the three rear hang spots"
+  );
+  assert(idleSkirmishSwings(0) === IDLE_SKIRMISH_HITS && idleSkirmishSwings(1) === 2 && idleSkirmishSwings(3) === 3, "each standing hero swings, at least twice");
+  assert(idleSkirmishStageIdx(null, null, 0) === 1 && idleSkirmishStageIdx(null, 3, 9) === 3 && idleSkirmishStageIdx(4, 3, 9) === 4, "skirmish stage follows mock, then now, then max");
+  const named = planIdleFoe(0, [{ heroType: 10101001, hp: 900 }], (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
+  assert(named.stem === "10101001" && named.spot === 0 && named.face === 1 && named.maxHp === 900, "stage monster with stand is the foe");
+  const rotated = planIdleFoe(1, [{ heroType: 10101001, hp: 900 }, { heroType: 10405006, hp: 400 }], (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
+  assert(rotated.stem === "10405006" && rotated.spot === 1 && rotated.maxHp === 400, "next wave uses the next stage monster and the next spot");
+  const fallback = planIdleFoe(1, [{ heroType: 99999999, hp: 10 }], (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
+  assert(fallback.stem === WIRE_SPINE_ENEMY_STEMS[1] && fallback.maxHp === null, "unknown monster type falls back to the enemy pack");
+  const split = idleSkirmishHurt(100, 0, 2);
+  const last = idleSkirmishHurt(100, 1, 2);
+  assert(split.hurt === 50 && split.kill === false && last.hurt === 50 && last.kill === true, "table hp is split and the last swing kills");
+  const chip = idleSkirmishHurt(null, 1, 2);
+  assert(chip.hurt === 64 && chip.kill === true, "missing hp still shows a presentation number and dies on the last swing");
+  assert(idleSkirmishKillClip("10101001", wireSpineHasClip) === "hit" && idleSkirmishKillClip("crusade_boss_die", wireSpineHasClip) === "die", "packs without die flinch, packs with die fall");
+  assert(IDLE_SKIRMISH_FALLBACK_STEMS.join(",") === WIRE_SPINE_ENEMY_STEMS.join(","), "skirmish fallback stems are the enemy battle packs");
+  const hangSrc = readFileSync(uiSource("idleHangView.ts"), "utf8");
+  const skirmishSrc = readFileSync(uiSource("idleHangSkirmish.ts"), "utf8");
+  const battleSrc = readFileSync(uiSource("hangBattle.ts"), "utf8");
+  const shellSrc = readFileSync(uiSource("pagePrefabShell.ts"), "utf8");
+  assert(
+    hangSrc.indexOf("mountIdleSkirmish") >= 0 &&
+      hangSrc.indexOf("skirmish.retarget") >= 0 &&
+      skirmishSrc.indexOf("IdleFoes") >= 0 &&
+      skirmishSrc.indexOf("encodeFrame") < 0 &&
+      skirmishSrc.indexOf("NetClient") < 0 &&
+      skirmishSrc.indexOf("challengeMainline") < 0 &&
+      skirmishSrc.indexOf("wire.3001") < 0,
+    "hang lineup starts a client-only skirmish and does not send battle or claim"
+  );
+  assert(
+    battleSrc.indexOf("pauseIdleSkirmishes") >= 0 &&
+      battleSrc.indexOf("resumeIdleSkirmishes") >= 0 &&
+      battleSrc.indexOf("IDLE_SKIRMISH_SPOTS") >= 0 &&
+      shellSrc.indexOf("PAGE_SHELL_FIGHT") >= 0 &&
+      shellSrc.indexOf("beginHangBattle") >= 0,
+    "real fight button still enters the report battle and pauses the skirmish"
+  );
+}
+
 async function main(): Promise<void> {
   checkPages();
   checkPopups();
@@ -27114,6 +27172,7 @@ async function main(): Promise<void> {
   checkPanelNav();
   checkCityMap();
   checkCityHub();
+  checkIdleSkirmish();
   checkSafeArea();
   checkLog();
   checkLoginPrefs();
