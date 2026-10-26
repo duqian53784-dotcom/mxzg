@@ -41,6 +41,7 @@ import {
   isH5Client,
   readClientVersion,
   versionNeedsUpdate,
+  versionUrls,
 } from "./clientVersion";
 import { listOpenEntries } from "../config/gates";
 import { NetClient } from "../net/NetClient";
@@ -263,10 +264,17 @@ export class Boot extends Component {
     return pending;
   }
 
-  /** 版本对不上就停在热更层。返回 false 表示这一页已经被拆掉。 */
+  /**
+   * 远程更大才进热更层。
+   * 地址为空，或远程请求失败（网络、超时、404、CORS）时不挡启动，按本地已是最新跳过热更。
+   * H5 / Creator 浏览器预览到不了 CDN 时走这条。
+   * 版本表本身读失败仍会弹出失败层：先重试一次，再失败改成继续，避免停在 0%。
+   * 返回 false 表示这一页已经被拆掉。
+   */
   private async runVersionStage(): Promise<boolean> {
     const chrome = this.chrome;
     if (!chrome) return false;
+    let failures = 0;
     for (;;) {
       if (!this.alive) return false;
       chrome.setRatio(0);
@@ -276,8 +284,13 @@ export class Boot extends Component {
         const local = await readClientVersion();
         if (!this.alive) return false;
         GameLog.shared.info("Boot", "stage=version " + local.version);
+        const empty = versionUrls(local).length === 0;
         const remote = await fetchRemoteVersion(local);
         if (!this.alive) return false;
+        if (remote === null) {
+          this.skipUnreachableVersion(local, empty);
+          return true;
+        }
         chrome.setRatio(1);
         if (!versionNeedsUpdate(local.version, remote)) {
           GameLog.shared.info("Boot", "stage=hot-update skip local=" + local.version + " remote=" + remote);
@@ -287,15 +300,39 @@ export class Boot extends Component {
         return await this.runHotUpdate(local);
       } catch (err) {
         if (!this.alive) return false;
+        failures += 1;
         const text = messageOf(err);
         GameLog.shared.error("Boot", "stage=version " + text);
         const copy = await this.bootCopy();
         chrome.setRatio(0);
         await chrome.open("update");
+        if (failures >= 2) {
+          const skip = await chrome.prompt(
+            (text || copy.versionFail) + "\n本地已是最新 / 跳过热更",
+            copy.versionSkip
+          );
+          if (!skip || !this.alive) return false;
+          GameLog.shared.warn("Boot", "stage=version 重试后仍失败，本地已是最新 / 跳过热更");
+          GameLog.shared.info("Boot", "stage=hot-update skip 本地已是最新 / 跳过热更");
+          chrome.setRatio(1);
+          return true;
+        }
         const again = await chrome.prompt(text || copy.versionFail, copy.retry);
         if (!again || !this.alive) return false;
       }
     }
+  }
+
+  /** 远程版本没读到。警告后跳过热更，后面继续加载资源。 */
+  private skipUnreachableVersion(local: ClientVersion, empty: boolean): void {
+    const where = isH5Client() ? " h5" : "";
+    const why = empty ? "版本地址为空" : "远程版本不可达";
+    GameLog.shared.warn("Boot", "stage=version " + why + where + "，本地已是最新 / 跳过热更 local=" + local.version);
+    GameLog.shared.info(
+      "Boot",
+      "stage=hot-update skip local=" + local.version + " remote=" + (empty ? "empty" : "unreachable")
+    );
+    if (this.chrome) this.chrome.setRatio(1);
   }
 
   /**
