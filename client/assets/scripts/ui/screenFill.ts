@@ -13,7 +13,7 @@ import { Proto } from "../net/protocol/Proto";
 import { WireSession } from "../net/WireSession";
 import { applyIdleClaim, claimToast, IDLE_HERO_EXP_ID, IDLE_ITEM_ID, IDLE_ROLE_EXP_ID } from "../module/idle/rewards";
 import { heroBaseStats, heroProfile, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles } from "../config/gameCatalog";
-import { chapterDrops, chapterIdleMinute, DropFace, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleBonus, vipIdleLine } from "../config/rosterCatalog";
+import { chapterDrops, chapterIdleMinute, DropFace, heroLevelNeed, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleBonus, vipIdleLine } from "../config/rosterCatalog";
 import { IDLE_UNIX_FLOOR, wireIdleCapMs, wireIdleElapsedMs } from "../net/protocol/wireIdle";
 import { WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/wireLineUpSave";
 import { mainFormationHeroes } from "../net/protocol/starterLineup";
@@ -23,11 +23,23 @@ import { paintIdleLoot, playIdleHarvest, seatHangTimer } from "./idleHangView";
 import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
 import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
 import { mockRuntimeEnabled } from "../net/transportSelect";
+import { emptyBagToast } from "../module/bag/items";
+import { formatStoreBagLine } from "../module/bag/bagView";
+import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
+import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 const INK = new Color(122, 71, 45, 255);
 const CREAM = new Color(255, 236, 190, 255);
 const COUNT = new Color(255, 248, 220, 255);
+const SHORT = new Color(196, 64, 48, 255);
+const COST_OK = new Color(254, 255, 255, 255);
+
+const HERO_LIST_BOARD = "prefabs/ui/hero/HeroListHeroLayer";
+const HERO_LEVEL_BOARD = "prefabs/ui/hero/HeroInfoUpLevelLayer";
+const HERO_STAR_BOARD = "prefabs/ui/hero/HeroInfoUpStarLayer";
+const BAG_INFO_BOARD = "prefabs/ui/backpack/BackpackInfoLayer";
+const HERO_EXP_ITEM = 900101;
 const CHECK = new Color(70, 210, 90, 255);
 const NAME_GREEN = new Color(134, 236, 149, 255);
 const DESC = new Color(255, 249, 197, 255);
@@ -466,6 +478,8 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
 /** 英雄详情：装备圈、属性、技能、育成页签。不发升级协议。 */
 export function dressHeroDetail(view: Node, hero: StoreHero): void {
   silenceBigMenus(view);
+  const evolve = findNamed(view, "node_evolve");
+  if (evolve) evolve.active = false;
   const profile = heroProfile(hero.heroType);
   const name = hero.name || (profile ? profile.name : "英雄");
   writeNamed(view, "lbl_hero_name", name);
@@ -485,6 +499,12 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
       place(createLabel(String(count), 16, { color: CREAM, width: 36, height: 22 }), stars, shown * 14, 0);
     }
   }
+  const bat = findNamed(view, "bat_node");
+  if (bat && !bat.getChildByName("FightValue")) {
+    const power = createLabel(hero.fighting === null ? "—" : String(hero.fighting), 22, { color: CREAM, width: 160, height: 28 });
+    power.name = "FightValue";
+    place(power, bat, 40, 0);
+  }
   if (hero.heroId) {
     const spot = place(uiNode("DetailSpine"), view, 320, 620);
     mountBattleSpine(spot, hangSpineStem(hero.heroId, hero.heroType), () => {
@@ -492,57 +512,89 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
     });
   }
   const stats = heroBaseStats(hero.heroType, hero.star ?? (profile ? profile.star : 1));
-  const board = uiNode("DetailBoard");
-  place(board, view, 320, 250);
+  const tabBar = findNamed(view, "scroll_view_tab") || view;
+  const panel = findNamed(view, "node_panel") || view;
+  const body = uiNode("DetailBody");
+  place(body, panel, 0, 180);
   const tabs = ["育成", "星UP", "宝石", "神装"];
   const tabNodes: Node[] = [];
   let tab = 0;
   let gemPlace = 1;
   let gearPlace = 1;
-  const body = uiNode("DetailBody");
-  place(body, board, 0, -36);
+  let grow: Node | null = null;
+  let starBoard: Node | null = null;
   const paint = () => {
-    if (!body.isValid) return;
+    if (!view.isValid) return;
+    for (let i = 0; i < tabNodes.length; i++) paintTab(tabNodes[i], i === tab);
+    if (grow) grow.active = tab === 0;
+    if (starBoard) starBoard.active = tab === 1;
     clearChildren(body);
-    for (let i = 0; i < tabNodes.length; i++) {
-      paintSprite(tabNodes[i], i === tab ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
+    if (tab === 0) {
+      if (grow) fillGrowBoard(grow, hero, profile, stats);
+      else paintGrow(body, hero, profile, stats);
+    } else if (tab === 1) {
+      if (starBoard) fillStarBoard(starBoard, hero, profile);
+      else paintStarUp(body, hero, profile);
+    } else if (tab === 2) {
+      paintGems(view, body, gemPlace, (placeId) => {
+        gemPlace = placeId;
+        paint();
+      });
+    } else {
+      paintGears(view, body, gearPlace, (placeId) => {
+        gearPlace = placeId;
+        paint();
+      });
     }
-    if (tab === 0) paintGrow(body, hero, profile, stats);
-    else if (tab === 1) paintStarUp(body, hero, profile);
-    else if (tab === 2) paintGems(view, body, gemPlace, (placeId) => {
-      gemPlace = placeId;
-      paint();
-    });
-    else paintGears(view, body, gearPlace, (placeId) => {
-      gearPlace = placeId;
-      paint();
-    });
   };
   for (let i = 0; i < tabs.length; i++) {
     const index = i;
-    const button = sprite(tabs[i], 100, 36, index === 0 ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
-    place(button, board, -180 + i * 110, 70);
+    const button = sprite(tabs[i], 100, 36, "ui/common/button_btn-tab-23");
+    place(button, tabBar, -165 + i * 110, 36);
     tabNodes.push(button);
-    const label = createLabel(tabs[i], 16, { color: INK, width: 90, height: 28 });
-    place(label, button, 0, 0);
+    place(createLabel(tabs[i], 16, { color: INK, width: 90, height: 28 }), button, 0, 0);
     if (!button.getComponent(Button)) button.addComponent(Button);
     button.on(Button.EventType.CLICK, () => {
       tab = index;
       paint();
     });
   }
-  fitButton(findNamed(view, "btn_evolution"), "升级", 22);
-  const up = findNamed(view, "btn_evolution");
-  if (up) {
-    if (!up.getComponent(Button)) up.addComponent(Button);
-    up.on(Button.EventType.CLICK, () => {
-      GameLog.shared.info("Hero", "英雄升级没有服端写协议，按钮停用，不改等级");
-    });
-  }
+  holdUpgrade(findNamed(view, "btn_evolution"), "升级");
+  void mountNested(view, HERO_LEVEL_BOARD, "GrowBoard").then((node) => {
+    if (!node || !view.isValid) return;
+    grow = node;
+    seatOnPanel(node, panel, 150);
+    silenceBigMenus(node);
+    const grade = findNamed(node, "btn_up_grade");
+    if (grade) grade.active = false;
+    holdUpgrade(findNamed(node, "btn_up_level"), "升级");
+    for (let i = 1; i <= 6; i++) {
+      const mark = findNamed(node, "sp_grade" + i);
+      if (mark) mark.active = false;
+    }
+    paint();
+  });
+  void mountNested(view, HERO_STAR_BOARD, "StarBoard").then((node) => {
+    if (!node || !view.isValid) return;
+    starBoard = node;
+    seatOnPanel(node, panel, 112.5);
+    silenceBigMenus(node);
+    const button = findNamed(node, "btn_up_star");
+    setGray(button, true);
+    if (button) {
+      if (!button.getComponent(Button)) button.addComponent(Button);
+      button.on(Button.EventType.CLICK, () => {
+        GameLog.shared.info("Hero", "升星没有服端写协议，不改星级");
+        flashToast(view, "不发升星协议");
+      });
+    }
+    paint();
+  });
   paint();
 }
 
 function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
+  silenceBigMenus(view);
   fitButton(findNamed(view, "btn_hero"), "英雄", 20);
   fitButton(findNamed(view, "btn_illustrat"), "图鉴", 20);
   fitButton(findNamed(view, "btn_dragon"), "圣龙", 20);
@@ -550,14 +602,21 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
   if (cap) cap.active = true;
   let tab: "hero" | "book" | "dragon" = "hero";
   let elem = 0;
+  let board: Node | null = null;
   const host = uiNode("HeroFill");
   place(host, view, 0, 0);
-  const content = gridScroll(host, "HeroScroll", 270, 600, 448, 400);
+  let content = gridScroll(host, "HeroScroll", 270, 560, 520, 400);
   const paint = () => {
     if (!content.isValid) return;
     clearChildren(content);
+    markHeroTabs(view, tab);
+    markElem(board, elem);
+    const elemRow = board ? findNamed(board, "node_elem") : null;
+    if (elemRow) elemRow.active = tab !== "dragon";
     const all = GameStore.heroes();
-    writeNamed(view, "lbl_capacity", "空间 " + (all ? all.length : 0) + "/" + heroSpaceShown());
+    const space = heroSpaceLine(all);
+    writeNamed(view, "lbl_capacity", space);
+    if (board) writeNamed(board, "lbl_capacity", space);
     if (tab === "dragon") {
       writeNamed(view, "lbl_go", dragonHeadLine());
       paintDragonBoard(view, content);
@@ -574,7 +633,7 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
           const cell = heroCell(hero, hero ? deployed.has(hero.heroId || 0) : false, hero ? () => openHero(hero) : null, false);
           place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
         }
-        sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 400);
+        sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 360);
         return;
       }
       writeNamed(view, "lbl_go", all === null ? "真服英雄未同步，灰的是图鉴" : "空名册，灰的是图鉴");
@@ -584,18 +643,16 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     writeNamed(view, "lbl_go", "灰头像是还没有");
     paintHeroBook(view, content, elem, deployed, openHero);
   };
-  const filters = [0, 1, 2, 3, 4, 5];
-  for (let i = 0; i < filters.length; i++) {
-    const id = filters[i];
-    const button = sprite("elem" + id, 48, 48, "ui/hero/hero-icon_elem-" + id);
-    place(button, host, 78 + i * 78, 618);
-    if (!button.getComponent(Button)) button.addComponent(Button);
-    button.on(Button.EventType.CLICK, () => {
-      elem = id;
-      if (tab === "dragon") tab = "hero";
-      paint();
-    });
+  const pickElem = (id: number) => {
+    elem = id;
+    if (tab === "dragon") tab = "hero";
+    paint();
+  };
+  for (let i = 0; i <= 5; i++) {
+    const button = sprite("elem" + i, 48, 48, "ui/hero/hero-icon_elem-" + i);
+    place(button, host, -210 + i * 84, 590);
   }
+  bindElemRow(host, pickElem);
   bindTab(view, "btn_hero", () => {
     tab = "hero";
     paint();
@@ -608,43 +665,70 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     tab = "dragon";
     paint();
   });
-  const skin = sprite("Permanent", 148, 46, "ui/permanent-skin/permanent-skin_btn-permanent-shop");
-  place(skin, host, 130, 168);
-  place(createLabel("永久技能", 16, { color: CREAM, width: 130, height: 28 }), skin, 0, 0);
+  void mountNested(view, HERO_LIST_BOARD, "HeroBoard").then((node) => {
+    if (!node || !view.isValid) return;
+    board = node;
+    const menu = findNamed(view, "UIMenu_1");
+    if (menu && menu.parent === view) node.setSiblingIndex(menu.getSiblingIndex());
+    const box = findNamed(node, "spr_box");
+    if (box) {
+      const old = host.getChildByName("HeroScroll");
+      if (old) old.destroy();
+      // 元素钮在盒子顶上，格子从钮下沿再往下排。
+      content = gridScroll(box, "HeroScroll", 0, -108, 540, 320);
+    }
+    if (cap) cap.active = false;
+    const big = findNamed(node, "node_capacity");
+    const menuHit = big ? big.getChildByName("UIMenu_1") : null;
+    const menuUi = menuHit ? menuHit.getComponent(UITransform) : null;
+    if (menuUi) menuUi.setContentSize(0, 0);
+    clearChildren(host);
+    bindElemRow(node, pickElem);
+    paint();
+  });
   paint();
   const offHero = WireSession.onSync(() => paint());
   view.once(Node.EventType.NODE_DESTROYED, () => offHero());
 }
 
 function fillBag(view: Node): void {
+  silenceBigMenus(view);
   let tab: BagTab = "item";
+  let picked: StoreBagItem | null = null;
   const host = uiNode("BagFill");
   place(host, view, 0, 0);
-  const content = gridScroll(host, "BagScroll", 313, 560, 460, 420);
+  const box = findNamed(view, "spr_box");
+  const content = box ? gridScroll(box, "BagScroll", 0, -12, 520, 400) : gridScroll(host, "BagScroll", 313, 540, 460, 400);
+  const tabHost = bagTabHost(view) || host;
   const tabs: Node[] = [];
   const paint = () => {
     if (!content.isValid) return;
     clearChildren(content);
-    for (let i = 0; i < tabs.length; i++) {
-      paintSprite(tabs[i], BAG_TABS[i].id === tab ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
-    }
+    for (let i = 0; i < tabs.length; i++) paintTab(tabs[i], BAG_TABS[i].id === tab);
     const all = GameStore.bag();
     if (all === null) writeNamed(view, "lbl_title", "背包 · 真服未同步");
     else if (countBag(all) === 0) writeNamed(view, "lbl_title", "背包 · 空背包");
     else writeNamed(view, "lbl_title", "背包");
     const rows = bagRows(tab);
+    if (picked && !rows.some((row) => sameBag(row, picked as StoreBagItem))) picked = null;
     const shown = paddedSlots(rows.length);
     for (let i = 0; i < shown; i++) {
       const item = i < rows.length ? rows[i] : null;
-      const cell = item ? bagCell(item, () => showInfoCard(view, bagCard(item))) : emptyBag();
-      place(cell, content, gridX(i, -168, BAG_PITCH_X), gridY(i, -60, BAG_PITCH_Y));
+      const cell = item
+        ? bagCell(item, picked !== null && sameBag(item, picked), () => {
+            picked = item;
+            showBagInfo(view, item);
+            paint();
+          })
+        : emptyBag(rows.length === 0 ? () => flashToast(view, all === null ? WIRE_BAG_UNSYNCED_TOAST : emptyBagToast()) : null);
+      place(cell, content, gridX(i, -168, BAG_PITCH_X), gridY(i, -56, BAG_PITCH_Y));
     }
-    sizeScroll(content, slotRows(shown) * BAG_PITCH_Y + 24, 420);
+    sizeScroll(content, slotRows(shown) * BAG_PITCH_Y + 24, 400);
   };
   for (let i = 0; i < BAG_TABS.length; i++) {
     const spec = BAG_TABS[i];
-    const button = sprite(spec.title, 108, 40, i === 1 ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
-    place(button, host, 125 + i * 118, 590);
+    const button = sprite(spec.title, 108, 40, "ui/common/button_btn-tab-23");
+    place(button, tabHost, tabHost === host ? 125 + i * 118 : 64 + i * 120, tabHost === host ? 590 : -24);
     place(createLabel(spec.title, 18, { color: INK, width: 96, height: 28 }), button, 0, 0);
     tabs.push(button);
     if (!button.getComponent(Button)) button.addComponent(Button);
@@ -765,6 +849,9 @@ function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void)
   for (let i = 0; i < n; i++) {
     place(sprite("star", 14, 14, "ui/hero/hero-info_spr-star-1"), root, (i - (n - 1) / 2) * 15, -40);
   }
+  if (hero.level !== null) {
+    place(createLabel(String(hero.level), 14, { color: COUNT, width: 36, height: 18 }), root, 22, -22);
+  }
   if (locked) place(sprite("lock", 28, 28, "ui/hero/hero-icon_spr-lock"), root, 28, 32);
   else if (deployed) place(sprite("battle", 28, 28, "ui/hero/hero-icon_spr-battle"), root, 30, 32);
   if (onTap) {
@@ -774,12 +861,13 @@ function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void)
   return root;
 }
 
-function bagCell(item: StoreBagItem, onTap: (() => void) | null): Node {
+function bagCell(item: StoreBagItem, selected: boolean, onTap: (() => void) | null): Node {
   const root = uiNode("BagCell");
   const ui = root.addComponent(UITransform);
   ui.setContentSize(96, 96);
   const profile = itemProfile(item.itemType, item.itemId);
   place(sprite("frame", 88, 88, rareFrame(profile ? profile.rare : 0)), root, 0, 0);
+  if (selected) place(sprite("select", 96, 96, "ui/bag/backpack_spr-select"), root, 0, 0);
   const icon = itemIconResource(item.itemType, item.itemId);
   const face = sprite("icon", 72, 72, icon || "ui/bag/backpack_spr-default", "ui/bag/backpack_spr-default");
   place(face, root, 0, 6);
@@ -796,11 +884,15 @@ function bagCell(item: StoreBagItem, onTap: (() => void) | null): Node {
   return root;
 }
 
-function emptyBag(): Node {
+function emptyBag(onTap: (() => void) | null): Node {
   const root = uiNode("BagEmpty");
   const ui = root.addComponent(UITransform);
   ui.setContentSize(96, 96);
   place(sprite("frame", 88, 88, "ui/common/other_spr-null"), root, 0, 0);
+  if (onTap) {
+    if (!root.getComponent(Button)) root.addComponent(Button);
+    root.on(Button.EventType.CLICK, onTap);
+  }
   return root;
 }
 
@@ -1230,10 +1322,363 @@ function writeNamed(root: Node, name: string, text: string): void {
   if (!node) return;
   setText(node, text);
   const label = node.getComponent(Label);
-  if (label && label.fontSize > 28) {
+  if (!label) return;
+  const scaled = Math.abs(node.scale.x - 1) > 0.05 || Math.abs(node.scale.y - 1) > 0.05;
+  if (scaled) {
+    label.overflow = Overflow.SHRINK;
+    const ui = node.getComponent(UITransform);
+    if (ui && ui.contentSize.width < 40) ui.setContentSize(360, 64);
+    return;
+  }
+  if (label.fontSize > 28) {
     label.fontSize = 18;
     label.overflow = Overflow.SHRINK;
   }
+}
+
+function writeKeep(root: Node, name: string, text: string): void {
+  const node = findNamed(root, name);
+  if (node) setText(node, text);
+}
+
+function tintNamed(root: Node, name: string, color: Color): void {
+  const node = findNamed(root, name);
+  const label = node ? node.getComponent(Label) : null;
+  if (label) label.color = color;
+}
+
+function holdUpgrade(node: Node | null, title: string): void {
+  if (!node) return;
+  fitButton(node, title, 22);
+  setGray(node, true);
+  if (!node.getComponent(Button)) node.addComponent(Button);
+  node.on(Button.EventType.CLICK, () => {
+    GameLog.shared.info("Hero", "英雄升级没有服端写协议，按钮停用，不改等级");
+    const host = node.parent;
+    flashToast(host && host.parent ? host.parent : node, "不发升级协议");
+  });
+}
+
+function fillGrowBoard(
+  board: Node,
+  hero: StoreHero,
+  profile: HeroProfile | null,
+  stats: { atk: number; hp: number; def: number; spd: number } | null
+): void {
+  const star = hero.star ?? ((profile && profile.star) || null);
+  const step = heroStarStep(star);
+  const limit = step ? step.levelLimit : null;
+  const level = hero.level;
+  const capped = level !== null && limit !== null && level >= limit;
+  writeKeep(board, "lbl_level", level === null ? "—" : limit === null ? String(level) : level + "/" + limit);
+  writeKeep(board, "lbl_profession", "职业: —");
+  const job = findNamed(board, "icon_occupat");
+  if (job) job.active = false;
+  writeKeep(board, "lbl_attack", "攻击：" + (stats ? String(stats.atk) : "—"));
+  writeKeep(board, "lbl_hp", "血量：" + (stats ? String(stats.hp) : "—"));
+  writeKeep(board, "lbl_defense", "防御：" + (stats ? String(stats.def) : "—"));
+  writeKeep(board, "lbl_speed", "速度：" + (stats ? String(stats.spd) : "—"));
+  const need = level === null || capped ? null : heroLevelNeed(level);
+  const gold = knownGold();
+  const exp = knownBagCount(HERO_EXP_ITEM);
+  writeKeep(board, "lbl_gold_need", need ? String(need.gold) : "—");
+  writeKeep(board, "lbl_exp_need", need ? String(need.exp) : "—");
+  tintNamed(board, "lbl_gold_need", need && gold !== null && gold < need.gold ? SHORT : COST_OK);
+  tintNamed(board, "lbl_exp_need", need && exp !== null && exp < need.exp ? SHORT : COST_OK);
+  const maxed = findNamed(board, "lbl_max_tips");
+  if (maxed) {
+    maxed.active = capped || (level !== null && !need && !heroLevelNeed(level));
+    if (maxed.active) setText(maxed, capped ? "已达星级上限" : "已达最大等级");
+  }
+  const note = board.getChildByName("UpgradeHold");
+  if (!note) {
+    const line = createLabel("不发升级协议", 14, { color: INK, width: 180, height: 22 });
+    line.name = "UpgradeHold";
+    const host = findNamed(board, "node_all") || board;
+    place(line, host, 40, 250);
+  }
+  const menu = findNamed(board, "skill_menu");
+  if (menu) {
+    const old = menu.children.slice();
+    for (let i = 0; i < old.length; i++) {
+      if (old[i].name.indexOf("skill") === 0) old[i].destroy();
+    }
+    const skills = profile ? profile.skills : [];
+    const n = skills.length < 4 ? skills.length : 4;
+    for (let i = 0; i < n; i++) {
+      const icon = sprite("skill" + i, 48, 48, "ui/hero/skill-icon_" + skills[i].id, "ui/hero/hero-icon_spr-default");
+      place(icon, menu, -150 + i * 70, 0);
+    }
+    const box = menu.getComponent(UITransform);
+    if (box) box.setContentSize(0, 0);
+  }
+}
+
+function fillStarBoard(board: Node, hero: StoreHero, profile: HeroProfile | null): void {
+  const star = hero.star ?? ((profile && profile.star) || 1);
+  const cur = heroStarStep(star);
+  const nxt = heroStarStep(star + 1);
+  const maxed = star >= 14 || !nxt;
+  writeKeep(board, "lbl_now_max_level", cur ? String(cur.levelLimit) : "—");
+  writeKeep(board, "lbl_now_next_level", maxed ? "—" : nxt ? String(nxt.levelLimit) : "—");
+  paintStarMarks(findNamed(board, "node_cur_star"), star);
+  const nextStars = findNamed(board, "node_next_star");
+  if (maxed) {
+    paintStarMarks(nextStars, 0);
+    if (nextStars && !nextStars.getChildByName("MaxStar")) {
+      const line = createLabel("已满星", 14, { color: INK, width: 80, height: 22 });
+      line.name = "MaxStar";
+      place(line, nextStars, 0, 0);
+    }
+  } else {
+    const oldMax = nextStars ? nextStars.getChildByName("MaxStar") : null;
+    if (oldMax) oldMax.destroy();
+    paintStarMarks(nextStars, star + 1);
+  }
+  const speed = findNamed(board, "lbl_upgrade_speed");
+  if (speed) speed.active = false;
+  const show = nxt || cur;
+  writeKeep(
+    board,
+    "lbl_upgrade_attack",
+    show ? show.attackShow + "%/" + show.hpShow + "%" : "—"
+  );
+  const from = cur && cur.skillLevels.length > 0 ? cur.skillLevels[0] : null;
+  const to = nxt && nxt.skillLevels.length > 0 ? nxt.skillLevels[0] : null;
+  writeKeep(board, "lbl_upgrade_skill_all_1", from === null ? "—" : from + "级");
+  writeKeep(board, "lbl_upgrade_skill_all_2", maxed || to === null ? "—" : to + "级");
+  const skills = profile ? profile.skills : [];
+  const icon1 = findNamed(board, "spr_skill_icon_1");
+  const icon2 = findNamed(board, "spr_skill_icon_2");
+  if (icon1 && skills.length > 0) paintFirst(icon1, ["ui/hero/skill-icon_" + skills[0].id, "ui/hero/hero-icon_spr-default"]);
+  if (icon2 && skills.length > 1) paintFirst(icon2, ["ui/hero/skill-icon_" + skills[1].id, "ui/hero/hero-icon_spr-default"]);
+  writeKeep(board, "lbl_skill_level_1", from === null ? "—" : String(from));
+  writeKeep(board, "lbl_skill_level_2", to === null ? "—" : String(to));
+  writeKeep(board, "lbl_jump", "不发升星协议");
+  const button = findNamed(board, "btn_up_star");
+  fitButton(button, maxed ? "已满星" : "升星", 22);
+  setGray(button, true);
+  paintStarCostRow(board, hero, maxed ? null : nxt);
+  const goldCost = nxt ? costNum(nxt.cost.concat(nxt.needItem), 900001) : null;
+  writeKeep(board, "lbl_gold_need", goldCost === null ? "—" : String(goldCost));
+  const gold = knownGold();
+  tintNamed(board, "lbl_gold_need", goldCost !== null && gold !== null && gold < goldCost ? SHORT : COST_OK);
+}
+
+function paintStarCostRow(board: Node, hero: StoreHero, nxt: StarStep | null): void {
+  const scroll = findNamed(board, "scroll_view");
+  if (!scroll) return;
+  const old = scroll.getChildByName("CostRow");
+  if (old) old.destroy();
+  const row = uiNode("CostRow");
+  place(row, scroll, 24, 70);
+  if (!nxt) {
+    place(createLabel("已满星", 14, { color: INK, width: 120, height: 22 }), row, 40, 0);
+    return;
+  }
+  const stacks = nxt.cost.concat(nxt.needItem);
+  const icons = stacks.length < 4 ? stacks.length : 4;
+  for (let i = 0; i < icons; i++) {
+    const stack = stacks[i];
+    const face = itemProfile(stack.itemType, null);
+    const icon = face && face.icon ? face.icon : "ui/bag/backpack_" + stack.itemType;
+    const owned = knownBagCount(stack.itemType);
+    const cell = sprite("cost" + i, 48, 48, rareFrame(face ? face.rare : 0));
+    place(cell, row, i * 64, 10);
+    const image = sprite("icon", 40, 40, icon, "ui/bag/backpack_spr-default");
+    place(image, cell, 0, 0);
+    if (owned !== null && owned < stack.num) {
+      const gray = image.getComponent(Sprite);
+      if (gray) gray.grayscale = true;
+    }
+    place(createLabel("×" + stack.num, 12, { color: owned !== null && owned < stack.num ? SHORT : INK, width: 48, height: 16 }), row, i * 64, -28);
+  }
+  const needs = heroStarNeeds(hero.heroType, nxt.star);
+  if (needs.length > 0) {
+    const bits: string[] = [];
+    for (let i = 0; i < needs.length && bits.length < 2; i++) bits.push(sacrificeLine(needs[i]));
+    place(createLabel(bits.join("  "), 12, { color: INK, width: 160, height: 36 }), row, 250, 0);
+  }
+}
+
+function costNum(stacks: { itemType: number; num: number }[], itemType: number): number | null {
+  for (let i = 0; i < stacks.length; i++) {
+    if (stacks[i].itemType === itemType) return stacks[i].num;
+  }
+  return null;
+}
+
+function knownGold(): number | null {
+  if (Session.source === "wire" && !Session.wireSync.gold) return null;
+  if (typeof Session.gold !== "number" || !isFinite(Session.gold)) return null;
+  return Session.gold;
+}
+
+function knownBagCount(id: number): number | null {
+  if (GameStore.bag() === null) return null;
+  return bagCount(id);
+}
+
+function heroSpaceLine(all: StoreHero[] | null): string {
+  const cap = heroSpaceShown();
+  return "空间 " + (all ? all.length : "—") + "/" + cap;
+}
+
+function markHeroTabs(view: Node, tab: "hero" | "book" | "dragon"): void {
+  paintTab(findNamed(view, "btn_hero"), tab === "hero");
+  paintTab(findNamed(view, "btn_illustrat"), tab === "book");
+  paintTab(findNamed(view, "btn_dragon"), tab === "dragon");
+}
+
+function markElem(board: Node | null, elem: number): void {
+  if (!board) return;
+  for (let i = 0; i <= 5; i++) {
+    const button = findNamed(board, "btn_elem" + i);
+    if (!button) continue;
+    const scale = i === elem ? 1 : 0.8;
+    button.setScale(scale, scale, 1);
+  }
+}
+
+function bindElemRow(root: Node, pick: (id: number) => void): void {
+  for (let i = 0; i <= 5; i++) {
+    const id = i;
+    const button = findNamed(root, "btn_elem" + id) || root.getChildByName("elem" + id);
+    if (!button || (button as Node & { mxzgElem?: boolean }).mxzgElem) continue;
+    (button as Node & { mxzgElem?: boolean }).mxzgElem = true;
+    if (!button.getComponent(Button)) button.addComponent(Button);
+    button.on(Button.EventType.CLICK, () => pick(id));
+  }
+}
+
+function bagTabHost(view: Node): Node | null {
+  const scroll = findNamed(view, "btn_scroll_view");
+  if (!scroll) return null;
+  return scroll.getChildByName("content");
+}
+
+function sameBag(a: StoreBagItem, b: StoreBagItem): boolean {
+  return a.itemId === b.itemId && a.itemType === b.itemType;
+}
+
+function paintTab(node: Node | null, on: boolean): void {
+  if (!node) return;
+  const button = node.getComponent(Button);
+  if (button) button.transition = Button.Transition.NONE;
+  paintSprite(node, on ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
+}
+
+function setGray(node: Node | null, on: boolean): void {
+  if (!node) return;
+  const image = node.getComponent(Sprite);
+  if (image) image.grayscale = on;
+  const kids = node.children;
+  for (let i = 0; i < kids.length; i++) setGray(kids[i], on);
+}
+
+function flashToast(view: Node, text: string): void {
+  GameLog.shared.info("UI", text);
+  let host: Node | null = view;
+  while (host && host.name !== "PagePrefabShell" && host.parent) host = host.parent;
+  const layer = host && host.isValid ? host : view;
+  const old = layer.getChildByName("ReadToast");
+  if (old) old.destroy();
+  const node = createLabel(text, 22, { color: CREAM, width: 520, height: 40 });
+  node.name = "ReadToast";
+  place(node, layer, 0, 180);
+  const timer = setTimeout(() => {
+    if (node.isValid) node.destroy();
+  }, 1600);
+  const maybe = timer as { unref?: () => void };
+  if (typeof maybe.unref === "function") maybe.unref();
+}
+
+function mountNested(parent: Node, path: string, name: string): Promise<Node | null> {
+  return loadPrefab(path).then(
+    (prefab) => {
+      if (!parent.isValid) return null;
+      const node = spawnPrefab(prefab, parent);
+      node.name = name;
+      node.setPosition(0, 0, 0);
+      return node;
+    },
+    (err) => {
+      GameLog.shared.warn("UI", path + " " + messageOf(err));
+      return null;
+    }
+  );
+}
+
+function showBagInfo(view: Node, item: StoreBagItem): void {
+  const spec = bagCard(item);
+  void mountNested(view, BAG_INFO_BOARD, "BagInfoHold").then((card) => {
+    if (!view.isValid) return;
+    const old = view.getChildByName("InfoCard");
+    if (old) old.destroy();
+    if (!card || !card.isValid) {
+      showInfoCard(view, spec);
+      return;
+    }
+    card.removeFromParent();
+    const root = uiNode("InfoCard");
+    place(root, view, 0, 0);
+    root.setSiblingIndex(Math.max(0, view.children.length - 1));
+    const dim = createRect("dim", 720, 1100, new Color(0, 0, 0, 140));
+    place(dim, root, 320, 480);
+    if (!dim.getComponent(Button)) dim.addComponent(Button);
+    const close = () => {
+      if (root.isValid) root.destroy();
+    };
+    dim.on(Button.EventType.CLICK, close);
+    card.parent = root;
+    card.setPosition(125, 330, 0);
+    card.addComponent(BlockInputEvents);
+    silenceBigMenus(card);
+    const bg = findNamed(card, "spr_bg");
+    if (bg) bg.setPosition(195, 148, 0);
+    writeKeep(card, "lbl_prop_name", spec.title);
+    writeKeep(card, "lbl_prop_type", spec.typeLine);
+    const desc = findNamed(card, "lbl_desc");
+    if (desc) {
+      desc.active = true;
+      setText(desc, spec.body || " ");
+    }
+    const icon = findNamed(card, "spr_icon");
+    if (icon) {
+      paintFirst(icon, [spec.icon, spec.fallback || "ui/bag/backpack_spr-default"]);
+      if (icon.parent && spec.frame) {
+        const frame = sprite("RareFrame", 108, 108, spec.frame);
+        place(frame, icon.parent, icon.position.x, icon.position.y);
+        frame.setSiblingIndex(icon.getSiblingIndex());
+      }
+    }
+    const use = findNamed(card, "btn_enter");
+    if (use) {
+      use.active = true;
+      setGray(use, true);
+      fitButton(use, "使用", 22);
+      if (!use.getComponent(Button)) use.addComponent(Button);
+      use.on(Button.EventType.CLICK, () => {
+        GameLog.shared.info("Bag", "背包使用停用，不发 5004–5009");
+        flashToast(view, "不发使用协议");
+      });
+    }
+    const detail = findNamed(card, "btn_detail");
+    if (detail) detail.active = false;
+    const decompose = findNamed(card, "btn_decompose");
+    if (decompose) decompose.active = false;
+    const src = findNamed(card, "btn_src");
+    if (src) {
+      setGray(src, true);
+      if (!src.getComponent(Button)) src.addComponent(Button);
+      src.on(Button.EventType.CLICK, () => flashToast(view, "来源只读，不跳转"));
+    }
+    const shut = findNamed(card, "btn_close");
+    if (shut) {
+      if (!shut.getComponent(Button)) shut.addComponent(Button);
+      shut.on(Button.EventType.CLICK, close);
+    }
+  });
 }
 
 function hideNamed(root: Node, name: string): void {
@@ -1285,17 +1730,35 @@ function pinSprites(node: Node): void {
   for (let i = 0; i < kids.length; i++) pinSprites(kids[i]);
 }
 
+/** 全屏 menu 会吃掉格子和页签。收成 0 以后，点击落到子按钮上。 */
 function silenceBigMenus(root: Node): void {
   const stack: Node[] = [root];
   while (stack.length > 0) {
     const node = stack.pop() as Node;
     const kids = node.children;
     for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
-    if (node.name === "UIMenu_1" || node.name === "UIMenu_2" || node.name === "menu_equip") continue;
-    if (node.name.indexOf("Menu") < 0 && node.name !== "menu") continue;
+    if (node.name.toLowerCase().indexOf("menu") < 0) continue;
     const ui = node.getComponent(UITransform);
     if (!ui || ui.contentSize.width < 500 || ui.contentSize.height < 500) continue;
     ui.setContentSize(0, 0);
+  }
+}
+
+/** 育成 / 星UP 的内容块对齐详情底栏，避免盖住页签。 */
+function seatOnPanel(board: Node, panel: Node, contentY: number): void {
+  board.setPosition(0, panel.position.y - contentY, 0);
+}
+
+function paintStarMarks(host: Node | null, count: number): void {
+  if (!host) return;
+  const old = host.children.slice();
+  for (let i = 0; i < old.length; i++) {
+    if (old[i].name !== "MaxStar") old[i].destroy();
+  }
+  const n = count > 5 ? 5 : count < 0 ? 0 : Math.floor(count);
+  for (let i = 0; i < n; i++) {
+    const star = sprite("star", 22, 22, "ui/hero/hero-info_spr-star-1");
+    place(star, host, (i - (n - 1) / 2) * 24, 0);
   }
 }
 
@@ -1508,16 +1971,27 @@ function dropCard(face: DropFace, every: number | null): InfoCard {
 
 function bagCard(item: StoreBagItem): InfoCard {
   const profile = itemProfile(item.itemType, item.itemId);
+  const raw = formatStoreBagLine(item);
   const tab = itemBagTab(item.itemType, item.itemId);
-  const count = item.num === null ? "" : "  数量 " + item.num;
-  const rare = profile && profile.rare > 0 ? "  稀有 " + profile.rare : "";
+  if (!profile) {
+    return {
+      icon: item.itemId ? "ui/bag/backpack_" + item.itemId : "ui/bag/backpack_spr-default",
+      fallback: "ui/bag/backpack_spr-default",
+      frame: "ui/bag/backpack_item-frame-1",
+      title: "道具",
+      typeLine: raw,
+      body: "对不上表。缺的数不写成 0。",
+    };
+  }
+  const count = item.num === null ? "数量 无" : "数量 " + item.num;
+  const rare = profile.rare > 0 ? "  稀有 " + profile.rare : "";
   return {
-    icon: (profile && profile.icon) || itemIconResource(item.itemType, item.itemId) || "ui/bag/backpack_spr-default",
+    icon: profile.icon || itemIconResource(item.itemType, item.itemId) || "ui/bag/backpack_spr-default",
     fallback: "ui/bag/backpack_spr-default",
-    frame: rareFrame(profile ? profile.rare : 0),
-    title: profile && profile.name ? profile.name : "道具",
-    typeLine: "类型：" + bagTabTitle(tab) + count + rare,
-    body: profile && profile.blurb ? profile.blurb : " ",
+    frame: rareFrame(profile.rare),
+    title: profile.name || "道具",
+    typeLine: "类型：" + bagTabTitle(tab) + "  " + count + rare,
+    body: profile.blurb || " ",
   };
 }
 

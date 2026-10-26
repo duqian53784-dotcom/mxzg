@@ -92,6 +92,13 @@ export interface RelicFace {
   stages: { id: number; star: number }[];
 }
 
+/** herolevel 这一级升上去要的英雄经验和金币。没有这一行是 null，不写成 0。 */
+export interface HeroLevelNeed {
+  level: number;
+  exp: number;
+  gold: number;
+}
+
 const GOLD = 900001;
 const ROLE_EXP = 900003;
 const HERO_EXP = 900101;
@@ -113,6 +120,7 @@ const jewels: JewelFace[] = [];
 const gears: GodGearFace[] = [];
 const dragons: DragonFace[] = [];
 const relics: RelicFace[] = [];
+const levelNeeds = new Map<number, HeroLevelNeed>();
 
 export function clearRosterCatalog(): void {
   idleByIdx.clear();
@@ -130,6 +138,7 @@ export function clearRosterCatalog(): void {
   gears.length = 0;
   dragons.length = 0;
   relics.length = 0;
+  levelNeeds.clear();
 }
 
 export function bindRosterCatalog(tables: Map<string, ConfigTableFile<Row>>): void {
@@ -145,6 +154,7 @@ export function bindRosterCatalog(tables: Map<string, ConfigTableFile<Row>>): vo
   bindGears(tables.get("godequipment"));
   bindDragons(tables.get("dragonlevel"), text);
   bindRelics(tables.get("dragonrelic"), tables.get("item"), text);
+  bindHeroLevels(tables.get("herolevel"));
 }
 
 /** 当前关的每分钟收益。表还没登记时是 null，调用方留原来的句子。 */
@@ -235,6 +245,14 @@ export function vipIdleLine(level: number | null | undefined): string {
 /** system.hero_space_initial。没读到表时是 300，和旧底栏「空间 n/300」一致。 */
 export function heroSpaceCap(): number {
   return heroSpace;
+}
+
+/** 当前等级升到下一级的金币和英雄经验。表上没有这一级是 null。 */
+export function heroLevelNeed(level: number | null | undefined): HeroLevelNeed | null {
+  const key = whole(level);
+  if (key === null || key < 1) return null;
+  const row = levelNeeds.get(key);
+  return row ? { level: row.level, exp: row.exp, gold: row.gold } : null;
 }
 
 export function heroStarStep(star: number | null | undefined): StarStep | null {
@@ -424,6 +442,16 @@ function bindGears(table: Table): void {
       star: num(row.star) ?? 0,
       name: note,
     });
+  }
+}
+
+function bindHeroLevels(table: Table): void {
+  for (const row of rows(table)) {
+    const level = num(row.level);
+    const exp = num(row.exp_need);
+    const gold = num(row.gold_need);
+    if (level === null || level < 1 || exp === null || gold === null || exp < 0 || gold < 0) continue;
+    levelNeeds.set(level, { level, exp, gold });
   }
 }
 
