@@ -1,6 +1,8 @@
 /**
  * 客户端版本来自 config/version，不再写死 0.1.0-mock。
  * 远程版本从平台地址和下载地址上的 version.json / version.manifest 里取整数版本号，和表里的 version 比大小。
+ * 地址为空，或请求失败（网络、超时、404、CORS、解析不出版本号）时返回 null，不抛「校验版本失败」。
+ * 调用方把 null 当成本地已是最新并跳过热更。H5 / Creator 浏览器预览到不了 CDN 时走这条。
  */
 import { sys } from "cc";
 import { ConfigLoader } from "../config/ConfigLoader";
@@ -73,9 +75,13 @@ export async function readClientVersion(): Promise<ClientVersion> {
   throw new Error("版本表没有可用的 version");
 }
 
-export async function fetchRemoteVersion(version: ClientVersion, timeoutMs = 4000): Promise<number> {
+/**
+ * 读到远程整数版本就返回它。
+ * 没有平台地址和下载地址，或每个地址都失败时返回 null。不抛「校验版本失败」。
+ */
+export async function fetchRemoteVersion(version: ClientVersion, timeoutMs = 4000): Promise<number | null> {
   const urls = versionUrls(version);
-  if (urls.length === 0) throw new Error("版本表没有平台地址");
+  if (urls.length === 0) return null;
   const found = await Promise.all(
     urls.map((url) =>
       fetchText(url, timeoutMs).then(
@@ -87,7 +93,7 @@ export async function fetchRemoteVersion(version: ClientVersion, timeoutMs = 400
   for (let i = 0; i < found.length; i++) {
     if (found[i] !== null) return found[i] as number;
   }
-  throw new Error("校验版本失败");
+  return null;
 }
 
 export function downloadWithProgress(
@@ -153,6 +159,7 @@ function fetchText(url: string, timeoutMs: number): Promise<string> {
     xhr.responseType = "text";
     xhr.onload = () => {
       clearTimeout(timer);
+      // status 0 是 CORS 或被浏览器拦住的跨域，不当成读到了版本。
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(typeof xhr.response === "string" ? xhr.response : "");
         return;

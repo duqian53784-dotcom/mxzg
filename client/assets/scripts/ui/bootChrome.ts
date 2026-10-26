@@ -23,6 +23,8 @@ export type BootChromeKind = "loading" | "update";
 export interface BootCopy {
   versionFail: string;
   retry: string;
+  /** 版本失败层重试一次之后的按钮。language 47647 是「跳过」，表没到时用「继续」。 */
+  versionSkip: string;
   newVersion: string;
   wifi: string;
   verify: string;
@@ -32,6 +34,7 @@ export interface BootCopy {
 const COPY_FALLBACK: BootCopy = {
   versionFail: "校验版本失败",
   retry: "重试",
+  versionSkip: "继续",
   newVersion: "有新版本啦！",
   wifi: "请在wifi环境下，点击下载按钮进行更新。",
   verify: "正在验证资源，请耐心等候",
@@ -42,6 +45,7 @@ export async function loadBootCopy(): Promise<BootCopy> {
   const copy: BootCopy = {
     versionFail: COPY_FALLBACK.versionFail,
     retry: COPY_FALLBACK.retry,
+    versionSkip: COPY_FALLBACK.versionSkip,
     newVersion: COPY_FALLBACK.newVersion,
     wifi: COPY_FALLBACK.wifi,
     verify: COPY_FALLBACK.verify,
@@ -52,6 +56,7 @@ export async function loadBootCopy(): Promise<BootCopy> {
     const map = indexLanguage(lang.rows);
     copy.versionFail = pick(map, "47741", copy.versionFail);
     copy.retry = pick(map, "110013", copy.retry);
+    copy.versionSkip = pick(map, "47647", copy.versionSkip);
     copy.newVersion = pick(map, "110029", copy.newVersion);
     copy.wifi = pick(map, "110030", copy.wifi);
     copy.verify = pick(map, "47149", copy.verify);
