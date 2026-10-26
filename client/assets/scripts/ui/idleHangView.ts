@@ -9,10 +9,10 @@
  * main-scene_spr-drop-1 是空的蓝金匾，不拿来当掉落堆。
  * 站场站好之后演武自己打：怪出现、挨打、收掉。点「战斗」才进真战报。
  */
-import { Color, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { Color, Node, resources, sp, Sprite, SpriteFrame, UITransform } from "cc";
 import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
-import { mountBattleSpine, SpineActor } from "./battleSpine";
+import { mountBattleSpine, mountNamedSpine, SpineActor } from "./battleSpine";
 import { hangStemsForFormation, idleHangStemsFrom } from "./idleHangRoster";
 import { mountIdleSkirmish } from "./idleHangSkirmish";
 import { localLineupIds, onLocalLineup } from "./localLineup";
@@ -62,6 +62,11 @@ export function mountIdleHang(parent: Node): Node {
   const floor = spriteNode("IdleFloor", 720, 1280);
   place(floor, root, 0, 0);
   paintSprite(floor, IDLE_HANG_FLOOR);
+
+  const progress = uiNode("IdleProgressSpine");
+  place(progress, root, 0, -500);
+  progress.setScale(1.9, 1.9, 1);
+  mountNamedSpine(progress, "jindutiao", "stand");
 
   const heroes = uiNode("IdleHeroes");
   place(heroes, root, 0, 0);
@@ -125,7 +130,10 @@ export function paintIdleLoot(hang: Node, icons: string[]): void {
   if (mark.mxzgLoot === key && live && live.isValid) return;
   mark.mxzgLoot = key;
   if (live) live.destroy();
-  if (icons.length === 0) return;
+  if (icons.length === 0) {
+    paintIdleLootSpine(hang, 0);
+    return;
+  }
   const pile = uiNode("IdleLoot");
   place(pile, hang, 8, -168);
   const n = icons.length < LOOT_AT.length ? icons.length : LOOT_AT.length;
@@ -135,6 +143,30 @@ export function paintIdleLoot(hang: Node, icons: string[]): void {
     place(icon, pile, spot.x, spot.y);
     paintSprite(icon, icons[i]);
   }
+  paintIdleLootSpine(hang, icons.length);
+}
+
+/** res-block：按掉落数量切 normal-0..4，数量为 0 时隐藏。 */
+function paintIdleLootSpine(hang: Node, count: number): void {
+  let host = hang.getChildByName("IdleLootSpine");
+  if (count <= 0) {
+    if (host && host.isValid) host.active = false;
+    return;
+  }
+  const level = Math.min(4, Math.max(0, Math.ceil(count / 3)));
+  const clip = "normal-" + String(level);
+  if (!host) {
+    host = uiNode("IdleLootSpine");
+    place(host, hang, 8, -200);
+    host.setScale(0.42, 0.42, 1);
+  }
+  host.active = true;
+  const mark = host as Node & { mxzgLootClip?: string };
+  if (mark.mxzgLootClip === clip && host.getComponent(sp.Skeleton)) return;
+  mark.mxzgLootClip = clip;
+  const old = host.getComponent(sp.Skeleton);
+  if (old) old.destroy();
+  mountNamedSpine(host, "res-block", clip);
 }
 
 /** Prefab 计时泡的子节点偏移是按底板算的。收到挂机地上，盖在掉落堆上沿。只挪一次。 */

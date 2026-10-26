@@ -7,6 +7,7 @@
  * Creator 3.8.8 仍可能加载失败，失败只回调，攻击照旧。不播 bisha。
  */
 import { Node, resources, sp } from "cc";
+import { GameLog } from "../core/GameLog";
 import { WireSpineClip } from "../net/protocol/wireBattle";
 import { upgradeSpine37Json } from "./spineUpgrade";
 import { place, uiNode } from "./UiKit";
@@ -49,7 +50,11 @@ const VFX_SCALE: { [stem: string]: number } = {
 export function mountNamedSpine(host: Node, stem: string, clip: string): void {
   try {
     resources.load("spine/" + stem, sp.SkeletonData, (err, asset) => {
-      if (!host.isValid || err || !asset) return;
+      if (!host.isValid) return;
+      if (err || !asset) {
+        GameLog.shared.warn("BattleSpine", "named miss spine/" + stem + " clip=" + clip);
+        return;
+      }
       try {
         const view = host.getComponent(sp.Skeleton) || host.addComponent(sp.Skeleton);
         view.premultipliedAlpha = false;
@@ -59,16 +64,16 @@ export function mountNamedSpine(host: Node, stem: string, clip: string): void {
           try {
             skinned.setSkin("default");
           } catch (_skinErr) {
-            /* 没有 default 皮也播 */
+            /* no default skin */
           }
         }
         view.setAnimation(0, clip, true);
       } catch (_err) {
-        /* 3.7 套播不了时进度条仍用底下的填充图 */
+        GameLog.shared.warn("BattleSpine", "named play fail spine/" + stem + " clip=" + clip);
       }
     });
   } catch (_err) {
-    /* resources 不可用时不挡启动 */
+    GameLog.shared.warn("BattleSpine", "named load throw spine/" + stem);
   }
 }
 
@@ -88,6 +93,7 @@ export function mountBattleSpine(parent: Node, stem: string, onFail: () => void,
   const fail = (): void => {
     if (dead) return;
     dead = true;
+    GameLog.shared.warn("BattleSpine", "hero/vfx miss spine/" + stem);
     onFail();
   };
   const playNamed = (name: string, hero: boolean): void => {
