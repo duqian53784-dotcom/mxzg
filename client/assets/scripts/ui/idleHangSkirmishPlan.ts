@@ -39,14 +39,13 @@ export function idleSpotsOnFloor(spots: ReadonlyArray<{ y: number }>): boolean {
 }
 
 /**
- * 两波之间往地砖上沿跑一小段再回到原格。
- * step 从 0 到 steps。中点最靠上。
+ * 两波之间背景滑一段再回到原位。英雄格子不动，只播跑。
+ * step 从 0 到 steps。中点滑得最远，天比大理石慢。
  */
-export function idleMarchStep(
-  spot: { x: number; y: number; face: -1 | 1 },
+export function idleMarchScroll(
   step: number,
   steps: number
-): { x: number; y: number } {
+): { hallX: number; hallY: number; skyX: number; skyY: number } {
   const n = steps >= 2 ? Math.floor(steps) : 2;
   let i = Math.floor(step);
   if (i < 0) i = 0;
@@ -54,8 +53,10 @@ export function idleMarchStep(
   const t = i / n;
   const wave = t < 0.5 ? t * 2 : (1 - t) * 2;
   return {
-    x: spot.x + spot.face * 18 * wave,
-    y: spot.y + 42 * wave,
+    hallX: Math.round(-16 * wave),
+    hallY: Math.round(-48 * wave),
+    skyX: Math.round(-6 * wave),
+    skyY: Math.round(-18 * wave),
   };
 }
 

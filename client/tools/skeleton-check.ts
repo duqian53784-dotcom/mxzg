@@ -102,7 +102,7 @@ import {
   IDLE_HANG_SPOTS,
   IDLE_SKIRMISH_HITS,
   IDLE_SKIRMISH_SPOTS,
-  idleMarchStep,
+  idleMarchScroll,
   idleSkirmishHurt,
   idleSkirmishKillClip,
   idleSkirmishMayStrike,
@@ -581,9 +581,13 @@ import {
   decodeProtoFields,
   encodeObservedCreateBody,
   encodeObservedLoginBody,
+  encodeWireMessage,
+  observedLoginChannel,
+  observedLoginDevice,
+  resolveLoginUid,
+  stableAccountUid,
   summarizeLoginReply,
   uidFromAccount,
-  encodeWireMessage,
   varintField,
   wireBody,
   wireRoleReady,
@@ -17146,7 +17150,34 @@ async function checkWs(): Promise<void> {
       textField(fields111, 7) === "mxzg-web-1001",
     "uid 111 fields match the log"
   );
-  assert(uidFromAccount("960011") === 960011 && uidFromAccount("mock") === null && uidFromAccount("0") === null, "uid parse");
+  assert(uidFromAccount("960011") === 960011 && uidFromAccount("111") === 111 && uidFromAccount("0") === null && uidFromAccount("") === null && uidFromAccount("01") === null, "digit uid stays the logged value");
+  const haoUid = uidFromAccount("hao1");
+  assert(
+    haoUid !== null &&
+      haoUid === stableAccountUid("hao1") &&
+      haoUid === uidFromAccount(" hao1 ") &&
+      haoUid > 0 &&
+      haoUid <= 999999999 &&
+      haoUid !== 960011,
+    "string account writes a stable positive uid"
+  );
+  assert(resolveLoginUid("960011", "1") === 960011 && resolveLoginUid("hao1", "") === haoUid && resolveLoginUid("hao1", "0") === haoUid && resolveLoginUid("hao1", "111") === 111, "platform id fills field 2 only when the account is not already digits");
+  assert(observedLoginChannel("") === "mxzg-web-1001" && observedLoginChannel("  ") === "mxzg-web-1001" && observedLoginDevice(null) === "localdev", "empty channel and pf keep localdev constants");
+  const haoBody = encodeObservedLoginBody(haoUid, 1792466798);
+  const haoFields = decodeProtoFields(haoBody);
+  assert(
+    varintField(haoFields, 2) === haoUid &&
+      varintField(haoFields, 1) === 7 &&
+      varintField(haoFields, 3) === 2 &&
+      textField(haoFields, 6) === "localdev" &&
+      textField(haoFields, 7) === "mxzg-web-1001",
+    "hao1 login still uses localdev and mxzg-web-1001"
+  );
+  const customLogin = encodeObservedLoginBody(111, 1792464901, { channel: "box-channel", device: "box-pf" });
+  const customFields = decodeProtoFields(customLogin);
+  assert(textField(customFields, 7) === "box-channel" && textField(customFields, 6) === "box-pf" && varintField(customFields, 2) === 111, "filled channel and pf replace the defaults");
+  const namedLogin = encodeWireMessage({ cmd: "login", data: { account: "hao1", nowSec: 1792466798 } });
+  assert(namedLogin !== null && varintField(decodeProtoFields(namedLogin.bytes.subarray(8)), 2) === haoUid, "login frame for a string account includes field 2");
   const created = encodeObservedCreateBody("见习冒险家");
   const createdFields = decodeProtoFields(created || new Uint8Array(0));
   assert(created !== null && textField(createdFields, 1) === "见习冒险家" && varintField(createdFields, 2) === 0, "create body");
@@ -26776,6 +26807,15 @@ function checkCityHub(): void {
   assert(shellSrc.indexOf("mountCcbiView") >= 0 && shellSrc.indexOf("sliceAnchorShift") >= 0, "page shells repair ccbi slice anchors before centering");
   const loginSrc = readFileSync(uiSource("p1Login.ts"), "utf8");
   assert(loginSrc.indexOf("mountCcbiView") >= 0 && loginSrc.indexOf("2000, 2000, new Color(8, 16, 32, 255)") >= 0, "notice mask is opaque and covers the login host");
+  assert(
+    loginSrc.indexOf("spr_platform_bg") >= 0 &&
+      loginSrc.indexOf("spr_channel_bg") >= 0 &&
+      loginSrc.indexOf("spr_pf_bg") >= 0 &&
+      loginSrc.indexOf("platformId()") >= 0,
+    "p1 login collects platform id, channel, and pf"
+  );
+  const bootLogin = readFileSync(bootSource(), "utf8");
+  assert(bootLogin.indexOf("resolveLoginUid") >= 0 && bootLogin.indexOf("platformId()") >= 0, "boot writes field 2 for string accounts and reads the platform id box");
   assert(chrome.indexOf("lbl-skin") >= 0 && chrome.indexOf("pinBottomBar") >= 0, "dungeon caption is the cn bitmap and the bar pins to the canvas bottom");
   const noticePlate = sliceAnchorShift(
     { x: 38, y: 90, ax: 0.5, ay: 0.5, w: 526, h: 520, sx: 1, sy: 1 },
@@ -27314,15 +27354,22 @@ function checkIdleSkirmish(): void {
       IDLE_HANG_SPOTS[1].y < IDLE_SKIRMISH_SPOTS[1].y,
     "idle foes and allies stand on the tile floor, allies in front"
   );
-  const marched = idleMarchStep(IDLE_HANG_SPOTS[0], 4, 8);
-  const returned = idleMarchStep(IDLE_HANG_SPOTS[0], 8, 8);
+  const marched = idleMarchScroll(4, 8);
+  const returned = idleMarchScroll(8, 8);
+  const started = idleMarchScroll(0, 8);
   assert(
     idleSpotsOnFloor(IDLE_HANG_SPOTS) &&
       idleSpotsOnFloor(IDLE_SKIRMISH_SPOTS) &&
-      marched.y === IDLE_HANG_SPOTS[0].y + 42 &&
-      returned.y === IDLE_HANG_SPOTS[0].y &&
-      returned.x === IDLE_HANG_SPOTS[0].x,
-    "spots stay under the colonnade and the march runs up then back"
+      started.hallY === 0 &&
+      started.skyY === 0 &&
+      marched.hallY === -48 &&
+      marched.skyY === -18 &&
+      Math.abs(marched.skyY) < Math.abs(marched.hallY) &&
+      returned.hallX === 0 &&
+      returned.hallY === 0 &&
+      returned.skyX === 0 &&
+      returned.skyY === 0,
+    "spots stay on the tile floor and the march scrolls the hall back to the origin"
   );
   assert(idleSkirmishMayStrike(true) === true && idleSkirmishMayStrike(false) === false, "no swing until the foe is visible");
   assert(idleSkirmishSwingClip(0) === "attack" && idleSkirmishSwingClip(1) === "attack2", "odd swings use attack2");
@@ -27371,6 +27418,11 @@ function checkIdleSkirmish(): void {
   assert(safeSrc.indexOf("wantsSafeDebug") >= 0, "resolution hud is opt-in");
   assert(
     skirmishSrc.indexOf('gesture("run")') >= 0 &&
+      skirmishSrc.indexOf('gesture("walk")') >= 0 &&
+      skirmishSrc.indexOf("idleMarchScroll") >= 0 &&
+      skirmishSrc.indexOf("IdleSky") >= 0 &&
+      skirmishSrc.indexOf("IdleFloor") >= 0 &&
+      skirmishSrc.indexOf("idleMarchStep") < 0 &&
       skirmishSrc.indexOf("onReady") >= 0 &&
       skirmishSrc.indexOf("idleSkirmishMayStrike") >= 0 &&
       skirmishSrc.indexOf("skillFramePaths") >= 0 &&

@@ -13,7 +13,7 @@ import { upgradeSpine37Json } from "./spineUpgrade";
 import { place, uiNode } from "./UiKit";
 
 export interface SpineActor {
-  /** 骨架节点。挂机跑位挪的是它的父格。 */
+  /** 骨架节点。挂机行军不挪父格，父格留在地砖槽上。 */
   readonly node: Node;
   play(clip: WireSpineClip): void;
   /** 命名特效。找不到动作时不播，也不当成加载失败。 */
@@ -149,7 +149,7 @@ export function mountBattleSpine(parent: Node, stem: string, onFail: () => void,
       GameLog.shared.warn("BattleSpine", "clip miss spine/" + stem + " " + name);
       return false;
     }
-    const loop = name === "run" || name === "stand" || name === "idle";
+    const loop = name === "run" || name === "walk" || name === "stand" || name === "idle";
     try {
       skel.setAnimation(0, name, loop);
       return true;

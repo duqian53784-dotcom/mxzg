@@ -1,7 +1,7 @@
 /**
  * 挂机舞台上的演武。阵容站好之后一直打，不点「战斗」也打。
  * 敌人按当前关 chapter 里有 stand 的 hero_type 轮流出现，对不上就用敌方默认套。
- * 英雄先跑，怪显示之后才攻击。套里没有 die 就打完收掉。
+ * 两波之间英雄留在地砖格上播 run，天和大理石往后滑。怪显示之后才攻击。套里没有 die 就打完收掉。
  * 飘字只是演出，不写钱包，不发 3001 / 3004 / 3005。
  * 点中间「战斗」进入真战报时暂停，回到挂机再继续。
  */
@@ -23,7 +23,7 @@ import {
   IDLE_SKIRMISH_SPOTS,
   IDLE_SKIRMISH_STRIKE_MS,
   IdleFoePlan,
-  idleMarchStep,
+  idleMarchScroll,
   idleSkirmishHurt,
   idleSkirmishKillClip,
   idleSkirmishMayStrike,
@@ -76,6 +76,8 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
   let puffNode: Node | null = null;
   let puffActor: SpineActor | null = null;
   const standGen = new Map<SpineActor, number>();
+  let skyBase: { x: number; y: number } | null = null;
+  let hallBase: { x: number; y: number } | null = null;
 
   const control = {
     pause(): void {
@@ -83,6 +85,8 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
       paused = true;
       generation += 1;
       clearFoe();
+      restoreHomes();
+      restoreScroll();
       standAll();
     },
     resume(): void {
@@ -172,32 +176,58 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     march(0);
   }
 
-  /** 先跑。跑完再刷怪，怪看得见才出刀。 */
+  /** 先原地跑，背景平移。跑完再刷怪，怪看得见才出刀。 */
   function march(step: number): void {
     if (blocked()) {
       restoreHomes();
+      restoreScroll();
       clearFoe();
       arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
       return;
     }
     if (step === 0) {
-      for (let i = 0; i < actors.length; i++) {
-        if (!actors[i].gesture("run")) actors[i].play("stand");
-      }
+      restoreHomes();
+      playMarch();
     }
-    const n = actors.length < IDLE_HANG_SPOTS.length ? actors.length : IDLE_HANG_SPOTS.length;
-    for (let i = 0; i < n; i++) {
-      const at = idleMarchStep(IDLE_HANG_SPOTS[i], step, MARCH_STEPS);
-      const home = actors[i].node.parent;
-      if (home && home.isValid) home.setPosition(at.x, at.y, 0);
-    }
+    scrollLayers(step);
     if (step < MARCH_STEPS) {
       arm(Math.round(MARCH_MS / MARCH_STEPS), () => march(step + 1));
       return;
     }
+    restoreScroll();
     restoreHomes();
     standAll();
     openWave();
+  }
+
+  function playMarch(): void {
+    for (let i = 0; i < actors.length; i++) {
+      const actor = actors[i];
+      if (actor.gesture("run")) continue;
+      if (actor.gesture("walk")) continue;
+      actor.play("stand");
+    }
+  }
+
+  function scrollLayers(step: number): void {
+    const shift = idleMarchScroll(step, MARCH_STEPS);
+    const sky = hang.getChildByName("IdleSky");
+    const hall = hang.getChildByName("IdleFloor");
+    if (sky && sky.isValid) {
+      if (!skyBase) skyBase = { x: sky.position.x, y: sky.position.y };
+      sky.setPosition(skyBase.x + shift.skyX, skyBase.y + shift.skyY, 0);
+    }
+    if (hall && hall.isValid) {
+      if (!hallBase) hallBase = { x: hall.position.x, y: hall.position.y };
+      hall.setPosition(hallBase.x + shift.hallX, hallBase.y + shift.hallY, 0);
+    }
+  }
+
+  function restoreScroll(): void {
+    const sky = hang.getChildByName("IdleSky");
+    const hall = hang.getChildByName("IdleFloor");
+    if (sky && sky.isValid && skyBase) sky.setPosition(skyBase.x, skyBase.y, 0);
+    if (hall && hall.isValid && hallBase) hall.setPosition(hallBase.x, hallBase.y, 0);
   }
 
   function restoreHomes(): void {
