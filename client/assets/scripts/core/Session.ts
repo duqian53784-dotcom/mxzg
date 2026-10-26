@@ -169,6 +169,15 @@ export function formatDiamondLine(): string {
   return "钻石 " + Session.diamond;
 }
 
+/** 头像下的等级徽。真服没同步等级时不写占位 1。 */
+export function formatLevelBadge(): string {
+  if (!Session.role) return "";
+  if (Session.source === "wire" && !Session.wireSync.level) return "";
+  const level = Session.role.level;
+  if (typeof level !== "number" || !isFinite(level) || level < 1) return "";
+  return String(Math.floor(level));
+}
+
 /** 主城标题下那一行：角色名、等级、所选服务器。 */
 export function formatHubIdentity(): string {
   if (!Session.account) return "未登录（请从 Boot 进入）";

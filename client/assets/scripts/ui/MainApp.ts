@@ -31,6 +31,7 @@ import { GameStore } from "../core/GameStore";
 import {
   formatDiamondLine,
   formatGoldLine,
+  formatLevelBadge,
   formatNameLine,
   formatSubLine,
   Session,
@@ -41,6 +42,7 @@ import { WireSession } from "../net/WireSession";
 import { Proto } from "../net/protocol";
 import { BagPage, buildBagPage } from "./BagPage";
 import { CityChrome, mountCityChrome, mountCityChromePrefab, TabState } from "./CityChrome";
+import { formatAvatarIcon, formatCombatPower } from "./hangHud";
 import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
 import { attachPagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
 import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage, mountHeroDetailPrefab, mountHeroListPrefab, USE_HERO_PREFAB } from "./HeroPage";
@@ -1363,6 +1365,9 @@ export class MainApp extends Component {
     if (!chrome) return;
     chrome.setIdentity(formatNameLine(), formatSubLine());
     chrome.setCurrencies(formatGoldLine(), formatDiamondLine());
+    chrome.setPower(formatCombatPower());
+    chrome.setLevelBadge(formatLevelBadge());
+    chrome.setAvatar(formatAvatarIcon());
     const current = this.panels?.current || "";
     const root = this.panels?.rootTab || CITY_TAB;
     const tabs: TabState[] = [];

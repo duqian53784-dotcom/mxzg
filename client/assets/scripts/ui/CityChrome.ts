@@ -1,4 +1,4 @@
-import { Color, Node, resources, Sprite, SpriteFrame, UITransform, view } from "cc";
+import { Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform, view } from "cc";
 import { CITY_BAR, cityBarSlot } from "../config/nav";
 import {
   bindClick,
@@ -23,6 +23,12 @@ export interface CityChrome {
   root: Node;
   setIdentity(nameLine: string, subLine: string): void;
   setCurrencies(goldLine: string, diamondLine: string): void;
+  /** 空串表示没有战力数据，不要留 Prefab 默认的 0。 */
+  setPower(text: string): void;
+  /** 空串藏掉头像下的占位等级。 */
+  setLevelBadge(text: string): void;
+  /** null 关掉空褐圈。有路径时用英雄头像盖住框心。 */
+  setAvatar(icon: string | null): void;
   setTabs(tabs: TabState[]): void;
   /** 只在主城页显示 ActGroup / UtilityRow。代码壳没有这两块。 */
   setCityExtras(visible: boolean): void;
@@ -119,6 +125,9 @@ export function mountCityChrome(parent: Node, onTab: (id: string) => void): City
       setText(goldNode, goldLine);
       setText(diamondNode, diamondLine);
     },
+    setPower(): void {},
+    setLevelBadge(): void {},
+    setAvatar(): void {},
     setTabs(tabs: TabState[]): void {
       for (let i = 0; i < tabs.length; i++) {
         const tab = tabs[i];
@@ -235,6 +244,28 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
       setText(goldNode, goldLine);
       setText(diamondNode, diamondLine);
     },
+    setPower(text: string): void {
+      const node = findNode(root, "TopBar/PowerSlot/Value");
+      if (!node) return;
+      setText(node, text);
+      const label = node.getComponent(Label);
+      if (label) label.overflow = Overflow.SHRINK;
+      const ui = node.getComponent(UITransform);
+      if (ui) ui.setContentSize(68, 24);
+    },
+    setLevelBadge(text: string): void {
+      const label = findNode(root, "TopBar/LblLevel");
+      const bg = findNode(root, "TopBar/LevelBg");
+      const show = text.length > 0;
+      if (label) {
+        label.active = show;
+        if (show) setText(label, text);
+      }
+      if (bg) bg.active = show;
+    },
+    setAvatar(icon: string | null): void {
+      paintAvatar(root, icon);
+    },
     setTabs(tabs: TabState[]): void {
       for (let i = 0; i < tabs.length; i++) {
         const tab = tabs[i];
@@ -313,6 +344,37 @@ function findCanvas(node: Node): Node | null {
     cur = cur.parent;
   }
   return null;
+}
+
+function paintAvatar(root: Node, icon: string | null): void {
+  const avatar = findNode(root, "TopBar/Avatar");
+  if (!avatar) return;
+  if (!icon) {
+    avatar.active = false;
+    return;
+  }
+  avatar.active = true;
+  let face = avatar.getChildByName("Face");
+  if (!face) {
+    face = uiNode("Face");
+    const ui = face.addComponent(UITransform);
+    ui.setContentSize(78, 78);
+    const sprite = face.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    face.setPosition(0, 0, 0);
+    face.parent = avatar;
+  }
+  const mark = face as Node & { mxzgIcon?: string };
+  if (mark.mxzgIcon === icon) return;
+  mark.mxzgIcon = icon;
+  const sprite = face.getComponent(Sprite);
+  if (!sprite) return;
+  const wanted = icon;
+  resources.load(wanted + "/spriteFrame", SpriteFrame, (err, frame) => {
+    if (err || !frame || !face || !face.isValid) return;
+    if (mark.mxzgIcon !== wanted) return;
+    sprite.spriteFrame = frame;
+  });
 }
 
 function mountTabCaption(button: Node, path: string): void {

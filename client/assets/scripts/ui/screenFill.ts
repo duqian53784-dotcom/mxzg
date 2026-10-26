@@ -3,7 +3,7 @@
  * 格子是运行时拼的：HeroListLayer / BackpackLayer 本身没有网格。
  * 不造假英雄、不造假道具、不发新协议。
  */
-import { BlockInputEvents, Button, Color, Label, Mask, Node, Overflow, resources, ScrollView, Sprite, SpriteFrame, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, HorizontalTextAlignment, Label, Mask, Node, Overflow, resources, ScrollView, Sprite, SpriteFrame, UITransform } from "cc";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameStore, StoreBagItem, StoreHero } from "../core/GameStore";
 import { GameLog } from "../core/GameLog";
@@ -13,12 +13,13 @@ import { Proto } from "../net/protocol/Proto";
 import { WireSession } from "../net/WireSession";
 import { applyIdleClaim, claimToast, IDLE_HERO_EXP_ID, IDLE_ITEM_ID, IDLE_ROLE_EXP_ID } from "../module/idle/rewards";
 import { heroBaseStats, heroProfile, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles } from "../config/gameCatalog";
-import { chapterDrops, chapterIdleMinute, DropFace, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, idleDropEverySec, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleLine } from "../config/rosterCatalog";
+import { chapterDrops, chapterIdleMinute, DropFace, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleBonus, vipIdleLine } from "../config/rosterCatalog";
 import { IDLE_UNIX_FLOOR, wireIdleCapMs, wireIdleElapsedMs } from "../net/protocol/wireIdle";
 import { WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/wireLineUpSave";
 import { mainFormationHeroes } from "../net/protocol/starterLineup";
-import { goldPerMin, itemEveryMs } from "../module/idle/rewards";
+import { formatHangClock, goldPerMin, itemEveryMs } from "../module/idle/rewards";
 import { hangSpineStem } from "./idleHangRoster";
+import { paintIdleLoot, seatHangTimer } from "./idleHangView";
 import { mountBattleSpine } from "./battleSpine";
 import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
 import { mockRuntimeEnabled } from "../net/transportSelect";
@@ -69,7 +70,7 @@ export function fillPageShell(id: string, view: Node, openHero: (hero: StoreHero
   else if (id === "bag") fillBag(view);
 }
 
-/** 藏掉地图球，换成掉落堆、计时和每分钟收益。三钮文案改成战力UP / 战斗 / 高速战斗。 */
+/** 藏掉地图球和空蓝金匾。四条收益用进度填充，三钮文案改成战力UP / 战斗 / 高速战斗。 */
 export function dressHangPanel(view: Node): void {
   const mark = view as Node & { mxzgHang?: boolean };
   if (mark.mxzgHang) return;
@@ -82,8 +83,6 @@ export function dressHangPanel(view: Node): void {
   if (plate) {
     const frame = plate.getChildByName("CCSprite_1");
     if (frame) frame.active = false;
-    const drop = sprite("HangDrop", 150, 110, "ui/city/main-scene_spr-drop-1");
-    place(drop, plate, 2, 48);
   }
   fitButton(findNamed(view, "btn_lineup"), "战力UP", 22);
   fitButton(findNamed(view, "btn_battle"), "战斗", 22);
@@ -94,32 +93,26 @@ export function dressHangPanel(view: Node): void {
   let seenClaim = WireSession.claimSerial;
   const tick = () => {
     if (!view.isValid) return;
-    paintHangExtras(view, plate);
     const idle = GameStore.idle();
     const clock = hangClockText(idle);
-    writeNamed(view, "lbl_progress_time", clock);
-    writeNamed(view, "lbl_progress_time2", claimNote || clock);
-    const minute = chapterIdleMinute(currentStageIdx());
-    if (minute) {
-      writeNamed(view, "lbl_gold", minute.gold + "/m");
-      writeNamed(view, "lbl_souls", minute.heroExp + "/m");
-      writeNamed(view, "lbl_exp", minute.roleExp + "/m");
-      return;
+    const rates = hangRates();
+    writeBar(view, "lbl_progress_time", clock === "未同步" ? "未同步" : clock);
+    writeBar(view, "lbl_gold", rates.gold);
+    writeBar(view, "lbl_souls", rates.souls);
+    writeBar(view, "lbl_exp", rates.exp);
+    setBarFill(view, "spr_progress_AFK_bg", "ui/city/main-scene_progress-AFK", clock === "未同步" ? 0 : timeFill(idle));
+    setBarFill(view, "CCSprite_4", "ui/city/main-scene_progress-hangs", rates.goldOn ? 1 : 0);
+    setBarFill(view, "CCSprite_3", "ui/city/main-scene_progress-exp", rates.soulsOn ? 1 : 0);
+    setBarFill(view, "CCSprite_2", "ui/city/main-scene_progress-role-exp", rates.expOn ? 1 : 0);
+    syncVip(view, plate);
+    const hang = view.parent ? view.parent.getChildByName("IdleHang") : null;
+    if (hang) paintIdleLoot(hang, hangLootIcons(rates));
+    const bubble = findNamed(view, "node_bubble") || (hang ? hang.getChildByName("node_bubble") : null);
+    if (bubble) {
+      const clockNode = bubble.getChildByName("lbl_progress_time2");
+      if (clockNode) setText(clockNode, claimNote || clock);
+      if (hang) seatHangTimer(hang, bubble);
     }
-    if (Session.source === "wire") {
-      writeNamed(view, "lbl_gold", "—/m");
-      writeNamed(view, "lbl_souls", "—/m");
-      writeNamed(view, "lbl_exp", "—/m");
-      return;
-    }
-    const cleared = clearedCount();
-    const gold = goldPerMin(cleared);
-    const every = itemEveryMs(cleared);
-    const perMin = every > 0 ? Math.max(1, Math.round(60000 / every)) : 0;
-    const sec = Math.max(1, Math.round(every / 1000));
-    writeNamed(view, "lbl_gold", gold + "/m");
-    writeNamed(view, "lbl_souls", perMin + "/m");
-    writeNamed(view, "lbl_exp", "每" + sec + "s");
   };
   const onIdleSync = () => {
     const idle = GameStore.idle();
@@ -148,40 +141,134 @@ export function dressHangPanel(view: Node): void {
   });
 }
 
+const COIN_ICON = "ui/common/res-icon_res-1";
+const GEM_ICON = "ui/common/res-icon_res-2";
+const CHEST_ICON = "ui/city/main-scene_spr-box-2";
+const MOON_ICON = "ui/bag/backpack_900101";
+const ROLE_ICON = "ui/bag/backpack_900003";
+
+interface HangRates {
+  gold: string;
+  souls: string;
+  exp: string;
+  goldOn: boolean;
+  soulsOn: boolean;
+  expOn: boolean;
+  hasTable: boolean;
+}
+
+/** 三格来自当前关 reward_base。表没绑上时真服写 —/m，Mock 仍退回旧节奏。 */
+function hangRates(): HangRates {
+  const minute = chapterIdleMinute(currentStageIdx());
+  if (minute) {
+    return {
+      gold: minute.gold + "/m",
+      souls: minute.heroExp + "/m",
+      exp: minute.roleExp + "/m",
+      goldOn: minute.gold > 0,
+      soulsOn: minute.heroExp > 0,
+      expOn: minute.roleExp > 0,
+      hasTable: true,
+    };
+  }
+  if (Session.source === "wire") {
+    return { gold: "—/m", souls: "—/m", exp: "—/m", goldOn: false, soulsOn: false, expOn: false, hasTable: false };
+  }
+  const cleared = clearedCount();
+  const gold = goldPerMin(cleared);
+  const every = itemEveryMs(cleared);
+  const perMin = every > 0 ? Math.max(1, Math.round(60000 / every)) : 0;
+  const sec = Math.max(1, Math.round(every / 1000));
+  return {
+    gold: gold + "/m",
+    souls: perMin + "/m",
+    exp: "每" + sec + "s",
+    goldOn: gold > 0,
+    soulsOn: perMin > 0,
+    expOn: sec > 0,
+    hasTable: false,
+  };
+}
+
+/** 有每分钟或 drop_group 才叠图标。没有数据就返回空，场地不留空框。 */
+function hangLootIcons(rates: HangRates): string[] {
+  const drops = chapterDrops(currentStageIdx());
+  if (!rates.hasTable && drops.length === 0 && Session.source === "wire") return [];
+  if (!rates.hasTable && drops.length === 0 && !rates.goldOn && !rates.soulsOn) return [];
+  const icons: string[] = [];
+  if (rates.goldOn || rates.hasTable) icons.push(COIN_ICON, COIN_ICON, COIN_ICON, COIN_ICON);
+  if (rates.soulsOn || rates.hasTable) icons.push(MOON_ICON, MOON_ICON);
+  if (rates.expOn || rates.hasTable) icons.push(ROLE_ICON);
+  icons.push(GEM_ICON, GEM_ICON, CHEST_ICON);
+  for (let i = 0; i < drops.length && icons.length < 8; i++) {
+    const face = drops[i];
+    icons.push(itemIconResource(face.itemType, null) || "ui/bag/backpack_" + face.itemType);
+  }
+  if (icons.length === 0) return [];
+  const pile: string[] = [];
+  for (let i = 0; i < 14; i++) pile.push(icons[i % icons.length]);
+  return pile;
+}
+
 /**
- * 掉落堆下面画当前关 drop_group 的物品图标。数量留在说明卡里，不写成已经掉到的数。
- * VIP 一行没有角色等级时写「VIP未同步」，不把 vip 表某一档乘进三格。
+ * 没有角色 VIP 等级时不写字。s2c 2001 没有 vip_level，不把「未同步」画在战斗钮下面。
+ * 有等级时才用 vip 表的那一行。三格仍不乘百分比。
  */
-function paintHangExtras(view: Node, plate: Node | null): void {
+function syncVip(view: Node, plate: Node | null): void {
   const host = plate || view;
+  const bonus = vipIdleBonus(null);
   let vip = host.getChildByName("HangVip");
+  if (!bonus) {
+    if (vip) vip.active = false;
+    return;
+  }
   if (!vip) {
-    vip = createLabel(vipIdleLine(null), 14, { color: INK, width: 280, height: 36 });
+    vip = createLabel(vipIdleLine(bonus.level), 14, { color: INK, width: 280, height: 36 });
     vip.name = "HangVip";
     place(vip, host, 0, plate ? -78 : 120);
   }
-  const drops = chapterDrops(currentStageIdx());
-  const every = idleDropEverySec();
-  const key = currentStageIdx() + ":" + every + ":" + drops.map((row) => row.itemType + ":" + row.min + ":" + row.max).join(",");
-  const mark = host as Node & { mxzgDrops?: string };
-  if (mark.mxzgDrops === key) return;
-  mark.mxzgDrops = key;
-  const old = host.getChildByName("HangDrops");
-  if (old) old.destroy();
-  if (drops.length === 0) return;
-  const row = uiNode("HangDrops");
-  place(row, host, 0, plate ? -28 : 168);
-  const shown = drops.length < 6 ? drops.length : 6;
-  const freq = every === null ? "可能掉落" : "可能掉落 每" + every + "秒";
-  place(createLabel(freq, 12, { color: INK, width: 220, height: 18 }), row, 0, 28);
-  for (let i = 0; i < shown; i++) {
-    const face = drops[i];
-    const icon = itemIconResource(face.itemType, null) || "ui/bag/backpack_" + face.itemType;
-    const cell = sprite("drop" + i, 36, 36, icon, "ui/bag/backpack_spr-default");
-    place(cell, row, (i - (shown - 1) / 2) * 40, 0);
-    if (!cell.getComponent(Button)) cell.addComponent(Button);
-    cell.on(Button.EventType.CLICK, () => showInfoCard(view, dropCard(face, every)));
+  vip.active = true;
+  setText(vip, vipIdleLine(bonus.level));
+}
+
+/** 条上的字原来是 0×0 再 SHRINK，看起来像空槽。右对齐铺进槽里。 */
+function writeBar(view: Node, name: string, text: string): void {
+  const node = findNamed(view, name);
+  if (!node) return;
+  node.setScale(1, 1, 1);
+  const label = node.getComponent(Label);
+  if (label) {
+    label.string = text;
+    label.fontSize = 16;
+    label.lineHeight = 20;
+    label.overflow = Overflow.SHRINK;
+    label.horizontalAlign = HorizontalTextAlignment.RIGHT;
   }
+  const ui = node.getComponent(UITransform);
+  if (ui) {
+    ui.setAnchorPoint(1, 0.5);
+    ui.setContentSize(118, 24);
+  }
+}
+
+function setBarFill(view: Node, barName: string, art: string, ratio: number): void {
+  const bar = findNamed(view, barName);
+  if (!bar) return;
+  let fill = bar.getChildByName("HangFill");
+  if (!fill) {
+    fill = sprite("HangFill", 150, 18, art);
+    const image = fill.getComponent(Sprite);
+    if (image) {
+      image.type = Sprite.Type.FILLED;
+      image.fillType = Sprite.FillType.HORIZONTAL;
+      image.fillStart = 0;
+    }
+    place(fill, bar, 0, 0);
+  }
+  const span = ratio <= 0 ? 0 : Math.min(1, ratio);
+  const image = fill.getComponent(Sprite);
+  if (image) image.fillRange = span;
+  fill.active = span > 0;
 }
 
 /** 底栏宝箱。Mock 走 idle.claim，真服只发已有的空 3005。 */
@@ -1225,7 +1312,18 @@ function hangClockText(idle: { fromStore: boolean; rewardTime: number | null; ma
   let elapsed = idle.fromStore ? wireIdleElapsedMs(idle.rewardTime, Date.now()) : Math.max(0, Date.now() - dressClock.t);
   const cap = idle.fromStore ? wireIdleCapMs(idle.maxRewardTime, idleCapMs()) : idleCapMs();
   if (cap !== null && elapsed > cap) elapsed = cap;
-  return clockText(elapsed);
+  return formatHangClock(elapsed);
+}
+
+function timeFill(idle: { fromStore: boolean; rewardTime: number | null; maxRewardTime: number | null }): number {
+  if (idle.fromStore && (idle.rewardTime === null || !isFinite(idle.rewardTime) || idle.rewardTime < IDLE_UNIX_FLOOR)) {
+    return 0;
+  }
+  let elapsed = idle.fromStore ? wireIdleElapsedMs(idle.rewardTime, Date.now()) : Math.max(0, Date.now() - dressClock.t);
+  const cap = idle.fromStore ? wireIdleCapMs(idle.maxRewardTime, idleCapMs()) : idleCapMs();
+  if (cap === null || cap <= 0) return elapsed > 0 ? 1 : 0;
+  if (elapsed > cap) elapsed = cap;
+  return elapsed / cap;
 }
 
 const dressClock = { t: Date.now() };
@@ -1475,15 +1573,4 @@ function currentStageIdx(): number {
   if (chapter.nowIdx !== null && chapter.nowIdx >= 1) return Math.floor(chapter.nowIdx);
   if (chapter.maxIdx !== null && chapter.maxIdx >= 1) return Math.floor(chapter.maxIdx);
   return 1;
-}
-
-function clockText(ms: number): string {
-  let total = Math.floor(ms / 1000);
-  if (total < 0) total = 0;
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const pad = (n: number) => (n < 10 ? "0" + n : String(n));
-  if (h > 0) return pad(h) + ":" + pad(m) + ":" + pad(s);
-  return pad(m) + ":" + pad(s);
 }

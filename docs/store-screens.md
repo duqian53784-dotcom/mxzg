@@ -24,6 +24,6 @@
 
 英雄列表、背包格子、挂机底栏、出阵和挂机上的战斗条，见 `docs/ui-1to1-hero-battle.md`。列表不再只留壳，也不再停在 16 格。
 
-挂机底栏的三格和 Mock 领取都读 `chapterreward.reward_base`。`item_num` 按每分钟用：第 1 关是金币 200、角色经验 10、英雄经验 25。当前关 = 已通关 + 1。`system.idle_max_time` 是秒，基础封顶 21600。随机掉落按 `drop_group` 把物品画在掉落堆下面，每隔 `idle_drop_frequency`（60 秒）只是说明文字，不掷一次，也不写进这三格。VIP 等级不在已核对的 s2c 2001 字段里，条上写「VIP未同步」，不把 `vip` 表的百分比乘进去。`idle_speed_up`（7200 秒）是快速战斗壳上的两小时预览，不发 3013，也不发放。强化石仍按旧间隔进背包。表没绑上时金币退回每分钟 6、每关 +4，封顶 8 小时。
+挂机底栏的三格和 Mock 领取都读 `chapterreward.reward_base`。`item_num` 按每分钟用：第 1 关是金币 200、角色经验 10、英雄经验 25。当前关 = 已通关 + 1。`system.idle_max_time` 是秒，基础封顶 21600。随机掉落按 `drop_group` 把物品画在掉落堆下面，每隔 `idle_drop_frequency`（60 秒）只是说明文字，不掷一次，也不写进这三格。VIP 等级不在已核对的 s2c 2001 字段里，条上不写「VIP未同步」，不把 `vip` 表的百分比乘进去。`idle_speed_up`（7200 秒）是快速战斗壳上的两小时预览，不发 3013，也不发放。强化石仍按旧间隔进背包。表没绑上时金币退回每分钟 6、每关 +4，封顶 8 小时。
 
 图鉴、星UP、宝石、神装、圣龙从 `herotype` / `herostar` / `jeweltype` / `godequipment` / `dragonlevel` / `dragonrelic` 画。背包里对得上 `item.idx` 的算持有，对不上就锁。不往名册里塞假英雄。4001 还没到或是空数组时，英雄页改画这张图鉴，格子保持上锁。圣龙四只共用图鉴标，不用 `dragon_identify` 光效当立绘。s2c 59001 带了 `attr_level` 才在标题写等级。

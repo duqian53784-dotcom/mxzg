@@ -151,6 +151,20 @@ export function formatDuration(ms: number): string {
   return pad(h) + ":" + pad(m) + ":" + pad(s);
 }
 
+/**
+ * 挂机泡和底栏时间条。满 1 小时写成 hh:mm，和旧日服泡上的 06:00 一样，不带秒。
+ * 不满 1 小时仍是 mm:ss。挂机页句子继续用 formatDuration 的 hh:mm:ss。
+ */
+export function formatHangClock(ms: number): string {
+  let total = Math.floor((typeof ms === "number" && isFinite(ms) ? ms : 0) / 1000);
+  if (total < 0) total = 0;
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return pad(h) + ":" + pad(m);
+  return pad(m) + ":" + pad(s);
+}
+
 export function formatItemEvery(everyMs: number): string {
   const sec = Math.max(0, Math.round((typeof everyMs === "number" && isFinite(everyMs) ? everyMs : 0) / 1000));
   if (sec >= 60 && sec % 60 === 0) return "每 " + sec / 60 + " 分钟 1 个";

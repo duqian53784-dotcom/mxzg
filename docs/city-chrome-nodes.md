@@ -35,7 +35,7 @@
 | `TopBar/LblName` | (-150, 602) | 160×28 | 名字。绑定写 `formatNameLine()` |
 | `TopBar/LblSub` | (-150, 574) | 200×18 | 区服行。绑定写 `formatSubLine()` |
 | `TopBar/PowerSlot` | (22, 602) | 112×30 | 战力槽 |
-| `TopBar/PowerSlot/Value` | (38, 602) | 52×24 | 战力数字，默认 `0`。现有绑定不写它 |
+| `TopBar/PowerSlot/Value` | (38, 602) | 52×24 | 战力数字。Prefab 默认 `0`。`refreshChrome` 写成名册 `fighting` 之和，一个都没有就留空 |
 | `TopBar/CurrencyGold` | (154, 602) | 136×30 | 金币槽 |
 | `TopBar/CurrencyGold/Value` | (150, 602) | 68×24 | 绑定写 `formatGoldLine()`，过长会缩小 |
 | `TopBar/CurrencyGold/BtnAddGold` | (206, 602) | 24×24 | 蓝色加号。`clickEvents` 空 |

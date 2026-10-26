@@ -251,7 +251,7 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 |---|---|---|
 | 英雄列表、背包滚动 | 运行时加竖向 ScrollView。壳上没有这个节点。空位只补满最后一行，并且至少 4 行，不是 300 个空格 | s2c 4001 带了 `hero_capacity` 就写「空间 n/该数」。这包没带才用 `system.hero_space_initial`（300）。0 仍写成 0 |
 | 出阵列表 | 用已有 `scroll_view_backpack`。前排 4（格子 4–1）、后排 4（格子 8–5），第 9 格锁着。确认发 c2s 3100，空的 s2c 3100 之后再等 3101，同一批脸按站位放回原格，然后才进战 | 阵法 1 只编码站位 2/3/5/6/7/8/9，所以最多 7 人。第 8 格留空，不把站位 1 或 4 编出去。打开时按站位排序，不再按包里的出现顺序填格 |
-| 挂机三格 | `chapterreward.idx` 对当前关，`reward_base` 里 900001 / 900101 / 900003 的 `item_num` 写成「N/m」 | 和底栏三个图标一致。真服表没绑上时三格写「—/m」，不再套 Mock 的每分钟金币。Mock 仍退回 `goldPerMin` |
+| 挂机四格 | 宝箱条按已挂机 / 封顶铺 `main-scene_progress-AFK`，字是短时钟。金币 `lbl_gold`、英雄经验 `lbl_souls`（月牙 900101）、角色经验 `lbl_exp`（900003）写成「N/m」，分别铺 `progress-hangs`、`progress-exp`、`progress-role-exp`。字原来是 0×0 再 SHRINK，所以槽是空的 | 和底栏三个图标一致。真服表没绑上时三格写「—/m」且不铺色。Mock 仍退回 `goldPerMin` |
 | Mock 领取 | 金币、角色经验、英雄经验走 `chapterreward.reward_base`，当前关 = 已通关 + 1。封顶用 `system.idle_max_time`（21600 秒）。挂机壳宝箱和 Mock 挂机页都走这一套 | 强化石仍是旧节奏：未通关每 30 秒 1 个，每通关缩短 1 秒，最短 10 秒，不在 `reward_base` 里。表没绑上时金币退回每分钟 6、每关 +4，封顶 8 小时。角色经验 900003、英雄经验 900101 作为背包道具发放。VIP 加成仍不加 |
 | 怒气条 | 挂机战斗条上的蓝条按战报里的回合号 / `battletype.round_max` 填充。行是「回合 N」时牌上写「N/15」（表没读到上限时分母仍是 15）。站场没有回合号时先停在 1 | 战报没有怒气字段，只标位置。不再用拍子下标当回合 |
 | 暴击飘字 | 战报 `crit` 为真时用更大的金字，前缀「暴击」。命中的 `hurt` 是伤害大小，正数画成红字减血，不再当成治疗。血量上升才是绿字。Mock 简化战报没有 crit，回合行里有「溃败」时敌方伤害按暴击画 | 不是表里的暴击率 |
@@ -260,9 +260,13 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 | 下一关 | 胜利时把已有 `btn_report` 改成「下一关」。Mock 再进当前关，真服先回挂机再走原来的 3001 | 不新开协议。失败不显示这颗钮 |
 | 快速战斗 | `QuickBattleLayer` 用 `idle_speed_up`（7200 秒）预览两小时 `reward_base`，并读已有 3012 | 不发 3013，不发奖励。说明和跳转只改提示字 |
 | 我要变强 | 打开已有 `HeroSuggestLayer`。四个页签只切换 `node_strong` / `resource` / `hero` / `lineup` | 不发协议。名字最多写名册前三名 |
-| VIP | 挂机条写「VIP未同步」。`vipIdleLine(level)` 能按 `vip` 表写出金币 / 英雄经验 / 角色经验百分比和 `extra_idle_time`。三格和封顶仍是 `reward_base` + `idle_max_time`，不乘某一档 | s2c 2001 已核对的字段没有 `vip_level`。字段 15 按旧说明不读。没有等级就不把表里的 10% 或 0% 当成这名角色的加成 |
-| 随机掉落 | 掉落堆下面画当前关 `drop_group` 的物品图标，最多 6 个。点开写表内 min/max 和「每 60 秒」。不写进三格，不掷随机数 | `chapterreward.drop_group` → `droptrigger` → `dropgroup`。`idle_drop_frequency` = 60 |
-| 时钟 | 真服只按 s2c 3004 的 `reward_time` 计一次。大于等于 10 亿才当时间戳，10^12 以上当毫秒，否则当 unix 秒。更小的数写「未同步」，不再从打开面板的时刻往上加。`max_reward_time` 小于 10 亿时按秒封顶（0 也封在 00:00:00）；像时间戳时退回 `system.idle_max_time`。超过 1 小时写成 `hh:mm:ss`。领取成功后第二行时钟不再停在「已发领取」 | 没读到表、也没有可用的 `max_reward_time` 时不封顶 |
+| VIP | 没有角色 VIP 等级时挂机条不写字，不再把「VIP未同步」画在战斗钮下面。`vipIdleLine(level)` 仍能按 `vip` 表写出百分比和 `extra_idle_time`。三格和封顶仍是 `reward_base` + `idle_max_time`，不乘某一档 | s2c 2001 已核对的字段没有 `vip_level`。字段 15 按旧说明不读。不能在客户端加 VIP% / 3013 / GM。没有等级就不把表里的 10% 或 0% 当成这名角色的加成 |
+| 掉落堆 | 不再把 `main-scene_spr-drop-1` 放在场地中央。那张是空的蓝金匾，不是金币堆。有当前关 `reward_base` 或 `drop_group` 时，用已有 `res-icon_res-1`、`res-icon_res-2`、`main-scene_spr-box-2`、`backpack_900101`、`backpack_900003` 和掉落物品图标叠一堆。没有这些数据时场地留空 | 仓库里没有单独的挂机掉落堆贴图。不新画。不掷随机数，不写进三格 |
+| 待命气泡 | 不再给每个站位写「待命」。场上最多留 Prefab 里那一个计时泡 `node_bubble`，挪到掉落堆上沿。没有对白数据就不另加对白 | 旧日服是一句对白。仓库里没有挂机对白表 |
+| 时钟 | 真服只按 s2c 3004 的 `reward_time` 计一次。大于等于 10 亿才当时间戳，10^12 以上当毫秒，否则当 unix 秒。更小的数写「未同步」，不再从打开面板的时刻往上加。`max_reward_time` 小于 10 亿时按秒封顶（0 也封在 00:00）。像时间戳时退回 `system.idle_max_time`。挂机泡和宝箱条满 1 小时写成 `hh:mm`（封顶 21600 秒是 `06:00`），不满 1 小时是 `mm:ss`。`formatDuration` 仍是 `hh:mm:ss`，挂机页句子不用它。领取成功后第二行时钟不再停在「已发领取」 | 没读到表、也没有可用的 `max_reward_time` 时不封顶 |
+| 顶栏战力 | `PowerSlot/Value` 用名册 `fighting` 之和。优先 MAIN，对不上再加全名册里已经带数字的英雄。一个都没有就留空，不写 Prefab 默认的 0。3103 空探针的 fighting=0 不进顶栏 | s2c 2001 没有战力字段 |
+| 顶栏头像 | 有名册时用出阵或第一名英雄的 `hero-icon` 盖住 `main-scene_spr-head-frame-1` 的褐心。没有头像路径就关掉 `Avatar`。等级徽用已同步等级，未同步不显示占位 `1` | s2c 2001 没有 head_id。34001 是已解锁列表，不是当前头 |
+| 关卡条 | 不挂。日服挂机场地中间那张战斗测试 / 可领水晶 / n/15 没有对应的挂机条 Prefab。`ChapterPreviewLayer` 是 640×600 的关卡预览窗，`ChapterRewardLayer` 是通关奖励窗，`MainTaskLayer` 标题是咖啡馆 | 不把整窗盖到挂机地上，也不新画条 |
 | 头像 | `ui/hero/hero-icon_<item_id>`。`item_id` 为 0 时用 `item.idx` = 英雄类型号上的 `hero-icon/` 路径 | 雷顿、赫卡忒·幽魂、撒旦·赫莱、深渊终结者的图是 `hero-icon_20701001` / `20701003` / `20701004` / `20701006` |
 | 图鉴顺序 | `herotype` 表的顺序。同类型多只英雄打开名册里的第一只 | 旧排序没对上 |
 | 元素名 | 1 火、2 水、3 木、4 光、5 暗 | 对 language 2101–2105。不是 Lua 实证 |
