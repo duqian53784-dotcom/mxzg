@@ -38,6 +38,7 @@ declare module "cc" {
     once(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
     off(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
     destroy(): void;
+    removeFromParent(): void;
     static EventType: {
       TOUCH_START: string;
       TOUCH_MOVE: string;
@@ -150,7 +151,7 @@ declare module "cc" {
   export const Layers: { Enum: { UI_2D: number } };
   export const HorizontalTextAlignment: { CENTER: number; LEFT: number; RIGHT: number };
   export const VerticalTextAlignment: { CENTER: number; TOP: number };
-  export const Overflow: { NONE: number; CLAMP: number; SHRINK: number };
+  export const Overflow: { NONE: number; CLAMP: number; SHRINK: number; RESIZE_HEIGHT: number };
 
   export class Director {
     static EVENT_AFTER_UPDATE: string;

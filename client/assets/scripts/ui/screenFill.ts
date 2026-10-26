@@ -1676,7 +1676,6 @@ function showSkillCard(view: Node, skillId: number, level: number | null): void 
       });
       return;
     }
-    card.removeFromParent();
     const root = uiNode("SkillCard");
     place(root, host, 0, 0);
     root.setSiblingIndex(Math.max(0, host.children.length - 1));
