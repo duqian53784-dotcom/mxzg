@@ -97,12 +97,13 @@ import {
   visibleBuffCount,
   visibleFloats,
 } from "../assets/scripts/ui/battlePresentation";
-import { SPINE_RUNTIME_VERSION, upgradeSpine37Json } from "../assets/scripts/ui/spineUpgrade";
+import { plantHangLocomotion, SPINE_RUNTIME_VERSION, upgradeSpine37Json } from "../assets/scripts/ui/spineUpgrade";
 import {
   IDLE_HANG_SPOTS,
   IDLE_SKIRMISH_HITS,
   IDLE_SKIRMISH_SPOTS,
-  idleMarchScroll,
+  idleFoeEnterX,
+  idleHangLoopOffset,
   idleSkirmishHurt,
   idleSkirmishKillClip,
   idleSkirmishMayStrike,
@@ -111,6 +112,9 @@ import {
   idleSkirmishSwings,
   idleSpotsOnFloor,
   planIdleFoe,
+  planIdleWave,
+  IDLE_HALL_SCROLL_PX,
+  IDLE_SKY_SCROLL_PX,
   IDLE_SKIRMISH_FALLBACK_STEMS,
 } from "../assets/scripts/ui/idleHangSkirmishPlan";
 import {
@@ -16104,6 +16108,22 @@ async function checkWs(): Promise<void> {
       readFileSync(heroPackPath, "utf8").indexOf('"spine":"3.7.94"') >= 0,
     "playback upgrades 3.7.94 skins and curves in memory and leaves the file at 3.7.94"
   );
+  const planted = plantHangLocomotion(JSON.parse(JSON.stringify(upgraded))) as {
+    animations: {
+      run: { bones: { bone: { translate?: unknown }; bone2: { translate?: unknown } } };
+      attack: { bones: { bone: { translate?: unknown } } };
+      stand: { bones: { bone: { translate?: unknown } } };
+    };
+  };
+  assert(
+    !planted.animations.run.bones.bone.translate &&
+      !!planted.animations.run.bones.bone2.translate &&
+      !!planted.animations.attack.bones.bone.translate &&
+      !!planted.animations.stand.bones.bone.translate &&
+      !!upgraded.animations.run &&
+      battleSpineSrc.indexOf("plantHangLocomotion") >= 0,
+    "hang run plants the body bone in memory and leaves attack, stand, and the file alone"
+  );
   const pmaAt = battleSpineSrc.indexOf("premultipliedAlpha = false");
   const dataAt = battleSpineSrc.indexOf("skeletonData = runtimeSpineData");
   assert(
@@ -16235,6 +16255,27 @@ async function checkWs(): Promise<void> {
     3
   );
   assert(hangOne.length === 1 && hangOne[0] === "42", "one unbound hang hero is not padded with defaults");
+  const hangThree = idleHangStemsFrom(
+    {
+      rows: [
+        {
+          marks: [
+            { field: 1, text: "0" },
+            { field: 4, text: "字段1=7,字段3=1" },
+            { field: 4, text: "字段1=8,字段3=2" },
+            { field: 4, text: "字段1=9,字段3=3" },
+          ],
+        },
+      ],
+    },
+    [
+      { heroId: 7, heroType: 10105008 },
+      { heroId: 8, heroType: 10405005 },
+      { heroId: 9, heroType: 10505005 },
+    ],
+    3
+  );
+  assert(hangThree.length === 3 && hangThree.join(",") === "10105008,10405005,10505005", "three MAIN heroes all stand on the hang");
   assert(WIRE_SPINE_LOAD_FAIL === "spine 未加载", "spine load failure has a visible toast");
   const pools = WIRE_SPINE_ALLY_STEMS.concat(WIRE_SPINE_ENEMY_STEMS);
   for (let pi = 0; pi < pools.length; pi++) {
@@ -27354,22 +27395,43 @@ function checkIdleSkirmish(): void {
       IDLE_HANG_SPOTS[1].y < IDLE_SKIRMISH_SPOTS[1].y,
     "idle foes and allies stand on the tile floor, allies in front"
   );
-  const marched = idleMarchScroll(4, 8);
-  const returned = idleMarchScroll(8, 8);
-  const started = idleMarchScroll(0, 8);
+  const hallStep = idleHangLoopOffset(1000, 720, IDLE_HALL_SCROLL_PX);
+  const skyStep = idleHangLoopOffset(1000, 720, IDLE_SKY_SCROLL_PX);
+  const wrapped = idleHangLoopOffset((720 / IDLE_HALL_SCROLL_PX) * 1000, 720, IDLE_HALL_SCROLL_PX);
+  const continued = idleHangLoopOffset(1000 + (720 / IDLE_HALL_SCROLL_PX) * 1000, 720, IDLE_HALL_SCROLL_PX);
   assert(
     idleSpotsOnFloor(IDLE_HANG_SPOTS) &&
       idleSpotsOnFloor(IDLE_SKIRMISH_SPOTS) &&
-      started.hallY === 0 &&
-      started.skyY === 0 &&
-      marched.hallY === -48 &&
-      marched.skyY === -18 &&
-      Math.abs(marched.skyY) < Math.abs(marched.hallY) &&
-      returned.hallX === 0 &&
-      returned.hallY === 0 &&
-      returned.skyX === 0 &&
-      returned.skyY === 0,
-    "spots stay on the tile floor and the march scrolls the hall back to the origin"
+      idleHangLoopOffset(0, 720, IDLE_HALL_SCROLL_PX) === 0 &&
+      hallStep === -IDLE_HALL_SCROLL_PX &&
+      skyStep === -IDLE_SKY_SCROLL_PX &&
+      Math.abs(skyStep) < Math.abs(hallStep) &&
+      wrapped === 0 &&
+      continued === hallStep &&
+      idleFoeEnterX(36, 0) === 36 + 460 &&
+      idleFoeEnterX(36, 1) === 36,
+    "spots stay on the tile floor, the march loops sideways, and foes enter from the right"
+  );
+  const waveOne = planIdleWave([{ heroType: 10101001, hp: 900 }], (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
+  const waveThree = planIdleWave(
+    [
+      { heroType: 10101001, hp: 1 },
+      { heroType: 10405006, hp: 2 },
+      { heroType: 10505010, hp: 3 },
+      { heroType: 10405007, hp: 4 },
+    ],
+    () => true,
+    WIRE_SPINE_ENEMY_STEMS
+  );
+  assert(
+    waveOne.length === 1 &&
+      waveOne[0].stem === "10101001" &&
+      waveOne[0].spot === 0 &&
+      waveThree.length === 3 &&
+      waveThree[0].spot === 0 &&
+      waveThree[2].stem === "10505010" &&
+      waveThree[2].spot === 2,
+    "a wave fields the stage foes together, capped at the three hang spots"
   );
   assert(idleSkirmishMayStrike(true) === true && idleSkirmishMayStrike(false) === false, "no swing until the foe is visible");
   assert(idleSkirmishSwingClip(0) === "attack" && idleSkirmishSwingClip(1) === "attack2", "odd swings use attack2");
@@ -27419,15 +27481,23 @@ function checkIdleSkirmish(): void {
   assert(
     skirmishSrc.indexOf('gesture("run")') >= 0 &&
       skirmishSrc.indexOf('gesture("walk")') >= 0 &&
-      skirmishSrc.indexOf("idleMarchScroll") >= 0 &&
+      skirmishSrc.indexOf("idleHangLoopOffset") >= 0 &&
+      skirmishSrc.indexOf("planIdleWave") >= 0 &&
+      skirmishSrc.indexOf("idleFoeEnterX") >= 0 &&
+      skirmishSrc.indexOf("plantAllies") >= 0 &&
+      skirmishSrc.indexOf('damaged.actor.play("hit")') >= 0 &&
+      skirmishSrc.indexOf('ally.play("hit")') < 0 &&
+      skirmishSrc.indexOf("idleMarchScroll") < 0 &&
       skirmishSrc.indexOf("IdleSky") >= 0 &&
       skirmishSrc.indexOf("IdleFloor") >= 0 &&
       skirmishSrc.indexOf("idleMarchStep") < 0 &&
       skirmishSrc.indexOf("onReady") >= 0 &&
       skirmishSrc.indexOf("idleSkirmishMayStrike") >= 0 &&
       skirmishSrc.indexOf("skillFramePaths") >= 0 &&
-      skirmishSrc.indexOf("skip swing, foe not visible") >= 0,
-    "skirmish runs, waits for the foe, then plays skill frames"
+      skirmishSrc.indexOf("skip swing, foe not visible") >= 0 &&
+      hangSrc.indexOf("stems.length") >= 0 &&
+      hangSrc.indexOf("slice(0, 1)") < 0,
+    "skirmish runs in place, scrolls only while marching, and hits the visible foe"
   );
   assert(fillSrc.indexOf("金环水晶") >= 0 && fillSrc.indexOf("frame.active = true") >= 0, "hang plate keeps the crystal frame");
   assert(battleSrc.indexOf("seatHangField") >= 0 && battleSrc.indexOf('findNamed(field, "Slot_A"') >= 0, "report slots sit on the hang floor");

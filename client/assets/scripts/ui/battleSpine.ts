@@ -9,7 +9,7 @@
 import { Node, resources, sp } from "cc";
 import { GameLog } from "../core/GameLog";
 import { WireSpineClip } from "../net/protocol/wireBattle";
-import { upgradeSpine37Json } from "./spineUpgrade";
+import { plantHangLocomotion, upgradeSpine37Json } from "./spineUpgrade";
 import { place, uiNode } from "./UiKit";
 
 export interface SpineActor {
@@ -265,7 +265,8 @@ function runtimeSpineData(stem: string, asset: sp.SkeletonData): sp.SkeletonData
     dst.textureNames = src.textureNames;
     if (typeof src.scale === "number") dst.scale = src.scale;
     dst._uuid = uuid;
-    dst.skeletonJson = upgradeSpine37Json(raw);
+    const upgraded = upgradeSpine37Json(raw);
+    dst.skeletonJson = plantHangLocomotion(upgraded === raw ? JSON.parse(JSON.stringify(upgraded)) : upgraded);
     runtimePacks[stem] = copy;
     return copy;
   } catch (err) {

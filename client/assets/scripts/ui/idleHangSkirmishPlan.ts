@@ -38,26 +38,39 @@ export function idleSpotsOnFloor(spots: ReadonlyArray<{ y: number }>): boolean {
   return true;
 }
 
+/** 行军时大理石每秒往左。天更慢。只走水平，不抬高，也不在段尾弹回。 */
+export const IDLE_HALL_SCROLL_PX = 28;
+export const IDLE_SKY_SCROLL_PX = 10;
+/** 这一段跑完才遇怪。遇怪时停。 */
+export const IDLE_MARCH_MS = 1400;
+/** 怪从格子右侧滑进格子。 */
+export const IDLE_FOE_ENTER_MS = 640;
+export const IDLE_FOE_ENTER_FROM = 460;
+
 /**
- * 两波之间背景滑一段再回到原位。英雄格子不动，只播跑。
- * step 从 0 到 steps。中点滑得最远，天比大理石慢。
+ * 行军阶段的循环偏移。时间一直涨，在宽度内折返，不会滑一段再回到原点。
+ * 返回负值：图层往左走。没有 y。
  */
-export function idleMarchScroll(
-  step: number,
-  steps: number
-): { hallX: number; hallY: number; skyX: number; skyY: number } {
-  const n = steps >= 2 ? Math.floor(steps) : 2;
-  let i = Math.floor(step);
-  if (i < 0) i = 0;
-  if (i > n) i = n;
-  const t = i / n;
-  const wave = t < 0.5 ? t * 2 : (1 - t) * 2;
-  return {
-    hallX: Math.round(-16 * wave),
-    hallY: Math.round(-48 * wave),
-    skyX: Math.round(-6 * wave),
-    skyY: Math.round(-18 * wave),
-  };
+export function idleHangLoopOffset(elapsedMs: number, width: number, pxPerSec: number): number {
+  const w = width >= 1 ? width : 1;
+  const speed = pxPerSec > 0 ? pxPerSec : 0;
+  let ms = elapsedMs;
+  if (!isFinite(ms) || ms <= 0 || speed === 0) return 0;
+  const dist = (ms / 1000) * speed;
+  if (!isFinite(dist) || dist <= 0) return 0;
+  let wrapped = dist % w;
+  if (wrapped < 0) wrapped += w;
+  if (wrapped === 0) return 0;
+  return -wrapped;
+}
+
+/** 怪入场的 x。t 从 0 到 1，从格子右侧滑到格子。y 由调用方保持格子的 y。 */
+export function idleFoeEnterX(slotX: number, t: number): number {
+  let u = t;
+  if (!isFinite(u) || u < 0) u = 0;
+  if (u > 1) u = 1;
+  const start = slotX + IDLE_FOE_ENTER_FROM;
+  return Math.round(start + (slotX - start) * u);
 }
 
 /** 怪已经显示才允许出刀。看不见人时不许打空。 */
@@ -129,18 +142,10 @@ export function idleSkirmishKillClip(stem: string, hasClip: (name: string, clip:
   return "stand";
 }
 
-/**
- * 当前关有 stand 的怪优先，按波次轮换。
- * 一只都对不上就用 fallback，仍按波次换格子。
- */
-export function planIdleFoe(
-  wave: number,
+function usableIdleFoes(
   monsters: { heroType: number; hp: number | null }[],
-  hasStand: (stem: string) => boolean,
-  fallback: readonly string[]
-): IdleFoePlan {
-  const turn = wave >= 0 ? Math.floor(wave) : 0;
-  const spot = IDLE_SKIRMISH_SPOTS[turn % IDLE_SKIRMISH_SPOTS.length];
+  hasStand: (stem: string) => boolean
+): { stem: string; hp: number | null }[] {
   const usable: { stem: string; hp: number | null }[] = [];
   for (let i = 0; i < monsters.length; i++) {
     const type = monsters[i].heroType;
@@ -155,6 +160,22 @@ export function planIdleFoe(
     const hp = monsters[i].hp;
     usable.push({ stem, hp: typeof hp === "number" && isFinite(hp) && hp > 0 ? Math.floor(hp) : null });
   }
+  return usable;
+}
+
+/**
+ * 当前关有 stand 的怪优先，按波次轮换。
+ * 一只都对不上就用 fallback，仍按波次换格子。
+ */
+export function planIdleFoe(
+  wave: number,
+  monsters: { heroType: number; hp: number | null }[],
+  hasStand: (stem: string) => boolean,
+  fallback: readonly string[]
+): IdleFoePlan {
+  const turn = wave >= 0 ? Math.floor(wave) : 0;
+  const spot = IDLE_SKIRMISH_SPOTS[turn % IDLE_SKIRMISH_SPOTS.length];
+  const usable = usableIdleFoes(monsters, hasStand);
   if (usable.length > 0) {
     const row = usable[turn % usable.length];
     return { stem: row.stem, spot: turn % IDLE_SKIRMISH_SPOTS.length, face: spot.face, maxHp: row.hp };
@@ -166,4 +187,28 @@ export function planIdleFoe(
     face: spot.face,
     maxHp: null,
   };
+}
+
+/**
+ * 这一波同时上场的怪。有几只能站的就上几只，最多三个格子。
+ * 不按死亡再补下一只。表里一只就一只。一只都没有就用 fallback 的第一只，站 0 号格。
+ */
+export function planIdleWave(
+  monsters: { heroType: number; hp: number | null }[],
+  hasStand: (stem: string) => boolean,
+  fallback: readonly string[]
+): IdleFoePlan[] {
+  const usable = usableIdleFoes(monsters, hasStand);
+  if (usable.length === 0) {
+    const one = planIdleFoe(0, monsters, hasStand, fallback);
+    const spot = IDLE_SKIRMISH_SPOTS[0];
+    return [{ stem: one.stem, spot: 0, face: spot.face, maxHp: null }];
+  }
+  const n = usable.length < IDLE_SKIRMISH_SPOTS.length ? usable.length : IDLE_SKIRMISH_SPOTS.length;
+  const plans: IdleFoePlan[] = [];
+  for (let i = 0; i < n; i++) {
+    const spot = IDLE_SKIRMISH_SPOTS[i];
+    plans.push({ stem: usable[i].stem, spot: i, face: spot.face, maxHp: usable[i].hp });
+  }
+  return plans;
 }
