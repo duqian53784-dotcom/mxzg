@@ -29,6 +29,12 @@ export interface LoginPanelView {
   account(): string;
   password(): string;
   serverId(): number;
+  /** P1 平台ID。代码登录面板没有这一栏，返回空串。 */
+  platformId(): string;
+  /** P1 CHANNEL_ID。空串表示仍用 mxzg-web-1001。 */
+  channelId(): string;
+  /** P1 PF_ID。空串表示仍用 localdev。 */
+  pfId(): string;
 }
 
 export interface LoginPanelOptions {
@@ -157,6 +163,15 @@ export function buildLoginPanel(
     serverId(): number {
       return selected.id;
     },
+    platformId(): string {
+      return "";
+    },
+    channelId(): string {
+      return "";
+    },
+    pfId(): string {
+      return "";
+    },
   };
 }
 
@@ -259,6 +274,15 @@ function bindLoginPrefab(
     },
     serverId(): number {
       return selected.id;
+    },
+    platformId(): string {
+      return "";
+    },
+    channelId(): string {
+      return "";
+    },
+    pfId(): string {
+      return "";
     },
   };
 }

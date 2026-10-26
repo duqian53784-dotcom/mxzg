@@ -51,8 +51,10 @@ import { WIRE_HEARTBEAT_MS } from "../net/protocol/frame";
 import {
   LoginReplySummary,
   summarizeCreateReply,
+  observedLoginChannel,
+  observedLoginDevice,
+  resolveLoginUid,
   summarizeLoginReply,
-  uidFromAccount,
   wireBody,
   wireRoleReady,
 } from "../net/protocol/wireLogin";
@@ -754,13 +756,21 @@ export class Boot extends Component {
     }
     const account = resolveAccount(panel.account(), this.account);
     const serverId = panel.serverId();
+    const platformId = panel.platformId();
+    const channelId = panel.channelId();
+    const pfId = panel.pfId();
     this.wsAccount = account;
     this.remember(account, serverId);
-    const uid = uidFromAccount(account);
+    const uid = resolveLoginUid(account, platformId);
     if (uid === null) {
-      GameLog.shared.warn(
+      GameLog.shared.warn("Ws", "账号「" + account + "」编不出平台 uid，1001 不写字段2。");
+    } else {
+      const pure = /^[1-9][0-9]{0,9}$/.test(account.trim());
+      const fromPlatform = !pure && /^[1-9][0-9]{0,9}$/.test(platformId.trim());
+      const how = pure ? "账号" : fromPlatform ? "平台ID" : "账号散列";
+      GameLog.shared.info(
         "Ws",
-        "账号「" + account + "」不是平台 uid，1001 不写字段2。日志两例是 111 和 960011。没有接平台登录。"
+        "登录字段2=" + uid + "（" + how + "） 字段6=" + observedLoginDevice(pfId) + " 字段7=" + observedLoginChannel(channelId)
       );
     }
     GameLog.shared.info("Ws", "选服 " + serverId + " 不写入登录包。两例 1001 的字段1都是 7、字段3都是 2。");
@@ -768,7 +778,11 @@ export class Boot extends Component {
     const nowSec = Math.floor(Date.now() / 1000);
     let body: Uint8Array;
     try {
-      const msg = await this.ensureWsNet().request("login", { account, nowSec }, 5000);
+      const msg = await this.ensureWsNet().request(
+        "login",
+        { account, uid, nowSec, platformId, channel: channelId, device: pfId },
+        5000
+      );
       body = wireBody(msg.data);
     } catch (err) {
       if (!this.alive) return;

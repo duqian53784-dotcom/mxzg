@@ -5,7 +5,7 @@
  *
  * c2s 1001（两例，uid 和字段5不同）：
  *   字段1 varint = 7
- *   字段2 varint = 平台 uid（111 与 960011）
+ *   字段2 varint = 平台 uid。纯数字账号原样（111 与 960011）。其它非空账号写成稳定正整数，不再省掉字段2。
  *   字段3 varint = 2
  *   字段5 string = 十进制 unix 秒（1792464901 与 1792466798）
  *   字段6 string = localdev
@@ -232,23 +232,78 @@ export function wireRoleReady(summary: LoginReplySummary): boolean {
   return typeof summary.roleId === "number" && summary.roleId > 0;
 }
 
-export function uidFromAccount(account: string): number | null {
-  const text = (account || "").trim();
-  if (!/^[1-9][0-9]{0,9}$/.test(text)) return null;
-  const n = Number(text);
+const PURE_UID = /^[1-9][0-9]{0,9}$/;
+
+/** 正整数平台 uid。0、空、超长数字都不是。 */
+export function positiveUid(text: string): number | null {
+  const raw = (text || "").trim();
+  if (!PURE_UID.test(raw)) return null;
+  const n = Number(raw);
   if (!Number.isSafeInteger(n) || n <= 0) return null;
   return n;
 }
 
-/** 字段顺序与日志第二例（uid 960011）一致，便于对字节。没有 uid 时省掉字段2。 */
-export function encodeObservedLoginBody(uid: number | null, nowSec: number): Uint8Array {
+/**
+ * 纯数字账号原样。其它非空账号压成 1..999999999，同一字符串每次相同。
+ * 空串和非法数字（0、前导 0）仍是 null，不另编一个号。
+ */
+export function uidFromAccount(account: string): number | null {
+  const text = (account || "").trim();
+  if (!text) return null;
+  if (/^[0-9]+$/.test(text)) return positiveUid(text);
+  return stableAccountUid(text);
+}
+
+/** FNV-1a，再收进 9 位正整数。给 hao1 这类账号填字段2。 */
+export function stableAccountUid(account: string): number {
+  const text = (account || "").trim();
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const n = (hash >>> 0) % 999999999;
+  return n === 0 ? 1 : n;
+}
+
+/**
+ * 纯数字账号优先，不看平台ID。
+ * 账号不是纯数字时，平台ID 填了正整数就用它当字段2；空着或是 0 则用账号散列。
+ */
+export function resolveLoginUid(account: string, platformId?: string | null): number | null {
+  const text = (account || "").trim();
+  if (PURE_UID.test(text)) return positiveUid(text);
+  const fromPlatform = positiveUid(platformId || "");
+  if (fromPlatform !== null) return fromPlatform;
+  return uidFromAccount(text);
+}
+
+/** 登录框 CHANNEL_ID 空着时仍是 mxzg-web-1001。 */
+export function observedLoginChannel(channel?: string | null): string {
+  const text = (channel || "").trim();
+  return text || LOGIN_CHANNEL;
+}
+
+/** 登录框 PF_ID 空着时仍是 localdev。填了才替换字段6。 */
+export function observedLoginDevice(device?: string | null): string {
+  const text = (device || "").trim();
+  return text || LOGIN_DEVICE;
+}
+
+export interface LoginBodyOptions {
+  channel?: string | null;
+  device?: string | null;
+}
+
+/** 字段顺序与日志第二例（uid 960011）一致，便于对字节。有 uid 就写字段2。channel / device 空着用本机常量。 */
+export function encodeObservedLoginBody(uid: number | null, nowSec: number, options?: LoginBodyOptions): Uint8Array {
   const parts: number[] = [];
   pushString(parts, 5, String(Math.floor(nowSec)));
   if (uid !== null) pushVarintField(parts, 2, uid);
   pushVarintField(parts, 1, LOGIN_FIELD1);
   pushVarintField(parts, 3, LOGIN_FIELD3);
-  pushString(parts, 7, LOGIN_CHANNEL);
-  pushString(parts, 6, LOGIN_DEVICE);
+  pushString(parts, 7, observedLoginChannel(options && options.channel));
+  pushString(parts, 6, observedLoginDevice(options && options.device));
   return Uint8Array.from(parts);
 }
 
@@ -379,7 +434,9 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
   if (cmd === Cmd.login) {
     const uid = readUid(msg.data);
     const nowSec = readNowSec(msg.data);
-    const body = encodeObservedLoginBody(uid, nowSec);
+    const channel = readLoginText(msg.data, "channel");
+    const device = readLoginText(msg.data, "device");
+    const body = encodeObservedLoginBody(uid, nowSec, { channel, device });
     const uidNote = uid === null ? "字段2未写" : "字段2=" + uid;
     return {
       cmdId: WireCmd.login,
@@ -394,9 +451,9 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
         " 字段5=" +
         Math.floor(nowSec) +
         " 字段6=" +
-        LOGIN_DEVICE +
+        observedLoginDevice(device) +
         " 字段7=" +
-        LOGIN_CHANNEL,
+        observedLoginChannel(channel),
     };
   }
   if (cmd === "wire.2001") {
@@ -1079,10 +1136,18 @@ export function summarizeCreateReply(body: Uint8Array): { roleId: number | null;
 
 function readUid(data: unknown): number | null {
   if (!data || typeof data !== "object") return null;
-  const raw = data as { uid?: unknown; account?: unknown };
+  const raw = data as { uid?: unknown; account?: unknown; platformId?: unknown };
   if (typeof raw.uid === "number" && Number.isSafeInteger(raw.uid) && raw.uid > 0) return raw.uid;
-  if (typeof raw.account === "string") return uidFromAccount(raw.account);
+  const account = typeof raw.account === "string" ? raw.account : "";
+  const platformId = typeof raw.platformId === "string" ? raw.platformId : "";
+  if (account || platformId) return resolveLoginUid(account, platformId);
   return null;
+}
+
+function readLoginText(data: unknown, key: "channel" | "device"): string {
+  if (!data || typeof data !== "object") return "";
+  const value = (data as { channel?: unknown; device?: unknown })[key];
+  return typeof value === "string" ? value : "";
 }
 
 function readNowSec(data: unknown): number {

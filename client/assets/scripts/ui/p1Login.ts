@@ -32,6 +32,9 @@ export async function mountP1LoginPrefab(
   host.parent = parent;
 
   const accountField = { current: null as TextField | null };
+  const platformField = { current: null as TextField | null };
+  const channelField = { current: null as TextField | null };
+  const pfField = { current: null as TextField | null };
   const statusNode = place(createLabel("", 20, { color: new Color(255, 244, 210, 255), width: 640 }), host, 0, -400);
   const detailNode = place(createLabel("", 16, { color: new Color(190, 205, 225, 255), width: 640, height: 48 }), host, 0, -448);
   let selected = findServer(options?.serverId ?? MOCK_SERVERS[0].id);
@@ -56,6 +59,12 @@ export async function mountP1LoginPrefab(
     const userBg = findDescendant(view, "spr_user_bg");
     if (!userBg) throw new Error("UserLoginLayer 缺少 spr_user_bg");
     accountField.current = overlayField(userBg, "账号", options?.account ?? "");
+    const platformBg = findDescendant(view, "spr_platform_bg");
+    if (platformBg) platformField.current = overlayField(platformBg, "正整数，可空", "");
+    const channelBg = findDescendant(view, "spr_channel_bg");
+    if (channelBg) channelField.current = overlayField(channelBg, "可空", "", 32);
+    const pfBg = findDescendant(view, "spr_pf_bg");
+    if (pfBg) pfField.current = overlayField(pfBg, "可空", "", 32);
 
     const serverBg = findDescendant(view, "spr_server_bg");
     if (!serverBg) throw new Error("UserLoginLayer 缺少 spr_server_bg");
@@ -249,14 +258,23 @@ export async function mountP1LoginPrefab(
     serverId(): number {
       return selected.id;
     },
+    platformId(): string {
+      return platformField.current ? platformField.current.getValue() : "";
+    },
+    channelId(): string {
+      return channelField.current ? channelField.current.getValue() : "";
+    },
+    pfId(): string {
+      return pfField.current ? pfField.current.getValue() : "";
+    },
   };
 }
 
-function overlayField(host: Node, placeholder: string, text: string): TextField {
+function overlayField(host: Node, placeholder: string, text: string, maxLength = 16): TextField {
   const ui = host.getComponent(UITransform);
   const width = ui ? Math.max(80, ui.contentSize.width - 28) : 420;
   const height = ui ? Math.max(36, ui.contentSize.height - 16) : 48;
-  const field = createField(placeholder, width, height, { text, maxLength: 16 });
+  const field = createField(placeholder, width, height, { text, maxLength });
   const bg = field.node.getChildByName("bg");
   if (bg) bg.active = false;
   placeOn(host, field.node);
