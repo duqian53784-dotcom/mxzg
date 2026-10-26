@@ -140,7 +140,7 @@ declare module "cc" {
   }
 
   export const Layers: { Enum: { UI_2D: number } };
-  export const HorizontalTextAlignment: { CENTER: number; LEFT: number };
+  export const HorizontalTextAlignment: { CENTER: number; LEFT: number; RIGHT: number };
   export const VerticalTextAlignment: { CENTER: number; TOP: number };
   export const Overflow: { NONE: number; CLAMP: number; SHRINK: number };
 
@@ -225,7 +225,11 @@ declare module "cc" {
   export class Sprite {
     static SizeMode: { CUSTOM: number; TRIMMED: number; RAW: number };
     static Type: { SIMPLE: number; SLICED: number; TILED: number; FILLED: number };
+    static FillType: { HORIZONTAL: number; VERTICAL: number; RADIAL: number };
     type: number;
+    fillType: number;
+    fillStart: number;
+    fillRange: number;
     color: Color;
     grayscale: boolean;
     spriteFrame: SpriteFrame | null;

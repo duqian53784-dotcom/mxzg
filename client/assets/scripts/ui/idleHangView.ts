@@ -5,6 +5,8 @@
  * 底栏「我要变强 / 战斗 / 快速战斗」仍是 BattlePanelLayer，盖在这块地上。
  * 站场优先 MAIN 阵容：hero_id 经名册 hero_type 对已有皮肤，再走内存里的 spine 升级。
  * 阵容是空的才用三套默认。加载失败把格子藏起来，不写套名。
+ * 不给每个站位写「待命」。计时泡只有 Prefab 里那一个，挪到掉落堆上。
+ * main-scene_spr-drop-1 是空的蓝金匾，不拿来当掉落堆。
  */
 import { Color, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { GameStore } from "../core/GameStore";
@@ -12,7 +14,7 @@ import { WireSession } from "../net/WireSession";
 import { mountBattleSpine } from "./battleSpine";
 import { hangStemsForFormation, idleHangStemsFrom } from "./idleHangRoster";
 import { localLineupIds, onLocalLineup } from "./localLineup";
-import { createLabel, createRect, place, uiNode } from "./UiKit";
+import { createRect, place, uiNode } from "./UiKit";
 
 export const IDLE_HANG_SKY = "ui/chapter/hang/map01_B";
 export const IDLE_HANG_FLOOR = "ui/chapter/hang/map01_F";
@@ -87,17 +89,62 @@ export function mountIdleHang(parent: Node): Node {
     offLocal();
   });
 
-  const pile = spriteNode("IdleDrop", 200, 130);
-  place(pile, root, 36, -150);
-  paintSprite(pile, "ui/city/main-scene_spr-drop-1");
-  for (let i = 0; i < IDLE_HANG_SPOTS.length; i++) {
-    const spot = IDLE_HANG_SPOTS[i];
-    const bubble = spriteNode("IdleTalk", 96, 44);
-    place(bubble, root, spot.x, spot.y + 118);
-    paintSprite(bubble, "ui/city/main-scene_spr-bubble");
-    place(createLabel("待命", 14, { width: 80, height: 24, color: new Color(90, 56, 32, 255) }), bubble, 0, 6);
-  }
   return root;
+}
+
+const LOOT_AT: ReadonlyArray<{ x: number; y: number; w: number }> = [
+  { x: -88, y: -2, w: 34 },
+  { x: -58, y: 18, w: 40 },
+  { x: -30, y: -16, w: 32 },
+  { x: -4, y: 8, w: 46 },
+  { x: 28, y: -12, w: 34 },
+  { x: 56, y: 14, w: 36 },
+  { x: 82, y: -4, w: 30 },
+  { x: -74, y: 28, w: 28 },
+  { x: -18, y: 26, w: 36 },
+  { x: 40, y: 28, w: 28 },
+  { x: 6, y: -4, w: 42 },
+  { x: -42, y: -6, w: 38 },
+  { x: 64, y: 24, w: 26 },
+  { x: -12, y: -8, w: 30 },
+];
+
+/**
+ * 用已有金币、水晶、宝箱和掉落图标叠一堆。没有图标时不留节点。
+ * 不使用 main-scene_spr-drop-1。
+ */
+export function paintIdleLoot(hang: Node, icons: string[]): void {
+  const key = icons.join("|");
+  const mark = hang as Node & { mxzgLoot?: string };
+  const live = hang.getChildByName("IdleLoot");
+  if (mark.mxzgLoot === key && live && live.isValid) return;
+  mark.mxzgLoot = key;
+  if (live) live.destroy();
+  if (icons.length === 0) return;
+  const pile = uiNode("IdleLoot");
+  place(pile, hang, 8, -168);
+  const n = icons.length < LOOT_AT.length ? icons.length : LOOT_AT.length;
+  for (let i = 0; i < n; i++) {
+    const spot = LOOT_AT[i];
+    const icon = spriteNode("loot", spot.w, spot.w);
+    place(icon, pile, spot.x, spot.y);
+    paintSprite(icon, icons[i]);
+  }
+}
+
+/** Prefab 计时泡的子节点偏移是按底板算的。收到挂机地上，盖在掉落堆上沿。只挪一次。 */
+export function seatHangTimer(hang: Node, bubble: Node): void {
+  const mark = bubble as Node & { mxzgSeat?: boolean };
+  if (!mark.mxzgSeat) {
+    mark.mxzgSeat = true;
+    const spr = bubble.getChildByName("spr_bubble");
+    const label = bubble.getChildByName("lbl_progress_time2");
+    if (bubble.parent !== hang) bubble.parent = hang;
+    if (spr) spr.setPosition(0, 4, 0);
+    if (label) label.setPosition(0, 10, 0);
+    bubble.setPosition(56, -118, 0);
+  }
+  if (bubble.parent === hang) bubble.setSiblingIndex(Math.max(0, hang.children.length - 1));
 }
 
 function spriteNode(name: string, width: number, height: number): Node {

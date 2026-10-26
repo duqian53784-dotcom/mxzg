@@ -503,6 +503,7 @@ import {
   vipIdleBonus,
   vipIdleLine,
 } from "../assets/scripts/config/rosterCatalog";
+import { sumKnownFighting } from "../assets/scripts/ui/hangHud";
 import { formatStoreBagLine } from "../assets/scripts/module/bag/bagView";
 import { formatStoreHeroLine } from "../assets/scripts/module/hero/rosterView";
 import { replayFromStore } from "../assets/scripts/module/mainline/battleFromStore";
@@ -525,6 +526,7 @@ import {
   capPreviewLine,
   claimToast,
   formatDuration,
+  formatHangClock,
   formatItemEvery,
   IDLE_CAP_MS,
   IDLE_ITEM_ID,
@@ -2331,6 +2333,8 @@ function checkStoreScreens(): void {
     "vip 1 idle bonuses come from the vip table"
   );
   assert(vipIdleBonus(null) === null && vipIdleLine(null) === "VIP未同步", "missing vip level is not treated as 0");
+  assert(sumKnownFighting([{ heroId: 1, fighting: null }], null) === null, "missing fighting is not treated as 0");
+  assert(sumKnownFighting([{ heroId: 1, fighting: 40 }, { heroId: 2, fighting: 60 }], [2]) === 60, "deployed filter sums only that hero");
   assert(vipIdleLine(1).indexOf("金币+10%") >= 0, "vip line shows the table percents");
   const star6 = heroStarStep(6);
   assert(
@@ -3076,6 +3080,10 @@ function checkIdleMath(): void {
   assert(bad.pendingGold === 0 && bad.goldPerMin === stage1.gold && bad.capped === false, "bad input");
   assert(formatDuration(0) === "00:00:00" && formatDuration(IDLE_CAP_MS) === "08:00:00" && formatDuration(cap) === "06:00:00", "duration format");
   assert(formatDuration(3661000) === "01:01:01", "duration hms");
+  assert(
+    formatHangClock(21600 * 1000) === "06:00" && formatHangClock(90 * 1000) === "01:30" && formatHangClock(3661000) === "01:01",
+    "hang clock is hh:mm once an hour has passed, and mm:ss under an hour"
+  );
   assert(formatItemEvery(30000) === "每 30 秒 1 个", "item every seconds");
   assert(formatItemEvery(120000) === "每 2 分钟 1 个", "item every minutes");
   assert(claimToast(0, 0) === "暂无收益", "empty claim toast");
@@ -26690,6 +26698,28 @@ function checkCityHub(): void {
       hangSrc.indexOf("idleHangStemsFrom") >= 0 &&
       hangSrc.indexOf("slot.active = false") >= 0,
     "battle tab hang scene uses the marble hall and does not pretend BattlePage is the idle shell"
+  );
+  assert(
+    hangSrc.indexOf("IdleTalk") < 0 &&
+      hangSrc.indexOf("IdleDrop") < 0 &&
+      hangSrc.indexOf("paintIdleLoot") >= 0 &&
+      hangSrc.indexOf("seatHangTimer") >= 0,
+    "hang scene does not spam standby bubbles or mount the empty drop plaque"
+  );
+  const fillSrc = readFileSync(uiSource("screenFill.ts"), "utf8");
+  assert(
+    fillSrc.indexOf("spr-drop-1") < 0 &&
+      fillSrc.indexOf("VIP未同步") < 0 &&
+      fillSrc.indexOf("formatHangClock") >= 0 &&
+      fillSrc.indexOf("lbl_gold") >= 0 &&
+      fillSrc.indexOf("progress-role-exp") >= 0,
+    "hang panel fills the four bars, hides the vip debug line, and does not mount the empty plaque"
+  );
+  assert(
+    mainApp.indexOf("formatCombatPower") >= 0 &&
+      mainApp.indexOf("formatAvatarIcon") >= 0 &&
+      mainApp.indexOf("formatLevelBadge") >= 0,
+    "top bar power and avatar fall back from the roster instead of leaving the prefab zero and empty circle"
   );
   const rosterSrc = readFileSync(uiSource("idleHangRoster.ts"), "utf8");
   assert(
