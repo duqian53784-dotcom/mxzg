@@ -3,7 +3,7 @@
  * 从仓库根目录：
  * npx --yes esbuild client/tools/skeleton-check.ts --bundle --platform=node --format=cjs --tsconfig=client/tools/tsconfig.check.json --outfile=/tmp/mxzg-skeleton-check.js && node /tmp/mxzg-skeleton-check.js
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { isEntryOpen, isServerGateOpen, listOpenEntries } from "../assets/scripts/config/gates";
 import {
@@ -151,6 +151,7 @@ import {
   battleCastFrameCount,
   effectFramePaths,
   hitFramePaths,
+  attackHeroSkillCoverage,
   hangSkillVfx,
   skillArrowFramePaths,
   skillFramePaths,
@@ -27179,6 +27180,8 @@ function checkCityHub(): void {
       hangBattleSrc.indexOf("HangAppearLeft") >= 0 &&
       hangBattleSrc.indexOf("HangAppearRight") >= 0 &&
       hangBattleSrc.indexOf("开战出场帧 battle-appear 没有挂上，仍写战斗开始") >= 0 &&
+      hangBattleSrc.indexOf("font/FZCSJW-GB1-0") >= 0 &&
+      hangBattleSrc.indexOf("技能名字体 FZCSJW 没有挂上，仍用系统字") >= 0 &&
       cityLayoutSrc.indexOf("不另摆位置") >= 0,
     "hang talk is one herotalk bubble, battle open plays appear frames, and city clouds stay unplaced"
   );
@@ -27426,9 +27429,15 @@ function checkCityHub(): void {
   assertFrames("skill-102040041-arrow", arrows);
   assert(skillArrowFramePaths(101010011).length === 0 && skillRestLayerFramePaths(9).length === 0, "skills without extra layers do not borrow arrows");
   const hangSkill = hangSkillVfx("10105008", true);
+  const starterSkill = hangSkillVfx("10101001", true);
+  const skillCover = attackHeroSkillCoverage();
   assert(
     skillIdForSpineStem("10105008") === 101050080 &&
       skillIdForSpineStem("10405005") === 104050050 &&
+      skillIdForSpineStem("10505005") === 105050050 &&
+      skillIdForSpineStem("10405006") === 104050060 &&
+      skillIdForSpineStem("10405007") === 104050070 &&
+      skillIdForSpineStem("10505010") === 105050100 &&
       skillIdForSpineStem("zzz") === null &&
       hangSkill.skill[0] === "battle/skill/skill-101050080/skill-101050080_0" &&
       hangSkill.layers.length === 2 &&
@@ -27438,6 +27447,28 @@ function checkCityHub(): void {
       hangSkillVfx("no-stem", true).layers.length === 0,
     "hang skill swings use the stem's own frames and keep hero-skill when none match"
   );
+  assert(
+    skillIdForSpineStem("10101001") === 101010011 &&
+      starterSkill.skill[0] === "battle/skill/skill-101010011/skill-101010011_0" &&
+      skillIdForSpineStem("10106006") === 101050060 &&
+      skillIdForSpineStem("10510014") === 105050140 &&
+      skillIdForSpineStem("30101001") === 101050080 &&
+      skillIdForSpineStem("10104004") === null &&
+      skillIdForSpineStem("10210007") === null &&
+      skillCover.heroes === 381 &&
+      skillCover.mapped === 226,
+    "spine skill map uses herotype, skin and fashion and leaves heroes without frames on hero-skill"
+  );
+  const skillRoot = join(process.cwd(), "client/assets/resources/battle/skill");
+  const skillIndex = readFileSync(join(process.cwd(), "client/assets/scripts/net/protocol/battleAssetIndex.ts"), "utf8");
+  const unwiredSkills: string[] = [];
+  const skillNames = readdirSync(skillRoot);
+  for (let i = 0; i < skillNames.length; i++) {
+    const name = skillNames[i];
+    if (name === "hero-skill" || name.indexOf(".") >= 0) continue;
+    if (skillIndex.indexOf('"' + name + '"') < 0) unwiredSkills.push(name);
+  }
+  assert(unwiredSkills.length === 0, "skill frame folders other than hero-skill are listed");
   assert(battleLayoutSrc.indexOf("不发协议") >= 0, "battle layout helper does not own a protocol");
   const battleDoc = readFileSync(join(process.cwd(), "docs", "battle-prefab-layout.md"), "utf8");
   assert(
