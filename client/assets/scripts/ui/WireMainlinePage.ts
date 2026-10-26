@@ -1954,7 +1954,13 @@ class WireMainlineController implements WireMainlinePage {
     reel.play(
       paths,
       (ok) => {
-        if (!ok || this.disposed || gen !== this.frameGen) return;
+        if (!ok) {
+          if (!this.disposed && gen === this.frameGen) {
+            GameLog.shared.warn("Mainline", "vfx frames miss role=" + role + " n=" + paths.length);
+          }
+          return;
+        }
+        if (this.disposed || gen !== this.frameGen) return;
         this.hideSpineRole(role, beat);
       },
       stepMs

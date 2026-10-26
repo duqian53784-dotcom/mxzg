@@ -95,9 +95,12 @@ export interface CityEffectSpot {
   parent: string;
   x: number;
   y: number;
-  /** 脊柱动画没有静帧，留空则不画。 */
+  /** 动画型首帧路径；spine 型为 null */
   frame: string | null;
+  /** anim | spine */
   kind: string;
+  /** spine 资源 stem（resources/spine/<stem>），仅 kind=spine */
+  spine: string | null;
 }
 
 export interface CityActivitySpot {
@@ -264,10 +267,18 @@ export function mapFramePath(layer: number, piece: number, variant: number): str
 }
 
 /** eff_main_city_summon → 静帧 summon-0。脊柱（dx / chuanghu）没有静帧。 */
-export function effectFramePath(para: string | undefined): string | null {
+/** eff_main_city_summon → ui/city/main-city-effect_summon（无帧号）。 */
+export function effectFrameStem(para: string | undefined): string | null {
   const prefix = "eff_main_city_";
   if (!para || para.indexOf(prefix) !== 0) return null;
-  return "ui/city/main-city-effect_" + para.slice(prefix.length) + "-0";
+  return "ui/city/main-city-effect_" + para.slice(prefix.length);
+}
+
+/** 首帧路径，兼容旧调用。 */
+export function effectFramePath(para: string | undefined): string | null {
+  const stem = effectFrameStem(para);
+  if (!stem) return null;
+  return stem + "-0";
 }
 
 export function frameSize(layer: number, piece: number, variant: number): FrameSize {
@@ -366,13 +377,16 @@ export function buildCityMapLayout(
   for (let i = 0; i < effectRows.length; i++) {
     const row = effectRows[i];
     if (!row || !row.parent) continue;
+    const kind = (row.type || "anim").toLowerCase();
+    const isSpine = kind === "spine";
     effects.push({
       name: row.para || "effect-" + row.idx,
       parent: row.parent,
       x: row.x,
       y: row.y,
-      frame: effectFramePath(row.para),
-      kind: row.type || "",
+      frame: isSpine ? null : effectFramePath(row.para),
+      kind: isSpine ? "spine" : "anim",
+      spine: isSpine && row.para ? row.para : null,
     });
   }
 

@@ -25,6 +25,7 @@ import {
   layerAnchorX,
   mapFramePath,
 } from "./cityMapLayout";
+import { startCityEffects, CityEffectHandle } from "./cityEffectPlay";
 import { CITY_HUB_PREFAB_PATH, bindClick, loadPrefab, spawnPrefab } from "./prefabLoad";
 import { bindVisibleRefresh, fitCityViewport, squeezeWideNode } from "./visibleFit";
 
@@ -169,6 +170,7 @@ async function bindCityHub(
 
   bindVisibleRefresh(root, applyVisible);
   await ensureCityPlates(views);
+  let fxHandle: CityEffectHandle | null = startCityEffects(views, layout.effects, placeBottomLeft);
 
   let moved = 0;
   const onStart = (): void => {
@@ -217,6 +219,10 @@ async function bindCityHub(
     mainButton,
     refreshLocks,
     dispose() {
+      if (fxHandle) {
+        fxHandle.stop();
+        fxHandle = null;
+      }
       if (!root.isValid) return;
       root.off(Node.EventType.TOUCH_START, onStart);
       root.off(Node.EventType.TOUCH_MOVE, onMove);

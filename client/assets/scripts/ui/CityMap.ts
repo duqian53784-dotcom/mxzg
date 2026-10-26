@@ -15,7 +15,6 @@ import {
   CITY_CFG_BTN,
   CITY_CFG_EFFECT,
   CITY_CFG_POS,
-  CityEffectSpot,
   CitySpot,
   MainCityBtnFile,
   MainCityEffectFile,
@@ -24,6 +23,7 @@ import {
   cityAtomLocked,
   layerAnchorX,
 } from "./cityMapLayout";
+import { startCityEffects, CityEffectHandle } from "./cityEffectPlay";
 import { bindVisibleRefresh, fitCityViewport } from "./visibleFit";
 
 export interface CityMapQuery {
@@ -96,9 +96,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   }
 
   const spots = new Map<string, { sprite: Sprite | null }>();
-  for (let i = 0; i < layout.effects.length; i++) {
-    await placeEffect(views, layout.effects[i]);
-  }
+  const fxHandle: CityEffectHandle = startCityEffects(views, layout.effects, placeBottomLeft);
   for (let i = 0; i < layout.buildings.length; i++) {
     const built = await placeBuilding(views, layout.buildings[i], clickAtom);
     if (built) spots.set(layout.buildings[i].atom, built);
@@ -188,6 +186,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
     root,
     refreshLocks,
     dispose() {
+      fxHandle.stop();
       if (!root.isValid) return;
       root.off(Node.EventType.TOUCH_START, onStart);
       root.off(Node.EventType.TOUCH_MOVE, onMove);
@@ -196,21 +195,6 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   };
 }
 
-async function placeEffect(views: Map<string, Node>, spot: CityEffectSpot): Promise<void> {
-  if (!spot.frame) return;
-  const parent = views.get(spot.parent);
-  if (!parent) return;
-  const frame = await loadFrame(spot.frame);
-  if (!frame) return;
-  const size = frameSizeOf(frame, 64, 64);
-  const node = uiNode(spot.name);
-  const ui = node.addComponent(UITransform);
-  ui.setContentSize(size.w, size.h);
-  ui.setAnchorPoint(0.5, 0.5);
-  node.parent = parent;
-  placeBottomLeft(node, parent, spot.x, spot.y);
-  paintSprite(node, frame);
-}
 
 async function placeBuilding(
   views: Map<string, Node>,

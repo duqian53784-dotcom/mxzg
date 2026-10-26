@@ -3,6 +3,7 @@
  * 路径是 resources 里的 spriteFrame，不带扩展名。
  */
 import { Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { GameLog } from "../core/GameLog";
 import { battleFrameStepMs } from "../config/battleTiming";
 import { armBattleDelay } from "./battleClock";
 import { uiNode } from "./UiKit";
@@ -81,6 +82,10 @@ export function mountFrameReel(parent: Node, size: number, name = "FrameReel"): 
       }
       if (ready.length === 0) {
         node.active = false;
+        GameLog.shared.warn(
+          "BattleFx",
+          "reel empty " + name + " tried=" + paths.slice(0, 3).join(",") + (paths.length > 3 ? "…" : "")
+        );
         if (onResult) onResult(false);
         return;
       }
