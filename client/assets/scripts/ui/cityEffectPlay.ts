@@ -1,16 +1,19 @@
 /**
- * 主城地图特效：序列帧轮播 + spine（dx / chuanghu 等）。
- * CityHub Prefab 已有 fx-* 节点时在其上换帧；spine 型动态建节点。
- * 失败打 GameLog，不静默。
+ * 主城地图特效：序列帧轮播 + spine（dx / chuanghu）。
+ * 序列挂到中景的父节点上、画在近景板之后，避免被建筑图标和近景盖成静帧。
+ * 帧按序号往下要，缺一张就停，不再一次等 64 张不存在的帧。
+ * dx 播不出来时改播 portrait 光球序列。失败打 GameLog。
  */
-import { Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
+import { Node, Sprite, SpriteFrame, UITransform, Vec3, resources } from "cc";
 import { GameLog } from "../core/GameLog";
 import { mountNamedSpine } from "./battleSpine";
-import { CityEffectSpot, effectFrameStem } from "./cityMapLayout";
+import { CITY_SPINE_FRAME_FALLBACK, CityEffectSpot, effectFrameStem, takeFrameRun } from "./cityMapLayout";
 import { uiNode } from "./UiKit";
 
 const FRAME_MS = 80;
-const MAX_FRAMES = 64;
+const FOLLOW_MS = 32;
+const FRAME_WAIT_MS = 1200;
+const FRAME_CAP = 32;
 
 export interface CityEffectHandle {
   stop(): void;
@@ -61,59 +64,13 @@ function mountAnimEffect(
     GameLog.shared.warn("CityFx", "no frame stem for " + spot.name);
     return null;
   }
-  let node = views.get("fx-" + spot.name) || parent.getChildByName("fx-" + spot.name);
-  if (!node) {
-    node = uiNode("fx-" + spot.name);
-    const ui = node.addComponent(UITransform);
-    ui.setContentSize(64, 64);
-    ui.setAnchorPoint(0.5, 0.5);
-    node.parent = parent;
-    views.set("fx-" + spot.name, node);
-  }
-  placeBottomLeft(node, parent, spot.x, spot.y);
-  const sprite = node.getComponent(Sprite) || node.addComponent(Sprite);
-  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-  let token = 0;
-  let timer: ReturnType<typeof setInterval> | null = null;
-  let alive = true;
-  const stop = () => {
-    alive = false;
-    token += 1;
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
+  const node = ensureFxNode(views, parent, spot.name);
+  const stopFollow = followLayer(node, parent, spot.x, spot.y, placeBottomLeft);
+  const stopFrames = playFrameStem(node, stem);
+  return () => {
+    stopFollow();
+    stopFrames();
   };
-  const my = ++token;
-  void loadFrameSequence(stem).then((frames) => {
-    if (!alive || my !== token || !node.isValid) return;
-    if (frames.length === 0) {
-      GameLog.shared.warn("CityFx", "anim frames empty " + stem);
-      return;
-    }
-    const first = frames[0];
-    const size = first.originalSize;
-    const ui = node.getComponent(UITransform);
-    if (ui && size && size.width > 0 && size.height > 0) {
-      ui.setContentSize(size.width, size.height);
-    }
-    let index = 0;
-    sprite.spriteFrame = frames[0];
-    if (frames.length === 1) {
-      GameLog.shared.info("CityFx", "anim static " + stem);
-      return;
-    }
-    timer = setInterval(() => {
-      if (!alive || !node.isValid) {
-        stop();
-        return;
-      }
-      index = (index + 1) % frames.length;
-      sprite.spriteFrame = frames[index];
-    }, FRAME_MS);
-    GameLog.shared.info("CityFx", "anim loop " + stem + " frames=" + frames.length);
-  });
-  return stop;
 }
 
 function mountSpineEffect(
@@ -123,47 +80,156 @@ function mountSpineEffect(
   placeBottomLeft: PlaceFn
 ): (() => void) | null {
   const stem = spot.spine as string;
-  let node = views.get("fx-" + spot.name) || parent.getChildByName("fx-" + spot.name);
-  if (!node) {
-    node = uiNode("fx-" + spot.name);
-    const ui = node.addComponent(UITransform);
-    ui.setContentSize(80, 80);
-    ui.setAnchorPoint(0.5, 0.5);
-    node.parent = parent;
-    views.set("fx-" + spot.name, node);
-  }
-  placeBottomLeft(node, parent, spot.x, spot.y);
-  mountNamedSpine(node, stem, "stand");
+  const node = ensureFxNode(views, parent, spot.name);
+  const stopFollow = followLayer(node, parent, spot.x, spot.y, placeBottomLeft);
+  let stopFrames: (() => void) | null = null;
+  mountNamedSpine(node, stem, "stand", {
+    onFail: () => {
+      const fallback = CITY_SPINE_FRAME_FALLBACK[stem];
+      if (!fallback) return;
+      GameLog.shared.warn("CityFx", "spine miss " + stem + " → " + fallback);
+      stopFrames = playFrameStem(node, fallback);
+    },
+  });
   return () => {
+    stopFollow();
+    if (stopFrames) stopFrames();
     if (node.isValid) node.destroy();
   };
 }
 
-function loadFrameSequence(stem: string): Promise<SpriteFrame[]> {
-  const jobs: Promise<SpriteFrame | null>[] = [];
-  for (let i = 0; i < MAX_FRAMES; i++) jobs.push(loadOne(stem + "-" + String(i)));
-  return Promise.all(jobs).then((all) => {
-    const out: SpriteFrame[] = [];
-    for (let i = 0; i < all.length; i++) {
-      if (!all[i]) break;
-      out.push(all[i] as SpriteFrame);
+function ensureFxNode(views: Map<string, Node>, parent: Node, name: string): Node {
+  let node = views.get("fx-" + name) || parent.getChildByName("fx-" + name);
+  if (!node) {
+    node = uiNode("fx-" + name);
+    const ui = node.addComponent(UITransform);
+    ui.setContentSize(64, 64);
+    ui.setAnchorPoint(0.5, 0.5);
+    node.parent = parent;
+    views.set("fx-" + name, node);
+  }
+  return node;
+}
+
+/**
+ * 近景板是中景的后绘制兄弟，中景里的特效会被它和后挂的建筑图标挡住。
+ * 把特效挂到同一视差父节点的最后，每拍用中景的本地坐标换算世界坐标，滚动仍跟着中景。
+ */
+function followLayer(node: Node, layer: Node, x: number, y: number, placeBottomLeft: PlaceFn): () => void {
+  const host = layer.parent;
+  const ui = layer.getComponent(UITransform) as
+    | (UITransform & {
+        convertToWorldSpaceAR?: (point: Vec3) => Vec3;
+      })
+    | null;
+  if (!host || !ui || typeof ui.convertToWorldSpaceAR !== "function") {
+    placeBottomLeft(node, layer, x, y);
+    if (node.parent) node.setSiblingIndex(Math.max(0, node.parent.children.length - 1));
+    return () => undefined;
+  }
+  const convert = ui.convertToWorldSpaceAR.bind(ui);
+  node.parent = host;
+  node.setSiblingIndex(Math.max(0, host.children.length - 1));
+  let alive = true;
+  const sync = () => {
+    if (!alive || !node.isValid || !layer.isValid) return;
+    const size = ui.contentSize || { width: 0, height: 0 };
+    const ax = typeof ui.anchorX === "number" ? ui.anchorX : 0.5;
+    const ay = typeof ui.anchorY === "number" ? ui.anchorY : 0.5;
+    const world = convert(new Vec3(x - size.width * ax, y - size.height * ay, 0));
+    const setter = node as Node & { setWorldPosition?: (pos: Vec3) => void };
+    if (world && typeof setter.setWorldPosition === "function") setter.setWorldPosition(world);
+    const scale = layer.scale;
+    if (scale) node.setScale(scale.x, scale.y, 1);
+  };
+  sync();
+  const timer = setInterval(sync, FOLLOW_MS);
+  return () => {
+    alive = false;
+    clearInterval(timer);
+  };
+}
+
+function playFrameStem(node: Node, stem: string): () => void {
+  const sprite = node.getComponent(Sprite) || node.addComponent(Sprite);
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  const trimable = sprite as Sprite & { trim?: boolean };
+  if (typeof trimable.trim === "boolean") trimable.trim = false;
+  let timer: ReturnType<typeof setInterval> | null = null;
+  let alive = true;
+  const stop = () => {
+    alive = false;
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
     }
-    return out;
+  };
+  void loadFrameSequence(stem).then((frames) => {
+    if (!alive || !node.isValid) return;
+    if (frames.length === 0) {
+      GameLog.shared.warn("CityFx", "anim frames empty " + stem);
+      return;
+    }
+    applyFrame(node, sprite, frames[0]);
+    if (frames.length === 1) {
+      GameLog.shared.info("CityFx", "anim static " + stem);
+      return;
+    }
+    let index = 0;
+    timer = setInterval(() => {
+      if (!alive || !node.isValid) {
+        stop();
+        return;
+      }
+      index = (index + 1) % frames.length;
+      applyFrame(node, sprite, frames[index]);
+    }, FRAME_MS);
+    GameLog.shared.info("CityFx", "anim loop " + stem + " frames=" + frames.length);
   });
+  return stop;
+}
+
+function applyFrame(node: Node, sprite: Sprite, frame: SpriteFrame): void {
+  sprite.spriteFrame = frame;
+  const size = frame.originalSize;
+  const ui = node.getComponent(UITransform);
+  if (ui && size && size.width > 0 && size.height > 0) ui.setContentSize(size.width, size.height);
+  const dirty = sprite as Sprite & { markForUpdateRenderData?: (force?: boolean) => void };
+  if (typeof dirty.markForUpdateRenderData === "function") dirty.markForUpdateRenderData(true);
+}
+
+function loadFrameSequence(stem: string): Promise<SpriteFrame[]> {
+  const probed: (SpriteFrame | null)[] = [];
+  const step = (index: number): Promise<SpriteFrame[]> => {
+    if (index >= FRAME_CAP) return Promise.resolve(takeFrameRun(probed));
+    return loadOne(stem + "-" + String(index)).then((frame) => {
+      probed.push(frame);
+      if (!frame && index > 0) return takeFrameRun(probed);
+      if (!frame && index === 0) return step(1);
+      return step(index + 1);
+    });
+  };
+  return step(0);
 }
 
 function loadOne(path: string): Promise<SpriteFrame | null> {
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (frame: SpriteFrame | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(frame);
+    };
+    const timer = setTimeout(() => finish(null), FRAME_WAIT_MS);
     try {
       resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
-        if (err || !asset) {
-          resolve(null);
-          return;
-        }
-        resolve(asset);
+        clearTimeout(timer);
+        if (err || !asset) finish(null);
+        else finish(asset);
       });
     } catch (_e) {
-      resolve(null);
+      clearTimeout(timer);
+      finish(null);
     }
   });
 }

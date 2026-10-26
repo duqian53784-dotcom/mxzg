@@ -224,6 +224,7 @@ declare module "cc" {
       skeletonData: SkeletonData | null;
       premultipliedAlpha: boolean;
       setAnimation(track: number, name: string, loop: boolean): void;
+      setCompleteListener(cb: (() => void) | null): void;
       findAnimation(name: string): { name: string } | null;
     }
   }

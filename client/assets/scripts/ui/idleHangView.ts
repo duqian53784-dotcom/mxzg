@@ -13,6 +13,7 @@ import { Color, Node, resources, sp, Sprite, SpriteFrame, UITransform } from "cc
 import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
 import { mountBattleSpine, mountNamedSpine, SpineActor } from "./battleSpine";
+import { harvestCollectClip } from "./cityMapLayout";
 import { hangStemsForFormation, idleHangStemsFrom } from "./idleHangRoster";
 import { mountIdleSkirmish } from "./idleHangSkirmish";
 import { localLineupIds, onLocalLineup } from "./localLineup";
@@ -62,11 +63,7 @@ export function mountIdleHang(parent: Node): Node {
   const floor = spriteNode("IdleFloor", 720, 1280);
   place(floor, root, 0, 0);
   paintSprite(floor, IDLE_HANG_FLOOR);
-
-  const progress = uiNode("IdleProgressSpine");
-  place(progress, root, 0, -500);
-  progress.setScale(1.9, 1.9, 1);
-  mountNamedSpine(progress, "jindutiao", "stand");
+  // 进度光在挂机底栏 AFK 条上（screenFill），不另贴在屏外。
 
   const heroes = uiNode("IdleHeroes");
   place(heroes, root, 0, 0);
@@ -130,6 +127,8 @@ export function paintIdleLoot(hang: Node, icons: string[]): void {
   if (mark.mxzgLoot === key && live && live.isValid) return;
   mark.mxzgLoot = key;
   if (live) live.destroy();
+  const counted = hang as Node & { mxzgLootCount?: number };
+  counted.mxzgLootCount = icons.length;
   if (icons.length === 0) {
     paintIdleLootSpine(hang, 0);
     return;
@@ -146,27 +145,66 @@ export function paintIdleLoot(hang: Node, icons: string[]): void {
   paintIdleLootSpine(hang, icons.length);
 }
 
-/** res-block：按掉落数量切 normal-0..4，数量为 0 时隐藏。 */
+/** 掉落数量对应的 normal 档。0 是空堆，1–3 为 1 档，封顶 4。 */
+export function idleLootLevel(count: number): number {
+  if (!isFinite(count) || count <= 0) return 0;
+  return Math.min(4, Math.max(0, Math.ceil(count / 3)));
+}
+
+/**
+ * 点挂机宝箱时播 res-block 的 collect。
+ * 播完回到当前数量的 normal；数量已经是 0 就藏起来。
+ * 领取回包刷新掉落时不打断这一下。
+ */
+export function playIdleHarvest(hang: Node): void {
+  const count = (hang as Node & { mxzgLootCount?: number }).mxzgLootCount || 0;
+  const host = ensureLootSpine(hang);
+  host.active = true;
+  const mark = host as Node & { mxzgHarvest?: boolean; mxzgLootClip?: string };
+  mark.mxzgHarvest = true;
+  const clip = harvestCollectClip(idleLootLevel(count));
+  mark.mxzgLootClip = clip;
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    if (!host.isValid || !hang.isValid) return;
+    mark.mxzgHarvest = false;
+    mark.mxzgLootClip = "";
+    const left = (hang as Node & { mxzgLootCount?: number }).mxzgLootCount || 0;
+    paintIdleLootSpine(hang, left);
+  };
+  // collect 大约 2.2 秒。没有播完回调时不要把堆停在收起。
+  setTimeout(finish, 2800);
+  mountNamedSpine(host, "res-block", clip, { loop: false, onFail: finish, onComplete: finish });
+}
+
+/** res-block：按掉落数量切 normal-0..4，数量为 0 时隐藏。收起过程中不改动作。 */
 function paintIdleLootSpine(hang: Node, count: number): void {
+  (hang as Node & { mxzgLootCount?: number }).mxzgLootCount = count;
   let host = hang.getChildByName("IdleLootSpine");
+  if (host && (host as Node & { mxzgHarvest?: boolean }).mxzgHarvest) return;
   if (count <= 0) {
     if (host && host.isValid) host.active = false;
     return;
   }
-  const level = Math.min(4, Math.max(0, Math.ceil(count / 3)));
-  const clip = "normal-" + String(level);
+  const clip = "normal-" + String(idleLootLevel(count));
+  host = ensureLootSpine(hang);
+  host.active = true;
+  const mark = host as Node & { mxzgLootClip?: string };
+  if (mark.mxzgLootClip === clip && host.getComponent(sp.Skeleton)) return;
+  mark.mxzgLootClip = clip;
+  mountNamedSpine(host, "res-block", clip);
+}
+
+function ensureLootSpine(hang: Node): Node {
+  let host = hang.getChildByName("IdleLootSpine");
   if (!host) {
     host = uiNode("IdleLootSpine");
     place(host, hang, 8, -200);
     host.setScale(0.42, 0.42, 1);
   }
-  host.active = true;
-  const mark = host as Node & { mxzgLootClip?: string };
-  if (mark.mxzgLootClip === clip && host.getComponent(sp.Skeleton)) return;
-  mark.mxzgLootClip = clip;
-  const old = host.getComponent(sp.Skeleton);
-  if (old) old.destroy();
-  mountNamedSpine(host, "res-block", clip);
+  return host;
 }
 
 /** Prefab 计时泡的子节点偏移是按底板算的。收到挂机地上，盖在掉落堆上沿。只挪一次。 */

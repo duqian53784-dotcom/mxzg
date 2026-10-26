@@ -3,7 +3,7 @@
  * 挂在 SafeFrame 上，根节点是设计分辨率 720×1280，不再按父节点 2000 放大。
  * Prefab 加载失败时用同一批 resources 贴图搭一份。
  */
-import { BlockInputEvents, Button, Color, Mask, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
+import { BlockInputEvents, Button, Color, Label, Mask, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
 import { ConfigLoader } from "../config/ConfigLoader";
 import { mountNamedSpine } from "./battleSpine";
 import { findNode, loadPrefab, spawnPrefab } from "./prefabLoad";
@@ -17,6 +17,12 @@ const FILL_LEFT = -FILL_W / 2;
 const TIP_MS = 3500;
 const SPINE_STEM = "jindutiao";
 const SPINE_CLIP = "stand";
+/** 提示字。清单要求 #ffeeb2。 */
+export const BOOT_TIP_COLOR = new Color(255, 238, 178, 255);
+/** 阶段字（检查版本 / 登录 / 同步角色）。 */
+export const BOOT_STAGE_COLOR = new Color(255, 244, 220, 255);
+/** 百分比。 */
+export const BOOT_PERCENT_COLOR = new Color(255, 248, 230, 255);
 
 export type BootChromeKind = "loading" | "update";
 
@@ -115,6 +121,7 @@ export class BootChrome {
     this.stage = text;
     const node = this.child("Message");
     if (node) setText(node, text);
+    tintLabel(node, BOOT_STAGE_COLOR);
   }
 
   setRatio(ratio: number): void {
@@ -133,6 +140,7 @@ export class BootChrome {
     if (head) head.setPosition(FILL_LEFT + width, head.position.y, 0);
     const percent = this.child("Percent");
     if (percent) setText(percent, Math.round(clamped * 100) + "%");
+    tintLabel(percent, BOOT_PERCENT_COLOR);
   }
 
   setTips(lines: string[]): void {
@@ -212,6 +220,7 @@ export class BootChrome {
     }
     const node = this.child("Tips");
     if (node) setText(node, this.tips[this.tipIndex]);
+    tintLabel(node, BOOT_TIP_COLOR);
   }
 
   private mountSpine(): void {
@@ -267,7 +276,7 @@ export class BootChrome {
     bg.parent = root;
     paintSprite(bg, bgSprite, "ui/login/bg-loading");
 
-    const message = createLabel("", 24, { color: new Color(255, 244, 220, 255), width: 660, height: 72 });
+    const message = createLabel("", 24, { color: BOOT_STAGE_COLOR, width: 660, height: 72 });
     message.name = "Message";
     place(message, root, 0, -390);
 
@@ -278,7 +287,7 @@ export class BootChrome {
     place(plate, root, 0, -448);
     paintSprite(plate, plateSprite, "ui/common/loading_text-bg");
 
-    const percent = createLabel("0%", 22, { color: new Color(255, 248, 230, 255), width: 160 });
+    const percent = createLabel("0%", 22, { color: BOOT_PERCENT_COLOR, width: 160 });
     percent.name = "Percent";
     place(percent, root, 0, -448);
 
@@ -325,7 +334,7 @@ export class BootChrome {
     place(head, root, FILL_LEFT, -500);
     paintSprite(head, headSprite, "ui/common/loading_spr-progress-1");
 
-    const tips = createLabel("", 20, { color: new Color(255, 238, 178, 255), width: 660, height: 80 });
+    const tips = createLabel("", 20, { color: BOOT_TIP_COLOR, width: 660, height: 80 });
     tips.name = "Tips";
     place(tips, root, 0, -580);
 
@@ -335,6 +344,12 @@ export class BootChrome {
     place(retry, root, 0, -280);
     return root;
   }
+}
+
+function tintLabel(node: Node | null, color: Color): void {
+  if (!node) return;
+  const label = node.getComponent(Label);
+  if (label) label.color = color;
 }
 
 function paintSprite(node: Node, sprite: Sprite, path: string): void {

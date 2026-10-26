@@ -46,13 +46,33 @@ const VFX_SCALE: { [stem: string]: number } = {
   act: 0.4,
 };
 
-/** 进度条这类单节点特效。失败只留空节点，不抛。 */
-export function mountNamedSpine(host: Node, stem: string, clip: string): void {
+export interface NamedSpinePlay {
+  /** 缺省循环。收起这类动作传 false，播完走 onComplete。 */
+  loop?: boolean;
+  onFail?: () => void;
+  onComplete?: () => void;
+}
+
+/** 进度条、掉落堆这类单节点特效。失败只留空节点并回调，不抛。 */
+export function mountNamedSpine(host: Node, stem: string, clip: string, play?: NamedSpinePlay): void {
+  const loop = !play || play.loop !== false;
+  const fail = (): void => {
+    GameLog.shared.warn("BattleSpine", "named miss spine/" + stem + " clip=" + clip);
+    if (play && play.onFail) play.onFail();
+  };
+  const arm = (view: sp.Skeleton): void => {
+    view.setAnimation(0, clip, loop);
+    if (loop || !play || !play.onComplete) return;
+    const done = play.onComplete;
+    const listen = view as sp.Skeleton & { setCompleteListener?: (cb: (() => void) | null) => void };
+    if (typeof listen.setCompleteListener === "function") listen.setCompleteListener(() => done());
+    else setTimeout(done, 2400);
+  };
   try {
     resources.load("spine/" + stem, sp.SkeletonData, (err, asset) => {
       if (!host.isValid) return;
       if (err || !asset) {
-        GameLog.shared.warn("BattleSpine", "named miss spine/" + stem + " clip=" + clip);
+        fail();
         return;
       }
       try {
@@ -67,13 +87,13 @@ export function mountNamedSpine(host: Node, stem: string, clip: string): void {
             /* no default skin */
           }
         }
-        view.setAnimation(0, clip, true);
+        arm(view);
       } catch (_err) {
-        GameLog.shared.warn("BattleSpine", "named play fail spine/" + stem + " clip=" + clip);
+        fail();
       }
     });
   } catch (_err) {
-    GameLog.shared.warn("BattleSpine", "named load throw spine/" + stem);
+    fail();
   }
 }
 
