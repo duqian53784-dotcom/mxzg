@@ -208,12 +208,29 @@ export function fallbackAttackTitle(skillName: string | null, line: string, clip
   return null;
 }
 
-/** 「第N回合」补上 /15。对不上的句子原样返回，不写成第 0 回合。 */
+/** 战报行里的回合号。「第N回合」和「回合 N」都认。站场、对不上时是 null。 */
+export function battleRoundNumber(line: string): number | null {
+  if (!line) return null;
+  const numbered = /第\s*(\d+)\s*回合/.exec(line);
+  const plain = numbered ? null : /回合\s*(\d+)/.exec(line);
+  const matched = numbered || plain;
+  if (!matched) return null;
+  const n = Number(matched[1]);
+  if (!isFinite(n) || n < 1) return null;
+  return Math.floor(n);
+}
+
+/**
+ * 「第N回合」写成「第N/15回合」。
+ * 真服行是「回合 N · …」，只留「N/15」，不把整句战报塞进回合牌。
+ * 对不上的句子原样返回，不写成第 0 回合。
+ */
 export function formatBattleRound(line: string, cap = 15): string {
-  const matched = /第\s*(\d+)\s*回合/.exec(line);
-  if (!matched) return line;
+  const n = battleRoundNumber(line);
+  if (n === null) return line;
   const total = cap >= 1 ? Math.floor(cap) : 15;
-  return "第" + matched[1] + "/" + total + "回合";
+  if (/第\s*\d+\s*回合/.test(line)) return "第" + n + "/" + total + "回合";
+  return n + "/" + total;
 }
 
 /**
@@ -234,9 +251,25 @@ export function signedHpDeltas(prev: readonly (number | null)[], next: readonly 
   return out;
 }
 
+/**
+ * 命中里的 hurt 是伤害大小，正数是掉血。飘字要带符号：掉血为负，治疗为正。
+ * 已经是血量差（signedHpDeltas）的不要再走这里。
+ */
+export function signedHitFloats(floats: BattleFloatCue[]): BattleFloatCue[] {
+  const out: BattleFloatCue[] = [];
+  for (let i = 0; i < floats.length; i++) {
+    const row = floats[i];
+    const hurt = row.hurt;
+    if (typeof hurt !== "number" || !isFinite(hurt) || hurt === 0) continue;
+    out.push({ anchor: row.anchor, crit: row.crit, hurt: -hurt });
+  }
+  return out;
+}
+
 export function floatHurtText(hurt: number): string {
-  if (typeof hurt !== "number" || !isFinite(hurt)) return "";
-  return String(hurt);
+  if (typeof hurt !== "number" || !isFinite(hurt) || hurt === 0) return "";
+  if (hurt < 0) return String(hurt);
+  return "+" + String(hurt);
 }
 
 export function critBubbleText(crit: boolean): string | null {
@@ -330,7 +363,7 @@ function pushSide(
   const n = Math.min(heroes.length, 3);
   for (let i = 0; i < n; i++) {
     const slot = nthSide(slots, side, i);
-    if (slot < 0) return;
+    if (slot < 0) continue;
     rows.push({
       slot,
       level: readHeroLevel(heroes[i]),

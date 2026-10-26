@@ -76,8 +76,11 @@ import {
   BATTLE_MIN_BEAT_MS,
   battleBeatWait,
   battleCastWait,
+  battleRoundNumber,
   battleSkillTitle,
   beatShowsCrit,
+  formatBattleRound,
+  signedHitFloats,
   nextBattleSpeed,
   overheadLevelText,
   planBattlePresentation,
@@ -691,6 +694,8 @@ import {
   decodeWireIdleClaim,
   formatWireIdle,
   formatWireIdleProbe,
+  wireIdleCapMs,
+  wireIdleElapsedMs,
   WIRE_IDLE_CLAIM_CMD,
   WIRE_IDLE_CMD,
   WIRE_IDLE_FRAME,
@@ -15869,6 +15874,10 @@ async function checkWs(): Promise<void> {
       roundPresent.beats[1].skillName !== "圣光打击" &&
       roundPresent.beats[1].floats.length === 1 &&
       roundPresent.beats[1].floats[0].hurt === 15 &&
+      signedHitFloats(roundPresent.beats[1].floats)[0].hurt === -15 &&
+      formatBattleRound(attackBeat.line, 15) === "1/15" &&
+      formatBattleRound("第2回合", 15) === "第2/15回合" &&
+      battleRoundNumber("站场") === null &&
       roundPresent.beats[1].floats[0].crit === false &&
       roundPresent.beats[1].floats[0].anchor === 1 &&
       !beatShowsCrit(roundPresent.beats[1].floats) &&
@@ -17406,6 +17415,10 @@ async function checkWs(): Promise<void> {
     );
     const idleMaxUnix = formatWireIdle({ rewardTime: 1792464848, maxRewardTime: 1792469999 }, 1792464848 + 10);
     assert(idleMaxUnix.duration.indexOf("上限未同步") >= 0, "unix max is not a duration cap");
+    assert(wireIdleElapsedMs(1792464848, (1792464848 + 90) * 1000) === 90000, "hang clock uses reward_time once");
+    assert(wireIdleElapsedMs(0, Date.now()) === 0 && wireIdleElapsedMs(null, Date.now()) === 0, "small reward_time does not start a local clock");
+    assert(wireIdleCapMs(28800, 21600000) === 28800000 && wireIdleCapMs(1792469999, 21600000) === 21600000, "max_reward_time seconds cap the hang clock");
+    assert(wireIdleCapMs(0, 21600000) === 0, "max_reward_time 0 stays a zero cap");
     assert(decodeWireIdle(new Uint8Array(0)) === null, "empty 3004 ignored");
     assert(decodeWireIdle(new Uint8Array([0x80])) === null, "bad 3004 ignored");
     assert(

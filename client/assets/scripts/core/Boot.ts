@@ -621,6 +621,14 @@ export class Boot extends Component {
     void this.onMockLoginClicked(panel, false);
   }
 
+  /** 登录或创角中途换了连接时，把进入按钮放开。组件已经拆掉就不动面板。 */
+  private dropAuthBusy(panel?: { setBusy(on: boolean): void } | null): void {
+    this.authBusy = false;
+    if (!this.alive) return;
+    if (panel) panel.setBusy(false);
+    else if (this.loginPanel) this.loginPanel.setBusy(false);
+  }
+
   private async probeLocalWs(): Promise<void> {
     if (!this.alive || this.entering || this.authBusy) return;
     this.authBusy = true;
@@ -628,8 +636,11 @@ export class Boot extends Component {
     if (panel) panel.setBusy(true);
     const epoch = this.wsEpoch;
     const opened = await this.openWs(epoch);
-    if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
-    if (!opened) return;
+    if (!this.alive) return;
+    if (epoch !== this.wsEpoch || !this.useWs || !opened) {
+      this.dropAuthBusy(this.loginPanel);
+      return;
+    }
     if (this.loginPanel) this.loginPanel.setBusy(false);
     this.authBusy = false;
     GameLog.shared.info("Boot", WS_OPEN_STATUS);
@@ -699,8 +710,11 @@ export class Boot extends Component {
     panel.setBusy(true);
     const epoch = this.wsEpoch;
     const opened = await this.openWs(epoch);
-    if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
-    if (!opened) return;
+    if (!this.alive) return;
+    if (epoch !== this.wsEpoch || !this.useWs || !opened) {
+      this.dropAuthBusy(panel);
+      return;
+    }
     const account = resolveAccount(panel.account(), this.account);
     const serverId = panel.serverId();
     this.wsAccount = account;
@@ -720,7 +734,11 @@ export class Boot extends Component {
       const msg = await this.ensureWsNet().request("login", { account, nowSec }, 5000);
       body = wireBody(msg.data);
     } catch (err) {
-      if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+      if (!this.alive) return;
+      if (epoch !== this.wsEpoch || !this.useWs) {
+        this.dropAuthBusy(panel);
+        return;
+      }
       const kind = wireTimeoutKind(err);
       const text = kind ? kind + " 请求超时" : messageOf(err);
       if (this.chrome) this.chrome.hide();
@@ -743,7 +761,11 @@ export class Boot extends Component {
       this.showBootToast(text);
       return;
     }
-    if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+    if (!this.alive) return;
+    if (epoch !== this.wsEpoch || !this.useWs) {
+      this.dropAuthBusy(panel);
+      return;
+    }
     const summary = summarizeLoginReply(body);
     GameLog.shared.info("Boot", summary.status + " " + summary.detail);
     if (wireRoleReady(summary) && summary.roleId !== null) {
@@ -754,7 +776,10 @@ export class Boot extends Component {
     if (create && summary.empty) {
       const parent = panel.root.parent;
       setTimeout(() => {
-        if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+        if (!this.alive || epoch !== this.wsEpoch || !this.useWs) {
+          this.dropAuthBusy(null);
+          return;
+        }
         this.destroyAuthPanels();
         if (parent && parent.isValid) this.showCreate(parent, account, false, true);
         else this.authBusy = false;
@@ -997,11 +1022,19 @@ export class Boot extends Component {
     this.face(STAGE_LOGIN);
     try {
       const createdMsg = await net.request("role.create", { name }, 5000);
-      if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+      if (!this.alive) return;
+      if (epoch !== this.wsEpoch || !this.useWs) {
+        this.dropAuthBusy(panel);
+        return;
+      }
       const created = summarizeCreateReply(wireBody(createdMsg.data));
       GameLog.shared.info("Boot", created.status);
       const againMsg = await net.request("login", { account: this.wsAccount, nowSec: Math.floor(Date.now() / 1000) }, 5000);
-      if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+      if (!this.alive) return;
+      if (epoch !== this.wsEpoch || !this.useWs) {
+        this.dropAuthBusy(panel);
+        return;
+      }
       const again = summarizeLoginReply(wireBody(againMsg.data));
       GameLog.shared.info("Boot", "创角后 " + again.status + " " + again.detail);
       if (wireRoleReady(again) && again.roleId !== null) {
@@ -1014,7 +1047,11 @@ export class Boot extends Component {
       this.authBusy = false;
       this.showBootToast(again.status);
     } catch (err) {
-      if (!this.alive || epoch !== this.wsEpoch || !this.useWs) return;
+      if (!this.alive) return;
+      if (epoch !== this.wsEpoch || !this.useWs) {
+        this.dropAuthBusy(panel);
+        return;
+      }
       const kind = wireTimeoutKind(err);
       const text = kind ? kind + " 请求超时" : messageOf(err);
       if (this.chrome) this.chrome.hide();

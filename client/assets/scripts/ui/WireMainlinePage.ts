@@ -150,7 +150,7 @@ import { mountBattleEnd } from "./battleEndView";
 import { armBattleDelay } from "./battleClock";
 import { battleFrameStep, FrameReel, mountFrameReel, warmBattleFrames } from "./battleFramePlay";
 import { battleCastFrameCount, effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
-import { battleCastWait, BattlePresentation, fallbackAttackTitle, formatBattleRound, nextBattleSpeed, planBattlePresentation, playbackBeats, signedHpDeltas } from "./battlePresentation";
+import { battleCastWait, battleRoundNumber, BattlePresentation, fallbackAttackTitle, formatBattleRound, nextBattleSpeed, planBattlePresentation, playbackBeats, signedHitFloats, signedHpDeltas } from "./battlePresentation";
 import { barsFromSides, beginHangBattle, bindHangSkip, bindHangSpeed, finishHangBattle, setHangSpeed, showHangStrike, stopHangBattle } from "./hangBattle";
 import {
   BattlePresentMount,
@@ -287,6 +287,10 @@ class WireMainlineController implements WireMainlinePage {
   private foughtStage = 1;
   /** 1、2、3。只缩短拍子，跳过和撤退不看这个数。 */
   private playSpeed = 1;
+  /** 挂机条上的回合。站场没有回合号时先显示 1，读到「回合 N」再改。 */
+  private hangRound = 1;
+  /** battletype.round_max。表没读到时用 15。 */
+  private roundTotal = 15;
   private endOpen = false;
   private endLayer: Node | null = null;
   private speedButton: Node | null = null;
@@ -1116,6 +1120,8 @@ class WireMainlineController implements WireMainlinePage {
       GameLog.shared.warn("Mainline", "battle present beats " + present.beats.length + " / plan " + plan.beats.length);
     }
     const cap = battleRoundMax(snap.report.battleType === null ? 1 : snap.report.battleType);
+    this.roundTotal = cap !== null && cap >= 1 ? cap : 15;
+    this.hangRound = 1;
     GameLog.shared.info(
       "Mainline",
       "frame step " +
@@ -1599,7 +1605,7 @@ class WireMainlineController implements WireMainlinePage {
       const label = this.hpLabels[i];
       if (label && label.isValid) setText(label, hpText(plan.slots[i], this.hpNow[i]));
     }
-    if (this.roundLabel && this.roundLabel.isValid) setText(this.roundLabel, formatBattleRound(beat.line));
+    if (this.roundLabel && this.roundLabel.isValid) setText(this.roundLabel, formatBattleRound(beat.line, this.roundTotal));
     this.logLines.push(beat.line);
     if (this.logLines.length > 4) this.logLines.shift();
     if (this.logLabel && this.logLabel.isValid) setText(this.logLabel, this.logLines.join("\n"));
@@ -1740,7 +1746,7 @@ class WireMainlineController implements WireMainlinePage {
     if (present && index >= 0 && index < present.beats.length) {
       const row = present.beats[index];
       skill = row.skillName;
-      if (row.floats.length > 0) floats = row.floats;
+      if (row.floats.length > 0) floats = signedHitFloats(row.floats);
     }
     const clips: string[] = [];
     for (let i = 0; i < beat.cues.length; i++) clips.push(beat.cues[i].clip);
@@ -1761,7 +1767,7 @@ class WireMainlineController implements WireMainlinePage {
     let rows = signedHpDeltas(prevHp, this.hpNow);
     if (present && index >= 0 && index < present.beats.length) {
       skill = present.beats[index].skillName;
-      if (present.beats[index].floats.length > 0) rows = present.beats[index].floats;
+      if (present.beats[index].floats.length > 0) rows = signedHitFloats(present.beats[index].floats);
     }
     const clips: string[] = [];
     for (let i = 0; i < beat.cues.length; i++) clips.push(beat.cues[i].clip);
@@ -1778,7 +1784,10 @@ class WireMainlineController implements WireMainlinePage {
         crit: rows[i].crit === true,
       });
     }
-    const round = index >= 0 ? index + 1 : 1;
+    const parsed = battleRoundNumber(beat.line);
+    if (parsed !== null) this.hangRound = parsed;
+    const round = this.hangRound >= 1 ? this.hangRound : 1;
+    const total = this.roundTotal >= 1 ? this.roundTotal : 15;
     const allies: { hp: number; maxHp: number }[] = [];
     const enemies: { hp: number; maxHp: number }[] = [];
     for (let i = 0; i < plan.slots.length; i++) {
@@ -1789,7 +1798,7 @@ class WireMainlineController implements WireMainlinePage {
       if (slot.side === "ally") allies.push(row);
       else if (slot.side === "enemy") enemies.push(row);
     }
-    showHangStrike(this.node, round, 15, skill, floats, barsFromSides(allies, enemies, Math.min(1, round / 15)));
+    showHangStrike(this.node, round, total, skill, floats, barsFromSides(allies, enemies, Math.min(1, round / total)));
   }
 
   /** 空着的前排后排先藏起来。点到的人才打开，沙地上不留一排色块。 */
