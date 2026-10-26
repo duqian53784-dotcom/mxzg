@@ -4,6 +4,7 @@
  * 行军时大家播 run，天和大理石往左循环。遇到怪就改站立，背景停。
  * 怪从右侧滑进格子。滑到位并且骨架出来之后才出刀。受击只打在被打的那只怪上。
  * 怪收掉之后我方接着跑。不把我方当成新刷出来的人。
+ * 奇数刀：皮肤套名对得上技能帧就叠主套、分套和箭矢；对不上仍是 hero-skill。
  * 飘字只是演出，不写钱包，不发 3001 / 3004 / 3005。
  * 点中间「战斗」进入真战报时暂停，回到挂机再继续。
  */
@@ -12,7 +13,7 @@ import { chapterEnemies } from "../config/gameCatalog";
 import { GameLog } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
 import { WIRE_SPINE_ENEMY_STEMS, WIRE_SPINE_HIT_STEM, wireSpineHasClip, wireSpineVfxClip } from "../net/protocol/wireBattle";
-import { skillFramePaths, hitFramePaths } from "./battleFrames";
+import { hangSkillVfx } from "./battleFrames";
 import { mountFrameReel } from "./battleFramePlay";
 import { mountBattleSpine, SpineActor } from "./battleSpine";
 import { placeHangFloats } from "./hangFloat";
@@ -78,6 +79,12 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
   const floats = place(uiNode("IdleSkirmishFloats"), fx, 0, 0);
   const skillReel = mountFrameReel(fx, 280, "IdleSkillReel");
   const hitReel = mountFrameReel(fx, 200, "IdleHitReel");
+  const layerReels = [
+    mountFrameReel(fx, 260, "IdleSkillLayer0"),
+    mountFrameReel(fx, 260, "IdleSkillLayer1"),
+    mountFrameReel(fx, 260, "IdleSkillLayer2"),
+  ];
+  const arrowReel = mountFrameReel(fx, 280, "IdleSkillArrow");
   let actors: SpineActor[] = [];
   let wave = 0;
   let swingCursor = 0;
@@ -216,6 +223,8 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
   function stopStrikeFx(): void {
     skillReel.stop();
     hitReel.stop();
+    arrowReel.stop();
+    for (let i = 0; i < layerReels.length; i++) layerReels[i].stop();
     if (puffNode && puffNode.isValid) puffNode.active = false;
     placeHangFloats(floats, []);
   }
@@ -431,7 +440,7 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     if (damaged.actor && wireSpineHasClip(damaged.plan.stem, "hit")) damaged.actor.play("hit");
     const spot = IDLE_SKIRMISH_SPOTS[damaged.plan.spot];
     placeHangFloats(floats, [{ text: "-" + blow.hurt, x: spot.x, y: spot.y + 108, heal: false }]);
-    playSwingFx(clip, spot.x, spot.y);
+    playSwingFx(clip, spot.x, spot.y, ally ? ally.stem : null);
     puff(spot.x, spot.y + 40);
     raiseFx();
     plantAllies();
@@ -466,18 +475,37 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
   }
 
-  function playSwingFx(clip: "attack" | "attack2", x: number, y: number): void {
-    const skill = clip === "attack2";
-    if (skill) {
+  function playSwingFx(clip: "attack" | "attack2", x: number, y: number, stem: string | null): void {
+    const stack = hangSkillVfx(stem, clip === "attack2");
+    if (stack.skill.length > 0) {
       skillReel.node.setPosition(x, y + 48, 0);
-      skillReel.play(skillFramePaths(null), (ok) => {
-        if (!ok) GameLog.shared.warn("IdleHang", "skill reel miss hero-skill");
+      skillReel.play(stack.skill, (ok) => {
+        if (!ok) GameLog.shared.warn("IdleHang", "skill reel miss " + (stem || "hero-skill"));
       });
     } else {
       skillReel.stop();
     }
+    for (let i = 0; i < layerReels.length; i++) {
+      const paths = i < stack.layers.length ? stack.layers[i] : [];
+      if (paths.length === 0) {
+        layerReels[i].stop();
+        continue;
+      }
+      layerReels[i].node.setPosition(x, y + 48, 0);
+      layerReels[i].play(paths, (ok) => {
+        if (!ok) GameLog.shared.warn("IdleHang", "skill layer miss " + (stem || ""));
+      });
+    }
+    if (stack.arrow.length > 0) {
+      arrowReel.node.setPosition(x, y + 56, 0);
+      arrowReel.play(stack.arrow, (ok) => {
+        if (!ok) GameLog.shared.warn("IdleHang", "skill arrow miss " + (stem || ""));
+      });
+    } else {
+      arrowReel.stop();
+    }
     hitReel.node.setPosition(x, y + 24, 0);
-    hitReel.play(hitFramePaths(null), (ok) => {
+    hitReel.play(stack.hit, (ok) => {
       if (!ok) GameLog.shared.warn("IdleHang", "hit reel miss hero-beattack");
     });
   }

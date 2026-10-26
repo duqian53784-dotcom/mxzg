@@ -12,7 +12,7 @@ Boot 场景按旧工程的顺序走完才进 Main：logo、版本比较、热更
 
 | 顺序 | GameLog | 屏幕上的字 | 做什么 |
 |---|---|---|---|
-| 1 | | logo | 节点 `logo-scene_spr-logo` 淡入 1 秒、停 1 秒、淡出 0.5 秒。点一下跳过停留和淡出。`bgm-logo` 从淡入开始循环，进 Main 时停 |
+| 1 | | logo | 节点 `logo-scene_spr-logo` 淡入 1 秒、停 1 秒、淡出 0.5 秒。点一下跳过停留和淡出。`bgm-logo` 从淡入开始循环，进 Main 时停。字标文件仍是 3×3 时，画面改成左右饰纹拼的焰环 |
 | 2 | `version` | 检查版本 | 读 `config/version` 的整数 `version`，再向 `platform_urls` 和 `download_urls` 要远程版本。拉不到不挡 |
 | 3 | `hot-update` | 更新资源 | 远程更大才打开 UpdateLayer。相等、本地更新，或远程拉不到，则跳过下载 |
 | 4 | `assets` | 加载资源 | 预加载底图、进度条、`spine/jindutiao`、`audio/bgm-logo` |
@@ -23,7 +23,7 @@ Boot 场景按旧工程的顺序走完才进 Main：logo、版本比较、热更
 
 旧 lua 不在仓库里。logo 这三段时间写在 `client/assets/scripts/ui/logoSplash.ts` 的 `LOGO_FADE_IN_SEC`、`LOGO_HOLD_SEC`、`LOGO_FADE_OUT_SEC`。
 
-`logo-scene_spr-logo.png` 是失败的图集抽出：文件 69 字节，IHDR 3×3。启动仍用这一张，没有另做 logo。
+`logo-scene_spr-logo.png` 仍是失败的图集抽出：文件 69 字节，IHDR 3×3。宽或高不超过 `LOGO_SPECK_MAX`（8）就不显示这张。开机改用已经抽出的 `logo-scene_spr-parttern-l` / `logo-scene_spr-parttern-r`，拉到高 820、中间叠 210，拼成焰环。以后字标本身大于 8×8，就只显示那一张，不再叠饰纹。
 
 ## 版本和热更
 
