@@ -6,6 +6,7 @@
  * 站场优先 MAIN 阵容：hero_id 经名册 hero_type 对已有皮肤，再走内存里的 spine 升级。
  * 阵容是空的才用三套默认。加载失败把格子藏起来，不写套名。
  * 不给每个站位写「待命」。计时泡只有 Prefab 里那一个，挪到掉落堆上。
+ * 左英雄头顶另挂一句 herotalk，进真战报时藏起来。
  * main-scene_spr-drop-1 是空的蓝金匾，不拿来当掉落堆。
  * 站场一次铺上 idleHangStems 返回的每一只（最多三格），演武不拆它们。点「战斗」才进真战报。
  */
@@ -17,6 +18,7 @@ import { mountBattleSpine, mountNamedSpine, SpineActor } from "./battleSpine";
 import { harvestCollectClip } from "./cityMapLayout";
 import { hangStemsForFormation, idleHangStemsFrom } from "./idleHangRoster";
 import { mountIdleSkirmish } from "./idleHangSkirmish";
+import { mountHangTalk } from "./idleHangTalk";
 import { IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
 import { localLineupIds, onLocalLineup } from "./localLineup";
 import { bindVisibleRefresh, fitVisibleRoot } from "./visibleFit";
@@ -67,6 +69,7 @@ export function mountIdleHang(parent: Node): Node {
 
   const heroes = uiNode("IdleHeroes");
   place(heroes, root, 0, 0);
+  mountHangTalk(root);
   const skirmish = mountIdleSkirmish(root);
   let painted = "";
   const paint = () => {

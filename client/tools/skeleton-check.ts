@@ -118,6 +118,20 @@ import {
   IDLE_SKIRMISH_FALLBACK_STEMS,
 } from "../assets/scripts/ui/idleHangSkirmishPlan";
 import {
+  BATTLE_APPEAR_FRAME_COUNT,
+  BATTLE_APPEAR_LEFT,
+  BATTLE_APPEAR_RIGHT,
+  battleAppearFramePaths,
+} from "../assets/scripts/ui/battleAppear";
+import { battleNumberFontPath, battleNumberKind, bitmapNumberText } from "../assets/scripts/ui/battleNumberFont";
+import {
+  hangTalkAnchor,
+  heroTalkCandidates,
+  pickHeroTalkLan,
+  plainTalk,
+  readHeroTalkRows,
+} from "../assets/scripts/ui/idleHangTalkPlan";
+import {
   EFFECT_RUNS,
   HIT_RUNS,
   SKILL_RUNS,
@@ -27017,6 +27031,61 @@ function checkCityHub(): void {
       hangBattleSrc.indexOf("battle-scene_btn-speed-11") >= 0 &&
       hangSrc.indexOf("挂机掉落堆 spine/res-block 没有挂上，仍用图标堆") >= 0,
     "battle replay lifts onto the hang shell and missing open/loot effects stay visible"
+  );
+  const leftAppear = battleAppearFramePaths("left");
+  const rightAppear = battleAppearFramePaths("right");
+  assert(
+    leftAppear.length === BATTLE_APPEAR_FRAME_COUNT &&
+      leftAppear[0] === "ui/battle/battle-appear-left_0" &&
+      leftAppear[14] === "ui/battle/battle-appear-left_14" &&
+      rightAppear[0] === "ui/battle/battle-appear-right_0" &&
+      rightAppear[14] === "ui/battle/battle-appear-right_14" &&
+      BATTLE_APPEAR_LEFT.x === -180 &&
+      BATTLE_APPEAR_LEFT.y === 0 &&
+      BATTLE_APPEAR_RIGHT.x === 180 &&
+      BATTLE_APPEAR_RIGHT.y === 0,
+    "battle open frames use the LayerAppear anchors and the 0-14 runs"
+  );
+  assert(
+    bitmapNumberText("-48") === "-48" &&
+      bitmapNumberText("+12") === "+12" &&
+      bitmapNumberText("暴击 -48") === null &&
+      bitmapNumberText("") === null &&
+      battleNumberFontPath("dmg") === "font/yellow-73" &&
+      battleNumberFontPath("crit") === "font/red-73" &&
+      battleNumberFontPath("heal") === "font/green-73" &&
+      battleNumberKind(false, true) === "crit" &&
+      battleNumberKind(true, true) === "heal",
+    "float digits use yellow, red, and green bitmap fonts and leave words on the system font"
+  );
+  const talkFile = JSON.parse(readFileSync(join(configDir(), "herotalk.json"), "utf8")) as { rows?: unknown };
+  const talkRows = readHeroTalkRows(talkFile);
+  const talkAt = hangTalkAnchor({ x: -150, y: -30 }, 120);
+  assert(
+    talkRows.length === 53 &&
+      pickHeroTalkLan(talkRows, 1, 0) === 70901 &&
+      heroTalkCandidates(talkRows, 1).every((row) => row.levelMin <= 1) &&
+      heroTalkCandidates(talkRows, 3).every((row) => row.lan !== 70914) &&
+      plainTalk("十连召唤<font color='#ec4529'>必出五星</font>呀") === "十连召唤必出五星呀" &&
+      talkAt.x === -60 &&
+      talkAt.y === 198,
+    "hang talk cycles herotalk by level and does not invent a sentence"
+  );
+  const talkSrc = readFileSync(uiSource("idleHangTalk.ts"), "utf8");
+  const cityLayoutSrc = readFileSync(uiSource("cityMapLayout.ts"), "utf8");
+  assert(
+    hangSrc.indexOf("IdleTalk") < 0 &&
+      hangSrc.indexOf("mountHangTalk") >= 0 &&
+      talkSrc.indexOf("IdleTalk") >= 0 &&
+      talkSrc.indexOf("other_spr-bubble-5") >= 0 &&
+      talkSrc.indexOf("herotalk") >= 0 &&
+      talkSrc.indexOf("待命") < 0 &&
+      talkSrc.indexOf("3013") < 0 &&
+      hangBattleSrc.indexOf("HangAppearLeft") >= 0 &&
+      hangBattleSrc.indexOf("HangAppearRight") >= 0 &&
+      hangBattleSrc.indexOf("开战出场帧 battle-appear 没有挂上，仍写战斗开始") >= 0 &&
+      cityLayoutSrc.indexOf("不另摆位置") >= 0,
+    "hang talk is one herotalk bubble, battle open plays appear frames, and city clouds stay unplaced"
   );
   const wireMainlineSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
   assert(

@@ -110,7 +110,7 @@ Creator 3.8.8 打开 `client`。要看这张战斗页，预览地址加 `?transp
 | `AppearRight` | (180, 0) | 360×1280 | 空挂点。帧在 `ui/battle/battle-appear-right_0`–`14` |
 | `VsBar` | (0, 240) | 80×46 | `battle-end_spr-vs`，白色，简单模式 |
 
-飘字 Label 仍是 `font/FZCSJW-GB1-0.ttf`。BMFont 已入库、还没挂到 Label：伤害 `font/yellow-73`，暴击 `font/red-73`。同包还有技能 `font/blue-73`、治疗 `font/green-73`。
+飘字数字挂已入库的 BMFont：掉血 `font/yellow-73`，暴击 `font/red-73`，治疗 `font/green-73`。这三套只有加号、减号和数字，「暴击」两个字仍是旁边的系统字。`font/blue-73` 同样只有数字，技能名继续用系统字。字库没挂上时退回红字、绿字和金字。
 
 ### 场内表现挂点
 
