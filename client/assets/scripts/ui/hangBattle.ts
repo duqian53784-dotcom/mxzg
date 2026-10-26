@@ -11,8 +11,7 @@ import { paintSpeedIcon } from "./BattlePage";
 import { mountNamedSpine } from "./battleSpine";
 import { placeHangFloats, type HangFloat } from "./hangFloat";
 import { pauseIdleSkirmishes, resumeIdleSkirmishes } from "./idleHangSkirmish";
-import { IDLE_SKIRMISH_SPOTS } from "./idleHangSkirmishPlan";
-import { IDLE_HANG_SPOTS } from "./idleHangView";
+import { hangStandPoint, IDLE_HANG_SPOTS, IDLE_SKIRMISH_SPOTS } from "./idleHangSkirmishPlan";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 export type { HangFloat };
@@ -102,15 +101,11 @@ export function showMockRound(page: Node, round: BattleRound, stageId: number): 
   const hold = ensureHold(page);
   if (!hold.right) hold.right = "第" + stageId + "关";
   const floats: HangFloat[] = [];
-  pushSide(floats, hold.allies, round.allies, 140);
-  pushSide(floats, hold.enemies, round.enemies, -150);
+  pushSide(floats, hold.allies, round.allies, "ally", false);
+  pushSide(floats, hold.enemies, round.enemies, "enemy", round.line.indexOf("溃败") >= 0);
   hold.allies = round.allies.map(copyUnit);
   hold.enemies = round.enemies.map(copyUnit);
   const skill = skillFromLine(round.line);
-  const critRound = round.line.indexOf("溃败") >= 0;
-  for (let i = 0; i < floats.length; i++) {
-    if (critRound && !floats[i].heal && floats[i].x < 0) floats[i].crit = true;
-  }
   const rage = round.round >= 1 ? Math.min(1, round.round / 15) : 0;
   showHangStrike(page, round.round, 15, skill, floats, barsFromSides(round.allies, round.enemies, rage));
 }
@@ -184,6 +179,7 @@ export function liftHangReplay(page: Node, field: Node | null, vfx: Node | null)
   setIdleCast(host, false);
   const hang = host.getChildByName("IdleHang");
   seatLifted(host, field, hang);
+  if (field) seatHangField(field);
   seatLifted(host, vfx, field && field.parent === host ? field : hang);
   const hud = host.getChildByName("HangBattle");
   if (hud && hud.isValid) hud.setSiblingIndex(Math.max(0, host.children.length - 1));
@@ -236,6 +232,24 @@ function seatLifted(host: Node, node: Node | null, after: Node | null): void {
   if (node.parent !== host) node.parent = host;
   const at = after && after.isValid && after.parent === host ? after.getSiblingIndex() + 1 : 0;
   node.setSiblingIndex(Math.min(at, Math.max(0, host.children.length - 1)));
+}
+
+/** 战报格子从森林左右排挪到挂机地砖。和演武同一组点。 */
+export function seatHangField(field: Node): void {
+  for (let i = 0; i < IDLE_HANG_SPOTS.length; i++) {
+    const ally = findNamed(field, "Slot_A" + i);
+    const enemy = findNamed(field, "Slot_E" + i);
+    const allySpot = hangStandPoint("ally", i);
+    const enemySpot = hangStandPoint("enemy", i);
+    if (ally) ally.setPosition(allySpot.x, allySpot.y, 0);
+    if (enemy) enemy.setPosition(enemySpot.x, enemySpot.y, 0);
+  }
+}
+
+/** 飘字落在这一侧的地砖站位头顶。 */
+export function hangFloatOrigin(side: "ally" | "enemy", index: number): { x: number; y: number } {
+  const spot = hangStandPoint(side, index);
+  return { x: spot.x, y: spot.y + 108 };
 }
 
 function setIdleCast(host: Node, active: boolean): void {
@@ -459,7 +473,13 @@ function setCaption(page: Node, text: string): void {
   });
 }
 
-function pushSide(out: HangFloat[], prev: BattleUnit[] | null, next: BattleUnit[], x: number): void {
+function pushSide(
+  out: HangFloat[],
+  prev: BattleUnit[] | null,
+  next: BattleUnit[],
+  side: "ally" | "enemy",
+  crit: boolean
+): void {
   if (!prev) return;
   const n = prev.length < next.length ? prev.length : next.length;
   for (let i = 0; i < n && i < 3; i++) {
@@ -467,11 +487,13 @@ function pushSide(out: HangFloat[], prev: BattleUnit[] | null, next: BattleUnit[
     if (!isFinite(delta) || delta === 0) continue;
     const heal = delta < 0;
     const amount = heal ? -delta : delta;
+    const at = hangFloatOrigin(side, i);
     out.push({
       text: (heal ? "+" : "-") + String(amount),
-      x: x + (i - 1) * 36,
-      y: 70 - i * 42,
+      x: at.x,
+      y: at.y,
       heal,
+      crit: crit && !heal,
     });
   }
 }

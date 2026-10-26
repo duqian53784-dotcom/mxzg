@@ -37,7 +37,7 @@
  * 有 skill_id 才开技能条并播技能帧。没有 skill_id 不编造，条和帧都关。英雄套没有 Skill 剪辑，不播缺的剪辑。帧按原图尺寸播，不压成 300 方块。进战先预热帧。
  * 底栏「战斗」先看到挂机站场（大理石殿 + BattlePanelLayer + 演武）。点壳上的「战斗」才发 3001。有 report 才在挂机壳上播战报。森林页不是挂机壳。
  * 关- / 请求战报 / 切磋 / GM 这些探针不画在底栏上。只有 ?dev=wire，或挂机左侧空地长按，才打开。?dev=wire 不改传输。
- * 站位是左敌右我，挂在已有的 Slot_E* / Slot_A* 上。报告没有英雄时仍补一格站场，页不空。
+ * 挂机战报和演武站在同一组地砖点上（hangStandPoint），仍挂已有的 Slot_E* / Slot_A*。飘字用 hangFloatOrigin。森林左右排留在 battlePrefabLayout，不拿来摆挂机。报告没有英雄时仍补一格站场，页不空。
  * USE_BATTLE_PREFAB 默认开。上述回放进战时挂 BattlePage.prefab：站位、血条、回合、战报，技能挂 VfxSkill，受击挂 VfxHit。WireBattlePage 仍不挂。
  * 战旗、战剑用已有套在内存里升级后播。加载失败只藏格子，不把「战旗」「战剑」和套名写出来。血条每拍跟到对应站位头顶。同一位置号两边都有时，行动带了阵营才打到对面。回放拍子跟导演帧走。导演订不上时用动画帧，到点仍会推进。
  * 播的时候把 Spine 3.7.94 在内存里收成 3.8.99（皮改成数组，曲线改成 curve/c2/c3/c4），不改磁盘上的 json。
@@ -153,7 +153,7 @@ import { armBattleDelay } from "./battleClock";
 import { battleFrameStep, FrameReel, mountFrameReel, warmBattleFrames } from "./battleFramePlay";
 import { battleCastFrameCount, effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
 import { battleCastWait, battleRoundNumber, BattlePresentation, fallbackAttackTitle, formatBattleRound, nextBattleSpeed, planBattlePresentation, playbackBeats, signedHitFloats, signedHpDeltas } from "./battlePresentation";
-import { barsFromSides, beginHangBattle, bindHangSkip, bindHangSpeed, dropHangReplay, finishHangBattle, liftHangReplay, setHangSpeed, showHangStrike, stopHangBattle } from "./hangBattle";
+import { barsFromSides, beginHangBattle, bindHangSkip, bindHangSpeed, dropHangReplay, finishHangBattle, hangFloatOrigin, liftHangReplay, setHangSpeed, showHangStrike, stopHangBattle } from "./hangBattle";
 import {
   BattlePresentMount,
   clearBattleOverhead,
@@ -161,7 +161,7 @@ import {
   paintBattleOverhead,
   paintBattleSkillName,
 } from "./battlePresentView";
-import { battleSlotPage } from "./battlePrefabLayout";
+import { hangStandPoint } from "./idleHangSkirmishPlan";
 import { mountBattleSpine, SpineActor } from "./battleSpine";
 import { bindClick } from "./prefabLoad";
 import { HANG_PROBE_EVENT, PAGE_SHELL_FIGHT, setPagePrefabShellVisible } from "./pagePrefabShell";
@@ -1273,7 +1273,7 @@ class WireMainlineController implements WireMainlinePage {
         this.hpLabels.push(hp || root);
         this.hpNow.push(slot.hp);
         this.slotRoots.push(root);
-        const face: -1 | 1 = slot.side === "ally" ? -1 : 1;
+        const face = hangStandPoint(slot.side, index).face;
         this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex), { face }));
         continue;
       }
@@ -1334,7 +1334,7 @@ class WireMainlineController implements WireMainlinePage {
       this.hpLabels.push(hp);
       this.hpNow.push(slot.hp);
       this.slotRoots.push(root);
-      const face: -1 | 1 = slot.side === "ally" ? -1 : 1;
+      const face = hangStandPoint(slot.side === "enemy" ? "enemy" : "ally", index).face;
       this.actors.push(mountBattleSpine(root, slot.stem, () => this.failSlot(slotIndex), { face }));
     }
     this.mountVfx(plan);
@@ -1671,11 +1671,11 @@ class WireMainlineController implements WireMainlinePage {
     }
   }
 
-  /** 血条是 Hud 里的节点。每拍挪到这一格头顶，不留在 Prefab 的预览位。 */
+  /** 血条是 Hud 里的节点。每拍挪到地砖站位头顶，不留在森林预览位。 */
   private seatHpBar(label: Node | null, slotRoot: Node | null, side: "ally" | "enemy", index: number): void {
-    const page = battleSlotPage(side, index);
-    if (!page || !label || !label.isValid || !label.parent || label.parent === slotRoot) return;
-    label.parent.setPosition(page.x, page.y + 78, 0);
+    const spot = hangStandPoint(side, index);
+    if (!label || !label.isValid || !label.parent || label.parent === slotRoot) return;
+    label.parent.setPosition(spot.x, spot.y + 78, 0);
   }
 
   private gmText(): string {
@@ -1805,14 +1805,23 @@ class WireMainlineController implements WireMainlinePage {
     const clips: string[] = [];
     for (let i = 0; i < beat.cues.length; i++) clips.push(beat.cues[i].clip);
     skill = fallbackAttackTitle(skill, beat.line, clips);
-    for (let i = 0; i < rows.length && i < 4; i++) {
+    const piled: number[] = [];
+    for (let i = 0; i < rows.length && floats.length < 6; i++) {
       const hurt = rows[i].hurt;
       if (!isFinite(hurt) || hurt === 0) continue;
+      const anchor = rows[i].anchor;
+      if (anchor === null || anchor < 0 || anchor >= plan.slots.length) continue;
+      const slot = plan.slots[anchor];
+      if (slot.side !== "ally" && slot.side !== "enemy") continue;
+      const origin = hangFloatOrigin(slot.side, sideIndexAt(plan.slots, anchor));
+      let pile = 0;
+      for (let s = 0; s < piled.length; s++) if (piled[s] === anchor) pile += 1;
+      piled.push(anchor);
       const heal = hurt > 0;
       floats.push({
         text: heal ? "+" + String(hurt) : String(hurt),
-        x: (i % 2 === 0 ? -140 : 140) + (i % 3) * 16,
-        y: 80 - i * 40,
+        x: origin.x,
+        y: origin.y - pile * 28,
         heal,
         crit: rows[i].crit === true,
       });
@@ -2255,8 +2264,8 @@ function anchorXY(slots: WireSpineSlot[], anchor: number | null, role: "skill" |
 
 function slotXY(side: WireSpineSlot["side"], index: number, _total: number): { x: number; y: number } {
   if (side === "enemy" || side === "ally") {
-    const page = battleSlotPage(side, index);
-    if (page) return page;
+    const spot = hangStandPoint(side, index);
+    return { x: spot.x, y: spot.y };
   }
   if (side === "sword") return { x: 0, y: -80 };
   return { x: 0, y: 40 };
@@ -2275,7 +2284,8 @@ function floatPages(plan: WireSpineReplay, floats: { anchor: number | null }[]):
       pages.push(null);
       continue;
     }
-    pages.push(battleSlotPage(slot.side, sideIndexAt(plan.slots, anchor)));
+    const spot = hangStandPoint(slot.side, sideIndexAt(plan.slots, anchor));
+    pages.push({ x: spot.x, y: spot.y });
   }
   return pages;
 }

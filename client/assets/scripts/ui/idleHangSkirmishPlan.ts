@@ -3,12 +3,71 @@
  * 敌人格子和挂机真战斗的后侧三格是同一组。
  */
 
-/** 左怪朝右，中、右朝左。 */
-export const IDLE_SKIRMISH_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1 }> = [
-  { x: -180, y: 230, face: 1 },
-  { x: 8, y: 268, face: -1 },
-  { x: 188, y: 226, face: -1 },
+/**
+ * map01_F 高 1280、原点在画面中心。柱廊平台大约从 y=120 往上。
+ * 我方和怪都站在棕色地砖上，不把怪放到柱廊上。
+ */
+export const IDLE_FLOOR_TOP = 120;
+
+/** 地砖前排。左、前、右，朝向怪所在的上沿。 */
+export const IDLE_HANG_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1 }> = [
+  { x: -150, y: -30, face: 1 },
+  { x: 10, y: -120, face: 1 },
+  { x: 150, y: -10, face: -1 },
 ];
+
+/** 地砖后沿，和我方隔开一排，仍在地砖上。左怪朝右，中、右朝左。 */
+export const IDLE_SKIRMISH_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1 }> = [
+  { x: -80, y: 40, face: 1 },
+  { x: 36, y: 86, face: -1 },
+  { x: 168, y: 28, face: -1 },
+];
+
+export function hangStandPoint(side: "ally" | "enemy", index: number): { x: number; y: number; face: -1 | 1 } {
+  const spots = side === "enemy" ? IDLE_SKIRMISH_SPOTS : IDLE_HANG_SPOTS;
+  const i = index < 0 || !isFinite(index) ? 0 : Math.floor(index);
+  return spots[i % spots.length];
+}
+
+/** 站位都在地砖上沿以下。柱廊上的 y 不算。 */
+export function idleSpotsOnFloor(spots: ReadonlyArray<{ y: number }>): boolean {
+  if (!spots || spots.length === 0) return false;
+  for (let i = 0; i < spots.length; i++) {
+    if (spots[i].y > IDLE_FLOOR_TOP) return false;
+  }
+  return true;
+}
+
+/**
+ * 两波之间往地砖上沿跑一小段再回到原格。
+ * step 从 0 到 steps。中点最靠上。
+ */
+export function idleMarchStep(
+  spot: { x: number; y: number; face: -1 | 1 },
+  step: number,
+  steps: number
+): { x: number; y: number } {
+  const n = steps >= 2 ? Math.floor(steps) : 2;
+  let i = Math.floor(step);
+  if (i < 0) i = 0;
+  if (i > n) i = n;
+  const t = i / n;
+  const wave = t < 0.5 ? t * 2 : (1 - t) * 2;
+  return {
+    x: spot.x + spot.face * 18 * wave,
+    y: spot.y + 42 * wave,
+  };
+}
+
+/** 怪已经显示才允许出刀。看不见人时不许打空。 */
+export function idleSkirmishMayStrike(foeVisible: boolean): boolean {
+  return foeVisible === true;
+}
+
+/** 奇数刀用 attack2，套里没有再退回 attack。 */
+export function idleSkirmishSwingClip(index: number): "attack" | "attack2" {
+  return Math.floor(index) % 2 === 1 ? "attack2" : "attack";
+}
 
 /** 和 WIRE_SPINE_ENEMY_STEMS 同一组。表里的怪对不上 stand 时用。 */
 export const IDLE_SKIRMISH_FALLBACK_STEMS = ["10405006", "10405007", "10505010"];

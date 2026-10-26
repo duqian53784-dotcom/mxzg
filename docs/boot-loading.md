@@ -91,6 +91,14 @@ Boot 场景按旧工程的顺序走完才进 Main：logo、版本比较、热更
 
 18 秒还缺包，加载层写出缺的号，按钮重试。重试再发上面那三下，不调用 `prepareCity`，已经进会话的包留着。Mock 不走这段等待。
 
+## 画面铺满
+
+加载层和热更层抵消 Boot `SafeFrame` 在窄屏上的缩小（`fitVisibleRoot`），按可见尺寸铺。`Bg` 用 cover：取可见宽 / 图宽、可见高 / 图高里更大的那个，多出来的裁掉，不留黑边。设计分辨率仍是 720×1280。不改 Fit Height，也不调用 `view.setDesignResolutionSize`。
+
+中间人物是 `spine/jiemian` 的 `stand`。节点 `BootCast`，约 0.7 倍，放在背景之上、进度条之下。`bg-loading.jpg` 只有水底，不含这组人物。套没挂上打「loading cast miss spine/jiemian」，底图和进度条仍在。
+
+左上角分辨率行默认不画。要看时加 `?safeDebug=1`，或 `localStorage.setItem("mxzg.safeDebug","1")`。刘海预览仍是 `mxzg.safe`。
+
 ## 相关文件
 
 - `client/assets/scripts/core/Boot.ts`

@@ -17,8 +17,12 @@ import { mountBattleSpine, mountNamedSpine, SpineActor } from "./battleSpine";
 import { harvestCollectClip } from "./cityMapLayout";
 import { hangStemsForFormation, idleHangStemsFrom } from "./idleHangRoster";
 import { mountIdleSkirmish } from "./idleHangSkirmish";
+import { IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
 import { localLineupIds, onLocalLineup } from "./localLineup";
+import { bindVisibleRefresh, fitVisibleRoot } from "./visibleFit";
 import { createRect, place, uiNode } from "./UiKit";
+
+export { IDLE_HANG_SPOTS };
 
 export const IDLE_HANG_SKY = "ui/chapter/hang/map01_B";
 export const IDLE_HANG_FLOOR = "ui/chapter/hang/map01_F";
@@ -27,12 +31,7 @@ export const IDLE_HANG_FLOOR = "ui/chapter/hang/map01_F";
 export const IDLE_HANG_MISSING_PREFAB =
   "没有整张挂机 Prefab。殿堂用 chapter/hang/map01_B + map01_F，底栏三钮仍是 BattlePanelLayer，不是森林 BattlePage。";
 
-/** 大理石地中部。底栏三钮盖住更低的位置。 */
-export const IDLE_HANG_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1 }> = [
-  { x: -150, y: 30, face: 1 },
-  { x: 16, y: -70, face: 1 },
-  { x: 168, y: 50, face: -1 },
-];
+/** 大理石地砖上的三格。定义在 idleHangSkirmishPlan，和怪的后沿是同一套地平面。 */
 
 /** 当前 3101 / 4001。本局出阵优先。没有 MAIN 英雄时是三套默认。 */
 export function idleHangStems(): string[] {
@@ -100,6 +99,37 @@ export function mountIdleHang(parent: Node): Node {
   return root;
 }
 
+/**
+ * 挂机壳抵消安全区缩小，铺满可见区域。
+ * 窄屏只裁左右，不再把整层缩成上下黑边。宽屏把殿堂底图拉到可见宽。
+ */
+export function bindHangFill(shell: Node): void {
+  const apply = () => {
+    if (!shell.isValid) return;
+    const box = fitVisibleRoot(shell);
+    const hang = shell.getChildByName("IdleHang");
+    if (!hang) return;
+    const width = box.width > 720 ? box.width : 720;
+    const height = box.height > 1280 ? box.height : 1280;
+    resizeNode(hang.getChildByName("IdleFill"), width, height);
+    resizeNode(hang.getChildByName("IdleFloor"), width, height);
+    const sky = hang.getChildByName("IdleSky");
+    if (sky) {
+      const ui = sky.getComponent(UITransform);
+      if (ui) ui.setContentSize(width, ui.contentSize.height > 0 ? ui.contentSize.height : 420);
+    }
+  };
+  bindVisibleRefresh(shell, apply);
+  const later = setTimeout(apply, 160);
+  shell.once(Node.EventType.NODE_DESTROYED, () => clearTimeout(later));
+}
+
+function resizeNode(node: Node | null, width: number, height: number): void {
+  if (!node) return;
+  const ui = node.getComponent(UITransform);
+  if (ui) ui.setContentSize(width, height);
+}
+
 const LOOT_AT: ReadonlyArray<{ x: number; y: number; w: number }> = [
   { x: -88, y: -2, w: 34 },
   { x: -58, y: 18, w: 40 },
@@ -135,7 +165,8 @@ export function paintIdleLoot(hang: Node, icons: string[]): void {
     return;
   }
   const pile = uiNode("IdleLoot");
-  place(pile, hang, 8, -168);
+  place(pile, hang, 0, -300);
+  pile.setScale(1.2, 1.2, 1);
   const n = icons.length < LOOT_AT.length ? icons.length : LOOT_AT.length;
   for (let i = 0; i < n; i++) {
     const spot = LOOT_AT[i];
@@ -213,7 +244,7 @@ function ensureLootSpine(hang: Node): Node {
   let host = hang.getChildByName("IdleLootSpine");
   if (!host) {
     host = uiNode("IdleLootSpine");
-    place(host, hang, 8, -200);
+    place(host, hang, 0, -328);
     host.setScale(0.42, 0.42, 1);
   }
   return host;
@@ -229,7 +260,7 @@ export function seatHangTimer(hang: Node, bubble: Node): void {
     if (bubble.parent !== hang) bubble.parent = hang;
     if (spr) spr.setPosition(0, 4, 0);
     if (label) label.setPosition(0, 10, 0);
-    bubble.setPosition(56, -118, 0);
+    bubble.setPosition(48, -248, 0);
   }
   if (bubble.parent === hang) bubble.setSiblingIndex(Math.max(0, hang.children.length - 1));
 }

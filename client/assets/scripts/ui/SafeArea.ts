@@ -20,6 +20,7 @@ import {
   metricsFrom,
   parseInsetOverride,
   SafeRect,
+  wantsSafeDebug,
 } from "./safeAreaLayout";
 import { createLabel, setText } from "./UiKit";
 
@@ -36,7 +37,7 @@ export interface SafeTarget {
 export interface BindSafeAreaOptions {
   canvas: Node;
   targets: SafeTarget[];
-  /** 默认 true。GameLog minLevel 为 debug 时在左上角显示尺寸。 */
+  /** 默认不画。只有 ?safeDebug=1 或 mxzg.safeDebug=1 时才在左上角显示尺寸。 */
   debugLabel?: boolean;
 }
 
@@ -156,6 +157,25 @@ function readPreviewOverride() {
   }
 }
 
+function previewSearch(): string | null {
+  try {
+    const search = (globalThis as { location?: { search?: string } }).location?.search;
+    return search && search.length > 0 ? search : null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function previewStored(key: string): string | null {
+  try {
+    const store = (globalThis as { localStorage?: { getItem(key: string): string | null } }).localStorage;
+    if (!store || typeof store.getItem !== "function") return null;
+    return store.getItem(key);
+  } catch (_err) {
+    return null;
+  }
+}
+
 function previewFromLocation() {
   try {
     const search = (globalThis as { location?: { search?: string } }).location?.search;
@@ -193,7 +213,7 @@ function syncDebugLabel(
   top: number
 ): Node | null {
   if (!canvas.isValid) return current;
-  if (GameLog.shared.minLevel !== "debug") {
+  if (!wantsSafeDebug(previewSearch(), previewStored("mxzg.safeDebug"))) {
     if (current && current.isValid) current.destroy();
     return null;
   }

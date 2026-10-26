@@ -13,9 +13,16 @@ import { upgradeSpine37Json } from "./spineUpgrade";
 import { place, uiNode } from "./UiKit";
 
 export interface SpineActor {
+  /** 骨架节点。挂机跑位挪的是它的父格。 */
+  readonly node: Node;
   play(clip: WireSpineClip): void;
   /** 命名特效。找不到动作时不播，也不当成加载失败。 */
   burst(name: string): void;
+  /**
+   * 按动作名播，不落到别的剪辑。没有这个名字就打日志并返回 false。
+   * 骨架还在加载时先记下，加载完再播。
+   */
+  gesture(name: string): boolean;
 }
 
 export interface SpineMountOptions {
@@ -23,6 +30,8 @@ export interface SpineMountOptions {
   effect?: boolean;
   /** 1 面向右（左场的敌方）。-1 面向左（右场的我方）。缺省面向右。 */
   face?: -1 | 1;
+  /** 骨架已经挂上并且播了开场动作。加载失败不调用。 */
+  onReady?: () => void;
 }
 
 const OPENING: { [stem: string]: WireSpineClip } = {
@@ -110,6 +119,7 @@ export function mountBattleSpine(parent: Node, stem: string, onFail: () => void,
   let dead = false;
   let pending: string | null = null;
   let pendingHero: WireSpineClip | null = null;
+  let exact: string | null = null;
   const fail = (): void => {
     if (dead) return;
     dead = true;
@@ -127,13 +137,43 @@ export function mountBattleSpine(parent: Node, stem: string, onFail: () => void,
       fail();
     }
   };
+  const playExact = (name: string): boolean => {
+    if (!skel || !node.isValid) return false;
+    let found = false;
+    try {
+      found = !!skel.findAnimation(name);
+    } catch (err) {
+      return false;
+    }
+    if (!found) {
+      GameLog.shared.warn("BattleSpine", "clip miss spine/" + stem + " " + name);
+      return false;
+    }
+    const loop = name === "run" || name === "stand" || name === "idle";
+    try {
+      skel.setAnimation(0, name, loop);
+      return true;
+    } catch (err) {
+      fail();
+      return false;
+    }
+  };
   const play = (clip: WireSpineClip): void => {
+    exact = null;
     pendingHero = clip;
     playNamed(clip, true);
   };
   const burst = (name: string): void => {
     pending = name;
     playNamed(name, false);
+  };
+  const gesture = (name: string): boolean => {
+    exact = name;
+    pendingHero = null;
+    if (!skel) return true;
+    const played = playExact(name);
+    if (!played) exact = null;
+    return played;
   };
   try {
     resources.load("spine/" + stem, sp.SkeletonData, (err, asset) => {
@@ -159,9 +199,19 @@ export function mountBattleSpine(parent: Node, stem: string, onFail: () => void,
           if (pending) burst(pending);
           return;
         }
+        const ready = options && options.onReady;
+        if (exact) {
+          if (playExact(exact)) {
+            if (ready && !dead) ready();
+            return;
+          }
+        }
         const opening = pendingHero || OPENING[stem] || "stand";
         if (!pickClip(view, opening)) fail();
-        else play(opening);
+        else {
+          play(opening);
+          if (ready && !dead) ready();
+        }
       } catch (loadErr) {
         fail();
       }
@@ -169,7 +219,7 @@ export function mountBattleSpine(parent: Node, stem: string, onFail: () => void,
   } catch (err) {
     fail();
   }
-  return { play, burst };
+  return { node, play, burst, gesture };
 }
 
 const runtimePacks: { [stem: string]: sp.SkeletonData } = {};

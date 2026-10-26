@@ -99,12 +99,17 @@ import {
 } from "../assets/scripts/ui/battlePresentation";
 import { SPINE_RUNTIME_VERSION, upgradeSpine37Json } from "../assets/scripts/ui/spineUpgrade";
 import {
+  IDLE_HANG_SPOTS,
   IDLE_SKIRMISH_HITS,
   IDLE_SKIRMISH_SPOTS,
+  idleMarchStep,
   idleSkirmishHurt,
   idleSkirmishKillClip,
+  idleSkirmishMayStrike,
   idleSkirmishStageIdx,
+  idleSkirmishSwingClip,
   idleSkirmishSwings,
+  idleSpotsOnFloor,
   planIdleFoe,
   IDLE_SKIRMISH_FALLBACK_STEMS,
 } from "../assets/scripts/ui/idleHangSkirmishPlan";
@@ -1639,6 +1644,7 @@ import {
   formatAdapt,
   formatAdaptShort,
   layoutSafeFrame,
+  wantsSafeDebug,
   metricsFrom,
   parseInsetOverride,
   SafeFrame,
@@ -2053,6 +2059,9 @@ function checkSafeArea(): void {
   near(node.scale.x, 1, "popup layer stays unscaled");
   near(node.pos.y, notchFrame.offsetY, "popup still shifts");
   assert(frameHasInsets(notchFrame), "frame keeps insets");
+  assert(wantsSafeDebug("", null) === false && wantsSafeDebug("?safeDebug=0", null) === false, "resolution hud stays off");
+  assert(wantsSafeDebug("?safeDebug=1", null) === true, "query opts into the hud");
+  assert(wantsSafeDebug("safe=88,0,34,0", "1") === true, "stored flag opts into the hud");
 }
 
 function frameHasInsets(frame: SafeFrame): boolean {
@@ -26988,7 +26997,7 @@ function checkCityHub(): void {
       accentSrc.indexOf("createLabel") < 0 &&
       accentSrc.indexOf("root.active = false") >= 0 &&
       accentSrc.indexOf("mountBattleSpine") >= 0 &&
-      wireBattlePageSrc.indexOf("page.y + 78") >= 0 &&
+      wireBattlePageSrc.indexOf("spot.y + 78") >= 0 &&
       wireBattlePageSrc.indexOf("playbackBeats") >= 0,
     "replay follows the director clock, seats hp on the slot, and does not print sword or flag names"
   );
@@ -27005,13 +27014,14 @@ function checkCityHub(): void {
       wireBattlePageSrc.indexOf("不发新 c2s") >= 0 &&
       wireBattlePageSrc.indexOf("回放结束不拆 BattlePage") >= 0 &&
       wireBattlePageSrc.indexOf("paintBattleScene") >= 0 &&
-      wireBattlePageSrc.indexOf("battleSlotPage") >= 0 &&
+      wireBattlePageSrc.indexOf("hangStandPoint") >= 0 &&
+      wireBattlePageSrc.indexOf("hangFloatOrigin") >= 0 &&
       wireBattlePageSrc.indexOf("battleCastWait") >= 0 &&
       wireBattlePageSrc.indexOf("battleBeatWait") >= 0 &&
       wireBattlePageSrc.indexOf("warmBattleFrames") >= 0 &&
       wireBattlePageSrc.indexOf("等待名册后再挑战") >= 0 &&
       wireBattlePageSrc.indexOf("showToast(\"等待名册后再挑战\")") >= 0 &&
-      wireBattlePageSrc.indexOf("左敌右我") >= 0 &&
+      wireBattlePageSrc.indexOf("地砖点") >= 0 &&
       wireBattlePageSrc.indexOf("mountFrameReel") >= 0 &&
       wireBattlePageSrc.indexOf("hero-beattack") >= 0 &&
       wireBattlePageSrc.indexOf("skill-effect") >= 0 &&
@@ -27296,12 +27306,26 @@ function mainAppFile(): string {
 function checkIdleSkirmish(): void {
   assert(
     IDLE_SKIRMISH_SPOTS.length === 3 &&
-      IDLE_SKIRMISH_SPOTS[0].x === -180 &&
-      IDLE_SKIRMISH_SPOTS[0].y === 230 &&
+      IDLE_SKIRMISH_SPOTS[0].x === -80 &&
+      IDLE_SKIRMISH_SPOTS[0].y === 40 &&
       IDLE_SKIRMISH_SPOTS[0].face === 1 &&
-      IDLE_SKIRMISH_SPOTS[2].face === -1,
-    "idle skirmish uses the three rear hang spots"
+      IDLE_SKIRMISH_SPOTS[2].face === -1 &&
+      IDLE_HANG_SPOTS.length === 3 &&
+      IDLE_HANG_SPOTS[1].y < IDLE_SKIRMISH_SPOTS[1].y,
+    "idle foes and allies stand on the tile floor, allies in front"
   );
+  const marched = idleMarchStep(IDLE_HANG_SPOTS[0], 4, 8);
+  const returned = idleMarchStep(IDLE_HANG_SPOTS[0], 8, 8);
+  assert(
+    idleSpotsOnFloor(IDLE_HANG_SPOTS) &&
+      idleSpotsOnFloor(IDLE_SKIRMISH_SPOTS) &&
+      marched.y === IDLE_HANG_SPOTS[0].y + 42 &&
+      returned.y === IDLE_HANG_SPOTS[0].y &&
+      returned.x === IDLE_HANG_SPOTS[0].x,
+    "spots stay under the colonnade and the march runs up then back"
+  );
+  assert(idleSkirmishMayStrike(true) === true && idleSkirmishMayStrike(false) === false, "no swing until the foe is visible");
+  assert(idleSkirmishSwingClip(0) === "attack" && idleSkirmishSwingClip(1) === "attack2", "odd swings use attack2");
   assert(idleSkirmishSwings(0) === IDLE_SKIRMISH_HITS && idleSkirmishSwings(1) === 2 && idleSkirmishSwings(3) === 3, "each standing hero swings, at least twice");
   assert(idleSkirmishStageIdx(null, null, 0) === 1 && idleSkirmishStageIdx(null, 3, 9) === 3 && idleSkirmishStageIdx(4, 3, 9) === 4, "skirmish stage follows mock, then now, then max");
   const named = planIdleFoe(0, [{ heroType: 10101001, hp: 900 }], (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
@@ -27339,6 +27363,23 @@ function checkIdleSkirmish(): void {
       shellSrc.indexOf("beginHangBattle") >= 0,
     "real fight button still enters the report battle and pauses the skirmish"
   );
+  const bootSrc = readFileSync(uiSource("bootChrome.ts"), "utf8");
+  const safeSrc = readFileSync(uiSource("SafeArea.ts"), "utf8");
+  const fillSrc = readFileSync(uiSource("screenFill.ts"), "utf8");
+  const wireSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
+  assert(bootSrc.indexOf("jiemian") >= 0 && bootSrc.indexOf("fitVisibleRoot") >= 0, "loading casts jiemian and fills the visible frame");
+  assert(safeSrc.indexOf("wantsSafeDebug") >= 0, "resolution hud is opt-in");
+  assert(
+    skirmishSrc.indexOf('gesture("run")') >= 0 &&
+      skirmishSrc.indexOf("onReady") >= 0 &&
+      skirmishSrc.indexOf("idleSkirmishMayStrike") >= 0 &&
+      skirmishSrc.indexOf("skillFramePaths") >= 0 &&
+      skirmishSrc.indexOf("skip swing, foe not visible") >= 0,
+    "skirmish runs, waits for the foe, then plays skill frames"
+  );
+  assert(fillSrc.indexOf("金环水晶") >= 0 && fillSrc.indexOf("frame.active = true") >= 0, "hang plate keeps the crystal frame");
+  assert(battleSrc.indexOf("seatHangField") >= 0 && battleSrc.indexOf('findNamed(field, "Slot_A"') >= 0, "report slots sit on the hang floor");
+  assert(wireSrc.indexOf("hangStandPoint") >= 0 && wireSrc.indexOf("hangFloatOrigin") >= 0, "report playback uses the hang floor spots");
 }
 
 async function main(): Promise<void> {

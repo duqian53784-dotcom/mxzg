@@ -25,8 +25,8 @@ Canvas 上已经有四边对齐的 Widget。不要再挂引擎自带的 SafeArea
 localStorage.setItem("mxzg.safe", "88,0,34,0")
 ```
 
-顺序是上、右、下、左，单位是设计分辨率像素。然后拖一下窗口（或刷新）。左上角在 `GameLog` 的 `minLevel` 为 `debug`（默认）时会显示一行，例如 `720x1280 L0 T88 R0 B34 x0.90`。控制台 `[mxzg][debug][SafeArea]` 会多写设计分辨率，例如 `visible 720x1280 design 720x1280 L0 R0 T88 B34 scale 0.90`。
+顺序是上、右、下、左，单位是设计分辨率像素。然后拖一下窗口（或刷新）。左上角那一行（例如 `590x1280 L0 T0 R0 B0 x0.82`）默认不画。要看时地址加 `?safeDebug=1`，或执行 `localStorage.setItem("mxzg.safeDebug", "1")` 后再刷新。控制台 `[mxzg][debug][SafeArea]` 仍会写设计分辨率，例如 `visible 720x1280 design 720x1280 L0 R0 T88 B34 scale 0.90`，不受这一行开关影响。
 
-去掉预览边距：`localStorage.removeItem("mxzg.safe")`。预览地址加 `?safe=88,0,34,0` 同样有效，并且优先于 localStorage。把 `GameLog.shared.minLevel` 调到 `"info"` 会关掉左上角那一行，适配仍在。
+去掉预览边距：`localStorage.removeItem("mxzg.safe")`。预览地址加 `?safe=88,0,34,0` 同样有效，并且优先于 localStorage。关掉分辨率行：去掉 `safeDebug=1`，并 `localStorage.removeItem("mxzg.safeDebug")`。适配仍在。
 
 真机刘海要页面带 `viewport-fit=cover`。Creator 3.8 的 Web Mobile 模板一般已经写了。若真机边距一直是 0，再查构建模板的 viewport。
