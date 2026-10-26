@@ -480,21 +480,76 @@ export function skillStemFrames(skillId: number | null): string[] | null {
  * 技能号对不上时是 null，调用方仍用原来的 skill-effect 取模。
  */
 export function skillLayerFrames(skillId: number | null): string[] | null {
+  const extra = skillCompanionFrames(skillId);
+  if (!extra) return null;
+  return extra.length > 0 ? extra[0] : [];
+}
+
+/**
+ * 主套之外、已经有帧的分套，按 skillStemOrder 的顺序。
+ * 第一份是下一层，后面是第三层和 `skill-<id>_1` 这类下划线分套。
+ * 技能号对不上时是 null。对得上但没有分套时是空数组。
+ */
+export function skillCompanionFrames(skillId: number | null): string[][] | null {
   const id = skillIdText(skillId);
   const primary = skillStemForId(skillId);
   if (!id || !primary) return null;
   const order = skillStemOrder(id);
   let passed = false;
+  const out: string[][] = [];
   for (let i = 0; i < order.length; i++) {
     if (!passed) {
       if (order[i] === primary) passed = true;
       continue;
     }
     const frames = framePaths(order[i]);
-    if (frames) return frames;
+    if (frames) out.push(frames);
+  }
+  return out;
+}
+
+/** 主套之后、下一层再往后的分套。没有技能号时是空数组。 */
+export function skillRestLayerFrames(skillId: number | null): string[][] {
+  const extra = skillCompanionFrames(skillId);
+  if (!extra || extra.length < 2) return [];
+  return extra.slice(1);
+}
+
+/** 这一套技能带的箭矢帧。没有就空数组，不拿别的技能的箭来补。 */
+export function skillArrowFrames(skillId: number | null): string[] {
+  const id = skillIdText(skillId);
+  if (!id) return [];
+  const order = skillStemOrder(id);
+  for (let i = 0; i < order.length; i++) {
+    const stem = order[i];
+    const count = SKILL_ARROW_COUNT[stem];
+    if (!count || !framePaths(stem)) continue;
+    const prefix = "battle/skill/" + stem + "/" + stem + "_arrow-";
+    const paths: string[] = [];
+    for (let n = 0; n < count; n++) paths.push(prefix + String(n));
+    return paths;
   }
   return [];
 }
+
+/**
+ * 挂机演武用。皮肤套名本身对得上帧，就用这个号。
+ * 8 位套名再补一个 0，和 heroskill.type 一样（10105008 → 101050080）。
+ * 两边都没有帧套就 null，不编造技能号。
+ */
+export function skillIdForSpineStem(stem: string | null | undefined): number | null {
+  if (!stem || !/^\d{4,12}$/.test(stem)) return null;
+  const plain = Number(stem);
+  if (skillStemForId(plain)) return plain;
+  const typed = Number(stem + "0");
+  if (skillStemForId(typed)) return typed;
+  return null;
+}
+
+/** 箭矢帧跟主套同一目录，文件名是 `<stem>_arrow-0` 起。缺一套就不补。 */
+export const SKILL_ARROW_COUNT: { [stem: string]: number } = {
+  "skill-102040041": 5,
+};
 
 function skillStemOrder(id: string): string[] {
   return [
@@ -502,6 +557,7 @@ function skillStemOrder(id: string): string[] {
     "skill-" + id + "-1",
     "skill-" + id + "-2",
     "skill-" + id + "-3",
+    "skill-" + id + "_1",
     "skill_" + id,
     "skill_" + id + "_1",
   ];

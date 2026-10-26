@@ -124,8 +124,12 @@ import {
   battleCastFrameCount,
   effectFramePaths,
   hitFramePaths,
+  hangSkillVfx,
+  skillArrowFramePaths,
   skillFramePaths,
+  skillIdForSpineStem,
   skillLayerFramePaths,
+  skillRestLayerFramePaths,
 } from "../assets/scripts/ui/battleFrames";
 import { OpenConditionRow, SystemGateRow } from "../assets/scripts/config/types";
 import {
@@ -3029,6 +3033,13 @@ function checkCityMap(): void {
   const splashSrc = readFileSync(uiSource("logoSplash.ts"), "utf8");
   const bootChromeSrc = readFileSync(uiSource("bootChrome.ts"), "utf8");
   assert(splashSrc.indexOf('uiNode("logo-scene_spr-logo")') >= 0, "logo node keeps the checklist name");
+  assert(
+    splashSrc.indexOf("logo-scene_spr-parttern-l") >= 0 &&
+      splashSrc.indexOf("logo-scene_spr-parttern-r") >= 0 &&
+      splashSrc.indexOf("LOGO_SPECK_MAX") >= 0 &&
+      splashSrc.indexOf("logoFrameIsSpeck") >= 0,
+    "boot logo uses the side ornaments when the wordmark is a speck"
+  );
   assert(
     bootChromeSrc.indexOf("BOOT_TIP_COLOR") >= 0 && bootChromeSrc.indexOf("ffeeb2") >= 0 && bootChromeSrc.indexOf("BOOT_STAGE_COLOR") >= 0,
     "loading tips stay #ffeeb2 and the stage line has its own color"
@@ -27233,6 +27244,36 @@ function checkCityHub(): void {
   );
   assertFrames("skill-101050080-1", nextLayer || []);
   assert(skillLayerFramePaths(9) === null && skillLayerFramePaths(101010011) !== null, "unknown skill ids keep the effect modulo");
+  const thirdLayer = skillRestLayerFramePaths(101050080);
+  assert(
+    thirdLayer.length === 1 && thirdLayer[0][0] === "battle/skill/skill-101050080-2/skill-101050080-2_0",
+    "the third skill layer plays with the base stem"
+  );
+  assertFrames("skill-101050080-2", thirdLayer[0]);
+  const underscoreLayer = skillLayerFramePaths(102050233);
+  assert(
+    underscoreLayer !== null &&
+      underscoreLayer[0] === "battle/skill/skill-102050233_1/skill-102050233_1_0",
+    "hyphen-underscore companion is the next skill layer"
+  );
+  assertFrames("skill-102050233_1", underscoreLayer || []);
+  const arrows = skillArrowFramePaths(102040041);
+  assert(arrows.length === 5 && arrows[0] === "battle/skill/skill-102040041/skill-102040041_arrow-0", "arrow frames ride with the skill");
+  assertFrames("skill-102040041-arrow", arrows);
+  assert(skillArrowFramePaths(101010011).length === 0 && skillRestLayerFramePaths(9).length === 0, "skills without extra layers do not borrow arrows");
+  const hangSkill = hangSkillVfx("10105008", true);
+  assert(
+    skillIdForSpineStem("10105008") === 101050080 &&
+      skillIdForSpineStem("10405005") === 104050050 &&
+      skillIdForSpineStem("zzz") === null &&
+      hangSkill.skill[0] === "battle/skill/skill-101050080/skill-101050080_0" &&
+      hangSkill.layers.length === 2 &&
+      hangSkill.layers[1][0] === "battle/skill/skill-101050080-2/skill-101050080-2_0" &&
+      hangSkillVfx("10105008", false).skill.length === 0 &&
+      hangSkillVfx("no-stem", true).skill[0].indexOf("hero-skill_effect-1-0") >= 0 &&
+      hangSkillVfx("no-stem", true).layers.length === 0,
+    "hang skill swings use the stem's own frames and keep hero-skill when none match"
+  );
   assert(battleLayoutSrc.indexOf("不发协议") >= 0, "battle layout helper does not own a protocol");
   const battleDoc = readFileSync(join(process.cwd(), "docs", "battle-prefab-layout.md"), "utf8");
   assert(
@@ -27493,7 +27534,7 @@ function checkIdleSkirmish(): void {
       skirmishSrc.indexOf("idleMarchStep") < 0 &&
       skirmishSrc.indexOf("onReady") >= 0 &&
       skirmishSrc.indexOf("idleSkirmishMayStrike") >= 0 &&
-      skirmishSrc.indexOf("skillFramePaths") >= 0 &&
+      skirmishSrc.indexOf("hangSkillVfx") >= 0 &&
       skirmishSrc.indexOf("skip swing, foe not visible") >= 0 &&
       hangSrc.indexOf("stems.length") >= 0 &&
       hangSrc.indexOf("slice(0, 1)") < 0,

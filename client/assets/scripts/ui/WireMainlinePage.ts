@@ -33,7 +33,7 @@
  * 主线入口已在「更多」，不往主屏再放矩形。
  * 收到 report 在本页播 spine 站场、回合攻击、有 hit 的受击，以及 batch2 技能/受击特效。3001、3006、3102 和 3030 都走 replayFromStore（里面仍是 planWireSpineReplay）。战报没有我方英雄时用 GameStore 的 MAIN。守方空时 chapter.idx 对上且有 stand 才换表内怪。3103 不走。3101 不走。3099 不走。
  * 有拍时 VfxHit 再播 hero-beattack，VfxSkill 再播 skill 和 skill-effect。mountFrameReel 挂在已有锚点上，不另建 Vfx 节点。帧没加载到就留 batch2。batch2 也没有骨架时，在同一锚点补已有 yanwu。
- * skill_id 对得上 resources 里的套时播那套帧，并再播下一层。对不上仍用 49 套和 skill-effect 取模。
+ * skill_id 对得上 resources 里的套时播那套帧，并同时播下一层、其余层和 `_arrow`。对不上仍用 49 套和 skill-effect 取模。
  * 有 skill_id 才开技能条并播技能帧。没有 skill_id 不编造，条和帧都关。英雄套没有 Skill 剪辑，不播缺的剪辑。帧按原图尺寸播，不压成 300 方块。进战先预热帧。
  * 底栏「战斗」先看到挂机站场（大理石殿 + BattlePanelLayer + 演武）。点壳上的「战斗」才发 3001。有 report 才在挂机壳上播战报。森林页不是挂机壳。
  * 关- / 请求战报 / 切磋 / GM 这些探针不画在底栏上。只有 ?dev=wire，或挂机左侧空地长按，才打开。?dev=wire 不改传输。
@@ -151,7 +151,7 @@ import { BattlePrefabShell, mountBattleBackdrop, mountBattlePrefab, paintBattleS
 import { mountBattleEnd } from "./battleEndView";
 import { armBattleDelay } from "./battleClock";
 import { battleFrameStep, FrameReel, mountFrameReel, warmBattleFrames } from "./battleFramePlay";
-import { battleCastFrameCount, effectFramePaths, hitFramePaths, skillFramePaths, skillLayerFramePaths } from "./battleFrames";
+import { battleCastFrameCount, effectFramePaths, hitFramePaths, skillArrowFramePaths, skillFramePaths, skillLayerFramePaths, skillRestLayerFramePaths } from "./battleFrames";
 import { battleCastWait, battleRoundNumber, BattlePresentation, fallbackAttackTitle, formatBattleRound, nextBattleSpeed, planBattlePresentation, playbackBeats, signedHitFloats, signedHpDeltas } from "./battlePresentation";
 import { barsFromSides, beginHangBattle, bindHangSkip, bindHangSpeed, dropHangReplay, finishHangBattle, hangFloatOrigin, liftHangReplay, setHangSpeed, showHangStrike, stopHangBattle } from "./hangBattle";
 import {
@@ -307,6 +307,9 @@ class WireMainlineController implements WireMainlinePage {
   private skillReel: FrameReel | null = null;
   private effectReel: FrameReel | null = null;
   private hitReel: FrameReel | null = null;
+  /** 第三层和更后面的分套。和主套同一个技能锚点。 */
+  private extraReels: FrameReel[] = [];
+  private arrowReel: FrameReel | null = null;
   private frameGen = 0;
   private fallbackNode: Node | null = null;
   private fallbackActor: SpineActor | null = null;
@@ -1892,19 +1895,25 @@ class WireMainlineController implements WireMainlinePage {
     GameLog.shared.info("Mainline", "加速 " + this.speedText() + "，跳过仍停在最后一拍");
   }
 
-  /** 技能帧在前，effect 帧较小、先挂所以在后面。受击帧挂 VfxHit。 */
+  /** 技能帧在前，分套和箭矢叠在同一个锚点。受击帧挂 VfxHit。 */
   private mountFrameReels(skillParent: Node, hitParent: Node): void {
     this.stopFrameReels();
     this.effectReel = mountFrameReel(skillParent, 240, "EffectReel");
     this.skillReel = mountFrameReel(skillParent, 300, "SkillReel");
     this.hitReel = mountFrameReel(hitParent, 220, "HitReel");
+    this.extraReels = [];
+    for (let i = 0; i < 3; i++) this.extraReels.push(mountFrameReel(skillParent, 260, "SkillLayer" + String(i + 2)));
+    this.arrowReel = mountFrameReel(skillParent, 280, "SkillArrow");
   }
 
   private stopFrameReels(): void {
-    const reels = [this.skillReel, this.effectReel, this.hitReel];
+    const reels = [this.skillReel, this.effectReel, this.hitReel, this.arrowReel];
+    for (let i = 0; i < this.extraReels.length; i++) reels.push(this.extraReels[i]);
     this.skillReel = null;
     this.effectReel = null;
     this.hitReel = null;
+    this.arrowReel = null;
+    this.extraReels = [];
     for (let i = 0; i < reels.length; i++) {
       if (reels[i]) reels[i].stop();
     }
@@ -1938,6 +1947,13 @@ class WireMainlineController implements WireMainlinePage {
     this.driveReel(this.effectReel, wantSkill && effectPaths.length > 0, effectPaths, "skill", skillXY, gen, beat, step);
     this.driveReel(this.skillReel, wantSkill, skillFramePaths(skillId), "skill", skillXY, gen, beat, step);
     this.driveReel(this.hitReel, wantHit, hitFramePaths(skillId), "hit", hitXY, gen, beat, step);
+    const rests = skillRestLayerFramePaths(skillId);
+    for (let i = 0; i < this.extraReels.length; i++) {
+      const paths = i < rests.length ? rests[i] : [];
+      this.driveReel(this.extraReels[i], wantSkill && paths.length > 0, paths, "skill", skillXY, gen, beat, step);
+    }
+    const arrows = skillArrowFramePaths(skillId);
+    this.driveReel(this.arrowReel, wantSkill && arrows.length > 0, arrows, "skill", skillXY, gen, beat, step);
   }
 
   /** 有 skill_id 的拍先把技能帧、下一层和受击帧拉进缓存。没有 skill_id 不预热、不编造。 */
@@ -1951,6 +1967,9 @@ class WireMainlineController implements WireMainlinePage {
       pushFramePaths(paths, skillFramePaths(skillId));
       const layer = skillLayerFramePaths(skillId);
       pushFramePaths(paths, layer === null ? effectFramePaths(skillId) : layer);
+      const rests = skillRestLayerFramePaths(skillId);
+      for (let r = 0; r < rests.length; r++) pushFramePaths(paths, rests[r]);
+      pushFramePaths(paths, skillArrowFramePaths(skillId));
       pushFramePaths(paths, hitFramePaths(skillId));
     }
     warmBattleFrames(paths);

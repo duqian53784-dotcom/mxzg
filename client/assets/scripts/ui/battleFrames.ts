@@ -4,7 +4,16 @@
  * hero-skill 的文件名是 hero-skill_effect-1-0 … 9，不是 stem_序号。
  * skill_id 对得上 resources 里的套时播那套。对不上仍用下面 49 套取模，所以 0 仍是 hero-skill。
  */
-import { skillLayerFrames, skillStemFrames } from "../net/protocol/battleAssetIndex";
+import {
+  skillArrowFrames,
+  skillCompanionFrames,
+  skillIdForSpineStem,
+  skillLayerFrames,
+  skillRestLayerFrames,
+  skillStemFrames,
+} from "../net/protocol/battleAssetIndex";
+
+export { skillIdForSpineStem };
 
 export const HIT_RUNS: readonly (readonly [string, number])[] = [
   ["1", 5],
@@ -122,6 +131,16 @@ export function skillLayerFramePaths(skillId: number | null): string[] | null {
   return skillLayerFrames(skillId);
 }
 
+/** 下一层之后还要同时播的分套。没有就是空数组。 */
+export function skillRestLayerFramePaths(skillId: number | null): string[][] {
+  return skillRestLayerFrames(skillId);
+}
+
+/** 跟主套一起播的箭矢。没有就是空数组。 */
+export function skillArrowFramePaths(skillId: number | null): string[] {
+  return skillArrowFrames(skillId);
+}
+
 /** 这一拍要留多久才够播完技能帧。没有 skill_id 是 0，调用方不编造技能。 */
 export function battleCastFrameCount(skillId: number | null): number {
   if (typeof skillId !== "number" || !isFinite(skillId)) return 0;
@@ -132,5 +151,36 @@ export function battleCastFrameCount(skillId: number | null): number {
   let count = skill;
   if (effect > count) count = effect;
   if (hit > count) count = hit;
+  const rest = skillRestLayerFrames(skillId);
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i].length > count) count = rest[i].length;
+  }
+  const arrow = skillArrowFrames(skillId).length;
+  if (arrow > count) count = arrow;
   return count;
+}
+
+/**
+ * 挂机奇数刀要叠的帧。对得上皮肤套名就播那套技能和它的分套、箭矢。
+ * 对不上仍是 hero-skill，不把 skill-effect 取模里的立绘套上来。
+ * 普通刀只留受击帧。
+ */
+export function hangSkillVfx(stem: string | null, skilled: boolean): { skill: string[]; layers: string[][]; arrow: string[]; hit: string[] } {
+  if (!skilled) {
+    return { skill: [], layers: [], arrow: [], hit: hitFramePaths(null) };
+  }
+  const skillId = skillIdForSpineStem(stem);
+  const layers: string[][] = [];
+  if (skillId !== null) {
+    const extra = skillCompanionFrames(skillId);
+    if (extra) {
+      for (let i = 0; i < extra.length; i++) layers.push(extra[i]);
+    }
+  }
+  return {
+    skill: skillFramePaths(skillId),
+    layers,
+    arrow: skillId === null ? [] : skillArrowFrames(skillId),
+    hit: hitFramePaths(skillId),
+  };
 }

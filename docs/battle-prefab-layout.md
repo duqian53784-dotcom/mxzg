@@ -32,7 +32,7 @@ Creator 3.8.8 打开 `client`。要看这张战斗页，预览地址加 `?transp
 - 英雄套磁盘仍是 Spine 3.7.94，进内存后升到运行时版本，不改磁盘 json。加载失败该格藏起来，并 Toast「spine 未加载」。战旗、战剑走同一套升级，失败只藏格子，不印套名。
 - 这些英雄套没有 die。hp 到 0 之后停在 hit。只有 `crusade_boss_die` 播 die。
 - 只上场上前 3 人。后排槽留着，第 4 人起不补。
-- `skill_id` 对上 `skill-<id>` 就播那套帧，并再播下一层。没有底套时主套用 `-1`。对不上仍按原来 49 套和 skill-effect 取模。第三层、`_arrow` 和多出来的下划线分套不另挂。英雄套没有 Skill / Skill2 剪辑，技能不走缺的剪辑，走技能帧和 skill-effect。帧按原图尺寸播。没有 `skill_id` 不播技能帧、不写技能名，也不编造。
+- `skill_id` 对上 `skill-<id>` 就播那套帧，并同时播下一层、其余层和 `_arrow`。没有底套时主套用 `-1`。`skill-<id>_1` 这种下划线分套也算进顺序。对不上仍按原来 49 套和 skill-effect 取模。英雄套没有 Skill / Skill2 剪辑，技能不走缺的剪辑，走技能帧和 skill-effect。帧按原图尺寸播，分套和箭矢跟主套同一个锚点。没有 `skill_id` 不播技能帧、不写技能名，也不编造。
 - 3001 解开的行动没有每拍时长。`system.csv` 的 `time_diff=25` 不是拍表，客户端不读。`battlepre.txt` 里的 `battle_duration` 是旧 JSON 样本，没有接进这条回放。×1 可见节奏是 `battleCastWait`：普通拍至少 1400ms，最后一拍至少 1000ms；这一拍带了 `skill_id` 时再取技能帧张数 × 70ms。×2、×3 把这段收成一半、三分之一，最短 80ms。`battleBeatWait` 的 700/260 还在，不是现在的可见节奏。
 - 3001 命中只解开 def_pos、hurt、hp。报告上没有 crit、level、buffs 时，暴击气泡、等级和 buff 藏起。有这些字段才会画。
 - 不播技能音效。WireBattlePage 仍不挂。

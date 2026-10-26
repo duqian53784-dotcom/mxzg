@@ -15,6 +15,8 @@ import { place, uiNode } from "./UiKit";
 export interface SpineActor {
   /** 骨架节点。挂机行军不挪父格，父格留在地砖槽上。 */
   readonly node: Node;
+  /** resources/spine 下的套名。演武用它找技能帧。 */
+  readonly stem: string;
   play(clip: WireSpineClip): void;
   /** 命名特效。找不到动作时不播，也不当成加载失败。 */
   burst(name: string): void;
@@ -219,7 +221,7 @@ export function mountBattleSpine(parent: Node, stem: string, onFail: () => void,
   } catch (err) {
     fail();
   }
-  return { node, play, burst, gesture };
+  return { node, stem, play, burst, gesture };
 }
 
 const runtimePacks: { [stem: string]: sp.SkeletonData } = {};
