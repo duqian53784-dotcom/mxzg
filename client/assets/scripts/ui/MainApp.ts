@@ -37,6 +37,7 @@ import {
   Session,
 } from "../core/Session";
 import { NetClient } from "../net/NetClient";
+import { wireDebugEnabled } from "../net/transportSelect";
 import { NetState } from "../net/NetTypes";
 import { WireSession } from "../net/WireSession";
 import { Proto } from "../net/protocol";
@@ -44,7 +45,7 @@ import { BagPage, buildBagPage } from "./BagPage";
 import { CityChrome, mountCityChrome, mountCityChromePrefab, TabState } from "./CityChrome";
 import { formatAvatarIcon, formatCombatPower } from "./hangHud";
 import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
-import { attachPagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
+import { attachPagePrefabShell, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
 import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage, mountHeroDetailPrefab, mountHeroListPrefab, USE_HERO_PREFAB } from "./HeroPage";
 import { buildSummonPage, mountSummonPrefab, SummonPage, USE_SUMMON_PREFAB } from "./SummonPage";
 import { buildWireSummonPage, WireSummonPage } from "./WireSummonPage";
@@ -684,11 +685,24 @@ export class MainApp extends Component {
     return false;
   }
 
-  /** 原来的页面仍由 buildPage 做。壳加载失败时页面不动。主城不盖壳。 */
+  /**
+   * 原来的页面仍由 buildPage 做。壳加载失败时页面不动。主城不盖壳。
+   * 底栏「战斗」自己铺挂机站场，不先画探针，也不等 BattlePanelLayer 才盖住探针。
+   * ?dev=wire 才留着探针，并且不再盖挂机壳。
+   */
   private presentPage(id: string): Node {
     const page = this.buildPage(id);
+    if (id === "mainline") {
+      if (!this.battleTabIsProbe()) void mountHangBattleShell(page);
+      return page;
+    }
     if (USE_PAGE_PREFAB_SHELL && id !== CITY_TAB) void attachPagePrefabShell(page, id);
     return page;
+  }
+
+  /** 真服且地址带 ?dev=wire。不改连接，Mock 仍只认 ?dev=mock。 */
+  private battleTabIsProbe(): boolean {
+    return Session.source === "wire" && wireDebugEnabled();
   }
 
   private buildPage(id: string): Node {
@@ -1388,7 +1402,7 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 打开关卡列表。Mock 战斗在 MainlinePage。真服有 idx 时打开主线页，挑战在页内发 3001。 */
+  /** 打开挂机站场。Mock 的挑战在 MainlinePage。真服点中间「战斗」发 3001。?dev=wire 才是探针页。 */
   private openMainline(): void {
     GameLog.shared.info("MainApp", "click mainline");
     if (Session.source === "wire") {
@@ -4120,6 +4134,7 @@ export class MainApp extends Component {
       },
       connected: () => this.cityNet().state === "connected",
       level: () => this.level(),
+      probe: wireDebugEnabled(),
     });
     this.mainline = page;
     return page.node;

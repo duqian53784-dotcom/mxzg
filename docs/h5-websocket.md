@@ -1,6 +1,6 @@
 # H5 连本机游戏服 WebSocket（D2 已验证，D3 主城壳）
 
-默认预览连真服，不必加 `?transport=ws`。地址是本机桥 `ws://127.0.0.1:13111/game`，桥把二进制帧原样转到游戏服 TCP `9902`。Mock 只在地址显式带 `?dev=mock`（或 `?transport=mock`）时打开，默认关，也不再从上次记住的键自动回到 Mock。`?transport=auto` 会先短连，桥没开停在「服未启动」，不进 Mock。角色数据只从 s2c 进 `GameStore`，步骤见 `docs/local-link-and-store.md` 和 `docs/real-data-audit.md`。
+默认预览连真服，不必加 `?transport=ws`。地址是本机桥 `ws://127.0.0.1:13111/game`，桥把二进制帧原样转到游戏服 TCP `9902`。Mock 只在地址显式带 `?dev=mock`（或 `?transport=mock`）时打开，默认关，也不再从上次记住的键自动回到 Mock。`?dev=wire` 只让底栏「战斗」打开主线探针，不改成 Mock。`?transport=auto` 会先短连，桥没开停在「服未启动」，不进 Mock。角色数据只从 s2c 进 `GameStore`，步骤见 `docs/local-link-and-store.md` 和 `docs/real-data-audit.md`。
 
 D2 已在倩本机勾过：`收到 s2c 1001`（例：角色 1000002），后面还有真服推送。不要直连 13101。
 

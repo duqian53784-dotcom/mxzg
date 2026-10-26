@@ -27,6 +27,19 @@ export const TransportConfig = {
 /** 运行时是否允许 MockTransport 把会话种进 GameStore。Boot 只在 ?dev=mock 时打开。 */
 let mockRuntime = false;
 
+/**
+ * 真服主线探针（关卡加减、请求战报、切磋、GM）。
+ * 只认地址上的 ?dev=wire。不改传输：默认仍是 ws://127.0.0.1:13111/game。
+ * ?dev=mock 仍只开 Mock，不会顺带打开这页。
+ */
+export function wireDebugFromSearch(search: string): boolean {
+  return queryParam(search, "dev") === "wire";
+}
+
+export function wireDebugEnabled(): boolean {
+  return wireDebugFromSearch(readPreviewSearch());
+}
+
 export function mockRuntimeEnabled(): boolean {
   return mockRuntime;
 }
