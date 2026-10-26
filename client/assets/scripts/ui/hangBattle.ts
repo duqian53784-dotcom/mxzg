@@ -2,12 +2,15 @@
  * 战斗叠在挂机壳上。底栏三钮和收益留在下面。
  * 回合写成 n/15。加速用 battle-scene 的速度图，跳过停在这一局的最后一拍。
  * 血条跟站位。战报没有怒气字段时，怒气条按当前回合 / 15 填充，只标位置。
- * 伤害红字，治疗绿字，暴击用更大的金字。数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
+ * 飘字数字走 yellow-73 / green-73 / red-73。字库没挂上时退回红、绿、金系统字。
+ * 开战在大理石上各播一遍左右出场帧，播完或第一下受击就藏。数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
  */
 import { Button, Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { GameLog } from "../core/GameLog";
 import { BattleRound, BattleUnit } from "../module/mainline/battle";
 import { paintSpeedIcon } from "./BattlePage";
+import { BATTLE_APPEAR_LEFT, BATTLE_APPEAR_RIGHT, battleAppearFramePaths } from "./battleAppear";
+import { battleFrameStep, mountFrameReel } from "./battleFramePlay";
 import { mountNamedSpine } from "./battleSpine";
 import { placeHangFloats, type HangFloat } from "./hangFloat";
 import { pauseIdleSkirmishes, resumeIdleSkirmishes } from "./idleHangSkirmish";
@@ -91,6 +94,7 @@ export function beginHangBattle(page: Node, left: string, right: string): void {
     setText(flash, "战斗开始");
   }
   playOpenVfx(layer);
+  playHangAppear(layer, hold.speed);
   paintVs(layer, hold);
   const round = layer.getChildByName("HangRound");
   if (round) setText(round, "1/15");
@@ -122,6 +126,7 @@ export function showHangStrike(
   const layer = ensureLayer(page);
   const flash = layer.getChildByName("HangFlash");
   if (flash) flash.active = round <= 1 && floats.length === 0;
+  if (!flash || !flash.active) stopHangAppear(layer);
   const cap = total >= 1 ? total : 15;
   const now = round >= 1 ? round : 1;
   const label = layer.getChildByName("HangRound");
@@ -139,6 +144,7 @@ export function finishHangBattle(page: Node, win: boolean | null): void {
   const hold = holds.get(page);
   const seq = hold ? hold.seq : -1;
   const layer = layerOf(page);
+  if (layer) stopHangAppear(layer);
   if (layer) {
     const banner = layer.getChildByName("HangSkill");
     if (banner) {
@@ -262,6 +268,66 @@ function setIdleCast(host: Node, active: boolean): void {
 }
 
 let openVfxMiss = false;
+let appearMiss = false;
+
+interface AppearRun {
+  stop(): void;
+}
+
+const appearRuns = new Map<Node, AppearRun>();
+
+/** 左右出场光各播一遍。锚点与 LayerAppear 相同，帧按原图尺寸，不收成一张。 */
+function playHangAppear(layer: Node, speed: number): void {
+  stopHangAppear(layer);
+  const timers: Array<ReturnType<typeof setTimeout>> = [];
+  const stops: Array<() => void> = [];
+  const step = battleFrameStep(speed);
+  const arm = (name: string, at: { x: number; y: number }, side: "left" | "right") => {
+    const old = layer.getChildByName(name);
+    if (old) old.destroy();
+    const paths = battleAppearFramePaths(side);
+    const reel = mountFrameReel(layer, 240, name);
+    reel.node.setPosition(at.x, at.y, 0);
+    stops.push(() => reel.stop());
+    reel.play(paths, (ok) => {
+      if (!ok) noteAppearMiss();
+    });
+    const timer = setTimeout(() => reel.stop(), paths.length * step + 40);
+    const maybe = timer as { unref?: () => void };
+    if (typeof maybe.unref === "function") maybe.unref();
+    timers.push(timer);
+  };
+  arm("HangAppearLeft", BATTLE_APPEAR_LEFT, "left");
+  arm("HangAppearRight", BATTLE_APPEAR_RIGHT, "right");
+  const stop = () => {
+    for (let i = 0; i < timers.length; i++) clearTimeout(timers[i]);
+    for (let i = 0; i < stops.length; i++) stops[i]();
+  };
+  appearRuns.set(layer, { stop });
+  const hooked = layer as Node & { mxzgAppearHook?: boolean };
+  if (!hooked.mxzgAppearHook) {
+    hooked.mxzgAppearHook = true;
+    layer.on(Node.EventType.NODE_DESTROYED, () => {
+      const run = appearRuns.get(layer);
+      if (!run) return;
+      run.stop();
+      appearRuns.delete(layer);
+    });
+  }
+}
+
+function stopHangAppear(layer: Node): void {
+  const run = appearRuns.get(layer);
+  if (!run) return;
+  run.stop();
+  appearRuns.delete(layer);
+}
+
+function noteAppearMiss(): void {
+  if (appearMiss) return;
+  appearMiss = true;
+  GameLog.shared.warn("Mainline", "开战出场帧 battle-appear 没有挂上，仍写战斗开始");
+}
 
 function playOpenVfx(layer: Node): void {
   let host = layer.getChildByName("HangOpenVfx");

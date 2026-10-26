@@ -5,6 +5,8 @@
  * 不发协议，不加载 PVR。
  */
 import { Color, Label, Node } from "cc";
+import { battleNumberKind } from "./battleNumberFont";
+import { applyBattleNumberFont } from "./battleNumberPaint";
 import {
   BATTLE_BUFF_SLOT_COUNT,
   BATTLE_FLOAT_CRIT_PATH,
@@ -100,14 +102,17 @@ export function paintBattleFloats(
     if (label) {
       const heal = shown[i].hurt > 0;
       const crit = shown[i].crit === true && !heal;
-      label.fontSize = crit ? 40 : 32;
-      label.lineHeight = crit ? 44 : 36;
-      label.isBold = true;
-      label.color = crit
-        ? new Color(255, 214, 64, 255)
-        : heal
-          ? new Color(72, 210, 96, 255)
-          : new Color(255, 72, 56, 255);
+      const kind = battleNumberKind(heal, crit);
+      if (!applyBattleNumberFont(label, kind, text)) {
+        label.fontSize = crit ? 40 : 32;
+        label.lineHeight = crit ? 44 : 36;
+        label.isBold = true;
+        label.color = crit
+          ? new Color(255, 214, 64, 255)
+          : heal
+            ? new Color(72, 210, 96, 255)
+            : new Color(255, 72, 56, 255);
+      }
     }
     node.active = true;
     const page = pages && i < pages.length ? pages[i] : null;
