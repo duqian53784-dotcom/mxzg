@@ -266,12 +266,45 @@ export function mapFramePath(layer: number, piece: number, variant: number): str
   return "ui/maps/map-bg-city-" + layer + "-" + piece + "-" + variant;
 }
 
-/** eff_main_city_summon → 静帧 summon-0。脊柱（dx / chuanghu）没有静帧。 */
 /** eff_main_city_summon → ui/city/main-city-effect_summon（无帧号）。 */
 export function effectFrameStem(para: string | undefined): string | null {
   const prefix = "eff_main_city_";
   if (!para || para.indexOf(prefix) !== 0) return null;
   return "ui/city/main-city-effect_" + para.slice(prefix.length);
+}
+
+/**
+ * 脊柱播失败时改播的序列。dx 图集里的光球和 portrait 帧同是 96×90。
+ * chuanghu 只有 27×40 的一张附件，没有对应序列。
+ * spr-cloud、main-city-effect_6、main-city-effect_15 不在 maincityeffect 表里，不另摆位置。
+ */
+export const CITY_SPINE_FRAME_FALLBACK: { [stem: string]: string } = {
+  dx: "ui/city/main-city-effect_portrait",
+};
+
+/**
+ * 按序号探到的帧。0 没有但 1 有（云从 1 起）就从 1 开始。
+ * 中间缺一张就停，不把后面的洞接上。
+ */
+export function takeFrameRun<T>(probed: ReadonlyArray<T | null | undefined>): T[] {
+  let start = 0;
+  const firstMissing = probed[0] === null || probed[0] === undefined;
+  if (firstMissing && probed.length > 1 && probed[1]) start = 1;
+  const out: T[] = [];
+  for (let i = start; i < probed.length; i++) {
+    const frame = probed[i];
+    if (frame === null || frame === undefined) break;
+    out.push(frame);
+  }
+  return out;
+}
+
+/** res-block 的收起动作。没有 collect-0，0 和负数都落到 collect-1，大于 4 封在 collect-4。 */
+export function harvestCollectClip(level: number): string {
+  let n = Math.round(level);
+  if (!isFinite(n) || n < 1) n = 1;
+  if (n > 4) n = 4;
+  return "collect-" + String(n);
 }
 
 /** 首帧路径，兼容旧调用。 */

@@ -261,7 +261,7 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 | 快速战斗 | `QuickBattleLayer` 用 `idle_speed_up`（7200 秒）预览两小时 `reward_base`，并读已有 3012 | 不发 3013，不发奖励。说明和跳转只改提示字 |
 | 我要变强 | 打开已有 `HeroSuggestLayer`。四个页签只切换 `node_strong` / `resource` / `hero` / `lineup` | 不发协议。名字最多写名册前三名 |
 | VIP | 没有角色 VIP 等级时挂机条不写字，不再把「VIP未同步」画在战斗钮下面。`vipIdleLine(level)` 仍能按 `vip` 表写出百分比和 `extra_idle_time`。三格和封顶仍是 `reward_base` + `idle_max_time`，不乘某一档 | s2c 2001 已核对的字段没有 `vip_level`。字段 15 按旧说明不读。不能在客户端加 VIP% / 3013 / GM。没有等级就不把表里的 10% 或 0% 当成这名角色的加成 |
-| 掉落堆 | 不再把 `main-scene_spr-drop-1` 放在场地中央。那张是空的蓝金匾，不是金币堆。有当前关 `reward_base` 或 `drop_group` 时，仍用已有 `res-icon_res-1`、`res-icon_res-2`、`main-scene_spr-box-2`、`backpack_900101`、`backpack_900003` 和掉落物品图标叠一堆。没有这些数据时场地留空 | `spine/res-block` 就是旧挂机宝箱金币堆（骨架注释路径「宝箱金币」）。`normal-0`…`normal-4` 从少到满，`normal-4` 是全件加光，`collect-1`…`collect-4` 是收起。本轮先做演武，这套 spine 还没挂上。不新画。不掷随机数，不写进三格 |
+| 掉落堆 | 不再把 `main-scene_spr-drop-1` 放在场地中央。那张是空的蓝金匾，不是金币堆。有当前关 `reward_base` 或 `drop_group` 时，仍用已有 `res-icon_res-1`、`res-icon_res-2`、`main-scene_spr-box-2`、`backpack_900101`、`backpack_900003` 和掉落物品图标叠一堆。没有这些数据时场地留空。堆上按数量播 `spine/res-block` 的 `normal-0`…`normal-4`。点底栏宝箱播对应的 `collect-1`…`collect-4`（没有 `collect-0`），播完回到 normal；数量已经是 0 就藏起来 | 领取仍是原来的空 c2s 3005 / Mock `idle.claim`，不新发协议。不掷随机数，不写进三格。进度光是 `jindutiao` 的 `stand`，铺在 `spr_progress_AFK_bg` 的遮罩里，宽度跟已挂机比例走。底下的 `progress-AFK` 填充还在 |
 | 待命气泡 | 不再给每个站位写「待命」。场上最多留 Prefab 里那一个计时泡 `node_bubble`，挪到掉落堆上沿。没有另挂对白泡 | 对白表在 `config/herotalk.json`，53 行，`lan` 70901–70953，language 都有，部分带 font 标签。气泡图是 `ui/common/other_spr-bubble-1.png`。本轮先做演武，这句对白还没挂上。不编新句子 |
 | 挂机演武 | 阵容站好后客户端自己打。`IdleFoes` 按当前关 `chapter` 里有 stand 的 `hero_type` 轮流出现在殿堂后侧三格（左 -180,230 朝右，中 8,268 朝左，右 188,226 朝左）。对不上 stand 就用 `10405006` / `10405007` / `10505010`。英雄播 attack，怪播 hit，受击再挂已有 `yanwu`。没有 die 的套打完收掉。飘字和战报同一套红字。点「战斗」会暂停，真战报结束再继续。不发协议，不改钱包 | 有表里的 hp 就按刀数分完，最后一刀是击杀。没有 hp 时演出数字是 48、64…。不掷随机数。伤害不进三格，也不进 3004 |
 | 时钟 | 真服只按 s2c 3004 的 `reward_time` 计一次。大于等于 10 亿才当时间戳，10^12 以上当毫秒，否则当 unix 秒。更小的数写「未同步」，不再从打开面板的时刻往上加。`max_reward_time` 小于 10 亿时按秒封顶（0 也封在 00:00）。像时间戳时退回 `system.idle_max_time`。挂机泡和宝箱条满 1 小时写成 `hh:mm`（封顶 21600 秒是 `06:00`），不满 1 小时是 `mm:ss`。`formatDuration` 仍是 `hh:mm:ss`，挂机页句子不用它。领取成功后第二行时钟不再停在「已发领取」 | 没读到表、也没有可用的 `max_reward_time` 时不封顶 |
@@ -278,6 +278,8 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 | 圣物 | 每种 `kind` 用 1 星那条的名字、图标和特性。任一星的 id 在背包里就算持有 | 不发升星 |
 | 说明卡 | 按 BackpackInfoLayer 的 390×300 在运行时拼。不挂那个 prefab，也不发使用 / 出售 / 来源 | 关闭只关这张卡 |
 | 空名册 / 空背包 | 4001 还没到：英雄页写「真服英雄未同步」，格子改画 `herotype` 图鉴（灰、锁），不造英雄。4001 是空数组：写「空名册」，同样改画图鉴。有英雄仍只画名册。背包没到写「真服未同步」，空表写「空背包」，格子仍是空框。出阵没有英雄写「空名册，没有可上阵的英雄」。收到后续 s2c 会重画 | 图鉴不是角色进度。不把配置表行写进 `GameStore` |
+| 主城特效 | `maincityeffect` 的 5 条 anim 按 `main-city-effect_<名>-0` 起往下播，缺一张就停。节点挂到中景父节点的最后，用中景本地坐标换算，避免被近景板和后挂的建筑图标盖住。`dx` 播 `stand`；播失败改播 `main-city-effect_portrait`（和 `spine/dx` 图集里的光球同是 96×90）。`chuanghu` 仍是 spine `stand` | `main-city-effect_spr-cloud-1`…`4`、`main-city-effect_6-*`、`main-city-effect_15-*` 有帧，但 `maincityeffect` 没有对应行，不猜坐标。不新画 |
+| 战斗缺帧 | 技能 / 受击帧全空时，对应 batch2 骨架还在就留骨架。骨架也没有时，在同一 Vfx 锚点播已有 `yanwu`（`act1`） | 不新做技能套。3013 / 升级 / 使用道具仍不发 |
 
 ## 启动加载 / 热更
 
@@ -285,7 +287,7 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 
 | 项 | 现在怎么做 | 依据 / 还差什么 |
 |---|---|---|
-| logo 图 | `resources/ui/login/logo-scene_spr-logo.png`，原始尺寸显示 | 文件 69 字节，IHDR 3×3，是失败的图集抽出。仍用这张 |
+| logo 图 | 节点名 `logo-scene_spr-logo`。图是 `resources/ui/login/logo-scene_spr-logo.png`，原始尺寸显示 | 文件 69 字节，IHDR 3×3，是失败的图集抽出。仍用这张，不另做 logo |
 | logo 时间 | 淡入 1 秒、停 1 秒、淡出 0.5 秒。点一下跳过停留和淡出 | 旧 lua 不在仓库。常量在 `logoSplash.ts` |
 | logo 音乐 | `resources/audio/bgm-logo.mp3` 从淡入循环到进 Main | |
 | 背景 | `ui/login/bg-loading.jpg` 768×1300。cover 到 720×1280：scale = max(720/768, 1280/1300) ≈ 0.9846，画出 756×1280 | 左右被裁一点，不留黑边 |
@@ -294,7 +296,7 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 | 进度头 | `loading_spr-progress-1` 裁切 18×27，从 x = -262 跟着填充走 | |
 | spine | `spine/jindutiao` 动画 `stand`。原生宽 275，scaleX = 524/275 ≈ 1.9055，放在遮罩里。遮罩锚点在左，宽度从 0 长到 524 | Spine 3.7.94，播放前走 `runtimeSpineData`。播不了时仍能看见底下的填充图 |
 | 百分比 | `loading_text-bg` 84×84，字在 y = -448，格式 `N%` | |
-| 提示 | y = -580，宽 660。`loadingtips` 3701–3705 对 language，去掉 font 标签，约 3.5 秒随机换，不重复上一条 | 字色 `#ffeeb2` |
-| 阶段字 | y = -390。检查版本 / 更新资源 / 加载资源 / 读取配置 / 登录 / 同步角色 | |
+| 提示 | y = -580，宽 660。`loadingtips` 3701–3705 对 language，去掉 font 标签，约 3.5 秒随机换，不重复上一条 | 字色 `#ffeeb2`（`BOOT_TIP_COLOR`）。运行时再涂一次，不跟 Prefab 漂 |
+| 阶段字 | y = -390。检查版本 / 更新资源 / 加载资源 / 读取配置 / 登录 / 同步角色 | 字色 `#fff4dc`（`BOOT_STAGE_COLOR`）。百分比 `#fff8e6` |
 | 重试 | 默认隐藏，y = -280。图是 `button_btn-orange-big-1`，按下 `orange-big-2`，九宫边距沿用 meta（左 64、右 59） | 热更确认时把字改成「下载」 |
 | 热更层 | 和加载层同一棵节点。H5 只走界面和进度。其它平台下载 `version.manifest`，不改搜索路径 | 没有热更 ccbi，也没有 AssetsManager |

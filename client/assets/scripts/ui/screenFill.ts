@@ -19,8 +19,8 @@ import { WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/wireLineUpSave";
 import { mainFormationHeroes } from "../net/protocol/starterLineup";
 import { formatHangClock, goldPerMin, itemEveryMs } from "../module/idle/rewards";
 import { hangSpineStem } from "./idleHangRoster";
-import { paintIdleLoot, seatHangTimer } from "./idleHangView";
-import { mountBattleSpine } from "./battleSpine";
+import { paintIdleLoot, playIdleHarvest, seatHangTimer } from "./idleHangView";
+import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
 import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
 import { mockRuntimeEnabled } from "../net/transportSelect";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
@@ -269,6 +269,36 @@ function setBarFill(view: Node, barName: string, art: string, ratio: number): vo
   const image = fill.getComponent(Sprite);
   if (image) image.fillRange = span;
   fill.active = span > 0;
+  if (barName === "spr_progress_AFK_bg") seatHangProgressSpine(bar, span);
+}
+
+/** jindutiao 铺在宝箱条上，遮罩跟着已挂机比例拉开。底下的填充图仍在。 */
+function seatHangProgressSpine(bar: Node, ratio: number): void {
+  const ui = bar.getComponent(UITransform);
+  const width = ui && ui.contentSize && ui.contentSize.width > 0 ? ui.contentSize.width : 166;
+  const height = ui && ui.contentSize && ui.contentSize.height > 0 ? ui.contentSize.height : 36;
+  let mask = bar.getChildByName("HangSpineMask");
+  if (!mask) {
+    mask = uiNode("HangSpineMask");
+    const maskUi = mask.addComponent(UITransform);
+    maskUi.setAnchorPoint(0, 0.5);
+    maskUi.setContentSize(0, height);
+    const maskComp = mask.addComponent(Mask);
+    maskComp.type = Mask.Type.GRAPHICS_RECT;
+    mask.setPosition(-width * 0.5, 0, 0);
+    mask.parent = bar;
+    const spine = uiNode("Spine");
+    spine.addComponent(UITransform).setContentSize(275, 39);
+    const scaleX = width / 275;
+    const scaleY = height / 39;
+    spine.setScale(scaleX, scaleY, 1);
+    spine.setPosition(width * 0.5, 0, 0);
+    spine.parent = mask;
+    mountNamedSpine(spine, "jindutiao", "stand");
+  }
+  const maskUi = mask.getComponent(UITransform);
+  if (maskUi) maskUi.setContentSize(Math.max(0, Math.round(width * ratio)), height);
+  mask.active = ratio > 0;
 }
 
 /** 底栏宝箱。Mock 走 idle.claim，真服只发已有的空 3005。 */
@@ -282,6 +312,8 @@ function bindHangClaim(view: Node, note: (text: string, resetClock: boolean) => 
     button.on(Button.EventType.CLICK, () => {
       if (busy) return;
       busy = true;
+      const hang = view.parent ? view.parent.getChildByName("IdleHang") : null;
+      if (hang) playIdleHarvest(hang);
       void claimHang(view, note).then(() => {
         busy = false;
       });

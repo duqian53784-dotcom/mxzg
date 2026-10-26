@@ -32,7 +32,7 @@
  * 不从 3102 自动接。fighting=0 是成功，不 Toast。不播 spine。
  * 主线入口已在「更多」，不往主屏再放矩形。
  * 收到 report 在本页播 spine 站场、回合攻击、有 hit 的受击，以及 batch2 技能/受击特效。3001、3006、3102 和 3030 都走 replayFromStore（里面仍是 planWireSpineReplay）。战报没有我方英雄时用 GameStore 的 MAIN。守方空时 chapter.idx 对上且有 stand 才换表内怪。3103 不走。3101 不走。3099 不走。
- * 有拍时 VfxHit 再播 hero-beattack，VfxSkill 再播 skill 和 skill-effect。mountFrameReel 挂在已有锚点上，不另建 Vfx 节点。帧没加载到就留 batch2。
+ * 有拍时 VfxHit 再播 hero-beattack，VfxSkill 再播 skill 和 skill-effect。mountFrameReel 挂在已有锚点上，不另建 Vfx 节点。帧没加载到就留 batch2。batch2 也没有骨架时，在同一锚点补已有 yanwu。
  * skill_id 对得上 resources 里的套时播那套帧，并再播下一层。对不上仍用 49 套和 skill-effect 取模。
  * 有 skill_id 才开技能条并播技能帧。没有 skill_id 不编造，条和帧都关。英雄套没有 Skill 剪辑，不播缺的剪辑。帧按原图尺寸播，不压成 300 方块。进战先预热帧。
  * 底栏「战斗」先看到挂机站场（大理石殿 + BattlePanelLayer + 演武）。点壳上的「战斗」才发 3001。有 report 才在挂机壳上播战报。森林页不是挂机壳。
@@ -50,7 +50,7 @@
  * 不发 18001，不把 Mock 1201/1202 当战报。
  * 没有 report 或未同步时 Toast「真服未同步」，不回落 Mock。3103 的 fighting=0 不 Toast。
  */
-import { Button, Color, EditBox, EventTouch, Mask, Node, UITransform } from "cc";
+import { Button, Color, EditBox, EventTouch, Mask, Node, sp, UITransform } from "cc";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import { WireSession } from "../net/WireSession";
@@ -59,6 +59,7 @@ import {
   formatWireFightLine,
   resolveWireBattleWin,
   WIRE_BATTLE_UNSYNCED_TOAST,
+  WIRE_SPINE_HIT_STEM,
   WIRE_SPINE_LOAD_FAIL,
   wireMainlineFightStage,
   wireSpineVfxClip,
@@ -307,6 +308,8 @@ class WireMainlineController implements WireMainlinePage {
   private effectReel: FrameReel | null = null;
   private hitReel: FrameReel | null = null;
   private frameGen = 0;
+  private fallbackNode: Node | null = null;
+  private fallbackActor: SpineActor | null = null;
   private nameLabels: Node[] = [];
   private hpLabels: Node[] = [];
   private hpNow: (number | null)[] = [];
@@ -1887,9 +1890,11 @@ class WireMainlineController implements WireMainlinePage {
     for (let i = 0; i < reels.length; i++) {
       if (reels[i]) reels[i].stop();
     }
+    this.hideVfxFallback();
   }
 
   private playFrameVfx(plan: WireSpineReplay, beat: WireSpineReplay["beats"][number]): void {
+    this.hideVfxFallback();
     this.frameGen += 1;
     const gen = this.frameGen;
     let wantSkill = false;
@@ -1957,6 +1962,7 @@ class WireMainlineController implements WireMainlinePage {
         if (!ok) {
           if (!this.disposed && gen === this.frameGen) {
             GameLog.shared.warn("Mainline", "vfx frames miss role=" + role + " n=" + paths.length);
+            if (!this.roleSpineReady(role, beat)) this.showVfxFallback(role, xy);
           }
           return;
         }
@@ -1965,6 +1971,59 @@ class WireMainlineController implements WireMainlinePage {
       },
       stepMs
     );
+  }
+
+  /** 帧路径全空、对应 batch2 也没挂上骨架时，用已有 yanwu 在同一锚点打一下。 */
+  private showVfxFallback(role: "skill" | "hit", xy: { x: number; y: number }): void {
+    let node = this.fallbackNode;
+    if (!node || !node.isValid) {
+      node = uiNode("VfxFallback");
+      this.fallbackNode = node;
+      const parent = this.fallbackParent(role);
+      node.parent = parent;
+      this.fallbackActor = mountBattleSpine(node, WIRE_SPINE_HIT_STEM, () => {
+        if (node && node.isValid) node.active = false;
+      }, { effect: true });
+    }
+    const parent = this.fallbackParent(role);
+    if (node.parent !== parent) node.parent = parent;
+    if (this.battleShell && this.battleShell.root.isValid) this.battleShell.placeVfx(node, role, xy.x, xy.y);
+    else node.setPosition(xy.x, xy.y, 0);
+    node.active = true;
+    if (node.parent) node.setSiblingIndex(Math.max(0, node.parent.children.length - 1));
+    if (this.fallbackActor) this.fallbackActor.burst(wireSpineVfxClip(WIRE_SPINE_HIT_STEM));
+    GameLog.shared.warn("Mainline", "vfx fallback yanwu role=" + role);
+  }
+
+  private hideVfxFallback(): void {
+    if (this.fallbackNode && this.fallbackNode.isValid) this.fallbackNode.active = false;
+  }
+
+  private fallbackParent(role: "skill" | "hit"): Node {
+    if (this.battleShell && this.battleShell.root.isValid) return this.battleShell.vfxAnchor(role);
+    return this.body;
+  }
+
+  private roleSpineReady(role: "skill" | "hit", beat: WireSpineReplay["beats"][number]): boolean {
+    for (let i = 0; i < beat.vfx.length; i++) {
+      if (beat.vfx[i].role !== role) continue;
+      for (let n = 0; n < this.vfxNodes.length; n++) {
+        if (this.vfxNodes[n].stem !== beat.vfx[i].stem) continue;
+        if (this.skeletonReady(this.vfxNodes[n].node)) return true;
+      }
+    }
+    return false;
+  }
+
+  private skeletonReady(node: Node): boolean {
+    const direct = node.getComponent(sp.Skeleton);
+    if (direct && direct.skeletonData) return true;
+    const kids = node.children;
+    for (let i = 0; i < kids.length; i++) {
+      const skel = kids[i].getComponent(sp.Skeleton);
+      if (skel && skel.skeletonData) return true;
+    }
+    return false;
   }
 
   private hideSpineRole(role: "skill" | "hit", beat: WireSpineReplay["beats"][number]): void {

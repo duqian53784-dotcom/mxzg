@@ -27,7 +27,7 @@ export function playLogoSplash(parent: Node, audioHost: Node): LogoSplashHandle 
   root.addComponent(BlockInputEvents);
   root.parent = parent;
   place(createRect("dim", 2000, 2000, new Color(0, 0, 0, 255)), root, 0, 0);
-  const logo = uiNode("Logo");
+  const logo = uiNode("logo-scene_spr-logo");
   const logoUi = logo.addComponent(UITransform);
   logoUi.setContentSize(3, 3);
   const sprite = logo.addComponent(Sprite);

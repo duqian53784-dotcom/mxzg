@@ -12,7 +12,7 @@ Boot 场景按旧工程的顺序走完才进 Main：logo、版本比较、热更
 
 | 顺序 | GameLog | 屏幕上的字 | 做什么 |
 |---|---|---|---|
-| 1 | | logo | `logo-scene_spr-logo` 淡入 1 秒、停 1 秒、淡出 0.5 秒。点一下跳过停留和淡出。`bgm-logo` 从淡入开始循环，进 Main 时停 |
+| 1 | | logo | 节点 `logo-scene_spr-logo` 淡入 1 秒、停 1 秒、淡出 0.5 秒。点一下跳过停留和淡出。`bgm-logo` 从淡入开始循环，进 Main 时停 |
 | 2 | `version` | 检查版本 | 读 `config/version` 的整数 `version`，再向 `platform_urls` 和 `download_urls` 要远程版本。拉不到不挡 |
 | 3 | `hot-update` | 更新资源 | 远程更大才打开 UpdateLayer。相等、本地更新，或远程拉不到，则跳过下载 |
 | 4 | `assets` | 加载资源 | 预加载底图、进度条、`spine/jindutiao`、`audio/bgm-logo` |

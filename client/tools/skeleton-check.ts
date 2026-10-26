@@ -25,6 +25,9 @@ import {
   CITY_PARALLAX_SPEEDS,
   contentLeftX,
   effectFramePath,
+  harvestCollectClip,
+  takeFrameRun,
+  CITY_SPINE_FRAME_FALLBACK,
   findCityNode,
   layerWindowX,
   MainCityBtnFile,
@@ -2966,6 +2969,20 @@ function checkCityMap(): void {
   assert(privilege[0] === "ui/city/main-city_btn-login-3" && privilege[1] === "ui/city/main-city_icon-act_privilege", "activity icon falls back");
   assert(effectFramePath("eff_main_city_summon") === "ui/city/main-city-effect_summon-0", "summon effect frame");
   assert(effectFramePath("dx") === null && effectFramePath("chuanghu") === null, "spine effects are not bitmaps");
+  assert(takeFrameRun(["a", "b", null, "c"]).join(",") === "a,b", "frame run stops at the first gap");
+  assert(takeFrameRun([null, "a", "b", null]).join(",") === "a,b", "frame run can start at frame 1");
+  assert(takeFrameRun([null, null]).length === 0, "missing frame run stays empty");
+  assert(
+    harvestCollectClip(0) === "collect-1" &&
+      harvestCollectClip(1) === "collect-1" &&
+      harvestCollectClip(4) === "collect-4" &&
+      harvestCollectClip(9) === "collect-4",
+    "harvest collect clips stay inside res-block"
+  );
+  assert(
+    CITY_SPINE_FRAME_FALLBACK.dx === "ui/city/main-city-effect_portrait" && !CITY_SPINE_FRAME_FALLBACK.chuanghu,
+    "dx falls back to portrait frames, chuanghu has none"
+  );
   let spine = 0;
   let still = 0;
   for (let i = 0; i < layout.effects.length; i++) {
@@ -2977,6 +2994,27 @@ function checkCityMap(): void {
 
   const cityMapSrc = readFileSync(uiSource("CityMap.ts"), "utf8");
   assert(cityMapSrc.indexOf("placeActivity") < 0 && cityMapSrc.indexOf('uiNode("act-') < 0, "city map does not stack the activity strip");
+  const cityFxSrc = readFileSync(uiSource("cityEffectPlay.ts"), "utf8");
+  assert(
+    cityFxSrc.indexOf("takeFrameRun") >= 0 &&
+      cityFxSrc.indexOf("FRAME_CAP") >= 0 &&
+      cityFxSrc.indexOf("convertToWorldSpaceAR") >= 0 &&
+      cityFxSrc.indexOf("CITY_SPINE_FRAME_FALLBACK") >= 0 &&
+      cityFxSrc.indexOf("MAX_FRAMES") < 0,
+    "city effects stop at the first missing frame and draw above the foreground"
+  );
+  const splashSrc = readFileSync(uiSource("logoSplash.ts"), "utf8");
+  const bootChromeSrc = readFileSync(uiSource("bootChrome.ts"), "utf8");
+  assert(splashSrc.indexOf('uiNode("logo-scene_spr-logo")') >= 0, "logo node keeps the checklist name");
+  assert(
+    bootChromeSrc.indexOf("BOOT_TIP_COLOR") >= 0 && bootChromeSrc.indexOf("ffeeb2") >= 0 && bootChromeSrc.indexOf("BOOT_STAGE_COLOR") >= 0,
+    "loading tips stay #ffeeb2 and the stage line has its own color"
+  );
+  const mainlineFxSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
+  assert(
+    mainlineFxSrc.indexOf("VfxFallback") >= 0 && mainlineFxSrc.indexOf("vfx fallback yanwu") >= 0,
+    "missing battle frames fall back to the existing yanwu hit"
+  );
   assert(cityMapSrc.indexOf("TOUCH_MOVE") >= 0 && cityMapSrc.indexOf("placeBuilding") >= 0, "building drag stays");
 
   const gates = {
@@ -26778,8 +26816,11 @@ function checkCityHub(): void {
     hangSrc.indexOf("IdleTalk") < 0 &&
       hangSrc.indexOf("IdleDrop") < 0 &&
       hangSrc.indexOf("paintIdleLoot") >= 0 &&
-      hangSrc.indexOf("seatHangTimer") >= 0,
-    "hang scene does not spam standby bubbles or mount the empty drop plaque"
+      hangSrc.indexOf("seatHangTimer") >= 0 &&
+      hangSrc.indexOf("playIdleHarvest") >= 0 &&
+      hangSrc.indexOf("harvestCollectClip") >= 0 &&
+      hangSrc.indexOf("IdleProgressSpine") < 0,
+    "hang scene does not spam standby bubbles or mount the empty drop plaque, and the chest plays collect"
   );
   const fillSrc = readFileSync(uiSource("screenFill.ts"), "utf8");
   assert(
@@ -26787,7 +26828,10 @@ function checkCityHub(): void {
       fillSrc.indexOf("VIP未同步") < 0 &&
       fillSrc.indexOf("formatHangClock") >= 0 &&
       fillSrc.indexOf("lbl_gold") >= 0 &&
-      fillSrc.indexOf("progress-role-exp") >= 0,
+      fillSrc.indexOf("progress-role-exp") >= 0 &&
+      fillSrc.indexOf("playIdleHarvest") >= 0 &&
+      fillSrc.indexOf("jindutiao") >= 0 &&
+      fillSrc.indexOf("HangSpineMask") >= 0,
     "hang panel fills the four bars, hides the vip debug line, and does not mount the empty plaque"
   );
   assert(
