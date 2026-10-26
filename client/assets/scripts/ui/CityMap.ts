@@ -2,7 +2,8 @@
  * 主城地图层。挂在主城页面里，顶栏和底栏仍是 CityChrome。
  * 视差底板用 resources/ui/maps/map-bg-city-*，建筑图标用 resources/ui/city。
  * 点击只回调 atom，由 MainApp 走已有的 PanelNav，不另开一套导航。
- * 地图内容比设计画面宽，拖动是预期。不挂 Mask，避免模板把城景裁没。
+ * 地图内容比可见画面宽，拖动是预期。拖到最左时内容左缘贴屏幕左缘。
+ * 不挂 Mask，避免模板把城景裁没。底板是 map-bg-city-* 多层长图，不拉成一张。
  * 配置里的活动图标不再铺成通栏。右上活动在 CityChrome 的 ActGroup。
  */
 import { Button, Color, EventTouch, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
@@ -23,6 +24,7 @@ import {
   cityAtomLocked,
   layerAnchorX,
 } from "./cityMapLayout";
+import { bindVisibleRefresh, fitCityViewport } from "./visibleFit";
 
 export interface CityMapQuery {
   level(): number;
@@ -47,8 +49,8 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
     loadCfg<MainCityBtnFile>(CITY_CFG_BTN),
     loadCfg<MainCityEffectFile>(CITY_CFG_EFFECT),
   ]);
-  const layout = buildCityMapLayout(pos, btn, effect);
-  const gesture = { dragged: false };
+  let layout = buildCityMapLayout(pos, btn, effect);
+  const gesture = { dragged: false, moved: false };
   const clickAtom = (atom: string) => {
     if (gesture.dragged) return;
     onAtom(atom);
@@ -60,6 +62,9 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   rootUi.setAnchorPoint(0.5, 0.5);
   root.setPosition(0, 0, 0);
   root.parent = parent;
+  const box = fitCityViewport(root);
+  layout = buildCityMapLayout(pos, btn, effect, { viewW: box.width, viewH: box.height });
+  rootUi.setContentSize(layout.viewW, layout.viewH);
 
   const parallax = uiNode("CityParallax");
   const parallaxUi = parallax.addComponent(UITransform);
@@ -101,16 +106,8 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
 
   let scroll = layout.scroll;
   let moved = 0;
-  const onStart = () => {
-    gesture.dragged = false;
-    moved = 0;
-  };
-  const onMove = (event: EventTouch) => {
-    const delta = event.getUIDelta();
-    const dx = delta && typeof delta.x === "number" ? delta.x : 0;
-    moved += Math.abs(dx);
-    if (moved > DRAG_PX) gesture.dragged = true;
-    scroll = clamp(scroll + dx, layout.minScroll, layout.maxScroll);
+  const applyScroll = (next: number) => {
+    scroll = next;
     placeBottomLeft(parallax, root, scroll, 0);
     for (let i = 0; i < layout.nodes.length; i++) {
       const desc = layout.nodes[i];
@@ -120,6 +117,55 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
       placeBottomLeft(node, parallax, layerAnchorX(scroll, desc.parallax.ratio, desc.parallax.ox), desc.parallax.oy);
     }
   };
+  const applyVisible = () => {
+    if (!root.isValid) return;
+    const nextBox = fitCityViewport(root);
+    const next = buildCityMapLayout(pos, btn, effect, { viewW: nextBox.width, viewH: nextBox.height });
+    layout = next;
+    rootUi.setContentSize(next.viewW, next.viewH);
+    parallaxUi.setContentSize(next.contentW, next.viewH);
+    for (let i = 0; i < next.nodes.length; i++) {
+      const desc = next.nodes[i];
+      const node = views.get(desc.name);
+      if (!node) continue;
+      const ui = node.getComponent(UITransform);
+      if (ui) {
+        ui.setContentSize(desc.w, desc.h);
+        ui.setAnchorPoint(desc.ax, desc.ay);
+      }
+      node.setScale(desc.scale, desc.scale, 1);
+      if (desc.parallax) continue;
+      const host = desc.parent ? views.get(desc.parent) || parallax : parallax;
+      placeBottomLeft(node, host, desc.x, desc.y);
+    }
+    for (let i = 0; i < next.buildings.length; i++) {
+      const spot = next.buildings[i];
+      const parent = views.get(spot.parent);
+      if (!parent) continue;
+      const node = parent.getChildByName("spot-" + spot.atom);
+      if (!node) continue;
+      node.setScale(spot.scale, spot.scale, 1);
+      placeBottomLeft(node, parent, spot.x, spot.y);
+    }
+    if (!gesture.moved) scroll = next.scroll;
+    else scroll = clamp(scroll, next.minScroll, next.maxScroll);
+    applyScroll(scroll);
+  };
+  const onStart = () => {
+    gesture.dragged = false;
+    moved = 0;
+  };
+  const onMove = (event: EventTouch) => {
+    const delta = event.getUIDelta();
+    const dx = delta && typeof delta.x === "number" ? delta.x : 0;
+    moved += Math.abs(dx);
+    if (moved > DRAG_PX) {
+      gesture.dragged = true;
+      gesture.moved = true;
+    }
+    applyScroll(clamp(scroll + dx, layout.minScroll, layout.maxScroll));
+  };
+  bindVisibleRefresh(root, applyVisible);
   root.on(Node.EventType.TOUCH_START, onStart);
   root.on(Node.EventType.TOUCH_MOVE, onMove);
   root.on(Node.EventType.TOUCH_CANCEL, onStart);

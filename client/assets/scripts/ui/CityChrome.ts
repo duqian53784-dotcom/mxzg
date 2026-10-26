@@ -1,4 +1,4 @@
-import { Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform, view } from "cc";
+import { Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { CITY_BAR, cityBarSlot } from "../config/nav";
 import {
   bindClick,
@@ -10,6 +10,7 @@ import {
   tintSprite,
 } from "./prefabLoad";
 import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
+import { bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar } from "./visibleFit";
 
 export type TabVisual = "selected" | "open" | "locked";
 
@@ -115,6 +116,7 @@ export function mountCityChrome(parent: Node, onTab: (id: string) => void): City
     buttons[entry.id] = button;
   }
 
+  bindCityChromeFit(root);
   return {
     root,
     setIdentity(nameLine: string, subLine: string): void {
@@ -199,7 +201,6 @@ export async function mountCityChromePrefab(
 }
 
 function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: CityChromeActions): CityChrome {
-  pinBottomBar(root);
   sealBottomBg(root);
   const nameNode = requireNode(root, "TopBar/LblName");
   const subNode = requireNode(root, "TopBar/LblSub");
@@ -233,6 +234,7 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
     bindClick(requireNode(root, MORE_HUB_PATHS[i]), () => actions.openMore());
   }
   bindClick(requireNode(root, "UtilityRow/BtnMail"), () => actions.openMail());
+  bindCityChromeFit(root);
 
   return {
     root,
@@ -287,63 +289,41 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
 }
 
 /**
- * 底栏贴在 Canvas 底边，左右拉到可见宽度。
- * 安全区把整层 chrome 上移时，底栏仍留在屏幕底（含 home indicator）。
- * 城景不再跟着上移，贴图铺到屏底，由底栏盖住。
+ * 顶栏（名字、战力、头像，挂机页也不另画一条）和底栏七项。
+ * Widget 左右拉到 view.getVisibleSize() 的宽，不写死 720。
+ * 窄屏只把按钮往中间收，背景仍铺满可见宽。
  */
-function pinBottomBar(root: Node): void {
-  const bar = findNode(root, "BottomBar");
-  const canvas = findCanvas(root);
-  if (!bar || !canvas) return;
-  const apply = (): void => {
-    if (!bar.isValid || !canvas.isValid) return;
-    const canvasUi = canvas.getComponent(UITransform);
-    const barUi = bar.getComponent(UITransform);
-    const parentUi = bar.parent ? bar.parent.getComponent(UITransform) : null;
-    if (!canvasUi || !barUi || !parentUi) return;
-    const canvasW = canvasUi.contentSize.width;
-    const canvasH = canvasUi.contentSize.height;
-    const barH = barUi.contentSize.height;
-    const width = canvasW > 720 ? canvasW : 720;
-    barUi.setContentSize(width, barH);
-    const bg = bar.getChildByName("Bg");
-    const bgUi = bg ? bg.getComponent(UITransform) : null;
-    if (bgUi) bgUi.setContentSize(width, bgUi.contentSize.height);
-    const pad = bar.getChildByName("BgPad");
-    const padUi = pad ? pad.getComponent(UITransform) : null;
-    if (padUi) padUi.setContentSize(width, barH);
-    const canvasConv = canvasUi as UITransform & {
-      convertToWorldSpaceAR?: (p: { x: number; y: number; z?: number }) => { x: number; y: number; z?: number };
-    };
-    const parentConv = parentUi as UITransform & {
-      convertToNodeSpaceAR?: (p: { x: number; y: number; z?: number }) => { x: number; y: number; z?: number };
-    };
-    if (!canvasConv.convertToWorldSpaceAR || !parentConv.convertToNodeSpaceAR) {
-      bar.setPosition(0, -canvasH / 2 + barH / 2, 0);
-      return;
-    }
-    const world = canvasConv.convertToWorldSpaceAR({ x: 0, y: -canvasH / 2, z: 0 });
-    const local = parentConv.convertToNodeSpaceAR(world);
-    bar.setPosition(0, local.y + barH / 2, local.z || 0);
-  };
-  apply();
-  const host = view as { on?: (type: string, cb: () => void) => void; off?: (type: string, cb: () => void) => void };
-  if (host.on) host.on("canvas-resize", apply);
-  bar.once(Node.EventType.NODE_DESTROYED, () => {
-    if (host.off) host.off("canvas-resize", apply);
+function bindCityChromeFit(root: Node): void {
+  bindVisibleRefresh(root, () => {
+    if (!root.isValid) return;
+    const box = fitVisibleRoot(root);
+    fitChromeChildren(root, box.width);
   });
-  // 安全区在稍后的 tick 里平移 chrome 层。再钉一次，底边仍贴屏幕。
-  setTimeout(apply, 0);
-  setTimeout(apply, 80);
 }
 
-function findCanvas(node: Node): Node | null {
-  let cur: Node | null = node;
-  while (cur) {
-    if (cur.name === "Canvas") return cur;
-    cur = cur.parent;
+/** 底栏贴住已经铺满可见高度的根节点底边，左右仍由 stretchBar 拉到可见宽。 */
+function pinBottomBar(bar: Node, width: number): void {
+  stretchBar(bar, width, "bottom");
+}
+
+function fitChromeChildren(root: Node, width: number): void {
+  const kids = root.children;
+  for (let i = 0; i < kids.length; i++) {
+    const child = kids[i];
+    if (child.name === "TopBar" || child.name === "top-bg") stretchBar(child, width, "top");
+    else if (child.name === "BottomBar" || child.name === "bottom-bg") pinBottomBar(child, width);
+    else squeezeWideNode(child, width);
   }
-  return null;
+  for (let i = 0; i < kids.length; i++) {
+    const child = kids[i];
+    if (child.name !== "TopBar" && child.name !== "BottomBar") continue;
+    const inner = child.children;
+    for (let j = 0; j < inner.length; j++) {
+      const node = inner[j];
+      if (node.name === "Bg" || node.name === "BgPad") continue;
+      squeezeWideNode(node, width);
+    }
+  }
 }
 
 function paintAvatar(root: Node, icon: string | null): void {

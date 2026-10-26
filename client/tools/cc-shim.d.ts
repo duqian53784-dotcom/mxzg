@@ -52,8 +52,16 @@ declare module "cc" {
     static AlignMode: { ON_WINDOW_RESIZE: number };
     isAlignHorizontalCenter: boolean;
     isAlignVerticalCenter: boolean;
+    isAlignLeft: boolean;
+    isAlignRight: boolean;
+    isAlignTop: boolean;
+    isAlignBottom: boolean;
     horizontalCenter: number;
     verticalCenter: number;
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
     alignMode: number;
     updateAlignment(): void;
   }

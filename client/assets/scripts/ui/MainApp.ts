@@ -790,6 +790,9 @@ export class MainApp extends Component {
 
   private buildCity(): Node {
     const page = this.pageRoot("CityPage");
+    const pageUi = page.getComponent(UITransform) || page.addComponent(UITransform);
+    pageUi.setContentSize(720, 1280);
+    pageUi.setAnchorPoint(0.5, 0.5);
     const mapHost = uiNode("CityMapHost");
     const hostUi = mapHost.addComponent(UITransform);
     hostUi.setContentSize(720, 1280);
