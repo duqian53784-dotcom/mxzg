@@ -107,6 +107,7 @@ declare module "cc" {
     fontSize: number;
     lineHeight: number;
     useSystemFont: boolean;
+    font: TTFFont | null;
     fontFamily: string;
     overflow: number;
     isBold: boolean;
@@ -200,6 +201,8 @@ declare module "cc" {
   export class SpriteFrame {
     originalSize: { width: number; height: number };
   }
+
+  export class TTFFont {}
 
   export class AudioClip {}
 

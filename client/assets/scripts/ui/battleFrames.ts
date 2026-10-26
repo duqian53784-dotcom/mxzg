@@ -5,6 +5,7 @@
  * skill_id 对得上 resources 里的套时播那套。对不上仍用下面 49 套取模，所以 0 仍是 hero-skill。
  */
 import {
+  attackHeroSkillCoverage,
   skillArrowFrames,
   skillCompanionFrames,
   skillIdForSpineStem,
@@ -13,7 +14,7 @@ import {
   skillStemFrames,
 } from "../net/protocol/battleAssetIndex";
 
-export { skillIdForSpineStem };
+export { attackHeroSkillCoverage, skillIdForSpineStem };
 
 export const HIT_RUNS: readonly (readonly [string, number])[] = [
   ["1", 5],
@@ -161,7 +162,7 @@ export function battleCastFrameCount(skillId: number | null): number {
 }
 
 /**
- * 挂机奇数刀要叠的帧。对得上皮肤套名就播那套技能和它的分套、箭矢。
+ * 挂机奇数刀要叠的帧。套名、套名补 0，或表上的换皮/技能号对得上，就播那套和它的分套、箭矢。
  * 对不上仍是 hero-skill，不把 skill-effect 取模里的立绘套上来。
  * 普通刀只留受击帧。
  */

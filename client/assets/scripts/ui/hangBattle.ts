@@ -3,9 +3,10 @@
  * 回合写成 n/15。加速用 battle-scene 的速度图，跳过停在这一局的最后一拍。
  * 血条跟站位。战报没有怒气字段时，怒气条按当前回合 / 15 填充，只标位置。
  * 飘字数字走 yellow-73 / green-73 / red-73。字库没挂上时退回红、绿、金系统字。
+ * 技能名用 font/FZCSJW-GB1-0，和战斗壳 SkillNameLabel 同一套字。没挂上仍是系统字。
  * 开战在大理石上各播一遍左右出场帧，播完或第一下受击就藏。数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
  */
-import { Button, Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { Button, Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, TTFFont, UITransform } from "cc";
 import { GameLog } from "../core/GameLog";
 import { BattleRound, BattleUnit } from "../module/mainline/battle";
 import { paintSpeedIcon } from "./BattlePage";
@@ -402,7 +403,9 @@ function ensureLayer(page: Node): Node {
   skillBg.active = false;
   place(skillBg, layer, 0, 150);
   const skill = createLabel("", 26, { color: INK, width: 260, height: 36 });
+  skill.name = "HangSkillName";
   place(skill, skillBg, 0, 0);
+  armHangSkillFont(skill);
 
   const bars = uiNode("HangBars");
   place(bars, layer, 0, 0);
@@ -450,6 +453,30 @@ function tapSpeed(page: Node, node: Node): void {
 function tapSkip(page: Node): void {
   const fn = skipFns.get(page);
   if (fn) fn();
+}
+
+const HANG_SKILL_FONT = "font/FZCSJW-GB1-0";
+let hangSkillFont: TTFFont | null = null;
+
+/** 技能名用战斗壳同一套方正字。加载失败留着系统字，并打一次日志。 */
+function armHangSkillFont(node: Node): void {
+  const label = node.getComponent(Label);
+  if (!label) return;
+  if (hangSkillFont) {
+    label.useSystemFont = false;
+    label.font = hangSkillFont;
+    return;
+  }
+  resources.load(HANG_SKILL_FONT, TTFFont, (err, font) => {
+    if (!node.isValid) return;
+    if (err || !font) {
+      GameLog.shared.warn("Mainline", "技能名字体 FZCSJW 没有挂上，仍用系统字");
+      return;
+    }
+    hangSkillFont = font;
+    label.useSystemFont = false;
+    label.font = font;
+  });
 }
 
 function setBanner(banner: Node, text: string | null): void {
