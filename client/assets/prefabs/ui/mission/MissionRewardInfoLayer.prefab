@@ -133,8 +133,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": -10,
-      "x": -10
+      "y": 350,
+      "x": 280
     },
     "_objFlags": 0,
     "_children": [],
@@ -659,8 +659,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 30,
-      "x": 30
+      "y": 280,
+      "x": 280
     },
     "_objFlags": 0,
     "_children": [],
@@ -1720,7 +1720,7 @@
       "__type__": "cc.Vec3",
       "z": 0,
       "y": 0,
-      "x": 0
+      "x": 91
     },
     "_objFlags": 0,
     "_children": [],
@@ -1799,7 +1799,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "挂机掉落",
@@ -1835,7 +1835,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1849,7 +1849,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -2087,7 +2087,7 @@
       "__type__": "cc.Vec3",
       "z": 0,
       "y": 0,
-      "x": 0
+      "x": -91
     },
     "_objFlags": 0,
     "_children": [],
@@ -2166,7 +2166,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "BOSS掉落",
@@ -2202,7 +2202,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -2216,7 +2216,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

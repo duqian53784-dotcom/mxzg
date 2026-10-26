@@ -1630,7 +1630,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 54,
+    "_actualFontSize": 27,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "我要变强",
@@ -1666,7 +1666,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 54,
+    "_lineHeight": 27,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1680,7 +1680,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 54,
+    "_fontSize": 27,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -1995,7 +1995,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 54,
+    "_actualFontSize": 27,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "快速战斗",
@@ -2031,7 +2031,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 54,
+    "_lineHeight": 27,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -2045,7 +2045,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 54,
+    "_fontSize": 27,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

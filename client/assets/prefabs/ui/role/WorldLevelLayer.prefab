@@ -130,8 +130,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
-      "x": 0
+      "y": 80,
+      "x": 160
     },
     "_objFlags": 0,
     "_children": [],

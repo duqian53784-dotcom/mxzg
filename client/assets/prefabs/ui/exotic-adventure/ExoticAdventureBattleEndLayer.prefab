@@ -1268,7 +1268,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 56,
+    "_actualFontSize": 28,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "确定",
@@ -1304,7 +1304,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 56,
+    "_lineHeight": 28,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1318,7 +1318,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 56,
+    "_fontSize": 28,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

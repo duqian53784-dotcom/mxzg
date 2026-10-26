@@ -699,8 +699,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": "[",
-      "y": "0",
+      "x": 0,
+      "y": 0,
       "z": 0
     },
     "_objFlags": 0,
@@ -763,7 +763,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "升级",
@@ -799,7 +799,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -813,7 +813,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -1066,8 +1066,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": "[",
-      "y": "0",
+      "x": 0,
+      "y": 0,
       "z": 0
     },
     "_objFlags": 0,
@@ -1130,7 +1130,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "技能",
@@ -1166,7 +1166,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1180,7 +1180,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -1433,8 +1433,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": "[",
-      "y": "0",
+      "x": 0,
+      "y": 0,
       "z": 0
     },
     "_objFlags": 0,
@@ -1497,7 +1497,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "突破",
@@ -1533,7 +1533,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1547,7 +1547,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -1800,8 +1800,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": "[",
-      "y": "0",
+      "x": 0,
+      "y": 0,
       "z": 0
     },
     "_objFlags": 0,
@@ -1864,7 +1864,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "洗炼",
@@ -1900,7 +1900,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1914,7 +1914,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -2167,8 +2167,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": "[",
-      "y": "0",
+      "x": 0,
+      "y": 0,
       "z": 0
     },
     "_objFlags": 0,
@@ -2231,7 +2231,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "精炼",
@@ -2267,7 +2267,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -2281,7 +2281,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -8327,8 +8327,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": "[",
-      "y": "0",
+      "x": 0,
+      "y": 0,
       "z": 0
     },
     "_objFlags": 0,
@@ -8391,7 +8391,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "幻 化",
@@ -8427,7 +8427,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -8441,7 +8441,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -10899,7 +10899,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 60,
+    "_actualFontSize": 30,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "去探险",
@@ -10935,7 +10935,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 60,
+    "_lineHeight": 30,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -10949,7 +10949,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 60,
+    "_fontSize": 30,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

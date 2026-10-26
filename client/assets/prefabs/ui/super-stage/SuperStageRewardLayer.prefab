@@ -154,8 +154,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -10,
-      "y": -10,
+      "x": 310,
+      "y": 436,
       "z": 0
     },
     "_lrot": {
@@ -1276,7 +1276,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": 22,
       "z": 0
     },
     "_lrot": {
@@ -1372,10 +1372,10 @@
     "_string": "首达奖励",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 40,
-    "_fontSize": 40,
+    "_actualFontSize": 20,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -1643,7 +1643,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": 22,
       "z": 0
     },
     "_lrot": {
@@ -1739,10 +1739,10 @@
     "_string": "段位奖励",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 40,
-    "_fontSize": 40,
+    "_actualFontSize": 20,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -1803,8 +1803,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 30,
-      "y": 60,
+      "x": 310,
+      "y": 394,
       "z": 0
     },
     "_lrot": {
@@ -2522,8 +2522,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -270,
-      "y": 0,
+      "x": 0,
+      "y": 21,
       "z": 0
     },
     "_lrot": {

@@ -145,8 +145,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
-      "x": -8
+      "y": 512,
+      "x": 308.2
     },
     "_objFlags": 0,
     "_children": [],
@@ -1555,8 +1555,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 643,
-      "x": 40
+      "y": 756,
+      "x": 309
     },
     "_objFlags": 0,
     "_children": [],
@@ -1690,8 +1690,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 61,
-      "x": 39
+      "y": 354.376,
+      "x": 308
     },
     "_objFlags": 0,
     "_children": [],
@@ -5741,8 +5741,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 61,
-      "x": 39
+      "y": 465.48,
+      "x": 308
     },
     "_objFlags": 0,
     "_children": [],
@@ -5968,8 +5968,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 61,
-      "x": 39
+      "y": 465.48,
+      "x": 308
     },
     "_objFlags": 0,
     "_children": [],
@@ -6198,8 +6198,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 61,
-      "x": 39
+      "y": 465.48,
+      "x": 308
     },
     "_objFlags": 0,
     "_children": [],
@@ -8439,7 +8439,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
+      "y": 22,
       "x": 0
     },
     "_objFlags": 0,
@@ -8519,7 +8519,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "英雄变强",
@@ -8555,7 +8555,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -8569,7 +8569,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -8806,7 +8806,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
+      "y": 22,
       "x": 0
     },
     "_objFlags": 0,
@@ -8886,7 +8886,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "获取资源",
@@ -8922,7 +8922,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -8936,7 +8936,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -9173,7 +9173,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
+      "y": 22,
       "x": 0
     },
     "_objFlags": 0,
@@ -9253,7 +9253,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "英雄推荐",
@@ -9289,7 +9289,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -9303,7 +9303,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -9540,7 +9540,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
+      "y": 22,
       "x": 0
     },
     "_objFlags": 0,
@@ -9620,7 +9620,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "阵容推荐",
@@ -9656,7 +9656,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -9670,7 +9670,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

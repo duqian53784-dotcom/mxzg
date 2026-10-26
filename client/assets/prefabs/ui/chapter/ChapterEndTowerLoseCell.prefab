@@ -702,7 +702,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 45,
+    "_actualFontSize": 22.5,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "变强小助手",
@@ -738,7 +738,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 45,
+    "_lineHeight": 22.5,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -752,7 +752,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 45,
+    "_fontSize": 22.5,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -1069,7 +1069,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 45,
+    "_actualFontSize": 22.5,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "立即抢购",
@@ -1105,7 +1105,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 45,
+    "_lineHeight": 22.5,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1119,7 +1119,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 45,
+    "_fontSize": 22.5,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

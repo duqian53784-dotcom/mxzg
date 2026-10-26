@@ -133,8 +133,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 0,
+      "x": 281,
+      "y": 353,
       "z": 0
     },
     "_lrot": {
@@ -659,8 +659,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 31,
-      "y": 50,
+      "x": 281,
+      "y": 300,
       "z": 0
     },
     "_lrot": {
@@ -1305,7 +1305,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": 28,
       "z": 0
     },
     "_lrot": {
@@ -1381,10 +1381,10 @@
     "_string": "低 级",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 40,
-    "_fontSize": 40,
+    "_actualFontSize": 20,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -1672,7 +1672,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": 28,
       "z": 0
     },
     "_lrot": {
@@ -1748,10 +1748,10 @@
     "_string": "中 级",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 40,
-    "_fontSize": 40,
+    "_actualFontSize": 20,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -2039,7 +2039,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": 28,
       "z": 0
     },
     "_lrot": {
@@ -2115,10 +2115,10 @@
     "_string": "高 级",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 40,
-    "_fontSize": 40,
+    "_actualFontSize": 20,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -2406,7 +2406,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": 28,
       "z": 0
     },
     "_lrot": {
@@ -2482,10 +2482,10 @@
     "_string": "中 级",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 40,
-    "_fontSize": 40,
+    "_actualFontSize": 20,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {

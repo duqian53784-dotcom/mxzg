@@ -1506,10 +1506,10 @@
     "_string": "确定",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 44,
-    "_fontSize": 44,
+    "_actualFontSize": 22,
+    "_fontSize": 22,
     "_fontFamily": "Arial",
-    "_lineHeight": 44,
+    "_lineHeight": 22,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {

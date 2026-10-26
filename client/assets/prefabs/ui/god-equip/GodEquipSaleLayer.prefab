@@ -136,8 +136,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 0,
+      "x": 229,
+      "y": 164,
       "z": 0
     },
     "_lrot": {
@@ -1126,10 +1126,10 @@
     "_string": "取消",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 44,
-    "_fontSize": 44,
+    "_actualFontSize": 22,
+    "_fontSize": 22,
     "_fontFamily": "Arial",
-    "_lineHeight": 44,
+    "_lineHeight": 22,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -1491,10 +1491,10 @@
     "_string": "确认",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 44,
-    "_fontSize": 44,
+    "_actualFontSize": 22,
+    "_fontSize": 22,
     "_fontFamily": "Arial",
-    "_lineHeight": 44,
+    "_lineHeight": 22,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -1670,8 +1670,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -209.0,
-      "y": -65.0,
+      "x": 0,
+      "y": 0,
       "z": 0
     },
     "_lrot": {

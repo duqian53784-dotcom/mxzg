@@ -148,8 +148,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -10,
-      "y": -10,
+      "x": 320,
+      "y": 370,
       "z": 0
     },
     "_lrot": {
@@ -2640,10 +2640,10 @@
     "_string": "选择",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 48,
-    "_fontSize": 48,
+    "_actualFontSize": 24,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {

@@ -130,8 +130,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
-      "x": 0
+      "y": 75,
+      "x": 275
     },
     "_objFlags": 0,
     "_children": [],
@@ -1186,7 +1186,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 50,
+    "_actualFontSize": 25,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "前 往",
@@ -1222,7 +1222,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 50,
+    "_lineHeight": 25,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1236,7 +1236,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 50,
+    "_fontSize": 25,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
