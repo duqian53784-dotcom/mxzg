@@ -2033,7 +2033,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 60,
+    "_actualFontSize": 30,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "精  炼",
@@ -2069,7 +2069,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 60,
+    "_lineHeight": 30,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -2083,7 +2083,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 60,
+    "_fontSize": 30,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -3798,8 +3798,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 1,
-      "y": -12,
+      "x": 121,
+      "y": 3,
       "z": 0
     },
     "_objFlags": 0,
@@ -4353,8 +4353,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 1,
-      "y": -12,
+      "x": 121,
+      "y": 3,
       "z": 0
     },
     "_objFlags": 0,

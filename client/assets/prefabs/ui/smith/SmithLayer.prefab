@@ -1600,7 +1600,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
+      "x": -67,
       "y": 0,
       "z": 0
     },
@@ -1693,9 +1693,9 @@
     "_isBold": false,
     "_isUnderline": false,
     "_spacingX": 0,
-    "_lineHeight": 48,
-    "_fontSize": 48,
-    "_actualFontSize": 48,
+    "_lineHeight": 24,
+    "_fontSize": 24,
+    "_actualFontSize": 24,
     "_enableOutline": false,
     "_outlineWidth": 2,
     "_outlineColor": {
@@ -1967,7 +1967,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
+      "x": -67,
       "y": 0,
       "z": 0
     },
@@ -2060,9 +2060,9 @@
     "_isBold": false,
     "_isUnderline": false,
     "_spacingX": 0,
-    "_lineHeight": 48,
-    "_fontSize": 48,
-    "_actualFontSize": 48,
+    "_lineHeight": 24,
+    "_fontSize": 24,
+    "_actualFontSize": 24,
     "_enableOutline": false,
     "_outlineWidth": 2,
     "_outlineColor": {
@@ -2334,7 +2334,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
+      "x": 67,
       "y": 0,
       "z": 0
     },
@@ -2427,9 +2427,9 @@
     "_isBold": false,
     "_isUnderline": false,
     "_spacingX": 0,
-    "_lineHeight": 48,
-    "_fontSize": 48,
-    "_actualFontSize": 48,
+    "_lineHeight": 24,
+    "_fontSize": 24,
+    "_actualFontSize": 24,
     "_enableOutline": false,
     "_outlineWidth": 2,
     "_outlineColor": {
@@ -2701,7 +2701,7 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
+      "x": 67,
       "y": 0,
       "z": 0
     },
@@ -2794,9 +2794,9 @@
     "_isBold": false,
     "_isUnderline": false,
     "_spacingX": 0,
-    "_lineHeight": 48,
-    "_fontSize": 48,
-    "_actualFontSize": 48,
+    "_lineHeight": 24,
+    "_fontSize": 24,
+    "_actualFontSize": 24,
     "_enableOutline": false,
     "_outlineWidth": 2,
     "_outlineColor": {

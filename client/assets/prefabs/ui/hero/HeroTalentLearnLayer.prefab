@@ -289,8 +289,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0.0,
-      "x": -4.14
+      "y": 387.6,
+      "x": 309
     },
     "_objFlags": 0,
     "_children": [],
@@ -1151,8 +1151,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 185.324,
-      "x": 41.442
+      "y": 373.324,
+      "x": 311.442
     },
     "_objFlags": 0,
     "_children": [],
@@ -2156,7 +2156,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 60,
+    "_actualFontSize": 30,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "领悟",
@@ -2192,7 +2192,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 60,
+    "_lineHeight": 30,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -2206,7 +2206,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 60,
+    "_fontSize": 30,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

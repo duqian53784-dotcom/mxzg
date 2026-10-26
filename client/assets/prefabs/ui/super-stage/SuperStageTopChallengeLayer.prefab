@@ -142,8 +142,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 0,
+      "x": 270,
+      "y": 335,
       "z": 0
     },
     "_lrot": {
@@ -1269,10 +1269,10 @@
     "_string": "挑 战",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 40,
-    "_fontSize": 40,
+    "_actualFontSize": 20,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {

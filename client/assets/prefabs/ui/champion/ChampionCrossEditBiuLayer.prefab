@@ -145,8 +145,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 0,
+      "x": 270,
+      "y": 200,
       "z": 0
     },
     "_lrot": {
@@ -1049,10 +1049,10 @@
     "_string": "确定",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 36,
-    "_fontSize": 36,
+    "_actualFontSize": 18,
+    "_fontSize": 18,
     "_fontFamily": "Arial",
-    "_lineHeight": 36,
+    "_lineHeight": 18,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {

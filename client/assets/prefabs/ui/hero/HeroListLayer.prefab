@@ -133,8 +133,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 105.75,
-      "x": 0.0
+      "y": 441.75,
+      "x": 320
     },
     "_objFlags": 0,
     "_children": [],
@@ -963,7 +963,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
+      "y": 21.5,
       "x": 0
     },
     "_objFlags": 0,
@@ -1043,7 +1043,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "英  雄",
@@ -1079,7 +1079,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1093,7 +1093,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -1330,7 +1330,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
+      "y": 21.5,
       "x": 0
     },
     "_objFlags": 0,
@@ -1410,7 +1410,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "图  鉴",
@@ -1446,7 +1446,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1460,7 +1460,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -1697,7 +1697,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
+      "y": 21.5,
       "x": 0
     },
     "_objFlags": 0,
@@ -1777,7 +1777,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "圣 龙",
@@ -1813,7 +1813,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1827,7 +1827,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

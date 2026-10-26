@@ -145,8 +145,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 23.5,
+      "x": 320,
+      "y": 480,
       "z": 0
     },
     "_lrot": {
@@ -1274,10 +1274,10 @@
     "_string": "我的錄像",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 40,
-    "_fontSize": 40,
+    "_actualFontSize": 20,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -1641,10 +1641,10 @@
     "_string": "大神風采",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 40,
-    "_fontSize": 40,
+    "_actualFontSize": 20,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -1705,8 +1705,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 35,
-      "y": 105,
+      "x": 320,
+      "y": 450,
       "z": 0
     },
     "_lrot": {

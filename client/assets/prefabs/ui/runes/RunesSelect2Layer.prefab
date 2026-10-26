@@ -136,8 +136,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 0,
+      "x": 300,
+      "y": 400,
       "z": 0
     },
     "_lrot": {
@@ -662,8 +662,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 15,
-      "y": 70,
+      "x": 300,
+      "y": 390,
       "z": 0
     },
     "_lrot": {
@@ -1373,10 +1373,10 @@
     "_string": "确 定",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 48,
-    "_fontSize": 48,
+    "_actualFontSize": 24,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {

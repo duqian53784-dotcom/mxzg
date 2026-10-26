@@ -399,8 +399,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
-      "x": 0
+      "y": 388,
+      "x": 320
     },
     "_objFlags": 0,
     "_children": [],
@@ -1309,7 +1309,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "遗忘技能",
@@ -1345,7 +1345,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1359,7 +1359,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -1676,7 +1676,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "升级",
@@ -1712,7 +1712,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1726,7 +1726,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -2153,8 +2153,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0.0,
-      "x": 0.0
+      "y": 275.48,
+      "x": 272
     },
     "_objFlags": 0,
     "_children": [],
@@ -2774,8 +2774,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": -360,
-      "x": 0.0
+      "y": -180,
+      "x": 272
     },
     "_objFlags": 0,
     "_children": [],
@@ -3237,8 +3237,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": -114,
-      "x": -257.0
+      "y": -57,
+      "x": 0
     },
     "_objFlags": 0,
     "_children": [],
@@ -3769,8 +3769,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
-      "x": 0.0
+      "y": 90,
+      "x": 272
     },
     "_objFlags": 0,
     "_children": [],
@@ -5529,8 +5529,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": -114,
-      "x": -257.0
+      "y": -57,
+      "x": 0
     },
     "_objFlags": 0,
     "_children": [],

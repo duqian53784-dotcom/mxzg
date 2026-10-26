@@ -130,8 +130,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
-      "x": 0
+      "y": 390,
+      "x": 320
     },
     "_objFlags": 0,
     "_children": [],
@@ -1037,7 +1037,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 52,
+    "_actualFontSize": 26,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "",
@@ -1073,7 +1073,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 52,
+    "_lineHeight": 26,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1087,7 +1087,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 52,
+    "_fontSize": 26,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -1479,8 +1479,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 109.2,
-      "x": 40.8
+      "y": 374.2,
+      "x": 320.8
     },
     "_objFlags": 0,
     "_children": [],

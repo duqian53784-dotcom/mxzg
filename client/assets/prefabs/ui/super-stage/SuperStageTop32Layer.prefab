@@ -780,10 +780,10 @@
     "_string": "我的竞猜",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 48,
-    "_fontSize": 48,
+    "_actualFontSize": 24,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -1240,8 +1240,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 0,
+      "x": 85,
+      "y": 21,
       "z": 0
     },
     "_lrot": {
@@ -1337,10 +1337,10 @@
     "_string": "128强赛",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 44,
-    "_fontSize": 44,
+    "_actualFontSize": 22,
+    "_fontSize": 22,
     "_fontFamily": "Arial",
-    "_lineHeight": 44,
+    "_lineHeight": 22,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -1607,8 +1607,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 0,
+      "x": -85,
+      "y": 21,
       "z": 0
     },
     "_lrot": {
@@ -1704,10 +1704,10 @@
     "_string": "16强赛",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 44,
-    "_fontSize": 44,
+    "_actualFontSize": 22,
+    "_fontSize": 22,
     "_fontFamily": "Arial",
-    "_lineHeight": 44,
+    "_lineHeight": 22,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {

@@ -136,8 +136,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
-      "x": 0
+      "y": 236,
+      "x": 315
     },
     "_objFlags": 0,
     "_children": [],
@@ -2126,7 +2126,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 44,
+    "_actualFontSize": 22,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "取消",
@@ -2162,7 +2162,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 44,
+    "_lineHeight": 22,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -2176,7 +2176,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 44,
+    "_fontSize": 22,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -2491,7 +2491,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 44,
+    "_actualFontSize": 22,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "确定",
@@ -2527,7 +2527,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 44,
+    "_lineHeight": 22,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -2541,7 +2541,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 44,
+    "_fontSize": 22,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

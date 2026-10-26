@@ -135,8 +135,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 0,
+      "x": 244,
+      "y": 161,
       "z": 0
     },
     "_objFlags": 0,
@@ -1356,7 +1356,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "确 定",
@@ -1392,7 +1392,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -1406,7 +1406,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

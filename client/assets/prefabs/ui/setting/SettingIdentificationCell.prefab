@@ -433,8 +433,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
-      "x": 0
+      "y": 63,
+      "x": 275
     },
     "_objFlags": 0,
     "_children": [],
@@ -568,8 +568,8 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 0,
-      "x": 0
+      "y": 63,
+      "x": 275
     },
     "_objFlags": 0,
     "_children": [],

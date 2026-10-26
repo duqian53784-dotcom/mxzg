@@ -142,8 +142,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 0,
+      "x": 300,
+      "y": 270,
       "z": 0
     },
     "_lrot": {
@@ -1382,10 +1382,10 @@
     "_string": "已激活",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 50,
-    "_fontSize": 50,
+    "_actualFontSize": 25,
+    "_fontSize": 25,
     "_fontFamily": "Arial",
-    "_lineHeight": 50,
+    "_lineHeight": 25,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
@@ -1747,10 +1747,10 @@
     "_string": "前往激活",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 50,
-    "_fontSize": 50,
+    "_actualFontSize": 25,
+    "_fontSize": 25,
     "_fontFamily": "Arial",
-    "_lineHeight": 50,
+    "_lineHeight": 25,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {

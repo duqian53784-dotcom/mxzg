@@ -826,8 +826,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -282.77,
-      "y": -774.581,
+      "x": 0.73,
+      "y": -649.081,
       "z": 0
     },
     "_objFlags": 0,
@@ -3212,8 +3212,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": "[",
-      "y": "0",
+      "x": 0,
+      "y": 0,
       "z": 0
     },
     "_objFlags": 0,
@@ -3276,7 +3276,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "熔炼池",
@@ -3312,7 +3312,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -3326,7 +3326,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -4560,8 +4560,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": "[",
-      "y": "0",
+      "x": 0,
+      "y": 0,
       "z": 0
     },
     "_objFlags": 0,
@@ -4624,7 +4624,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "激活",
@@ -4660,7 +4660,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -4674,7 +4674,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -5512,8 +5512,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": "[",
-      "y": "0",
+      "x": 0,
+      "y": 0,
       "z": 0
     },
     "_objFlags": 0,
@@ -5576,7 +5576,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "激活",
@@ -5612,7 +5612,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -5626,7 +5626,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -7014,7 +7014,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "取消幻化",
@@ -7050,7 +7050,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -7064,7 +7064,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -7379,7 +7379,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 40,
+    "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "幻化",
@@ -7415,7 +7415,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 40,
+    "_lineHeight": 20,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -7429,7 +7429,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 40,
+    "_fontSize": 20,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

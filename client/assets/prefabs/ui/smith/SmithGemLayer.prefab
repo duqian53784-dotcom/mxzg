@@ -484,7 +484,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": 22,
       "z": 0
     },
     "_lrot": {
@@ -576,9 +576,9 @@
     "_isBold": false,
     "_isUnderline": false,
     "_spacingX": 0,
-    "_lineHeight": 48,
-    "_fontSize": 48,
-    "_actualFontSize": 48,
+    "_lineHeight": 24,
+    "_fontSize": 24,
+    "_actualFontSize": 24,
     "_enableOutline": false,
     "_outlineWidth": 2,
     "_outlineColor": {
@@ -851,7 +851,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": 22,
       "z": 0
     },
     "_lrot": {
@@ -943,9 +943,9 @@
     "_isBold": false,
     "_isUnderline": false,
     "_spacingX": 0,
-    "_lineHeight": 48,
-    "_fontSize": 48,
-    "_actualFontSize": 48,
+    "_lineHeight": 24,
+    "_fontSize": 24,
+    "_actualFontSize": 24,
     "_enableOutline": false,
     "_outlineWidth": 2,
     "_outlineColor": {
@@ -1218,7 +1218,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": 0,
+      "y": 22,
       "z": 0
     },
     "_lrot": {
@@ -1310,9 +1310,9 @@
     "_isBold": false,
     "_isUnderline": false,
     "_spacingX": 0,
-    "_lineHeight": 48,
-    "_fontSize": 48,
-    "_actualFontSize": 48,
+    "_lineHeight": 24,
+    "_fontSize": 24,
+    "_actualFontSize": 24,
     "_enableOutline": false,
     "_outlineWidth": 2,
     "_outlineColor": {
@@ -1404,8 +1404,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -285.0,
-      "y": -350,
+      "x": 0,
+      "y": -175,
       "z": 0
     },
     "_lrot": {

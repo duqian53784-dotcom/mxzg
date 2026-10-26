@@ -135,8 +135,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -10,
-      "y": -10,
+      "x": 310,
+      "y": 430,
       "z": 0
     },
     "_objFlags": 0,
@@ -661,8 +661,8 @@
     "_id": "",
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 30,
-      "y": 112,
+      "x": 310,
+      "y": 367,
       "z": 0
     },
     "_objFlags": 0,
@@ -2448,7 +2448,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 36,
+    "_actualFontSize": 18,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "喜欢",
@@ -2484,7 +2484,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 36,
+    "_lineHeight": 18,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -2498,7 +2498,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 36,
+    "_fontSize": 18,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -3296,7 +3296,7 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 48,
+    "_actualFontSize": 24,
     "_isItalic": false,
     "_spacingX": 0,
     "_string": "",
@@ -3332,7 +3332,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -3346,7 +3346,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 48,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,

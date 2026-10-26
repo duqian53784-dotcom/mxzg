@@ -1785,10 +1785,10 @@
     "_string": "前往激活",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
-    "_actualFontSize": 48,
-    "_fontSize": 48,
+    "_actualFontSize": 24,
+    "_fontSize": 24,
     "_fontFamily": "Arial",
-    "_lineHeight": 48,
+    "_lineHeight": 24,
     "_overflow": 0,
     "_enableWrapText": false,
     "_font": {
