@@ -511,6 +511,7 @@ import {
   chapterClearReward,
   chapterDrops,
   chapterIdleMinute,
+  heroLevelNeed,
   heroSpaceCap,
   heroStarStep,
   idleCapMs,
@@ -2290,6 +2291,7 @@ function bindCheckCatalog(): void {
     "herobase",
     "heroskill",
     "herostar",
+    "herolevel",
     "language",
     "item",
     "chapter",
@@ -2376,6 +2378,9 @@ function checkStoreScreens(): void {
     "stage 1 first_reward includes 4000 gold"
   );
   assert(heroSpaceCap() === 300, "hero space label uses hero_space_initial");
+  const level1 = heroLevelNeed(1);
+  assert(level1 !== null && level1.gold === 53 && level1.exp === 12, "level 1 cost is herolevel gold and exp");
+  assert(heroLevelNeed(null) === null && heroLevelNeed(0) === null, "missing level cost is not written as 0");
   assert(
     profile !== null && profile.skills.some((skill) => skill.id === 101010011 && skill.name === "烈焰之锤"),
     "herotype skills resolve through heroskill and language"
@@ -26833,6 +26838,20 @@ function checkCityHub(): void {
       fillSrc.indexOf("jindutiao") >= 0 &&
       fillSrc.indexOf("HangSpineMask") >= 0,
     "hang panel fills the four bars, hides the vip debug line, and does not mount the empty plaque"
+  );
+  assert(
+    fillSrc.indexOf("HeroListHeroLayer") >= 0 &&
+      fillSrc.indexOf("HeroInfoUpLevelLayer") >= 0 &&
+      fillSrc.indexOf("HeroInfoUpStarLayer") >= 0 &&
+      fillSrc.indexOf("BackpackInfoLayer") >= 0 &&
+      fillSrc.indexOf("不发升级协议") >= 0 &&
+      fillSrc.indexOf("不发升星协议") >= 0 &&
+      fillSrc.indexOf("不发使用协议") >= 0 &&
+      fillSrc.indexOf("emptyBagToast") >= 0 &&
+      fillSrc.indexOf("grayscale") >= 0 &&
+      fillSrc.indexOf("不发 5004") >= 0 &&
+      fillSrc.indexOf("3013") < 0,
+    "hero and bag shells bind the read-only boards and do not send upgrade, use, or 3013"
   );
   assert(
     mainApp.indexOf("formatCombatPower") >= 0 &&

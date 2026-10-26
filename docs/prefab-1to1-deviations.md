@@ -276,7 +276,7 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 | 稀有框 | 只有 2 / 3 / 4 用 `backpack_spr-rare-*` | 没有 `spr-rare-1` 或 `spr-rare-5`，其余用 `backpack_item-frame-1` |
 | 圣龙立绘 | 四个名字仍按 `dragonlevel` 第一次出现：斯摩格、迪斯莱尔、雷博尔、英菲尼迪。格子用同一张 `dragon_btn-illustration`，写「图鉴」，不再把 `dragon_identify-1`…`4` 安到这四条上。标题在 s2c 59001 有 `attr_level` 时写「圣龙等级 N」 | `dragon_identify-0`…`11` 是鉴定光效，不是物种立绘。表上没有立绘列。不发 59007 升等级 |
 | 圣物 | 每种 `kind` 用 1 星那条的名字、图标和特性。任一星的 id 在背包里就算持有 | 不发升星 |
-| 说明卡 | 按 BackpackInfoLayer 的 390×300 在运行时拼。不挂那个 prefab，也不发使用 / 出售 / 来源 | 关闭只关这张卡 |
+| 说明卡 | 点背包格子挂 `BackpackInfoLayer`。底板挪到内容中间。灰「使用」只记日志，不发 5004–5009。来源钮灰掉，不跳转。Prefab 加载失败才退回运行时 390×300 卡 | 关闭只关这张卡 |
 | 空名册 / 空背包 | 4001 还没到：英雄页写「真服英雄未同步」，格子改画 `herotype` 图鉴（灰、锁），不造英雄。4001 是空数组：写「空名册」，同样改画图鉴。有英雄仍只画名册。背包没到写「真服未同步」，空表写「空背包」，格子仍是空框。出阵没有英雄写「空名册，没有可上阵的英雄」。收到后续 s2c 会重画 | 图鉴不是角色进度。不把配置表行写进 `GameStore` |
 | 主城特效 | `maincityeffect` 的 5 条 anim 按 `main-city-effect_<名>-0` 起往下播，缺一张就停。节点挂到中景父节点的最后，用中景本地坐标换算，避免被近景板和后挂的建筑图标盖住。`dx` 播 `stand`；播失败改播 `main-city-effect_portrait`（和 `spine/dx` 图集里的光球同是 96×90）。`chuanghu` 仍是 spine `stand` | `main-city-effect_spr-cloud-1`…`4`、`main-city-effect_6-*`、`main-city-effect_15-*` 有帧，但 `maincityeffect` 没有对应行，不猜坐标。不新画 |
 | 战斗缺帧 | 技能 / 受击帧全空时，对应 batch2 骨架还在就留骨架。骨架也没有时，在同一 Vfx 锚点播已有 `yanwu`（`act1`） | 不新做技能套。3013 / 升级 / 使用道具仍不发 |
