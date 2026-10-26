@@ -8,6 +8,7 @@
  * 不给每个站位写「待命」。计时泡只有 Prefab 里那一个，挪到掉落堆上。
  * 左英雄头顶另挂一句 herotalk，进真战报时藏起来。
  * main-scene_spr-drop-1 是空的蓝金匾，不拿来当掉落堆。
+ * 掉落堆和计时泡抬到金环顶上面，不盖住环。
  * 站场一次铺上 idleHangStems 返回的每一只（最多三格），演武不拆它们。点「战斗」才进真战报。
  */
 import { Color, Node, resources, sp, Sprite, SpriteFrame, UITransform } from "cc";
@@ -16,6 +17,7 @@ import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
 import { mountBattleSpine, mountNamedSpine, SpineActor } from "./battleSpine";
 import { harvestCollectClip } from "./cityMapLayout";
+import { hangLootBubbleY, hangLootIconY, hangLootSpineY, HANG_LOOT_BUBBLE_X } from "./hangChrome";
 import { hangStemsForFormation, idleHangStemsFrom } from "./idleHangRoster";
 import { mountIdleSkirmish } from "./idleHangSkirmish";
 import { mountHangTalk } from "./idleHangTalk";
@@ -168,7 +170,7 @@ export function paintIdleLoot(hang: Node, icons: string[]): void {
     return;
   }
   const pile = uiNode("IdleLoot");
-  place(pile, hang, 0, -300);
+  place(pile, hang, 0, hangLootIconY());
   pile.setScale(1.2, 1.2, 1);
   const n = icons.length < LOOT_AT.length ? icons.length : LOOT_AT.length;
   for (let i = 0; i < n; i++) {
@@ -247,7 +249,7 @@ function ensureLootSpine(hang: Node): Node {
   let host = hang.getChildByName("IdleLootSpine");
   if (!host) {
     host = uiNode("IdleLootSpine");
-    place(host, hang, 0, -328);
+    place(host, hang, 0, hangLootSpineY());
     host.setScale(0.42, 0.42, 1);
   }
   return host;
@@ -263,7 +265,7 @@ export function seatHangTimer(hang: Node, bubble: Node): void {
     if (bubble.parent !== hang) bubble.parent = hang;
     if (spr) spr.setPosition(0, 4, 0);
     if (label) label.setPosition(0, 10, 0);
-    bubble.setPosition(48, -248, 0);
+    bubble.setPosition(HANG_LOOT_BUBBLE_X, hangLootBubbleY(), 0);
   }
   if (bubble.parent === hang) bubble.setSiblingIndex(Math.max(0, hang.children.length - 1));
 }

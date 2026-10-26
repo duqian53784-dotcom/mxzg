@@ -19,6 +19,12 @@ import { formationFaceSlot, WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/w
 import { mainFormationHeroes } from "../net/protocol/starterLineup";
 import { formatHangClock, goldPerMin, itemEveryMs } from "../module/idle/rewards";
 import { hangSpineStem } from "./idleHangRoster";
+import {
+  hangBarFillBox,
+  hangBattleGlowPaths,
+  hangBattleGlowStepMs,
+  HANG_BATTLE_GLOW_SPEED,
+} from "./hangChrome";
 import { paintIdleLoot, playIdleHarvest, seatHangTimer } from "./idleHangView";
 import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
 import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
@@ -84,7 +90,8 @@ export function fillPageShell(id: string, view: Node, openHero: (hero: StoreHero
 
 /**
  * 藏掉殿堂缩略图和「地图 / 999」字。地图框 main-scene_spr-map-frame-1 留着，
- * 它是底栏中间的金环水晶，盖住奶油色空板。四条收益用进度填充，三钮改成战力UP / 战斗 / 高速战斗。
+ * 它是底栏中间的金环水晶，盖住奶油色空板。掉落堆抬到环顶上面。
+ * 四条收益按原图高度填充。中间「战斗」循环 btn-battle 光，字仍在光上面。
  */
 export function dressHangPanel(view: Node): void {
   const mark = view as Node & { mxzgHang?: boolean };
@@ -100,6 +107,7 @@ export function dressHangPanel(view: Node): void {
   fitButton(findNamed(view, "btn_lineup"), "战力UP", 22);
   fitButton(findNamed(view, "btn_battle"), "战斗", 22);
   fitButton(findNamed(view, "btn_speed_battle"), "高速战斗", 20);
+  seatBattleGlow(findNamed(view, "btn_battle"));
   pinSprites(view);
   let claimNote = "";
   let seenReward = GameStore.idle().rewardTime;
@@ -244,6 +252,85 @@ function syncVip(view: Node, plate: Node | null): void {
   setText(vip, vipIdleLine(bonus.level));
 }
 
+let battleGlowMissLogged = false;
+
+/**
+ * effect2 的 eff_battle_layer_battle。光挂在钮心，画在字下面。
+ * 十张都没有时紫底和「战斗」还在。不挡点击。
+ */
+function seatBattleGlow(button: Node | null): void {
+  if (!button || button.getChildByName("BattleGlow")) return;
+  const glow = uiNode("BattleGlow");
+  glow.addComponent(UITransform).setContentSize(224, 102);
+  const image = glow.addComponent(Sprite);
+  image.sizeMode = Sprite.SizeMode.CUSTOM;
+  image.type = Sprite.Type.SIMPLE;
+  glow.setPosition(0, 0, 0);
+  glow.parent = button;
+  glow.setSiblingIndex(0);
+  const step = hangBattleGlowStepMs(HANG_BATTLE_GLOW_SPEED);
+  const paths = hangBattleGlowPaths();
+  let timer: ReturnType<typeof setInterval> | null = null;
+  const stop = () => {
+    if (!timer) return;
+    clearInterval(timer);
+    timer = null;
+  };
+  button.once(Node.EventType.NODE_DESTROYED, stop);
+  const pending: Promise<SpriteFrame | null>[] = [];
+  for (let i = 0; i < paths.length; i++) pending.push(loadGlowFrame(paths[i]));
+  Promise.all(pending).then((frames) => {
+    if (!glow.isValid) {
+      stop();
+      return;
+    }
+    const ready: SpriteFrame[] = [];
+    for (let i = 0; i < frames.length; i++) {
+      const frame = frames[i];
+      if (frame) ready.push(frame);
+    }
+    if (ready.length === 0) {
+      noteBattleGlowMiss();
+      glow.active = false;
+      return;
+    }
+    let index = 0;
+    const tick = () => {
+      if (!glow.isValid) {
+        stop();
+        return;
+      }
+      const frame = ready[index % ready.length];
+      image.spriteFrame = frame;
+      const size = frame.originalSize;
+      const ui = glow.getComponent(UITransform);
+      if (ui && size && size.width > 0 && size.height > 0) ui.setContentSize(size.width, size.height);
+      index += 1;
+    };
+    tick();
+    timer = setInterval(tick, step);
+  });
+}
+
+function loadGlowFrame(path: string): Promise<SpriteFrame | null> {
+  return new Promise((resolve) => {
+    try {
+      resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
+        if (err || !asset) resolve(null);
+        else resolve(asset);
+      });
+    } catch (_err) {
+      resolve(null);
+    }
+  });
+}
+
+function noteBattleGlowMiss(): void {
+  if (battleGlowMissLogged) return;
+  battleGlowMissLogged = true;
+  GameLog.shared.warn("Mainline", "挂机战斗钮光 main-scene-effect_btn-battle 没有挂上，紫底仍在");
+}
+
 /** 条上的字原来是 0×0 再 SHRINK，看起来像空槽。右对齐铺进槽里。 */
 function writeBar(view: Node, name: string, text: string): void {
   const node = findNamed(view, name);
@@ -269,7 +356,8 @@ function setBarFill(view: Node, barName: string, art: string, ratio: number): vo
   if (!bar) return;
   let fill = bar.getChildByName("HangFill");
   if (!fill) {
-    fill = sprite("HangFill", 150, 18, art);
+    const box = hangBarFillBox(art);
+    fill = sprite("HangFill", box.w, box.h, art);
     const image = fill.getComponent(Sprite);
     if (image) {
       image.type = Sprite.Type.FILLED;
