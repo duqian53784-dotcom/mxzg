@@ -105,9 +105,17 @@ const HERO_EXP = 900101;
 
 const DRAGON_PLATE = "ui/dragon/dragon_btn-illustration";
 
+export interface ChapterStageFace {
+  /** chapterreward.map，形如 map01。对不上文件名规则时是空串。 */
+  map: string;
+  /** chapterreward.name 对上的 language。没有时是空串。 */
+  name: string;
+}
+
 const idleByIdx = new Map<number, IdleMinute>();
 const clearByIdx = new Map<number, CostStack[]>();
 const dropGroupByIdx = new Map<number, number>();
+const stageFaceByIdx = new Map<number, ChapterStageFace>();
 const triggersByGroup = new Map<number, number[]>();
 const itemsByTrigger = new Map<number, DropFace[]>();
 const vipRows = new Map<number, VipIdleBonus>();
@@ -126,6 +134,7 @@ export function clearRosterCatalog(): void {
   idleByIdx.clear();
   clearByIdx.clear();
   dropGroupByIdx.clear();
+  stageFaceByIdx.clear();
   triggersByGroup.clear();
   itemsByTrigger.clear();
   vipRows.clear();
@@ -144,7 +153,7 @@ export function clearRosterCatalog(): void {
 export function bindRosterCatalog(tables: Map<string, ConfigTableFile<Row>>): void {
   clearRosterCatalog();
   const text = languageMap(tables.get("language"));
-  bindIdle(tables.get("chapterreward"));
+  bindIdle(tables.get("chapterreward"), text);
   bindDrops(tables.get("droptrigger"), tables.get("dropgroup"));
   bindSystem(tables.get("system"));
   bindVip(tables.get("vip"));
@@ -155,6 +164,17 @@ export function bindRosterCatalog(tables: Map<string, ConfigTableFile<Row>>): vo
   bindDragons(tables.get("dragonlevel"), text);
   bindRelics(tables.get("dragonrelic"), tables.get("item"), text);
   bindHeroLevels(tables.get("herolevel"));
+}
+
+/**
+ * 当前关的地图名和地名。idx 超出表时跟收益同一套就近。
+ * 表还没登记时是 null。
+ */
+export function chapterStageFace(stageIdx: number): ChapterStageFace | null {
+  const pick = pickIdleIdx(stageIdx);
+  if (pick === null) return null;
+  const row = stageFaceByIdx.get(pick);
+  return row ? { map: row.map, name: row.name } : null;
 }
 
 /** 当前关的每分钟收益。表还没登记时是 null，调用方留原来的句子。 */
@@ -305,7 +325,7 @@ export function listRelics(): RelicFace[] {
   return relics.slice();
 }
 
-function bindIdle(table: Table): void {
+function bindIdle(table: Table, text: Map<string, string>): void {
   for (const row of rows(table)) {
     const idx = num(row.idx);
     if (idx === null || idx < 1) continue;
@@ -319,7 +339,15 @@ function bindIdle(table: Table): void {
     clearByIdx.set(idx, parseStacks(row.first_reward));
     const group = num(row.drop_group);
     if (group !== null && group > 0) dropGroupByIdx.set(idx, group);
+    const map = typeof row.map === "string" && /^map\d{2}$/.test(row.map) ? row.map : "";
+    const nameKey = num(row.name);
+    const name = nameKey === null ? "" : plainLanguage(text.get(String(nameKey)) || "");
+    stageFaceByIdx.set(idx, { map, name });
   }
+}
+
+function plainLanguage(value: string): string {
+  return value.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
 }
 
 function bindDrops(triggers: Table, items: Table): void {

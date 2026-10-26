@@ -543,7 +543,9 @@ import {
   clearGameCatalog,
   heroBaseStats,
   heroProfile,
+  heroSkillPage,
   itemDisplayName,
+  occupationName,
   itemIconResource,
   mainlevelExpLabel,
 } from "../assets/scripts/config/gameCatalog";
@@ -551,6 +553,7 @@ import {
   chapterClearReward,
   chapterDrops,
   chapterIdleMinute,
+  chapterStageFace,
   heroLevelNeed,
   heroSpaceCap,
   heroStarStep,
@@ -2439,6 +2442,19 @@ function checkStoreScreens(): void {
   assert(itemDisplayName(900001, null, "原名") === "金币", "item_type matches item.idx");
   assert(itemIconResource(900001, null) === "ui/bag/backpack_900001", "item icon uses the bag png");
   assert(chapterPlaceLabel(1) === "第1章 · 第1关", "chapter idx labels the stage");
+  assert(occupationName(2) === "法师", "occupation 2 is language 111002");
+  assert(profile !== null && profile.occupation === 2, "独眼梦魇 occupation comes from herotype");
+  const hammer = heroSkillPage(101010011, 1);
+  assert(
+    hammer !== null && hammer.name === "烈焰之锤" && hammer.blurb.indexOf("对单个敌人") >= 0,
+    "skill page reads heroskill name and describe"
+  );
+  const basic = heroSkillPage(101010010, 0);
+  assert(basic !== null && basic.name === "普攻", "basic attack keeps its own name");
+  const face1 = chapterStageFace(1);
+  assert(face1 !== null && face1.map === "map01" && face1.name === "羽嘉森林", "stage 1 hang map and place name");
+  const face16 = chapterStageFace(16);
+  assert(face16 !== null && face16.map === "map02" && face16.name === "石块高地", "stage 16 hang map follows chapterreward");
   assert(mainlevelExpLabel(1) === "等级经验 120", "mainlevel exp for the role level");
   const bare = {
     battleId: null,
@@ -2533,6 +2549,7 @@ function checkStoreScreens(): void {
   clearGameCatalog();
   GameStore.reset();
   assert(chapterPlaceLabel(1) === null, "clearing the catalog drops chapter labels");
+  assert(chapterStageFace(1) === null && occupationName(2) === null, "clearing drops stage face and occupation");
 }
 
 function checkLoginPrefs(): void {
