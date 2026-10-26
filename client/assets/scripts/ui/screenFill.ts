@@ -14,10 +14,13 @@ import { WireSession } from "../net/WireSession";
 import { applyIdleClaim, claimToast, IDLE_HERO_EXP_ID, IDLE_ITEM_ID, IDLE_ROLE_EXP_ID } from "../module/idle/rewards";
 import { heroBaseStats, heroProfile, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles } from "../config/gameCatalog";
 import { chapterDrops, chapterIdleMinute, DropFace, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, idleDropEverySec, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleLine } from "../config/rosterCatalog";
+import { IDLE_UNIX_FLOOR, wireIdleCapMs, wireIdleElapsedMs } from "../net/protocol/wireIdle";
+import { WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/wireLineUpSave";
+import { mainFormationHeroes } from "../net/protocol/starterLineup";
 import { goldPerMin, itemEveryMs } from "../module/idle/rewards";
 import { hangSpineStem } from "./idleHangRoster";
 import { mountBattleSpine } from "./battleSpine";
-import { deployedHeroIds, setLocalLineup } from "./localLineup";
+import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
 import { mockRuntimeEnabled } from "../net/transportSelect";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
@@ -57,6 +60,9 @@ const BAG_TABS: { id: BagTab; title: string }[] = [
   { id: "spirit", title: "精灵" },
 ];
 
+/** 阵法 1 只编码 2/3/5/6/7/8/9。前排 4、后排 4 里多出来的一格留空。 */
+const FORM_MAX = WIRE_LINEUP_SAVE_POSITIONS.length;
+
 export function fillPageShell(id: string, view: Node, openHero: (hero: StoreHero) => void): void {
   if (!view.isValid) return;
   if (id === "hero") fillHero(view, openHero);
@@ -84,13 +90,13 @@ export function dressHangPanel(view: Node): void {
   fitButton(findNamed(view, "btn_speed_battle"), "高速战斗", 20);
   pinSprites(view);
   let claimNote = "";
+  let seenReward = GameStore.idle().rewardTime;
+  let seenClaim = WireSession.claimSerial;
   const tick = () => {
     if (!view.isValid) return;
     paintHangExtras(view, plate);
-    let elapsed = idleElapsedMs();
-    const cap = idleCapMs();
-    if (cap !== null && elapsed > cap) elapsed = cap;
-    const clock = clockText(elapsed);
+    const idle = GameStore.idle();
+    const clock = hangClockText(idle);
     writeNamed(view, "lbl_progress_time", clock);
     writeNamed(view, "lbl_progress_time2", claimNote || clock);
     const minute = chapterIdleMinute(currentStageIdx());
@@ -98,6 +104,12 @@ export function dressHangPanel(view: Node): void {
       writeNamed(view, "lbl_gold", minute.gold + "/m");
       writeNamed(view, "lbl_souls", minute.heroExp + "/m");
       writeNamed(view, "lbl_exp", minute.roleExp + "/m");
+      return;
+    }
+    if (Session.source === "wire") {
+      writeNamed(view, "lbl_gold", "—/m");
+      writeNamed(view, "lbl_souls", "—/m");
+      writeNamed(view, "lbl_exp", "—/m");
       return;
     }
     const cleared = clearedCount();
@@ -109,9 +121,26 @@ export function dressHangPanel(view: Node): void {
     writeNamed(view, "lbl_souls", perMin + "/m");
     writeNamed(view, "lbl_exp", "每" + sec + "s");
   };
+  const onIdleSync = () => {
+    const idle = GameStore.idle();
+    if (WireSession.claimSerial !== seenClaim) {
+      seenClaim = WireSession.claimSerial;
+      const noteText = WireSession.claimNote;
+      claimNote = noteText.indexOf("解不开") >= 0 || noteText.indexOf("没有 reward_time") >= 0 ? "领取未生效" : "";
+    }
+    if (idle.rewardTime !== seenReward) {
+      seenReward = idle.rewardTime;
+      if (idle.fromStore) claimNote = "";
+    }
+    tick();
+  };
   tick();
   const timer = setInterval(tick, 1000);
-  view.once(Node.EventType.NODE_DESTROYED, () => clearInterval(timer));
+  const offIdle = WireSession.onSync(onIdleSync);
+  view.once(Node.EventType.NODE_DESTROYED, () => {
+    clearInterval(timer);
+    offIdle();
+  });
   bindHangClaim(view, (text, resetClock) => {
     claimNote = text;
     if (resetClock) dressClock.t = Date.now();
@@ -223,7 +252,7 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
     if (lock) lock.active = n === 9;
   }
   let elem = 0;
-  let selected = deployedHeroIds();
+  let selected = formationIds();
   const paint = () => {
     if (!view.isValid) return;
     paintFormationGrid(view, elem, selected, (heroId) => {
@@ -239,7 +268,7 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
     if (!owned) writeNamed(view, "lbl_tip", "真服英雄未同步");
     else if (owned.length === 0) writeNamed(view, "lbl_tip", "空名册，没有可上阵的英雄");
     else if (roster.length === 0) writeNamed(view, "lbl_tip", "这个元素没有");
-    else writeNamed(view, "lbl_tip", selected.length >= 8 ? "上阵 8/8" : "已选 " + selected.length + "/8");
+    else writeNamed(view, "lbl_tip", selected.length >= FORM_MAX ? "上阵 " + FORM_MAX + "/" + FORM_MAX : "已选 " + selected.length + "/" + FORM_MAX);
   };
   for (let i = 0; i <= 5; i++) {
     const button = findNamed(view, "btn_elem" + i);
@@ -260,29 +289,46 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
   if (confirm) {
     confirm.setSiblingIndex(Math.max(0, (confirm.parent ? confirm.parent.children.length : 1) - 1));
     if (!confirm.getComponent(Button)) confirm.addComponent(Button);
+    let saving = false;
     confirm.on(Button.EventType.CLICK, () => {
+      if (saving) return;
       if (selected.length === 0) {
         GameLog.shared.info("Mainline", "出阵没有英雄，仍留在挂机");
         return;
       }
       if (Session.source === "wire") {
-        const before = WireSession.lineUpSaveSerial;
+        const beforeSave = WireSession.lineUpSaveSerial;
+        const beforeLine = WireSession.lineUpSerial;
         if (!WireSession.saveMainFormation(selected)) {
           GameLog.shared.info("Mainline", "出阵未发出 3100，服未连接");
+          writeNamed(view, "lbl_tip", "服未连接，没有发出 3100");
           return;
         }
-        GameLog.shared.info("Mainline", "出阵已发 3100，formation_id=1，等待空包");
+        saving = true;
+        GameLog.shared.info("Mainline", "出阵已发 3100，formation_id=1，等待空包后再等 3101");
+        writeNamed(view, "lbl_tip", "已发 3100，等待 3101");
         let off = (): void => {};
         const timer = setTimeout(() => {
+          saving = false;
           off();
-          GameLog.shared.info("Mainline", "3100 无回包，不出战");
-        }, 5000);
-        off = WireSession.onSync(() => {
-          if (WireSession.lineUpSaveSerial === before) return;
+          if (view.isValid) writeNamed(view, "lbl_tip", "3100 或 3101 无回包，不出战");
+          GameLog.shared.info("Mainline", "3100 或 3101 无回包，不出战");
+        }, 8000);
+        const stop = () => {
           clearTimeout(timer);
           off();
+        };
+        off = WireSession.onSync(() => {
+          if (!view.isValid) {
+            stop();
+            return;
+          }
+          if (WireSession.lineUpSaveSerial === beforeSave) return;
+          if (WireSession.lineUpSerial === beforeLine) return;
+          stop();
           onConfirm();
         });
+        view.once(Node.EventType.NODE_DESTROYED, stop);
         return;
       }
       if (!mockRuntimeEnabled()) {
@@ -309,6 +355,7 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
   if (badge) paintSprite(badge, "ui/hero/hero-icon_elem-" + clamp(elem, 0, 5));
   const stars = findNamed(view, "node_star");
   if (stars) {
+    clearChildren(stars);
     const count = hero.star ?? (profile && profile.star) ?? 0;
     const shown = count > 5 ? 5 : clamp(count, 0, 5);
     for (let i = 0; i < shown; i++) {
@@ -391,7 +438,7 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     if (!content.isValid) return;
     clearChildren(content);
     const all = GameStore.heroes();
-    writeNamed(view, "lbl_capacity", "空间 " + (all ? all.length : 0) + "/" + heroSpaceCap());
+    writeNamed(view, "lbl_capacity", "空间 " + (all ? all.length : 0) + "/" + heroSpaceShown());
     if (tab === "dragon") {
       writeNamed(view, "lbl_go", dragonHeadLine());
       paintDragonBoard(view, content);
@@ -990,9 +1037,49 @@ function toggleId(selected: number[], id: number): number[] {
     next.splice(index, 1);
     return next;
   }
-  if (next.length >= 8) return next;
+  if (next.length >= FORM_MAX) return next;
   next.push(id);
   return next;
+}
+
+/** 打开出阵时按站位排。Mock 本局记录仍按点选顺序，最多 FORM_MAX。 */
+function formationIds(): number[] {
+  if (mockRuntimeEnabled()) {
+    const local = localLineupIds();
+    if (local.length > 0) return local.slice(0, FORM_MAX);
+  }
+  const line = GameStore.formation() || (Session.source === "wire" ? WireSession.lineUp : null);
+  const ranked = mainFormationHeroes(line).slice().sort(byFormationPosition);
+  const ids: number[] = [];
+  for (let i = 0; i < ranked.length; i++) {
+    const id = ranked[i].heroId;
+    if (ids.indexOf(id) >= 0) continue;
+    ids.push(id);
+    if (ids.length >= FORM_MAX) break;
+  }
+  return ids;
+}
+
+function byFormationPosition(a: { position: number | null }, b: { position: number | null }): number {
+  const ar = formationRank(a.position);
+  const br = formationRank(b.position);
+  if (ar !== br) return ar - br;
+  return 0;
+}
+
+function formationRank(position: number | null): number {
+  if (position === null) return 1000;
+  for (let i = 0; i < WIRE_LINEUP_SAVE_POSITIONS.length; i++) {
+    if (WIRE_LINEUP_SAVE_POSITIONS[i] === position) return i;
+  }
+  return 500 + position;
+}
+
+function heroSpaceShown(): number {
+  if (Session.source === "wire" && WireSession.heroCapacity !== null && WireSession.heroCapacity >= 0) {
+    return WireSession.heroCapacity;
+  }
+  return heroSpaceCap();
 }
 
 function bindTab(view: Node, name: string, fn: () => void): void {
@@ -1131,22 +1218,17 @@ function clearedCount(): number {
   return 0;
 }
 
-function idleElapsedMs(): number {
-  const idle = GameStore.idle();
-  const bank = idle.fromStore ? bankedMs(idle.rewardTime) : 0;
-  const started = (dressClock as { t: number }).t;
-  return bank + Math.max(0, Date.now() - started);
+function hangClockText(idle: { fromStore: boolean; rewardTime: number | null; maxRewardTime: number | null }): string {
+  if (idle.fromStore && (idle.rewardTime === null || !isFinite(idle.rewardTime) || idle.rewardTime < IDLE_UNIX_FLOOR)) {
+    return "未同步";
+  }
+  let elapsed = idle.fromStore ? wireIdleElapsedMs(idle.rewardTime, Date.now()) : Math.max(0, Date.now() - dressClock.t);
+  const cap = idle.fromStore ? wireIdleCapMs(idle.maxRewardTime, idleCapMs()) : idleCapMs();
+  if (cap !== null && elapsed > cap) elapsed = cap;
+  return clockText(elapsed);
 }
 
 const dressClock = { t: Date.now() };
-
-function bankedMs(rewardTime: number | null): number {
-  if (rewardTime === null || !isFinite(rewardTime) || rewardTime <= 0) return 0;
-  if (rewardTime > 1e12) return Math.max(0, Date.now() - rewardTime);
-  if (rewardTime > 1e9) return Math.max(0, Date.now() - rewardTime * 1000);
-  if (rewardTime > 8 * 3600) return rewardTime;
-  return rewardTime * 1000;
-}
 
 interface InfoCard {
   icon: string;

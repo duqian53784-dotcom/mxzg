@@ -98,10 +98,16 @@ export function paintBattleFloats(
     setText(node, text);
     const label = node.getComponent(Label);
     if (label) {
-      label.fontSize = 32;
-      label.lineHeight = 36;
+      const heal = shown[i].hurt > 0;
+      const crit = shown[i].crit === true && !heal;
+      label.fontSize = crit ? 40 : 32;
+      label.lineHeight = crit ? 44 : 36;
       label.isBold = true;
-      label.color = text.charAt(0) === "-" ? new Color(255, 72, 56, 255) : new Color(255, 236, 160, 255);
+      label.color = crit
+        ? new Color(255, 214, 64, 255)
+        : heal
+          ? new Color(72, 210, 96, 255)
+          : new Color(255, 72, 56, 255);
     }
     node.active = true;
     const page = pages && i < pages.length ? pages[i] : null;

@@ -809,6 +809,8 @@ export class WireSession {
    * 空数组是已同步的空名册，不是未同步。
    */
   static heroes: WireHeroEntry[] | null = null;
+  /** s2c 4001 的 hero_capacity。null 表示这包没带，界面退回 hero_space_initial。0 仍是 0。 */
+  static heroCapacity: number | null = null;
   /**
    * 收齐的 s2c 17000。null 表示这次进主城还没收到 17000。
    * 空表是已同步，不是未同步。
@@ -1552,6 +1554,8 @@ export class WireSession {
     this.bagMarks = [];
     this.mailEntries = null;
     this.heroes = null;
+    this.heroCapacity = null;
+    this.resetHeroGather();
     this.activity = null;
     this.achievements = null;
     this.pvp = null;
@@ -1721,6 +1725,8 @@ export class WireSession {
       this.bagMarks = [];
       this.mailEntries = null;
       this.heroes = null;
+      this.heroCapacity = null;
+      this.resetHeroGather();
       this.activity = null;
       this.achievements = null;
       this.pvp = null;
@@ -1889,6 +1895,8 @@ export class WireSession {
     this.bagMarks = [];
     this.mailEntries = null;
     this.heroes = null;
+    this.heroCapacity = null;
+    this.resetHeroGather();
     this.activity = null;
     this.achievements = null;
     this.pvp = null;
@@ -5046,6 +5054,7 @@ export class WireSession {
     const entries = list.entries.map(copyHero);
     this.pendingHero = null;
     this.heroes = entries;
+    this.heroCapacity = list.heroCapacity;
     GameLog.shared.info("Wire", "s2c 4001 " + wireHeroNote({ ...list, entries }));
     this.emit();
   }

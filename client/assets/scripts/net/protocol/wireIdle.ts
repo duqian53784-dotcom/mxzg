@@ -195,6 +195,29 @@ function nonNegativeVarint(fields: ProtoField[], field: number): number | null {
   return null;
 }
 
+/**
+ * 挂机底栏用的已挂机毫秒。reward_time 大于等于 10 亿才当时间戳。
+ * 10^12 以上当毫秒，否则当 unix 秒。更小的数（含 0）不从本机时钟推，返回 0。
+ */
+export function wireIdleElapsedMs(rewardTime: number | null, nowMs: number): number {
+  if (rewardTime === null || !isFinite(rewardTime) || rewardTime < IDLE_UNIX_FLOOR) return 0;
+  const now = typeof nowMs === "number" && isFinite(nowMs) ? nowMs : 0;
+  const stamp = rewardTime >= 1e12 ? rewardTime : rewardTime * 1000;
+  const elapsed = now - stamp;
+  return elapsed > 0 ? elapsed : 0;
+}
+
+/**
+ * 封顶毫秒。max_reward_time 小于 10 亿时是秒数上限（0 也算）。
+ * 像时间戳或没带时，退回表里的 idle_max_time。表也没有就是 null。
+ */
+export function wireIdleCapMs(maxRewardTime: number | null, tableCapMs: number | null): number | null {
+  if (maxRewardTime !== null && isFinite(maxRewardTime) && maxRewardTime >= 0 && maxRewardTime < IDLE_UNIX_FLOOR) {
+    return maxRewardTime * 1000;
+  }
+  return tableCapMs;
+}
+
 function finiteSec(nowSec: number): number {
   if (typeof nowSec !== "number" || !isFinite(nowSec)) return 0;
   return Math.floor(nowSec);
