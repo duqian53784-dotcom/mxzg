@@ -125,6 +125,19 @@ import {
 } from "../assets/scripts/ui/battleAppear";
 import { battleNumberFontPath, battleNumberKind, bitmapNumberText } from "../assets/scripts/ui/battleNumberFont";
 import {
+  hangBarFillBox,
+  hangBattleGlowPaths,
+  hangBattleGlowStepMs,
+  hangCrystalTopY,
+  hangLootBubbleY,
+  hangLootIconY,
+  hangLootSpineY,
+  hangPanelRootY,
+  HANG_BATTLE_GLOW_COUNT,
+  HANG_BATTLE_GLOW_SPEED,
+  HANG_LOOT_BUBBLE_X,
+} from "../assets/scripts/ui/hangChrome";
+import {
   hangTalkAnchor,
   heroTalkCandidates,
   pickHeroTalkLan,
@@ -26954,6 +26967,71 @@ function checkCityHub(): void {
       fillSrc.indexOf("jindutiao") >= 0 &&
       fillSrc.indexOf("HangSpineMask") >= 0,
     "hang panel fills the four bars, hides the vip debug line, and does not mount the empty plaque"
+  );
+  const roleFill = hangBarFillBox("ui/city/main-scene_progress-role-exp");
+  const afkFill = hangBarFillBox("ui/city/main-scene_progress-AFK");
+  const goldFill = hangBarFillBox("ui/city/main-scene_progress-hangs");
+  const expFill = hangBarFillBox("ui/city/main-scene_progress-exp");
+  const glowPaths = hangBattleGlowPaths();
+  const cityArt = join(configDir(), "..", "ui", "city");
+  const rolePng = readFileSync(join(cityArt, "main-scene_progress-role-exp.png"));
+  const afkPng = readFileSync(join(cityArt, "main-scene_progress-AFK.png"));
+  const effect2 = JSON.parse(readFileSync(join(configDir(), "effect2.json"), "utf8")) as {
+    rows?: { name?: string; speed?: number }[];
+  };
+  let glowSpeed = 0;
+  const effect2Rows = effect2.rows || [];
+  for (let i = 0; i < effect2Rows.length; i++) {
+    if (effect2Rows[i].name === "eff_battle_layer_battle") glowSpeed = effect2Rows[i].speed || 0;
+  }
+  assert(
+    hangPanelRootY() === -500 &&
+      hangCrystalTopY() === -240.5 &&
+      hangLootSpineY() === -182 &&
+      hangLootIconY() === -154 &&
+      hangLootBubbleY() === -102 &&
+      HANG_LOOT_BUBBLE_X === 48 &&
+      hangLootSpineY() > hangCrystalTopY(),
+    "hang loot sits above the crystal ring instead of covering it"
+  );
+  assert(
+    afkFill.w === 158 &&
+      afkFill.h === 28 &&
+      goldFill.w === 158 &&
+      goldFill.h === 24 &&
+      expFill.h === 24 &&
+      roleFill.w === 158 &&
+      roleFill.h === 4 &&
+      afkPng.readUInt32BE(16) === 158 &&
+      afkPng.readUInt32BE(20) === 28 &&
+      rolePng.readUInt32BE(20) === 4 &&
+      fillSrc.indexOf("hangBarFillBox") >= 0 &&
+      fillSrc.indexOf("sprite(\"HangFill\", 150, 18") < 0,
+    "hang bar fills keep the art height, including the 4px role-exp line"
+  );
+  assert(
+    glowPaths.length === HANG_BATTLE_GLOW_COUNT &&
+      glowPaths[0] === "ui/city/main-scene-effect_btn-battle-0" &&
+      glowPaths[9] === "ui/city/main-scene-effect_btn-battle-9" &&
+      HANG_BATTLE_GLOW_SPEED === 24 &&
+      glowSpeed === 24 &&
+      hangBattleGlowStepMs(glowSpeed) === 240 &&
+      hangBattleGlowStepMs(0) === 240 &&
+      existsSync(join(cityArt, "main-scene-effect_btn-battle-0.png")) &&
+      existsSync(join(cityArt, "main-scene-effect_btn-battle-9.png")) &&
+      fillSrc.indexOf("seatBattleGlow") >= 0 &&
+      fillSrc.indexOf("挂机战斗钮光 main-scene-effect_btn-battle 没有挂上，紫底仍在") >= 0 &&
+      fillSrc.indexOf("btn-scale-battle") < 0,
+    "hang battle button loops the ten glow frames at the effect2 step and does not invent a crystal core"
+  );
+  const resBlock = readFileSync(join(configDir(), "..", "spine", "res-block.json"), "utf8");
+  assert(
+    hangSrc.indexOf("hangLootSpineY") >= 0 &&
+      hangSrc.indexOf("hangLootIconY") >= 0 &&
+      hangSrc.indexOf("hangLootBubbleY") >= 0 &&
+      hangSrc.indexOf("place(pile, hang, 0, -300)") < 0 &&
+      resBlock.indexOf('"height":202.48') >= 0,
+    "hang loot pile and timer use the crystal-clearance seats"
   );
   assert(
     fillSrc.indexOf("HeroListHeroLayer") >= 0 &&
