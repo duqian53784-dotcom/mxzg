@@ -45,6 +45,7 @@ const PREFAB_UUID: { [path: string]: string } = {
   "prefabs/ui/hero/HeroInfoLayer": "fa5d3f0c-1441-479b-a182-48d374c7dc6c",
   "prefabs/ui/hero/HeroInfoUpLevelLayer": "723c0b26-52e0-47a6-ad0f-30d22af54f92",
   "prefabs/ui/hero/HeroInfoUpStarLayer": "0b07b4af-4619-4794-bd0a-a72efd375367",
+  "prefabs/ui/hero/HeroSkillInfoLayer": "c403f3e0-51d9-447d-978b-81f90b52fe69",
   "prefabs/ui/backpack/BackpackInfoLayer": "f151a2c1-a24a-4e5d-9d67-2096089cde82",
   "prefabs/ui/hero/HeroSelectLayer": "c75bff2b-0944-4809-9b5f-1eb8c09107f8",
   "prefabs/ui/hero/HeroPalaceLayer": "f585a6a0-f33b-5bcf-8d0c-0ffb96a65397",

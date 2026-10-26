@@ -1,7 +1,8 @@
 /**
  * 底栏「战斗」先看到的挂机站场。不是森林 BattlePage。
  * 仓里没有把殿堂、站场英雄和三钮合成一张的挂机 Prefab。
- * 殿堂用已有 chapter/hang/map01_B（天）和 map01_F（柱、像、大理石地）。
+ * 殿堂用 chapter/hang 的 mapXX_B（天）和 mapXX_F（柱、像、大理石地）。
+ * 号来自当前关 chapterreward.map。对不上或图没挂上时仍是 map01。
  * 底栏「我要变强 / 战斗 / 快速战斗」仍是 BattlePanelLayer，盖在这块地上。
  * 站场优先 MAIN 阵容：hero_id 经名册 hero_type 对已有皮肤，再走内存里的 spine 升级。
  * 阵容是空的才用三套默认。加载失败把格子藏起来，不写套名。
@@ -12,6 +13,7 @@
  * 站场一次铺上 idleHangStems 返回的每一只（最多三格），演武不拆它们。点「战斗」才进真战报。
  */
 import { Color, Node, resources, sp, Sprite, SpriteFrame, UITransform } from "cc";
+import { chapterStageFace } from "../config/rosterCatalog";
 import { GameLog } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
@@ -33,7 +35,7 @@ export const IDLE_HANG_FLOOR = "ui/chapter/hang/map01_F";
 
 /** 写进自检和说明。森林 BattlePage 不是这张壳。 */
 export const IDLE_HANG_MISSING_PREFAB =
-  "没有整张挂机 Prefab。殿堂用 chapter/hang/map01_B + map01_F，底栏三钮仍是 BattlePanelLayer，不是森林 BattlePage。";
+  "没有整张挂机 Prefab。殿堂用 chapterreward.map 对应的 chapter/hang/mapXX_B + mapXX_F，对不上仍是 map01。底栏三钮仍是 BattlePanelLayer，不是森林 BattlePage。";
 
 /** 大理石地砖上的三格。定义在 idleHangSkirmishPlan，和怪的后沿是同一套地平面。 */
 
@@ -62,11 +64,20 @@ export function mountIdleHang(parent: Node): Node {
   place(createRect("IdleFill", 720, 1280, new Color(186, 156, 124, 255)), root, 0, 0);
   const sky = spriteNode("IdleSky", 720, 420);
   place(sky, root, 0, 430);
-  paintSprite(sky, IDLE_HANG_SKY);
 
   const floor = spriteNode("IdleFloor", 720, 1280);
   place(floor, root, 0, 0);
-  paintSprite(floor, IDLE_HANG_FLOOR);
+  let hall = "";
+  const paintHall = () => {
+    if (!root.isValid) return;
+    const face = chapterStageFace(hangStageIdx());
+    const map = face && face.map ? face.map : "map01";
+    if (map === hall) return;
+    hall = map;
+    paintHallSprite(sky, "ui/chapter/hang/" + map + "_B", IDLE_HANG_SKY);
+    paintHallSprite(floor, "ui/chapter/hang/" + map + "_F", IDLE_HANG_FLOOR);
+  };
+  paintHall();
   // 进度光在挂机底栏 AFK 条上（screenFill），不另贴在屏外。
 
   const heroes = uiNode("IdleHeroes");
@@ -94,7 +105,10 @@ export function mountIdleHang(parent: Node): Node {
   };
   paint();
   let off = () => {};
-  off = WireSession.onSync(paint);
+  off = WireSession.onSync(() => {
+    paintHall();
+    paint();
+  });
   const offLocal = onLocalLineup(paint);
   root.once(Node.EventType.NODE_DESTROYED, () => {
     off();
@@ -280,15 +294,41 @@ function spriteNode(name: string, width: number, height: number): Node {
   return node;
 }
 
-function paintSprite(node: Node, path: string): void {
+function hangStageIdx(): number {
+  const mock = GameStore.mockStageId();
+  if (mock !== null && mock >= 1) return Math.floor(mock);
+  const chapter = GameStore.chapter();
+  if (chapter.nowIdx !== null && chapter.nowIdx >= 1) return Math.floor(chapter.nowIdx);
+  if (chapter.maxIdx !== null && chapter.maxIdx >= 1) return Math.floor(chapter.maxIdx);
+  return 1;
+}
+
+const hallMiss = new Set<string>();
+
+function paintHallSprite(node: Node, path: string, fallback: string): void {
   const sprite = node.getComponent(Sprite);
   if (!sprite) return;
-  try {
-    resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
-      if (err || !asset || !node.isValid) return;
-      sprite.spriteFrame = asset;
-    });
-  } catch (err) {
-    return;
-  }
+  const apply = (frame: string) => {
+    try {
+      resources.load(frame + "/spriteFrame", SpriteFrame, (err, asset) => {
+        if (!node.isValid) return;
+        if (err || !asset) {
+          if (frame !== fallback && !hallMiss.has(frame)) {
+            hallMiss.add(frame);
+            GameLog.shared.warn("Mainline", "挂机地图 " + frame + " 没有挂上，仍用 map01");
+            apply(fallback);
+          }
+          return;
+        }
+        sprite.spriteFrame = asset;
+      });
+    } catch (_err) {
+      return;
+    }
+  };
+  apply(path);
+}
+
+function paintSprite(node: Node, path: string): void {
+  paintHallSprite(node, path, path);
 }

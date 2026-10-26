@@ -58,6 +58,11 @@ export interface ChapterEnemy {
   hp: number | null;
 }
 
+interface SkillLevelText {
+  level: number;
+  blurb: string;
+}
+
 const profiles = new Map<number, HeroProfile>();
 const bases = new Map<string, HeroBaseStats>();
 const items = new Map<number, ItemProfile>();
@@ -65,6 +70,8 @@ const itemTypes = new Map<number, number>();
 const chapters = new Map<number, ChapterPlace>();
 const chapterEnemiesByIdx = new Map<number, ChapterEnemy[]>();
 const levels = new Map<number, number>();
+const occupationNames = new Map<number, string>();
+const skillBooks = new Map<number, { name: string; levels: SkillLevelText[] }>();
 
 export function clearGameCatalog(): void {
   profiles.clear();
@@ -74,6 +81,8 @@ export function clearGameCatalog(): void {
   chapters.clear();
   chapterEnemiesByIdx.clear();
   levels.clear();
+  occupationNames.clear();
+  skillBooks.clear();
   clearRosterCatalog();
 }
 
@@ -81,6 +90,7 @@ export function clearGameCatalog(): void {
 export function bindGameCatalog(tables: Map<string, ConfigTableFile<Row>>): void {
   clearGameCatalog();
   const text = languageMap(tables.get("language"));
+  bindOccupations(text);
   const skillNames = skillNameMap(tables.get("heroskill"), text);
   bindHeroProfiles(tables.get("herotype"), skillNames);
   bindBases(tables.get("herobase"));
@@ -95,6 +105,45 @@ export function heroProfile(heroType: number | null | undefined): HeroProfile | 
   const type = whole(heroType);
   if (type === null) return null;
   return profiles.get(type) ?? null;
+}
+
+/**
+ * language 111001–111005：战士、法师、牧师、坦克、游侠。
+ * 对不上是 null，调用方写「未知」，不编职业名。
+ */
+export function occupationName(id: number | null | undefined): string | null {
+  const key = whole(id);
+  if (key === null) return null;
+  return occupationNames.get(key) ?? null;
+}
+
+/**
+ * heroskill 这一档的名字和说明。level 对不上时用不超过它的最高一档。
+ * next 是下一档 lan_describe。没有下一档是空串。没有这条技能是 null。
+ */
+export function heroSkillPage(
+  skillId: number | null | undefined,
+  level: number | null | undefined
+): { name: string; blurb: string; next: string } | null {
+  const id = whole(skillId);
+  if (id === null || id <= 0) return null;
+  const book = skillBooks.get(id);
+  if (!book) return null;
+  const want = whole(level);
+  let pick = 0;
+  if (want !== null) {
+    for (let i = 0; i < book.levels.length; i++) {
+      if (book.levels[i].level <= want) pick = i;
+      else break;
+    }
+  }
+  const row = book.levels.length > 0 ? book.levels[pick] : null;
+  const next = row && pick + 1 < book.levels.length ? book.levels[pick + 1] : null;
+  return {
+    name: book.name || "技能 " + id,
+    blurb: row ? row.blurb : "",
+    next: next ? next.blurb : "",
+  };
 }
 
 /** 图鉴用。顺序跟 herotype 表一致，不另排。 */
@@ -315,22 +364,50 @@ function languageMap(table: Table): Map<string, string> {
   return text;
 }
 
+function bindOccupations(text: Map<string, string>): void {
+  for (let i = 1; i <= 5; i++) {
+    const value = plainLanguage(text.get(String(111000 + i)) || "");
+    if (value) occupationNames.set(i, value);
+  }
+}
+
 function skillNameMap(table: Table, text: Map<string, string>): Map<number, string> {
-  const chosen = new Map<number, { rank: number; name: string }>();
+  const grouped = new Map<number, { name: string; nameRank: number; levels: SkillLevelText[] }>();
   for (const row of rows(table)) {
     const skillId = num(row.type);
     if (skillId === null || skillId <= 0) continue;
     const level = num(row.level);
     const rank = level === null ? 9999 : level;
-    const prev = chosen.get(skillId);
-    if (prev && rank >= prev.rank) continue;
+    let book = grouped.get(skillId);
+    if (!book) {
+      book = { name: "", nameRank: 9999, levels: [] };
+      grouped.set(skillId, book);
+    }
     const lang = num(row.lan_name);
-    const name = lang === null ? "" : text.get(String(lang)) || "";
-    if (!name) continue;
-    chosen.set(skillId, { rank, name });
+    const name = lang === null ? "" : plainLanguage(text.get(String(lang)) || "");
+    if (name && rank < book.nameRank) {
+      book.name = name;
+      book.nameRank = rank;
+    }
+    const descKey = num(row.lan_describe);
+    const blurb = descKey === null ? "" : plainLanguage(text.get(String(descKey)) || "");
+    if (blurb && level !== null) {
+      let replaced = false;
+      for (let i = 0; i < book.levels.length; i++) {
+        if (book.levels[i].level === level) {
+          replaced = true;
+          break;
+        }
+      }
+      if (!replaced) book.levels.push({ level, blurb });
+    }
   }
   const names = new Map<number, string>();
-  chosen.forEach((item, skillId) => names.set(skillId, item.name));
+  grouped.forEach((book, skillId) => {
+    book.levels.sort((a, b) => a.level - b.level);
+    if (book.name) names.set(skillId, book.name);
+    if (book.name || book.levels.length > 0) skillBooks.set(skillId, { name: book.name, levels: book.levels });
+  });
   return names;
 }
 
