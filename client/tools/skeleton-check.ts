@@ -23,12 +23,15 @@ import {
   cityAtomLocked,
   cityAtomRoute,
   CITY_PARALLAX_SPEEDS,
+  contentLeftX,
   effectFramePath,
+  findCityNode,
   layerWindowX,
   MainCityBtnFile,
   MainCityEffectFile,
   MainCityPosFile,
 } from "../assets/scripts/ui/cityMapLayout";
+import { horizontalFillMargins, widthSqueeze } from "../assets/scripts/ui/visibleChrome";
 import { labelCenterInParent, sliceAnchorShift } from "../assets/scripts/ui/ccbiPlace";
 import { isP1ProgressStatus, pagePrefabShell } from "../assets/scripts/ui/prefabShellMap";
 import {
@@ -2892,6 +2895,46 @@ function checkCityMap(): void {
     );
   }
   assert(layout.scroll === -390 && layout.minScroll === -780 && layout.maxScroll === 0, "map starts centered");
+  assert(Math.abs(contentLeftX(layout.viewW, layout.maxScroll) + layout.viewW / 2) < 0.001, "design scroll left is flush");
+
+  const wideMap = buildCityMapLayout(pos, btn, effect, { viewW: 996, viewH: 1280 });
+  assert(wideMap.viewW === 996 && wideMap.viewH === 1280 && wideMap.contentW === 1500, "wide viewport keeps the 1500 plate");
+  assert(wideMap.contentW >= wideMap.viewW && wideMap.maxScroll === 0 && wideMap.minScroll === 996 - 1500, "wide map covers the visible width");
+  assert(Math.abs(contentLeftX(wideMap.viewW, wideMap.maxScroll) + 498) < 0.001, "wide map left edge meets the screen when scrolled left");
+  assert(Math.abs(contentLeftX(wideMap.viewW, wideMap.minScroll) + wideMap.contentW - 498) < 0.001, "wide map right edge meets the screen when scrolled right");
+  const narrowMap = buildCityMapLayout(pos, btn, effect, { viewW: 590, viewH: 1280 });
+  assert(narrowMap.contentW >= 590 && narrowMap.maxScroll === 0 && narrowMap.minScroll === 590 - 1500, "narrow map still covers the phone");
+  assert(Math.abs(contentLeftX(narrowMap.viewW, narrowMap.maxScroll) + 295) < 0.001, "narrow map left edge is flush");
+  const leftPlate = findCityNode(narrowMap, "spr_map_bg1_1");
+  const ground = findCityNode(wideMap, "spr_map_bg2_1");
+  assert(leftPlate !== null && leftPlate.x === 0 && leftPlate.ax === 0, "left foreground plate starts at the content left");
+  assert(ground !== null && ground.frame === "ui/maps/map-bg-city-2-1-1", "ground stays a map-bg-city plate");
+  assert(findCityNode(wideMap, "spr_map_bg1_2") !== null && findCityNode(wideMap, "spr_map_bg4_1") !== null, "keeps the layered plates");
+  const wideFill = horizontalFillMargins(996, 996);
+  const stuck = horizontalFillMargins(720, 996);
+  assert(wideFill.left === 0 && wideFill.right === 0 && wideFill.width === 996, "bar widget is flush when the parent is the visible width");
+  assert(stuck.width === 996 && stuck.left === (720 - 996) / 2 && stuck.right === stuck.left, "bar still fills when the parent is stuck at 720");
+  assert(Math.abs(widthSqueeze(996) - 1) < 0.001, "wide chrome does not spread the tabs");
+  assert(Math.abs(widthSqueeze(590) - 590 / 720) < 0.001, "narrow chrome squeezes tabs onto the phone");
+  const project = JSON.parse(readFileSync(join(config, "..", "..", "..", "settings", "v2", "packages", "project.json"), "utf8")) as {
+    general: { designResolution: { width: number; height: number; fitWidth: boolean; fitHeight: boolean } };
+  };
+  assert(
+    project.general.designResolution.width === 720 &&
+      project.general.designResolution.height === 1280 &&
+      project.general.designResolution.fitHeight === true &&
+      project.general.designResolution.fitWidth === false,
+    "project stays fit height only at 720x1280"
+  );
+  const fitSrc = readFileSync(uiSource("visibleFit.ts"), "utf8");
+  const chromeSrc = readFileSync(uiSource("CityChrome.ts"), "utf8");
+  const hubSrc = readFileSync(uiSource("CityHub.ts"), "utf8");
+  assert(
+    fitSrc.indexOf("getVisibleSize") >= 0 && fitSrc.indexOf("isAlignLeft") >= 0 && fitSrc.indexOf("isAlignRight") >= 0,
+    "visible fit stretches left and right from the visible size"
+  );
+  assert(chromeSrc.indexOf("stretchBar") >= 0 && chromeSrc.indexOf("TopBar") >= 0 && chromeSrc.indexOf("BottomBar") >= 0, "city chrome stretches both bars");
+  assert(hubSrc.indexOf("fitCityViewport") >= 0 && hubSrc.indexOf("map-bg-city") >= 0, "city hub uses the visible viewport and the layered plates");
   assert(layout.nodes.filter((node) => node.parallax).length === 4, "four parallax layers");
   const speeds: number[] = [];
   for (let i = 0; i < layout.nodes.length; i++) {

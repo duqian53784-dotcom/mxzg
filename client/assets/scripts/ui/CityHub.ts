@@ -3,10 +3,11 @@
  * 路径相对 assets：prefabs/ui/city/CityHub。底板丢图时才用 resources 补 spriteFrame。
  * 不挂脚本组件，不改 Prefab。USE_CITY_HUB_PREFAB 为 false，或加载 / 绑节点失败时，
  * MainApp 仍走 mountCityMap。顶栏底栏仍是 CityChrome。
+ * 视口宽跟 view.getVisibleSize() 走。底板仍是 map-bg-city-* 多层长图，不拉成一张。
  * 建筑点击交给原来的 onCityAtom。根上的 BtnMainline 打开原来的主线页。
  * 活动通栏不画在这张 Prefab 上，避免盖住建筑。右上活动仍是 CityChrome 的 ActGroup。
  */
-import { Button, Color, EventTouch, Node, resources, Sprite, SpriteFrame, UITransform, Widget } from "cc";
+import { Button, Color, EventTouch, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { ConfigLoader } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
 import { CityMapHandle, CityMapQuery } from "./CityMap";
@@ -25,6 +26,7 @@ import {
   mapFramePath,
 } from "./cityMapLayout";
 import { CITY_HUB_PREFAB_PATH, bindClick, loadPrefab, spawnPrefab } from "./prefabLoad";
+import { bindVisibleRefresh, fitCityViewport, squeezeWideNode } from "./visibleFit";
 
 export { CITY_HUB_PREFAB_PATH };
 
@@ -77,42 +79,13 @@ async function bindCityHub(
     loadCfg<MainCityBtnFile>(CITY_CFG_BTN),
     loadCfg<MainCityEffectFile>(CITY_CFG_EFFECT),
   ]);
-  const layout = buildCityMapLayout(pos, btn, effect);
+  let layout = buildCityMapLayout(pos, btn, effect);
   const views = indexByName(root);
   for (let i = 0; i < MAP_NODES.length; i++) {
     if (!views.has(MAP_NODES[i])) throw new Error("缺少节点 " + MAP_NODES[i]);
   }
   const parallax = views.get("CityParallax") as Node;
-  const rootUi = root.getComponent(UITransform);
-  if (rootUi) {
-    rootUi.setContentSize(layout.viewW, layout.viewH);
-    rootUi.setAnchorPoint(0.5, 0.5);
-  }
-  // 不挂 Mask。运行时 GRAPHICS_RECT 的模板矩形会是 0，城景被裁没，只剩页面底色。
-  // 设计分辨率已经是 720 宽，画面外的地图由相机裁掉。
-  root.setPosition(0, 0, 0);
-  const widget = root.getComponent(Widget) || root.addComponent(Widget);
-  widget.isAlignHorizontalCenter = true;
-  widget.isAlignVerticalCenter = true;
-  widget.horizontalCenter = 0;
-  widget.verticalCenter = 0;
-  widget.alignMode = Widget.AlignMode.ON_WINDOW_RESIZE;
-  if (typeof widget.updateAlignment === "function") widget.updateAlignment();
-
-  const parallaxUi = parallax.getComponent(UITransform);
-  if (parallaxUi) {
-    parallaxUi.setContentSize(layout.contentW, layout.viewH);
-    parallaxUi.setAnchorPoint(0, 0);
-  }
-
-  for (let i = 0; i < layout.nodes.length; i++) {
-    const desc = layout.nodes[i];
-    const node = views.get(desc.name);
-    if (!node) throw new Error("缺少节点 " + desc.name);
-    fitNode(node, desc.w, desc.h, desc.ax, desc.ay, desc.scale);
-  }
-
-  const gesture = { dragged: false };
+  const gesture = { dragged: false, moved: false };
   const spots = new Map<string, { sprite: Sprite | null }>();
   let bound = 0;
   for (let i = 0; i < layout.buildings.length; i++) {
@@ -133,16 +106,7 @@ async function bindCityHub(
   }
   if (bound < 1 || !views.has("spot-main_summon")) throw new Error("CityHub 没有建筑按钮");
 
-  for (let i = 0; i < layout.effects.length; i++) {
-    const spot = layout.effects[i];
-    const node = views.get("fx-" + spot.name);
-    if (!node) continue;
-    const parent = views.get(spot.parent);
-    if (!parent || node.parent !== parent) continue;
-    placeBottomLeft(node, parent, spot.x, spot.y);
-  }
-
-  let scroll = layout.scroll;
+  let scroll = 0;
 
   const placeBuildings = (): void => {
     for (let i = 0; i < layout.buildings.length; i++) {
@@ -150,13 +114,14 @@ async function bindCityHub(
       const node = views.get("spot-" + spot.atom);
       const parent = views.get(spot.parent);
       if (!node || !parent) continue;
+      node.setScale(spot.scale, spot.scale, 1);
       placeBottomLeft(node, parent, spot.x, spot.y);
     }
   };
 
   const applyScroll = (next: number): void => {
     scroll = next;
-    // 城景贴设计画面底边。底栏盖在上面。不要把整层上移，否则屏底露出页面黑底。
+    // 城景贴视口底边。底栏盖在上面。不要把整层上移，否则屏底露出页面黑底。
     placeBottomLeft(parallax, root, scroll, 0);
     for (let i = 0; i < layout.nodes.length; i++) {
       const desc = layout.nodes[i];
@@ -167,16 +132,42 @@ async function bindCityHub(
     }
   };
 
-  for (let i = 0; i < layout.nodes.length; i++) {
-    const desc = layout.nodes[i];
-    if (desc.parallax) continue;
-    const node = views.get(desc.name);
-    const host = desc.parent ? views.get(desc.parent) : parallax;
-    if (!node || !host) continue;
-    placeBottomLeft(node, host, desc.x, desc.y);
-  }
-  placeBuildings();
-  applyScroll(layout.scroll);
+  const applyVisible = (): void => {
+    if (!root.isValid) return;
+    const box = fitCityViewport(root);
+    layout = buildCityMapLayout(pos, btn, effect, { viewW: box.width, viewH: box.height });
+    const parallaxUi = parallax.getComponent(UITransform);
+    if (parallaxUi) {
+      parallaxUi.setContentSize(layout.contentW, layout.viewH);
+      parallaxUi.setAnchorPoint(0, 0);
+    }
+    for (let i = 0; i < layout.nodes.length; i++) {
+      const desc = layout.nodes[i];
+      const node = views.get(desc.name);
+      if (!node) throw new Error("缺少节点 " + desc.name);
+      fitNode(node, desc.w, desc.h, desc.ax, desc.ay, desc.scale);
+      if (desc.parallax) continue;
+      const host = desc.parent ? views.get(desc.parent) : parallax;
+      if (!host) continue;
+      placeBottomLeft(node, host, desc.x, desc.y);
+    }
+    for (let i = 0; i < layout.effects.length; i++) {
+      const spot = layout.effects[i];
+      const node = views.get("fx-" + spot.name);
+      if (!node) continue;
+      const parent = views.get(spot.parent);
+      if (!parent || node.parent !== parent) continue;
+      placeBottomLeft(node, parent, spot.x, spot.y);
+    }
+    placeBuildings();
+    const mainButton = views.get("BtnMainline");
+    if (mainButton) squeezeWideNode(mainButton, box.width);
+    if (!gesture.moved) scroll = layout.scroll;
+    else scroll = clamp(scroll, layout.minScroll, layout.maxScroll);
+    applyScroll(scroll);
+  };
+
+  bindVisibleRefresh(root, applyVisible);
   await ensureCityPlates(views);
 
   let moved = 0;
@@ -188,7 +179,10 @@ async function bindCityHub(
     const delta = event.getUIDelta();
     const dx = delta && typeof delta.x === "number" ? delta.x : 0;
     moved += Math.abs(dx);
-    if (moved > DRAG_PX) gesture.dragged = true;
+    if (moved > DRAG_PX) {
+      gesture.dragged = true;
+      gesture.moved = true;
+    }
     applyScroll(clamp(scroll + dx, layout.minScroll, layout.maxScroll));
   };
   root.on(Node.EventType.TOUCH_START, onStart);

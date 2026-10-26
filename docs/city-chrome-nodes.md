@@ -1,6 +1,6 @@
 # 主城顶底栏节点（CityChrome）
 
-设计画布 **720×1280**，原点在画面中心，和 `CityHub`、原来的 `CityChrome` 一样。底栏、顶栏原图大约 640 宽，Prefab 里拉到 720，运行时 `sealBottomBg` 仍把 `BottomBar/Bg` 加宽到 724，垫住左右透边。
+设计画布 **720×1280**，原点在画面中心，和 `CityHub`、原来的 `CityChrome` 一样。底栏、顶栏原图大约 640 宽，Prefab 里拉到 720。运行时顶栏和底栏再按 `view.getVisibleSize()` 的宽左右拉开，不保持 720。`sealBottomBg` 垫住底栏贴图的左右透边。
 
 再生：`python3 client/tools/gen_citychrome_prefab.py`。脚本从 chrome zip 覆盖同路径 PNG（有则写），给新图补 Creator 3.8 `.meta`，已有图只在裁切数字变化时改 `.meta`，**不改 uuid**。不写 #66 那五张九宫格，不引用日文 `lbl` 位图。
 

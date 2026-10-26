@@ -1,7 +1,9 @@
 /**
  * 主城地图层（方案 B）的纯布局。
  * 只排视差底板、建筑点和活动图标，不包含 Pilot 的 7 项底栏、顶栏和日文图字。
- * 坐标：配置里的 x/y 是父节点左下角空间里的锚点位置；屏幕坐标原点在 720×1280 画面中心。
+ * 坐标：配置里的 x/y 是父节点左下角空间里的锚点位置；屏幕坐标原点在画面中心。
+ * 设计分辨率是 720×1280。视口宽跟当前可见宽走，可以大于或小于 720。
+ * 底板仍是 map-bg-city-* 多层长图，逻辑宽约 1500，不把一张图拉满屏幕。
  */
 import { entryAccess, findNavEntry, GateSnapshot } from "../config/nav";
 
@@ -300,9 +302,14 @@ export function buildCityMapLayout(
   const viewH = options && options.viewH ? options.viewH : CITY_VIEW_H;
   const variant = options && options.variant ? options.variant : CITY_MAP_VARIANT;
   const mapScale = viewH / CITY_MAP_H;
-  const contentW = CITY_MAP_W * mapScale;
-  const scroll = Math.min(0, -(contentW * 0.5 - viewW * 0.5));
+  // 逻辑宽是多层长图（约 1500）。视口更宽时内容至少铺满视口，避免两侧空出。
+  const contentW = Math.max(CITY_MAP_W * mapScale, viewW);
   const minScroll = Math.min(0, viewW - contentW);
+  const maxScroll = 0;
+  // scroll 0 是内容左缘贴视口左缘。初始停在中间。
+  let scroll = -(contentW - viewW) * 0.5;
+  if (scroll < minScroll) scroll = minScroll;
+  if (scroll > maxScroll) scroll = maxScroll;
   const speeds = CITY_PARALLAX_SPEEDS;
   const mid = CITY_MAP_W * 0.5 * mapScale;
 
@@ -326,7 +333,8 @@ export function buildCityMapLayout(
     spriteNode(
       "spr_map_bg1_2",
       "spr_map_bg1",
-      foregroundPiece2X(viewW, CITY_MAP_W, speeds[0]),
+      // 贴图拼接按设计宽 720 排，不跟视口变。变的是视口和滚动范围。
+      foregroundPiece2X(CITY_VIEW_W, CITY_MAP_W, speeds[0]),
       0,
       1,
       0,
@@ -377,7 +385,7 @@ export function buildCityMapLayout(
     contentW,
     scroll,
     minScroll,
-    maxScroll: 0,
+    maxScroll,
     nodes,
     buildings,
     effects,
@@ -390,6 +398,14 @@ export function findCityNode(layout: CityMapLayout, name: string): CityMapNode |
     if (layout.nodes[i].name === name) return layout.nodes[i];
   }
   return null;
+}
+
+/**
+ * 内容左缘在画面中心坐标系里的 x。
+ * scroll 为 0（拖到最左）时等于 -viewW/2，和屏幕左缘重合。
+ */
+export function contentLeftX(viewW: number, scroll: number): number {
+  return scroll - viewW * 0.5;
 }
 
 /** 建筑中心在画面中心坐标系里的位置。 */
