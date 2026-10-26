@@ -35,7 +35,8 @@
  * 有拍时 VfxHit 再播 hero-beattack，VfxSkill 再播 skill 和 skill-effect。mountFrameReel 挂在已有锚点上，不另建 Vfx 节点。帧没加载到就留 batch2。
  * skill_id 对得上 resources 里的套时播那套帧，并再播下一层。对不上仍用 49 套和 skill-effect 取模。
  * 有 skill_id 才开技能条并播技能帧。没有 skill_id 不编造，条和帧都关。英雄套没有 Skill 剪辑，不播缺的剪辑。帧按原图尺寸播，不压成 300 方块。进战先预热帧。
- * 底栏「战斗」先看到挂机站场（大理石殿 + BattlePanelLayer）。点壳上的「战斗」才发 3001。有 report 才挂森林 BattlePage。森林页不是挂机壳。
+ * 底栏「战斗」先看到挂机站场（大理石殿 + BattlePanelLayer + 演武）。点壳上的「战斗」才发 3001。有 report 才在挂机壳上播战报。森林页不是挂机壳。
+ * 关- / 请求战报 / 切磋 / GM 这些探针不画在底栏上。只有 ?dev=wire，或挂机左侧空地长按，才打开。?dev=wire 不改传输。
  * 站位是左敌右我，挂在已有的 Slot_E* / Slot_A* 上。报告没有英雄时仍补一格站场，页不空。
  * USE_BATTLE_PREFAB 默认开。上述回放进战时挂 BattlePage.prefab：站位、血条、回合、战报，技能挂 VfxSkill，受击挂 VfxHit。WireBattlePage 仍不挂。
  * 战旗、战剑用已有套在内存里升级后播。加载失败只藏格子，不把「战旗」「战剑」和套名写出来。血条每拍跟到对应站位头顶。同一位置号两边都有时，行动带了阵营才打到对面。回放拍子跟导演帧走。导演订不上时用动画帧，到点仍会推进。
@@ -162,7 +163,7 @@ import {
 import { battleSlotPage } from "./battlePrefabLayout";
 import { mountBattleSpine, SpineActor } from "./battleSpine";
 import { bindClick } from "./prefabLoad";
-import { PAGE_SHELL_FIGHT, setPagePrefabShellVisible } from "./pagePrefabShell";
+import { HANG_PROBE_EVENT, PAGE_SHELL_FIGHT, setPagePrefabShellVisible } from "./pagePrefabShell";
 import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
 const PAGE_BG = new Color(8, 16, 32, 255);
@@ -193,6 +194,8 @@ export interface WireMainlineHost {
   connected(): boolean;
   /** 真服加速、跳过门槛用。缺省当 1 级。 */
   level?(): number;
+  /** true 才画探针。底栏「战斗」不传。 */
+  probe?: boolean;
 }
 
 export interface WireMainlinePage {
@@ -234,6 +237,8 @@ class WireMainlineController implements WireMainlinePage {
   private seenWireErrorSerial = 0;
   private gmTypeId = WIRE_GM_DEFAULT_TYPE;
   private gmSaved = false;
+  /** 这一页长按打开了探针。关页就丢掉，下次底栏仍是挂机。 */
+  private probeLatched = false;
   /** 这次「挑战」还要等 2015 / 3100 / 3101，完成后再发 3001。GM 按钮不置这个。 */
   private resumeChallenge = false;
   /** 这次 3101 是挑战前确认 MAIN，不是「获取阵容」按钮。 */
@@ -331,6 +336,7 @@ class WireMainlineController implements WireMainlinePage {
       this.challenge();
       setPagePrefabShellVisible(this.node, this.phase !== "battle");
     });
+    this.node.on(HANG_PROBE_EVENT, () => this.openProbe());
     this.seenSerial = WireSession.battleSerial;
     this.seenReportSerial = WireSession.chapterReportSerial;
     this.seenBattleReportSerial = WireSession.battleReportSerial;
@@ -342,10 +348,10 @@ class WireMainlineController implements WireMainlinePage {
     this.seenGmHeroSerial = WireSession.gmHeroSerial;
     this.seenLineUpSaveSerial = WireSession.lineUpSaveSerial;
     this.seenWireErrorSerial = WireSession.wireErrorSerial;
-    this.showInfo();
-    if (!WireSession.hasChapterReward()) this.host.showToast(WIRE_CHAPTER_REWARD_UNSYNCED_TOAST);
+    if (this.probeOn()) this.showInfo();
+    if (this.probeOn() && !WireSession.hasChapterReward()) this.host.showToast(WIRE_CHAPTER_REWARD_UNSYNCED_TOAST);
     WireSession.pullChapterRewardList();
-    if (!WireSession.hasQuickBattle()) this.host.showToast(WIRE_QUICK_BATTLE_UNSYNCED_TOAST);
+    if (this.probeOn() && !WireSession.hasQuickBattle()) this.host.showToast(WIRE_QUICK_BATTLE_UNSYNCED_TOAST);
     WireSession.pullQuickBattleCount();
     GameLog.shared.info("Mainline", "wire open " + this.nowText() + " / " + this.maxText() + " / " + this.rewardText() + " / " + this.quickText());
     this.offSync = WireSession.onSync(() => this.onSync());
@@ -561,10 +567,25 @@ class WireMainlineController implements WireMainlinePage {
     if (this.resumeChallenge && this.phase === "info") this.continueChallenge();
   }
 
+  private probeOn(): boolean {
+    return this.host.probe === true || this.probeLatched;
+  }
+
+  /** 挂机左侧长按。战斗进行中不拆回放。 */
+  private openProbe(): void {
+    if (this.disposed || this.phase !== "info" || this.waiting) return;
+    this.probeLatched = true;
+    this.showInfo();
+  }
+
   private showInfo(): void {
     this.phase = "info";
-    setPagePrefabShellVisible(this.node, true);
     this.clearBody();
+    if (!this.probeOn()) {
+      setPagePrefabShellVisible(this.node, true);
+      return;
+    }
+    setPagePrefabShellVisible(this.node, false);
     this.attachInfoScroll();
     place(createLabel(WIRE_MAINLINE_READONLY_TITLE, 40, { color: TITLE }), this.body, 0, 550);
     this.nowLabel = place(createLabel(this.nowText(), 28, { color: TITLE, width: 640 }), this.body, 0, 460);

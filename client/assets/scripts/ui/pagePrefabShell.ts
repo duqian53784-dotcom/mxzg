@@ -31,6 +31,10 @@ export const HERO_INFO_PREFAB = "prefabs/ui/hero/HeroInfoLayer";
 
 export { PAGE_SHELL_FIGHT, USE_PAGE_PREFAB_SHELL };
 
+/** 挂机左侧空地长按，打开真服探针。不画在底栏上。 */
+export const HANG_PROBE_EVENT = "mxzg-wire-probe";
+const HANG_PROBE_MS = 720;
+
 interface ShellHold {
   want: boolean;
   root: Node | null;
@@ -84,22 +88,7 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     const probe = createButton("功能页", () => setPagePrefabShellVisible(page, false), 96, 32);
     probe.name = "BtnShellProbe";
     place(probe, root, -300, 600);
-    const raise = () => {
-      if (!root.isValid || root.parent !== page) return;
-      const kids = page.children;
-      let overlay = -1;
-      for (let i = 0; i < kids.length; i++) {
-        if (kids[i] !== root && kids[i].name === "BattleEndHold") {
-          overlay = i;
-          break;
-        }
-      }
-      if (overlay < 0) {
-        root.setSiblingIndex(Math.max(0, kids.length - 1));
-        return;
-      }
-      if (kids.indexOf(root) > overlay) root.setSiblingIndex(overlay);
-    };
+    const raise = () => pinShell(root, page);
     page.on(Node.EventType.CHILD_ADDED, raise);
     root.parent = page;
     root.active = hold.want;
@@ -113,6 +102,126 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
   } catch (err) {
     GameLog.shared.error("MainApp", "page prefab shell " + id + " " + messageOf(err) + "，仍用原来的页面");
   }
+}
+
+/**
+ * 底栏「战斗」自己的挂机壳。大理石站场、英雄和演武在等 Prefab 之前就铺上。
+ * 底钮仍是 BattlePanelLayer（战力UP / 战斗 / 高速战斗）和收益条。
+ * 顶栏战力、头像仍是主城壳上的 hangHud，不在这一页再画一条。
+ * 没有「功能页」。探针只留给 ?dev=wire，或左侧空地长按。
+ * Prefab 失败时站场还在，并补三颗代码钮，中间「战斗」仍发 PAGE_SHELL_FIGHT。
+ */
+export async function mountHangBattleShell(page: Node): Promise<void> {
+  if (!page.isValid) return;
+  let hold = holds.get(page);
+  if (hold && hold.root) return;
+  if (!hold) {
+    hold = { want: true, root: null };
+    holds.set(page, hold);
+  }
+  const root = uiNode("PagePrefabShell");
+  const ui = root.addComponent(UITransform);
+  ui.setContentSize(720, 1280);
+  ui.setAnchorPoint(0.5, 0.5);
+  root.addComponent(BlockInputEvents);
+  mountIdleHang(root);
+  bindHangProbe(root, page);
+  root.on(Node.EventType.CHILD_ADDED, () => raiseHangProbe(root));
+  const raise = () => pinShell(root, page);
+  page.on(Node.EventType.CHILD_ADDED, raise);
+  root.parent = page;
+  root.active = hold.want;
+  hold.root = root;
+  raise();
+  page.once(Node.EventType.NODE_DESTROYED, () => {
+    holds.delete(page);
+  });
+  const spec = pagePrefabShell("mainline");
+  const path = spec ? spec.path : "prefabs/ui/battle/BattlePanelLayer";
+  try {
+    const prefab = await loadPrefab(path);
+    if (!page.isValid || !root.isValid) return;
+    const view = spawnPrefab(prefab, root);
+    mountCcbiView(view);
+    dressHangPanel(view);
+    bindFightChrome(view, root, page);
+    raiseHangProbe(root);
+    GameLog.shared.info("MainApp", "hang battle shell " + path);
+  } catch (err) {
+    GameLog.shared.error("MainApp", "hang battle shell " + messageOf(err) + "，站场仍在");
+    if (!root.isValid) return;
+    mountCodeHangBar(root, page);
+    raiseHangProbe(root);
+  }
+}
+
+function pinShell(root: Node, page: Node): void {
+  if (!root.isValid || root.parent !== page) return;
+  const kids = page.children;
+  let overlay = -1;
+  for (let i = 0; i < kids.length; i++) {
+    if (kids[i] !== root && kids[i].name === "BattleEndHold") {
+      overlay = i;
+      break;
+    }
+  }
+  if (overlay < 0) {
+    root.setSiblingIndex(Math.max(0, kids.length - 1));
+    return;
+  }
+  if (kids.indexOf(root) > overlay) root.setSiblingIndex(overlay);
+}
+
+/** 左侧空地。不挡中间「战斗」和底栏三钮。按住约 0.7 秒才打开探针。 */
+function bindHangProbe(root: Node, page: Node): void {
+  const spot = createRect("HangProbeHotspot", 72, 88, new Color(0, 0, 0, 0));
+  place(spot, root, -320, 120);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const clear = () => {
+    if (!timer) return;
+    clearTimeout(timer);
+    timer = null;
+  };
+  spot.on(Node.EventType.TOUCH_START, () => {
+    const battle = root.getChildByName("HangBattle");
+    if (battle && battle.active) return;
+    clear();
+    timer = setTimeout(() => {
+      timer = null;
+      if (!page.isValid || !root.isValid || !root.active) return;
+      page.emit(HANG_PROBE_EVENT);
+    }, HANG_PROBE_MS);
+    const maybe = timer as { unref?: () => void };
+    if (typeof maybe.unref === "function") maybe.unref();
+  });
+  spot.on(Node.EventType.TOUCH_END, clear);
+  spot.on(Node.EventType.TOUCH_CANCEL, clear);
+}
+
+function raiseHangProbe(root: Node): void {
+  const spot = root.getChildByName("HangProbeHotspot");
+  if (!spot || !spot.isValid) return;
+  spot.setSiblingIndex(Math.max(0, root.children.length - 1));
+}
+
+function mountCodeHangBar(root: Node, page: Node): void {
+  const grow = createButton("战力UP", () => {
+    void openHangSheet(root, HANG_GROW_PREFAB, (sheet) => bindGrowSheet(sheet));
+  }, 180, 56);
+  grow.name = "btn_lineup";
+  place(grow, root, -220, -470);
+  const fight = createButton("战斗", () => {
+    if (!page.isValid) return;
+    beginHangBattle(page, "我方", "敌方");
+    page.emit(PAGE_SHELL_FIGHT);
+  }, 180, 64);
+  fight.name = "btn_battle";
+  place(fight, root, 0, -470);
+  const quick = createButton("高速战斗", () => {
+    void openHangSheet(root, HANG_QUICK_PREFAB, (sheet) => bindQuickSheet(sheet));
+  }, 180, 56);
+  quick.name = "btn_speed_battle";
+  place(quick, root, 220, -470);
 }
 
 /**
@@ -292,6 +401,7 @@ function wireFightButtons(view: Node, root: Node, page: Node, again: boolean): v
   }
   bindHangSheets(view, root, again);
   silenceHangMenu(view);
+  raiseHangProbe(root);
 }
 
 /** menu 是 640×960 的空命中框，盖住中间「战斗」。收成 0 后点击落到按钮上。 */

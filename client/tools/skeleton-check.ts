@@ -1617,6 +1617,7 @@ import {
   readPreviewTransport,
   resolveBootTransport,
   TransportConfig,
+  wireDebugFromSearch,
   WS_DOWN_LOG,
   WS_DOWN_STATUS,
   WS_OPEN_STATUS,
@@ -2119,6 +2120,13 @@ function checkGameStore(): void {
   const devMock = parseTransportSearch("?dev=mock");
   assert(devMock.kind === "mock" && devMock.explicit, "dev=mock is explicit and off unless requested");
   assert(!resolveBootTransport(devMock, "ws").useWs, "dev=mock stays offline");
+  const devWire = parseTransportSearch("?dev=wire");
+  assert(devWire.kind === "ws" && devWire.explicit === false, "dev=wire does not leave the real server");
+  assert(resolveBootTransport(devWire, null).useWs, "dev=wire still uses the bridge");
+  assert(
+    wireDebugFromSearch("?dev=wire") === true && wireDebugFromSearch("?dev=mock") === false && wireDebugFromSearch("") === false,
+    "mainline probe is only ?dev=wire"
+  );
   const savedWs = resolveBootTransport(plain, "ws");
   assert(savedWs.useWs && !savedWs.autoFallback, "empty plus saved ws uses the bridge");
   const forced = parseTransportSearch("?transport=mock");
@@ -26697,6 +26705,20 @@ function checkCityHub(): void {
     !!mainlineShell && mainlineShell.fight && mainlineShell.path === "prefabs/ui/battle/BattlePanelLayer",
     "mainline shell is the battle panel and keeps the existing fight"
   );
+  assert(
+    mainApp.indexOf("mountHangBattleShell") >= 0 &&
+      mainApp.indexOf("battleTabIsProbe") >= 0 &&
+      mainApp.indexOf("wireDebugEnabled") >= 0 &&
+      mainApp.indexOf("Session.source === \"wire\" && wireDebugEnabled()") >= 0,
+    "battle tab paints the hang shell and only skips it for ?dev=wire"
+  );
+  const hangMountAt = shellSrc.indexOf("export async function mountHangBattleShell");
+  const hangIdleAt = hangMountAt >= 0 ? shellSrc.indexOf("mountIdleHang(root)", hangMountAt) : -1;
+  const hangAwaitAt = hangIdleAt >= 0 ? shellSrc.indexOf("await loadPrefab", hangIdleAt) : -1;
+  assert(
+    hangMountAt >= 0 && hangIdleAt > hangMountAt && hangAwaitAt > hangIdleAt && shellSrc.indexOf("HangProbeHotspot") >= 0,
+    "hang hall is on the battle tab before the panel prefab, and the probe is a long-press"
+  );
   const hangSrc = readFileSync(uiSource("idleHangView.ts"), "utf8");
   const clockSrc = readFileSync(uiSource("battleClock.ts"), "utf8");
   assert(
@@ -26798,6 +26820,12 @@ function checkCityHub(): void {
   const battleLayoutSrc = readFileSync(uiSource("battlePrefabLayout.ts"), "utf8");
   const wireBattlePageSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
   assert(wireBattlePageSrc.indexOf("PAGE_SHELL_FIGHT") >= 0 && wireBattlePageSrc.indexOf("this.challenge()") >= 0, "wire mainline fight still calls challenge");
+  assert(
+    wireBattlePageSrc.indexOf("if (this.probeOn()) this.showInfo()") >= 0 &&
+      wireBattlePageSrc.indexOf("HANG_PROBE_EVENT") >= 0 &&
+      wireBattlePageSrc.indexOf("if (!this.probeOn())") >= 0,
+    "wire probe buttons stay off the default hang page"
+  );
   assert(
     wireBattlePageSrc.indexOf("returnToHang") >= 0 &&
       wireBattlePageSrc.indexOf("回挂机") >= 0 &&

@@ -1,6 +1,6 @@
 # 真服数据与持久化审计
 
-默认预览连本机桥 `ws://127.0.0.1:13111/game`（TCP 9902），不必加 `?transport=ws`。`GameStore` 只在 s2c 落地后写入。Mock 会话播种只在地址显式带 `?dev=mock`（或 `?transport=mock`）时打开，默认关。
+默认预览连本机桥 `ws://127.0.0.1:13111/game`（TCP 9902），不必加 `?transport=ws`。`GameStore` 只在 s2c 落地后写入。Mock 会话播种只在地址显式带 `?dev=mock`（或 `?transport=mock`）时打开，默认关。`?dev=wire` 只打开主线探针，不改这条连接。
 
 本仓库没有 Java 服源码。`server/` 被 `.gitignore` 忽略，`scripts/start-local-all` 找的是 `F:\源码\mj\program\server` 或 `F:\project\mxzg\server`。本机这两处都不存在，也没有 MySQL 3306、Redis 11001、JDK 1.8。因此不能改 gameserver 的落库，也不能在这台 VM 上把 center / gameserver 拉起来。下表里「服端落库」按已有协议注释（`BattleHandler`、`RoleMission`、`getFormation`、`LineUpSave`）填写；没有源码的写号保持停用，不新造 opcode，也不做 P5。
 
