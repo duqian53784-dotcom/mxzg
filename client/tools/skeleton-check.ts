@@ -27488,6 +27488,22 @@ function checkCityHub(): void {
     "hero list element filter binds prefab btn_elem0-5 and does not build the bar"
   );
   assert(
+    heroFill.indexOf("bindHeroPageTabs(view, showTab)") >= 0 &&
+      heroFill.indexOf('bindTab(view, "btn_illustrat")') < 0 &&
+      heroFill.indexOf('bindTab(view, "btn_dragon")') < 0 &&
+      fillSrc.indexOf('const HERO_TAB_HERO = "UIMenu_1/btn_hero"') >= 0 &&
+      fillSrc.indexOf('const HERO_TAB_BOOK = "UIMenu_1/btn_illustrat"') >= 0 &&
+      fillSrc.indexOf('const HERO_TAB_DRAGON = "UIMenu_1/btn_dragon"') >= 0 &&
+      fillSrc.indexOf("findNode(view, HERO_TAB_HERO)") >= 0 &&
+      fillSrc.indexOf("findNode(view, HERO_TAB_BOOK)") >= 0 &&
+      fillSrc.indexOf("findNode(view, HERO_TAB_DRAGON)") >= 0 &&
+      fillSrc.indexOf('elemRow.active = tab !== "dragon"') >= 0 &&
+      fillSrc.indexOf('seatPrefabScroll(scroll, 540, height, "Hero")') >= 0 &&
+      fillSrc.indexOf('getChildByName("HeroScroll")') >= 0 &&
+      fillSrc.indexOf("function bindTab") < 0,
+    "hero page tabs bind prefab UIMenu_1 buttons after the board mounts, and the hero scroller reuses the seated content"
+  );
+  assert(
     mainApp.indexOf("formatCombatPower") >= 0 &&
       mainApp.indexOf("formatAvatarIcon") >= 0 &&
       mainApp.indexOf("formatLevelBadge") >= 0,
