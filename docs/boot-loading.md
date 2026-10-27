@@ -31,7 +31,7 @@ Boot 场景按旧工程的顺序走完才进 Main：logo、版本比较、热更
 
 远程地址按表里的 `platform_urls`、`download_urls` 各试四个：`version.json`、`version.manifest`、`version`，以及目录本身。能读出不少于 5 位的整数，或 JSON 里的 `version` / `remoteVersion` / `clientVersion` / `rows[0].version`，就拿来比。远程更大才打开 UpdateLayer。相等或本地更大则跳过下载，日志仍是 `stage=hot-update skip`。
 
-地址是空的，或者这些请求都失败（网络错误、超时、404、CORS、读不出版本号），不挡启动，也不把加载层换成失败页。`fetchRemoteVersion` 返回 null，不抛「校验版本失败」。GameLog 打警告，文案是「本地已是最新 / 跳过热更」，然后继续加载资源、读表、登录。H5（`isH5Client()`：Creator 浏览器预览、手机浏览器、桌面浏览器）不发这些请求：表里的 `http://106.52.67.63:2011/` 和 `http://cdn-mxzg.anyaojs.com/release/qyzh/chn/` 在 https 预览里会被当成混合内容拦住。配置仍读本地 `resources`。真服只走 `ws://127.0.0.1:13111/game`。其它平台拉不到同样不卡死。远程真的更大时，UpdateLayer 仍会出来。
+地址是空的，或者这些请求都失败（网络错误、超时、404、CORS、读不出版本号），不挡启动，也不把加载层换成失败页。`fetchRemoteVersion` 返回 null，不抛「校验版本失败」。GameLog 打警告，文案是「本地已是最新 / 跳过热更」，然后继续加载资源、读表、登录。浏览器预览不发这些请求：`isH5Client()` 为真，或页面协议是 `http:` / `https:`（有的预览里 `sys.isBrowser` 是 false）。`fetchRemoteVersion` 自己走 `remoteVersionUrls` 的空列表，不直接用 `versionUrls`。GameLog 有一行「跳过远程版本，因为浏览器/预览」，不请求 `http://106.52.67.63:2011/` 和 `http://cdn-mxzg.anyaojs.com/release/qyzh/chn/`。配置仍读本地 `resources`。真服只走 WebSocket。其它平台拉不到同样不卡死。远程真的更大时，UpdateLayer 仍会出来。
 
 本地版本表本身读失败时，加载层仍换成热更层，文案用 language `47741`（校验版本失败），按钮用 `110013`（重试）。点过这一次重试还失败，按钮改成 language `47647`（跳过）；这句还没读到时按钮写成「继续」。点下去同样按「本地已是最新 / 跳过热更」往下走，不再无限停在重试。
 

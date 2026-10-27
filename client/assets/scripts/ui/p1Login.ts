@@ -37,7 +37,7 @@ export async function mountP1LoginPrefab(
   const pfField = { current: null as TextField | null };
   const statusNode = place(createLabel("", 20, { color: new Color(255, 244, 210, 255), width: 640 }), host, 0, -400);
   const detailNode = place(createLabel("", 16, { color: new Color(190, 205, 225, 255), width: 640, height: 48 }), host, 0, -448);
-  const bridgeLogin = options?.mode === "ws";
+  const bridgeLogin = options?.mode !== "mock";
   let selected = bridgeLogin ? { id: 1, name: "本机桥" } : findServer(options?.serverId ?? MOCK_SERVERS[0].id);
   let serverLabel: Node | null = null;
   let loginButton: Node | null = null;
@@ -98,9 +98,9 @@ export async function mountP1LoginPrefab(
     }
 
     place(createButton("创角", () => handlers.onCreate(), 200, 44), host, -120, -520);
-    if (options?.mode === "ws" && handlers.onMock) {
+    if (bridgeLogin && handlers.onMock) {
       place(createButton("改走 Mock", () => handlers.onMock && handlers.onMock(), 200, 44), host, 120, -520);
-    } else if (options?.mode !== "ws" && handlers.onLive) {
+    } else if (!bridgeLogin && handlers.onLive) {
       place(createButton("连本机服", () => handlers.onLive && handlers.onLive(), 200, 44), host, 120, -520);
     }
 

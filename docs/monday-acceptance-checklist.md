@@ -1,6 +1,6 @@
 # 周一验收清单
 
-在 Cocos Creator 3.8.8 里对真服走一遍。预览地址不要带 `?dev=mock`，也不要带 `?transport=mock`。Mock 只在那两个参数后面打开，不能再变成默认。
+在 Cocos Creator 3.8.8 里对真服走一遍。预览地址不要带 `?dev=mock`，也不要带 `?transport=mock`。Mock 只在那两个参数后面打开，不能再变成默认。真桥眼检不要用这两个参数。拉完代码后先停掉 Creator 预览，再重新预览，并硬刷新。隧道眼检的地址是 `?transport=ws&ws=wss://…/game`。GameLog 里的 `preview search=` 应带上这条查询，`kind=ws`，`useWs=true`。选服是「本机桥」，不是「本地Mock」。
 
 本仓库没有 Java 服。服由本机 `scripts/start-local-all` 拉起，桥是 `ws://127.0.0.1:13111/game`（TCP 9902）。客户端不本地加减金币、不改关卡、不改星级。
 
@@ -25,8 +25,8 @@
 ## 开之前
 
 1. 先双击 `scripts/start-local-all`。9902 或 13111 已经在听会自己跳过。
-2. Creator 打开 `client`。启动场景保持 Boot。
-3. 预览。地址栏不要加 mock。GameLog 里应看到 `stage=version` → `hot-update` → `assets` → `config` → `login` → `sync` → `enter-main`。不应出现 `connect mock://local`。
+2. Creator 打开 `client`。启动场景保持 Boot。拉完代码后停掉正在跑的预览，再点预览，浏览器硬刷新。普通刷新可能仍是旧脚本。
+3. 预览。地址栏不要加 `?dev=mock`。本机真桥不必加参数。隧道真桥用 `?transport=ws&ws=wss://…/game`。GameLog 里应看到 `preview search=`（含 kind、wsUrl、explicit、useWs），然后 `stage=version` → `hot-update` → `assets` → `config` → `login` → `sync` → `enter-main`。`useWs=true`。不应出现 `connect mock://local`，也不应请求 `http://106.52.67.63:2011/` 或 `http://cdn-mxzg.anyaojs.com/release/qyzh/chn/`。版本行应写明因为浏览器/预览跳过远程版本。
 4. 账号填已经有角色的数字平台 uid。新号走创角。空号也要能进，不要白屏。
 
 通过：加载层盖住选服，连上桥之后才露出选服。点进入之后字仍是「登录」，然后是「同步角色」，八个包齐了才进主城。18 秒没齐会写出缺的号，重试再拉，不把半套数据当成进了主城。眼检走 `UserLoginLayer` 和 `ChooseServerLayer`。`LoginPanel` 只在预制开关关掉时出现，标题「mxzg」收进 60 高的格子，不再用 48 号顶出盒子。

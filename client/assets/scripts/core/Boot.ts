@@ -9,6 +9,7 @@
  * 这两套关掉后仍走 buildLoginPanel / buildCreateRolePanel，代码 UI 不删。
  * 账号走 Proto.login / Proto.roleEnter；没有角色或点「创角」时再 Proto.roleCreate。
  * 默认连本机桥 ws://127.0.0.1:13111/game（转到 TCP 9902），不必加 ?transport=ws。
+ * 隧道眼检 ?transport=ws&ws=wss://…/game 强制走这条 wss。只有 ?dev=mock / ?transport=mock 才进 Mock。
  * Mock 只在地址带 ?dev=mock 时打开。?transport=auto 短连失败停在「服未启动」，不进 Mock。
  * 打开后发心跳 1004，点登录再发 1001。s2c 1001 有角色就进同一套主城壳。
  * 进主城后角色数据只从 s2c 进 GameStore。
@@ -36,11 +37,13 @@ import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
 import {
   ClientVersion,
   downloadWithProgress,
+  browserSkipsRemoteVersion,
   fetchRemoteVersion,
   hotUpdateUrl,
-  remoteVersionUrls,
   isH5Client,
+  noteSkippedRemoteVersion,
   readClientVersion,
+  remoteVersionUrls,
   versionNeedsUpdate,
 } from "./clientVersion";
 import { listOpenEntries } from "../config/gates";
@@ -61,16 +64,17 @@ import {
 import { NetState } from "../net/NetTypes";
 import {
   explainWireTimeout,
-  readPreviewTransport,
+  parseTransportSearch,
+  readPreviewSearch,
   resolveBootTransport,
   setMockRuntime,
   TransportChoice,
   WS_CLOSE_STATUS,
-  WS_DOWN_DETAIL,
-  WS_DOWN_LOG,
   WS_DOWN_STATUS,
   WS_MOCK_STATUS,
   WS_OPEN_STATUS,
+  wsDownDetail,
+  wsDownLog,
 } from "../net/transportSelect";
 import { Proto } from "../net/protocol";
 import { RoleEnterResp } from "../net/protocol/types";
@@ -146,6 +150,8 @@ export class Boot extends Component {
   private authEpoch = 0;
   private alive = true;
   private useWs = false;
+  /** 登录页上点了「连本机服」之后，不再用地址把这次选择盖回 Mock。 */
+  private holdTransport = false;
   /** ?transport=auto 时先短连。没带 ?dev=mock 时失败停在服未启动。 */
   private autoFallback = false;
   /** 地址显式 ?dev=mock 或 ?transport=mock。没写就关。 */
@@ -154,7 +160,7 @@ export class Boot extends Component {
   private transportPref?: TransportPref;
   /** 短连失败后，下一帧登录页用这句，而不是「账号」。 */
   private pendingStatus: string | null = null;
-  private wsChoice: TransportChoice = readPreviewTransport();
+  private wsChoice: TransportChoice = parseTransportSearch("");
   private wsEpoch = 0;
   private wsLive = false;
   private wsNet: NetClient | null = null;
@@ -201,8 +207,13 @@ export class Boot extends Component {
     }
   }
 
-  private async runBoot(): Promise<void> {
-    this.wsChoice = readPreviewTransport();
+  /**
+   * 读本页、父页、最外层和 referrer 上的预览查询。
+   * 只有显式 ?dev=mock / ?transport=mock 才 useWs=false，登录才会重建成 MOCK_SERVERS。
+   */
+  private applyPreviewTransport(): void {
+    const rawSearch = readPreviewSearch();
+    this.wsChoice = parseTransportSearch(rawSearch);
     const stored = loadLoginPrefs(this.prefStore());
     const resolved = resolveBootTransport(this.wsChoice, stored?.transport);
     this.useWs = resolved.useWs;
@@ -210,6 +221,19 @@ export class Boot extends Component {
     this.devMock = this.wsChoice.kind === "mock" && this.wsChoice.explicit;
     setMockRuntime(this.devMock && !this.useWs);
     if (stored?.transport === "mock" || stored?.transport === "ws") this.transportPref = stored.transport;
+    GameLog.shared.info(
+      "Boot",
+      "preview search=" +
+        (rawSearch || "(empty)") +
+        " kind=" +
+        this.wsChoice.kind +
+        " wsUrl=" +
+        this.wsChoice.wsUrl +
+        " explicit=" +
+        (this.wsChoice.explicit ? "true" : "false") +
+        " useWs=" +
+        (this.useWs ? "true" : "false")
+    );
     GameLog.shared.info(
       "Boot",
       this.useWs
@@ -220,6 +244,10 @@ export class Boot extends Component {
             " 默认连真服。Mock 仅 ?dev=mock"
         : "transport=mock 已开 ?dev=mock。关掉该参数即回真服 " + this.wsChoice.wsUrl
     );
+  }
+
+  private async runBoot(): Promise<void> {
+    this.applyPreviewTransport();
     const canvas = this.resolveCanvas();
     this.canvas = canvas;
     const frame = this.mountSafeFrame(canvas);
@@ -287,8 +315,9 @@ export class Boot extends Component {
         const local = await readClientVersion();
         if (!this.alive) return false;
         GameLog.shared.info("Boot", "stage=version " + local.version);
-        const browser = isH5Client();
+        const browser = browserSkipsRemoteVersion();
         const empty = remoteVersionUrls(local, browser).length === 0;
+        if (browser) noteSkippedRemoteVersion();
         const remote = empty ? null : await fetchRemoteVersion(local);
         if (!this.alive) return false;
         if (remote === null) {
@@ -329,9 +358,10 @@ export class Boot extends Component {
 
   /** 远程版本没读到。警告后跳过热更，后面继续加载资源。 */
   private skipUnreachableVersion(local: ClientVersion, empty: boolean): void {
-    const where = isH5Client() ? " h5" : "";
-    const why = isH5Client()
-      ? "Creator 预览不请求 106.52.67.63:2011 和 cdn-mxzg.anyaojs.com。配置用本地表，真服只走 ws://127.0.0.1:13111/game"
+    const browser = browserSkipsRemoteVersion();
+    const where = browser ? " h5" : "";
+    const why = browser
+      ? "跳过远程版本，因为浏览器/预览。不请求 106.52.67.63:2011 和 cdn-mxzg.anyaojs.com"
       : empty
         ? "版本地址为空"
         : "远程版本不可达";
@@ -500,6 +530,7 @@ export class Boot extends Component {
   }
 
   private showLogin(parent: Node): void {
+    if (!this.holdTransport) this.applyPreviewTransport();
     this.authBusy = false;
     this.destroyAuthPanels();
     const epoch = this.authEpoch;
@@ -605,7 +636,7 @@ export class Boot extends Component {
     if (this.chrome) this.chrome.hide();
     if (this.pendingStatus) {
       panel.setStatus(this.pendingStatus);
-      panel.setDetail(this.devMock ? "服未启动。可点进入游戏走 Mock" : WS_DOWN_DETAIL);
+      panel.setDetail(this.devMock ? "服未启动。可点进入游戏走 Mock" : wsDownDetail(this.wsChoice.wsUrl));
       this.pendingStatus = null;
     }
   }
@@ -695,6 +726,7 @@ export class Boot extends Component {
   /** 登录页上的「连本机服」。不立刻进主城，先打开桥再等用户点进入游戏。 */
   private onUseLive(): void {
     if (!this.alive || this.entering || this.authBusy) return;
+    this.holdTransport = true;
     this.useWs = true;
     this.autoFallback = false;
     this.devMock = false;
@@ -728,11 +760,11 @@ export class Boot extends Component {
         return false;
       }
       this.autoFallback = false;
-      GameLog.shared.error("Boot", "WebSocket 连接失败 " + messageOf(err) + "。" + WS_DOWN_LOG);
+      GameLog.shared.error("Boot", "WebSocket 连接失败 " + messageOf(err) + "。" + wsDownLog(url));
       if (this.chrome) this.chrome.hide();
       if (this.loginPanel) {
         this.loginPanel.setStatus(WS_DOWN_STATUS);
-        this.loginPanel.setDetail(WS_DOWN_DETAIL);
+        this.loginPanel.setDetail(wsDownDetail(url));
         this.loginPanel.setBusy(false);
       }
       this.authBusy = false;
