@@ -10,7 +10,7 @@
 import { Button, Color, EventTouch, Node, Sprite, UITransform } from "cc";
 import { ConfigLoader } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
-import { CityMapHandle, CityMapQuery, loadCitySpriteFrame } from "./CityMap";
+import { CityMapHandle, CityMapQuery, dropCitySpriteLoad, loadCitySpriteFrame, paintCitySpriteWhenReady } from "./CityMap";
 import {
   CITY_CFG_BTN,
   CITY_CFG_EFFECT,
@@ -75,11 +75,9 @@ async function bindCityHub(
   onMainline: () => void,
   query: CityMapQuery
 ): Promise<CityHubHandle> {
-  const [pos, btn, effect] = await Promise.all([
-    loadCfg<MainCityPosFile>(CITY_CFG_POS),
-    loadCfg<MainCityBtnFile>(CITY_CFG_BTN),
-    loadCfg<MainCityEffectFile>(CITY_CFG_EFFECT),
-  ]);
+  let pos: MainCityPosFile | null = null;
+  let btn: MainCityBtnFile | null = null;
+  let effect: MainCityEffectFile | null = null;
   let layout = buildCityMapLayout(pos, btn, effect);
   const views = indexByName(root);
   for (let i = 0; i < MAP_NODES.length; i++) {
@@ -89,24 +87,6 @@ async function bindCityHub(
   const gesture = { dragged: false, moved: false };
   const spots = new Map<string, { sprite: Sprite | null }>();
   let bound = 0;
-  for (let i = 0; i < layout.buildings.length; i++) {
-    const spot = layout.buildings[i];
-    const node = views.get("spot-" + spot.atom);
-    if (!node) continue;
-    node.setScale(spot.scale, spot.scale, 1);
-    const sprite = node.getComponent(Sprite);
-    if (sprite) {
-      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-      sprite.color = OPEN_COLOR;
-    }
-    const button = node.getComponent(Button);
-    if (!button) throw new Error(node.name + " 缺少 Button");
-    bindAtom(node, spot.atom, onAtom, () => gesture.dragged);
-    spots.set(spot.atom, { sprite });
-    bound += 1;
-  }
-  if (bound < 1 || !views.has("spot-main_summon")) throw new Error("CityHub 没有建筑按钮");
-
   let scroll = 0;
 
   const placeBuildings = (): void => {
@@ -168,9 +148,37 @@ async function bindCityHub(
     applyScroll(scroll);
   };
 
+  // 先按空表把视差板摆进屏幕。Prefab 默认 x=-750，等配置再摆的话进城会先黑几秒。
   bindVisibleRefresh(root, applyVisible);
-  // 底板丢了再补。不 await：一张图不回调时，视差和特效先挂上。
+  // 底板丢了再补。不 await：一张图不回调时，视差和特效先挂上。超时不重开解码。
   ensureCityPlates(views);
+  const loaded = await Promise.all([
+    loadCfg<MainCityPosFile>(CITY_CFG_POS),
+    loadCfg<MainCityBtnFile>(CITY_CFG_BTN),
+    loadCfg<MainCityEffectFile>(CITY_CFG_EFFECT),
+  ]);
+  if (!root.isValid) throw new Error("CityHub 已卸下");
+  pos = loaded[0];
+  btn = loaded[1];
+  effect = loaded[2];
+  applyVisible();
+  for (let i = 0; i < layout.buildings.length; i++) {
+    const spot = layout.buildings[i];
+    const node = views.get("spot-" + spot.atom);
+    if (!node) continue;
+    node.setScale(spot.scale, spot.scale, 1);
+    const sprite = node.getComponent(Sprite);
+    if (sprite) {
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      sprite.color = OPEN_COLOR;
+    }
+    const button = node.getComponent(Button);
+    if (!button) throw new Error(node.name + " 缺少 Button");
+    bindAtom(node, spot.atom, onAtom, () => gesture.dragged);
+    spots.set(spot.atom, { sprite });
+    bound += 1;
+  }
+  if (bound < 1 || !views.has("spot-main_summon")) throw new Error("CityHub 没有建筑按钮");
   let fxHandle: CityEffectHandle | null = startCityEffects(views, layout.effects, placeBottomLeft);
 
   let moved = 0;
@@ -261,50 +269,52 @@ const CITY_PLATES: { name: string; layer: number; piece: number }[] = [
   { name: "spr_map_bg1_2", layer: 1, piece: 2 },
 ];
 
-const cityHubPlateMisses = new Set<string>();
-
-/** Prefab 跨 bundle 丢了 spriteFrame 时，城景会空。按 resources 再补，单张超时就放行再试。 */
-function ensureCityPlates(views: Map<string, Node>, left = 3): void {
-  const jobs: Promise<void>[] = [];
-  for (let i = 0; i < CITY_PLATES.length; i++) {
-    const plate = CITY_PLATES[i];
-    const node = views.get(plate.name);
-    if (!node) continue;
-    const sprite = node.getComponent(Sprite);
-    if (!sprite || cityPlateReady(sprite)) continue;
-    const path = mapFramePath(plate.layer, plate.piece, 1);
-    jobs.push(
-      loadCitySpriteFrame(path).then((frame) => {
-        if (!frame || !sprite.isValid || cityPlateReady(sprite)) return;
-        sprite.spriteFrame = frame;
-        sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-      })
-    );
-  }
-  if (jobs.length === 0) return;
-  void Promise.all(jobs).then(() => {
-    if (!views) return;
-    let missing = false;
-    for (let i = 0; i < CITY_PLATES.length; i++) {
-      const node = views.get(CITY_PLATES[i].name);
-      const sprite = node && node.isValid ? node.getComponent(Sprite) : null;
-      if (sprite && !cityPlateReady(sprite)) missing = true;
-    }
-    if (!missing) return;
-    if (left > 1) {
-      ensureCityPlates(views, left - 1);
-      return;
-    }
+/**
+ * 进主城前提前把 Prefab、三张布局表和 map-bg 底板丢进加载。
+ * 和顶栏 Prefab、配置表并行，避免进城后才开始解码，暗页多停几秒。
+ */
+export function primeCityHub(): void {
+  try {
+    void loadPrefab(CITY_HUB_PREFAB_PATH).catch(() => undefined);
+    void ConfigLoader.loadJson(CITY_CFG_POS).catch(() => undefined);
+    void ConfigLoader.loadJson(CITY_CFG_BTN).catch(() => undefined);
+    void ConfigLoader.loadJson(CITY_CFG_EFFECT).catch(() => undefined);
     for (let i = 0; i < CITY_PLATES.length; i++) {
       const plate = CITY_PLATES[i];
-      const node = views.get(plate.name);
-      const sprite = node && node.isValid ? node.getComponent(Sprite) : null;
-      if (!sprite || cityPlateReady(sprite)) continue;
-      const path = mapFramePath(plate.layer, plate.piece, 1);
-      if (cityHubPlateMisses.has(path)) continue;
-      cityHubPlateMisses.add(path);
-      GameLog.shared.warn("CityHub", "plate miss " + path);
+      void loadCitySpriteFrame(mapFramePath(plate.layer, plate.piece, 1));
     }
+  } catch (_err) {
+    /* 预热失败仍走原来的挂载 */
+  }
+}
+
+const cityHubPlateMisses = new Set<string>();
+
+/** Prefab 跨 bundle 丢了 spriteFrame 时，城景会空。按 resources 再补。超时不重开解码，晚到的帧仍贴上。 */
+function ensureCityPlates(views: Map<string, Node>): void {
+  for (let i = 0; i < CITY_PLATES.length; i++) fillCityPlate(views, CITY_PLATES[i], 3);
+}
+
+function fillCityPlate(views: Map<string, Node>, plate: { name: string; layer: number; piece: number }, left: number): void {
+  const node = views.get(plate.name);
+  if (!node) return;
+  const sprite = node.getComponent(Sprite);
+  if (!sprite || cityPlateReady(sprite)) return;
+  const path = mapFramePath(plate.layer, plate.piece, 1);
+  void paintCitySpriteWhenReady(path, (frame) => {
+    if (!sprite.isValid || cityPlateReady(sprite)) return;
+    sprite.spriteFrame = frame;
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  }).then((status) => {
+    if (!sprite.isValid || cityPlateReady(sprite) || status === "ok") return;
+    if (left > 1) {
+      dropCitySpriteLoad(path);
+      fillCityPlate(views, plate, left - 1);
+      return;
+    }
+    if (cityHubPlateMisses.has(path)) return;
+    cityHubPlateMisses.add(path);
+    GameLog.shared.warn("CityHub", "plate miss " + path);
   });
 }
 

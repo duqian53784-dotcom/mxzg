@@ -25,12 +25,14 @@ export const HANG_LAYER_H = 1280;
 export const IDLE_HANG_DEFAULT_POSITIONS = [1, 4, 5] as const;
 
 /**
- * 左队收进金环左边。掉落堆心在 x≈0，图标大约铺到 x=-123，近列停在 -200。
- * 远列停在 -320，还在 720 宽的地砖里。
+ * 左队收进金环左边。掉落堆心在 x≈0，图标大约铺到 x=-123。
+ * 锚点在脚。朝右的骨架会向左伸出大约 120–180，远列停在 -260 时最左会裁出 720 的左缘。
+ * 近列 -120、远列 -220，4/5 号落在中间（-170）。列和行的相对关系不变，身体留在地砖里。
+ * 可见宽小于 720 时再由 hangAllyVisibleShift 把整列右移，不改这张表。
  * 三行收在柱廊下沿和金环上沿之间，低行的脚不踩进掉落堆。
  */
-const ALLY_LANE_NEAR_X = -200;
-const ALLY_LANE_FAR_X = -320;
+const ALLY_LANE_NEAR_X = -120;
+const ALLY_LANE_FAR_X = -220;
 const ALLY_LANE_LOW_Y = -36;
 const ALLY_LANE_HIGH_Y = 84;
 
@@ -141,6 +143,16 @@ export function hangStandPoint(side: "ally" | "enemy", index: number): HangSpot 
   const i = index < 0 || !isFinite(index) ? 0 : Math.floor(index);
   const n = i % spots.length;
   return spots[n < 0 ? n + spots.length : n];
+}
+
+/**
+ * 窄屏按 Fit Height 裁掉 720 左右两边。远列按 720 摆时会再被裁一截。
+ * 返回整列要右移的距离。宽屏和正好 720 不挪，避免把左列拉到中线。
+ */
+export function hangAllyVisibleShift(layerWidth: number): number {
+  const width = layerWidth > 0 && isFinite(layerWidth) ? layerWidth : HANG_LAYER_W;
+  if (width >= HANG_LAYER_W - 0.5) return 0;
+  return (HANG_LAYER_W - width) / 2;
 }
 
 function hangCenterPoint(index: number, isMirror: boolean): { x: number; y: number } {

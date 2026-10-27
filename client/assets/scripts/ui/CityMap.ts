@@ -94,12 +94,10 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   }
 
   const spots = new Map<string, { sprite: Sprite | null }>();
-  // 特效不等底板。一张图加载不回调时，后面的层和建筑仍然挂上。
-  const fxHandle: CityEffectHandle = startCityEffects(views, layout.effects, placeBottomLeft);
+  // 底板先画。特效和建筑不等图回调，超时只放开等待，晚到的帧仍然贴上。
   paintCityFrames(frameJobs);
-  const builtList = await Promise.all(
-    layout.buildings.map((spot) => placeBuilding(views, spot, clickAtom))
-  );
+  const fxHandle: CityEffectHandle = startCityEffects(views, layout.effects, placeBottomLeft);
+  const builtList = layout.buildings.map((spot) => placeBuilding(views, spot, clickAtom));
   for (let i = 0; i < layout.buildings.length; i++) {
     const built = builtList[i];
     if (built) spots.set(layout.buildings[i].atom, built);
@@ -199,28 +197,57 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
 }
 
 
-async function placeBuilding(
+function placeBuilding(
   views: Map<string, Node>,
   spot: CitySpot,
   onAtom: (atom: string) => void
-): Promise<{ sprite: Sprite | null } | null> {
+): { sprite: Sprite | null } | null {
   const parent = views.get(spot.parent);
   if (!parent) return null;
-  const frame = await loadFirst(spot.icons);
   const node = uiNode("spot-" + spot.atom);
   const ui = node.addComponent(UITransform);
-  const size = frame ? frameSizeOf(frame, 120, 80) : { w: 88, h: 48 };
-  ui.setContentSize(size.w, size.h);
+  ui.setContentSize(88, 48);
   ui.setAnchorPoint(0.5, 0.5);
   node.setScale(spot.scale, spot.scale, 1);
   node.parent = parent;
   placeBottomLeft(node, parent, spot.x, spot.y);
-  const sprite = frame ? paintSprite(node, frame) : null;
-  const caption = createLabel(spot.label, 18, { color: LABEL_COLOR, width: Math.max(120, size.w) });
+  const sprite = node.addComponent(Sprite);
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  sprite.color = OPEN_COLOR;
+  const caption = createLabel(spot.label, 18, { color: LABEL_COLOR, width: 120 });
   caption.parent = node;
-  caption.setPosition(0, -size.h * 0.5 - 14, 0);
+  caption.setPosition(0, -38, 0);
+  paintBuildingIcon(node, caption, spot.icons, 3);
   bindAtom(node, spot.atom, onAtom);
   return { sprite };
+}
+
+/** 图标晚到再补尺寸。超时不重开解码；真失败才换下一张或再试。 */
+function paintBuildingIcon(node: Node, caption: Node, paths: string[], left: number): void {
+  if (!paths.length || !node.isValid) return;
+  const path = paths[0];
+  void paintCitySpriteWhenReady(path, (frame) => {
+    if (!node.isValid) return;
+    const size = frameSizeOf(frame, 120, 80);
+    const ui = node.getComponent(UITransform);
+    if (ui) ui.setContentSize(size.w, size.h);
+    const sprite = node.getComponent(Sprite);
+    if (sprite) {
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      sprite.spriteFrame = frame;
+    }
+    caption.setPosition(0, -size.h * 0.5 - 14, 0);
+  }).then((status) => {
+    if (!node.isValid || status === "ok") return;
+    if (status === "fail" && paths.length > 1) {
+      paintBuildingIcon(node, caption, paths.slice(1), left);
+      return;
+    }
+    if (status === "fail" && left > 1) {
+      dropCitySpriteLoad(path);
+      paintBuildingIcon(node, caption, paths, left - 1);
+    }
+  });
 }
 
 function bindAtom(node: Node, atom: string, onAtom: (atom: string) => void): void {
@@ -262,38 +289,107 @@ function frameSizeOf(frame: SpriteFrame, fallbackW: number, fallbackH: number): 
   return { w, h };
 }
 
-async function loadFirst(paths: string[]): Promise<SpriteFrame | null> {
-  for (let i = 0; i < paths.length; i++) {
-    const frame = await loadCitySpriteFrame(paths[i]);
-    if (frame) return frame;
-  }
-  return null;
-}
-
-/** 单张底板大约 1.2 秒还不回调就放行。调用方再试，不把整张城卡死。 */
+/** 单张底板大约 1.2 秒还不回调就放行。调用方再试，不把整张城卡死。晚到的帧仍然贴上。 */
 export const CITY_PLATE_WAIT_MS = 1200;
 
 const cityPlateMisses = new Set<string>();
 
+interface PlateLoad {
+  promise: Promise<SpriteFrame | null>;
+  frame: SpriteFrame | null;
+  failed: boolean;
+  waiters: Array<(frame: SpriteFrame | null) => void>;
+}
+
+const plateLoads = new Map<string, PlateLoad>();
+
+/**
+ * 同一路径只解码一次。超时把 await 放开（返回 null），不取消加载。
+ * 图晚到时写进 record.frame，并通知 waiters。真失败才标 failed，方便再试。
+ */
 export function loadCitySpriteFrame(path: string): Promise<SpriteFrame | null> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (frame: SpriteFrame | null) => {
-      if (settled) return;
-      settled = true;
+  const existing = plateLoads.get(path);
+  if (existing) {
+    if (existing.frame) return Promise.resolve(existing.frame);
+    return existing.promise;
+  }
+  const record: PlateLoad = {
+    promise: Promise.resolve(null),
+    frame: null,
+    failed: false,
+    waiters: [],
+  };
+  record.promise = new Promise((resolve) => {
+    let unblocked = false;
+    const give = (frame: SpriteFrame | null, failed: boolean) => {
+      if (frame) record.frame = frame;
+      if (failed) record.failed = true;
+      const pending = record.waiters.splice(0, record.waiters.length);
+      for (let i = 0; i < pending.length; i++) pending[i](frame);
+      if (unblocked) return;
+      unblocked = true;
       resolve(frame);
     };
-    const timer = setTimeout(() => finish(null), CITY_PLATE_WAIT_MS);
+    const timer = setTimeout(() => {
+      if (unblocked) return;
+      unblocked = true;
+      resolve(null);
+    }, CITY_PLATE_WAIT_MS);
     try {
       resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
         clearTimeout(timer);
-        if (err || !asset) finish(null);
-        else finish(asset);
+        if (err || !asset) give(null, true);
+        else give(asset, false);
       });
     } catch (_err) {
       clearTimeout(timer);
-      finish(null);
+      give(null, true);
     }
+  });
+  plateLoads.set(path, record);
+  return record.promise;
+}
+
+/** 真失败之后才允许再 load 一次。进行中的解码不丢掉。 */
+export function dropCitySpriteLoad(path: string): void {
+  const record = plateLoads.get(path);
+  if (!record || record.frame || !record.failed) return;
+  plateLoads.delete(path);
+}
+
+/**
+ * 图到了就画。超时不算缺图：晚到的帧仍会画上。
+ * 只有 resources 明确失败才返回 fail，调用方再试。
+ */
+export function paintCitySpriteWhenReady(path: string, apply: (frame: SpriteFrame) => void): Promise<"ok" | "fail"> {
+  let record = plateLoads.get(path);
+  if (record && record.frame) {
+    apply(record.frame);
+    return Promise.resolve("ok");
+  }
+  if (record && record.failed) return Promise.resolve("fail");
+  if (!record) {
+    void loadCitySpriteFrame(path);
+    record = plateLoads.get(path);
+  }
+  if (!record) return Promise.resolve("fail");
+  if (record.frame) {
+    apply(record.frame);
+    return Promise.resolve("ok");
+  }
+  if (record.failed) return Promise.resolve("fail");
+  const live = record;
+  live.waiters.push((frame) => {
+    if (frame) apply(frame);
+  });
+  return live.promise.then((frame) => {
+    if (frame || live.frame) return "ok";
+    if (live.failed) return "fail";
+    return new Promise<"ok" | "fail">((resolve) => {
+      live.waiters.push((late) => {
+        resolve(late || live.frame ? "ok" : "fail");
+      });
+    });
   });
 }
 
@@ -302,13 +398,13 @@ function paintCityFrames(jobs: { node: Node; path: string }[]): void {
 }
 
 function paintCityFrame(node: Node, path: string, left: number): void {
-  void loadCitySpriteFrame(path).then((frame) => {
+  void paintCitySpriteWhenReady(path, (frame) => {
     if (!node.isValid) return;
-    if (frame) {
-      paintSprite(node, frame);
-      return;
-    }
+    paintSprite(node, frame);
+  }).then((status) => {
+    if (!node.isValid || status === "ok") return;
     if (left > 1) {
+      dropCitySpriteLoad(path);
       paintCityFrame(node, path, left - 1);
       return;
     }

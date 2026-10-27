@@ -199,7 +199,7 @@ import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
 import { CityMapHandle, mountCityMap } from "./CityMap";
-import { mountCityHubPrefab } from "./CityHub";
+import { mountCityHubPrefab, primeCityHub } from "./CityHub";
 import { cityAtomRoute } from "./cityMapLayout";
 import {
   CITY_DRAG_HINT,
@@ -213,7 +213,7 @@ import {
   cityHubEntries,
   cityHubSpots,
 } from "./cityHubEntries";
-import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
+import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
 
 /** 默认挂 CityChrome Prefab。false 时仍走 mountCityChrome，和接 Prefab 之前一样。不改 Boot。 */
 export const USE_CITY_CHROME_PREFAB = true;
@@ -227,6 +227,8 @@ export const USE_CITY_HUB_PREFAB = true;
 const { ccclass } = _decorator;
 
 const PAGE_BG = new Color(8, 16, 32, 255);
+/** 主城地图出来前的底。跟白天城景的天，不要用页面那块藏青，否则进城像黑屏。 */
+const CITY_SKY = new Color(176, 216, 242, 255);
 const TITLE_COLOR = new Color(255, 228, 170, 255);
 const MUTED = new Color(190, 205, 225, 255);
 const GATE_COLOR = new Color(170, 190, 170, 255);
@@ -554,6 +556,7 @@ export class MainApp extends Component {
   }
 
   private async build(): Promise<void> {
+    primeCityHub();
     const canvas = this.resolveCanvas();
     this.shell = UIShell.mount(canvas);
     if (!ConfigDb.current) {
@@ -801,6 +804,8 @@ export class MainApp extends Component {
 
   private buildCity(): Node {
     const page = this.pageRoot("CityPage");
+    const sky = page.getChildByName("bg");
+    if (sky) paintRect(sky, CITY_SKY);
     const pageUi = page.getComponent(UITransform) || page.addComponent(UITransform);
     pageUi.setContentSize(720, 1280);
     pageUi.setAnchorPoint(0.5, 0.5);

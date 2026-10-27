@@ -7,7 +7,7 @@
  * 站场优先 MAIN 阵容：hero_id 经名册 hero_type 对已有皮肤，再走内存里的 spine 升级。
  * 阵容是空的才用三套默认。加载失败把格子藏起来，不写套名。
  * 不给每个站位写「待命」。计时泡只有 Prefab 里那一个，挪到掉落堆上。
- * 左英雄头顶另挂一句 herotalk，进真战报时藏起来。
+ * 掉落堆上方另挂一句 herotalk，不压左列头顶。进真战报时藏起来。
  * main-scene_spr-drop-1 是空的蓝金匾，不拿来当掉落堆。
  * 掉落堆和计时泡抬到金环顶上面，不盖住环，堆心仍在金环中线。
  * 站场按阵位号铺人（日服 getHangHeroPosition），不是按 0、1、2 往三角表里塞。
@@ -24,7 +24,7 @@ import { hangLootBubbleY, hangLootIconY, hangLootSpineY, HANG_LOOT_BUBBLE_X } fr
 import { HangCastMember, hangCastForFormation, idleHangCastFrom } from "./idleHangRoster";
 import { mountIdleSkirmish } from "./idleHangSkirmish";
 import { mountHangTalk } from "./idleHangTalk";
-import { hangAllyFloorPoint, hangLinePosition, IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
+import { hangAllyFloorPoint, hangAllyVisibleShift, hangLinePosition, IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
 import { localLineupIds, onLocalLineup } from "./localLineup";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, uiSize } from "./visibleFit";
 import { createRect, place, uiNode } from "./UiKit";
@@ -155,6 +155,9 @@ export function bindHangFill(shell: Node): void {
       const skyH = skySize && skySize.height > 0 ? skySize.height : 420;
       assignContentSize(ui, width, skyH);
     }
+    // 窄屏左右被裁。整列右移，列距仍是阵位公式算出来的。
+    const heroes = hang.getChildByName("IdleHeroes");
+    if (heroes) heroes.setPosition(hangAllyVisibleShift(box.width), 0, 0);
   };
   bindVisibleRefresh(shell, apply);
   const later = setTimeout(apply, 160);
