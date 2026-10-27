@@ -50,9 +50,14 @@ export function sliceAnchorShift(box: CcbiBox, frame: CcbiFrame): { x: number; y
 }
 
 /**
- * 英雄列表 / 背包的羊皮纸铺进 720×1280。
- * 左右各留一点岩壁或店景，上下贴在顶栏和底栏之间。
+ * 英雄列表 / 背包的 ccbi 窗在 720×1280 里保持设计缩放 1。
+ * 日服是 640×1280 FIXED_HEIGHT，整屏 global_scale 已经是 winW/640；
+ * ccbi 窗本身不再乘 (720 - LIST_WINDOW_SIDE*2) / 640。那一步是 684/640 ≈ 1.069，
+ * Inspector 里 BackpackLayer / HeroListLayer 的额外缩放就是它。
+ * 全屏店景、岩洞由壳底图单独铺满。上下也不把九宫格拉到顶栏和底栏，
+ * 拉高会把羊皮纸撑成空壳，并把店员顶出画面。
  * 根锚点在底边（ccbi 列表根是 0）。bg 坐标是修复九宫格之后的锚点位置。
+ * LIST_WINDOW_* 只记下顶栏底栏的设计带，铺窗时不再用它改缩放。
  */
 export const LIST_WINDOW_TOP = 470;
 export const LIST_WINDOW_BOTTOM = -480;
@@ -77,27 +82,21 @@ export interface ListWindowSpread {
 }
 
 export function listWindowSpread(input: ListWindowInput): ListWindowSpread {
-  const rootW = input.rootW > 1 ? input.rootW : 640;
   const rootH = input.rootH > 1 ? input.rootH : 960;
-  const targetW = 720 - LIST_WINDOW_SIDE * 2;
-  const scale = targetW / rootW;
+  const scale = 1;
   const rootY = -(0.5 - input.anchorY) * rootH * scale;
   const bgH = input.bgH > 1 ? input.bgH : 1;
   const bgBottom = input.bgY - input.bgAy * bgH;
   const bgTop = bgBottom + bgH;
   const screenTop = rootY + bgTop * scale;
   const screenBottom = rootY + bgBottom * scale;
-  let extraTop = (LIST_WINDOW_TOP - screenTop) / scale;
-  let extraBottom = (screenBottom - LIST_WINDOW_BOTTOM) / scale;
-  if (!isFinite(extraTop) || extraTop < 0) extraTop = 0;
-  if (!isFinite(extraBottom) || extraBottom < 0) extraBottom = 0;
   return {
     scale,
     rootY,
-    extraTop,
-    extraBottom,
-    screenTop: screenTop + extraTop * scale,
-    screenBottom: screenBottom - extraBottom * scale,
+    extraTop: 0,
+    extraBottom: 0,
+    screenTop,
+    screenBottom,
   };
 }
 
