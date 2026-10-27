@@ -27036,9 +27036,24 @@ function checkCityHub(): void {
   const visibleFitSrc = readFileSync(uiSource("visibleFit.ts"), "utf8");
   const shellFillSrc = readFileSync(uiSource("screenFill.ts"), "utf8");
   assert(visibleFitSrc.indexOf("export function positiveUiSize") >= 0, "positiveUiSize rejects null and zero contentSize");
+  assert(visibleFitSrc.indexOf("export function assignContentSize") >= 0, "assignContentSize skips a null contentSize");
   assert(
     shellSrc.indexOf("positiveUiSize") >= 0 && shellFillSrc.indexOf("positiveUiSize") >= 0,
     "hang and list shells do not read a null width"
+  );
+  assert(shellSrc.indexOf("contentSize.width") < 0 && shellSrc.indexOf("contentSize.height") < 0, "hang shell menu does not read contentSize.width");
+  const hangViewSrc = readFileSync(uiSource("idleHangView.ts"), "utf8");
+  const hangSkirmishSrc = readFileSync(uiSource("idleHangSkirmish.ts"), "utf8");
+  assert(
+    hangViewSrc.indexOf("contentSize.width") < 0 &&
+      hangViewSrc.indexOf("contentSize.height") < 0 &&
+      hangSkirmishSrc.indexOf("contentSize.width") < 0 &&
+      hangSkirmishSrc.indexOf("contentSize.height") < 0,
+    "hang fill and skirmish do not read a null content size"
+  );
+  assert(
+    shellFillSrc.indexOf("assignContentSize") >= 0 && shellFillSrc.indexOf("先不挂遮罩") >= 0,
+    "hang progress mask waits until content size is live"
   );
   assert(
     shellSrc.indexOf("seatListShell") >= 0 && shellSrc.indexOf("fitVisibleRoot") >= 0,

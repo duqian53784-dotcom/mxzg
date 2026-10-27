@@ -21,7 +21,7 @@ import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from 
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
-import { bindVisibleRefresh, fitVisibleRoot, positiveUiSize } from "./visibleFit";
+import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize, uiSize } from "./visibleFit";
 
 /** 挂机底栏「快速战斗」。已有壳。3013 开战硬禁，只读 3012 次数。 */
 export const HANG_QUICK_PREFAB = "prefabs/ui/quick-battle/QuickBattleLayer";
@@ -453,7 +453,7 @@ function repairLabel(node: Node): void {
   const tall = label.fontSize > height * 0.85;
   if (!wide && !tall) return;
   const ui = node.getComponent(UITransform);
-  if (ui) ui.setContentSize(Math.max(8, width - 8), Math.max(8, height - 4));
+  assignContentSize(ui, Math.max(8, width - 8), Math.max(8, height - 4));
   label.overflow = Overflow.SHRINK;
 }
 
@@ -663,8 +663,9 @@ function silenceHangMenu(view: Node): void {
   const menu = findDescendant(view, "menu");
   if (!menu) return;
   const ui = menu.getComponent(UITransform);
-  if (!ui || !ui.contentSize) return;
-  if (ui.contentSize.width > 400 || ui.contentSize.height > 400) ui.setContentSize(0, 0);
+  const size = uiSize(ui);
+  if (!size || (size.width <= 400 && size.height <= 400)) return;
+  assignContentSize(ui, 0, 0);
 }
 
 /**
