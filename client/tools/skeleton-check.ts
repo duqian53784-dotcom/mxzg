@@ -27219,15 +27219,19 @@ function checkCityHub(): void {
     bgH: 614.4,
   });
   assert(
-    Math.abs(heroWindow.screenTop - 470) < 0.6 &&
-      Math.abs(heroWindow.screenBottom - -480) < 0.6 &&
-      heroWindow.extraTop > 40 &&
-      heroWindow.extraBottom > 20 &&
-      heroWindow.scale > 1 &&
-      heroWindow.scale < 1.2 &&
-      Math.abs(bagWindow.screenTop - 470) < 0.6 &&
-      Math.abs(bagWindow.screenBottom - -480) < 0.6,
-    "hero and bag parchment fill the band between the top and bottom bars"
+    heroWindow.scale === 1 &&
+      bagWindow.scale === 1 &&
+      heroWindow.extraTop === 0 &&
+      heroWindow.extraBottom === 0 &&
+      bagWindow.extraTop === 0 &&
+      bagWindow.extraBottom === 0 &&
+      Math.abs(heroWindow.rootY - -480) < 0.001 &&
+      Math.abs(bagWindow.rootY - -480) < 0.001 &&
+      Math.abs(heroWindow.screenTop - 297.75) < 0.05 &&
+      Math.abs(heroWindow.screenBottom - -374.25) < 0.05 &&
+      Math.abs(bagWindow.screenTop - 240.15) < 0.05 &&
+      Math.abs(bagWindow.screenBottom - -374.25) < 0.05,
+    "hero and bag ccbi windows stay at design scale 1 and are not spread to 684"
   );
   assert(
     growAnchorDelta(0.5, 142, 75) === 33.5 && growAnchorDelta(0, 10, 20) === -20 && growAnchorDelta(1, 10, 20) === 10,
@@ -27388,6 +27392,9 @@ function checkCityHub(): void {
       bagFill.indexOf('uiNode("BagScroll")') < 0 &&
       bagFill.indexOf('uiNode("BagFill")') < 0 &&
       bagFill.indexOf('getChildByName("BagScroll")') >= 0 &&
+      bagFill.indexOf("content.parent = port") >= 0 &&
+      bagFill.indexOf("GRAPHICS_RECT") >= 0 &&
+      fillSrc.indexOf("other_spr-null") >= 0 &&
       fillSrc.indexOf("function gridScroll") < 0,
     "bag scroll lives under spr_box and fillBag does not build BagScroll"
   );

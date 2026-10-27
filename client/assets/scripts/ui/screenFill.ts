@@ -912,8 +912,8 @@ function hideDebugBubble(view: Node): void {
 }
 
 /**
- * 把 640 宽的羊皮纸拉到 720×1280 里、顶栏和底栏之间。
- * 左右留 LIST_WINDOW_SIDE，底图从壳后面露出来。
+ * 640 宽的羊皮纸留在设计缩放 1，底左角锚点居中放进 720×1280。
+ * 不再整页放大，也不把九宫格拉高去贴顶栏底栏。全屏底图由壳单独铺。
  */
 function fitParchmentWindow(view: Node): ParchmentFit {
   const mark = view as Node & { mxzgParchment?: ParchmentFit };
@@ -1184,10 +1184,12 @@ function fillBag(view: Node): void {
         : rows.length === 0
           ? () => flashToast(view, emptyBagToast())
           : null;
+      if (content.layer) adoptLayer(cell, content.layer);
       bindBagCell(cell, item, selected, onTap);
       place(cell, content, gridX(i, -168, BAG_PITCH_X), gridY(i, -56, BAG_PITCH_Y));
     }
     sizeScroll(content, slotRows(shown) * BAG_PITCH_Y + 24, 400 + fit.extra);
+    pinBagScroll(content);
   };
   void Promise.all([loadPrefab(BAG_CELL), loadPrefab(BAG_TAB)]).then(
     (loaded) => {
@@ -1218,31 +1220,81 @@ function fillBag(view: Node): void {
 }
 
 /**
- * spr_box/BagScroll 写在 BackpackLayer 里。这里只把视口拉到羊皮纸增高后的高度。
- * 不另造滚动节点。格子进 content。
+ * spr_box/BagScroll 写在 BackpackLayer 里。不另造滚动节点。
+ * 预制把 content 和空的 view 并列，遮罩在宿主上。Creator 的 ScrollView 只裁 content 的父节点，
+ * 宿主遮罩的模板又经常是空的，格子实例化了也看不见。这里把 content 放进 view，遮罩改画在 view 上。
  */
 function bagScrollContent(view: Node, fit: ParchmentFit): Node | null {
   const box = findNamed(view, "spr_box");
   const scroll = box ? box.getChildByName("BagScroll") : null;
-  const content = scroll ? scroll.getChildByName("content") : null;
-  if (!box || !scroll || !content) {
+  if (!box || !scroll) {
     GameLog.shared.warn("Bag", "BackpackLayer 的 spr_box 下没有 BagScroll");
     return null;
   }
-  const height = 400 + fit.extra;
+  const content = seatPrefabScroll(scroll, 520, bagPortHeight(box, scroll, fit), "Bag");
+  if (!content) GameLog.shared.warn("Bag", "BackpackLayer 的 spr_box 下没有 BagScroll");
+  return content;
+}
+
+/** 视口高度跟 spr_box，空账号的 4 行也能落在羊皮纸里面。 */
+function bagPortHeight(box: Node, scroll: Node, fit: ParchmentFit): number {
+  const boxSize = positiveUiSize(box.getComponent(UITransform));
+  const topInset = scroll.position.y < 0 ? -scroll.position.y : 0;
+  const room = boxSize ? boxSize.height - topInset - topInset : 0;
+  const rows = slotRows(COLS * 4) * BAG_PITCH_Y + 24;
+  const want = Math.max(400 + fit.extra, rows);
+  if (room > 80) return Math.min(want, room);
+  return want;
+}
+
+/**
+ * 已有 ScrollView。content 若跟 view 并列，就收进 view。遮罩画在真正包住格子的那个节点上。
+ */
+function seatPrefabScroll(scroll: Node, width: number, height: number, warnTag: string): Node | null {
+  const port = scroll.getChildByName("view");
+  let content = scroll.getChildByName("content");
+  if (!content && port) content = port.getChildByName("content");
+  if (!content) return null;
+  if (port && content.parent !== port) content.parent = port;
+  const hostMask = scroll.getComponent(Mask);
+  if (hostMask && port) hostMask.enabled = false;
   const scrollUi = scroll.getComponent(UITransform);
   const scrollSize = positiveUiSize(scrollUi);
-  assignContentSize(scrollUi, scrollSize && scrollSize.width > 0 ? scrollSize.width : 520, height);
-  const maskView = scroll.getChildByName("view");
-  const viewUi = maskView ? maskView.getComponent(UITransform) : null;
-  if (viewUi) {
+  const useW = scrollSize && scrollSize.width > 0 ? scrollSize.width : width;
+  assignContentSize(scrollUi, useW, height);
+  if (port) {
+    const viewUi = port.getComponent(UITransform);
     const viewSize = positiveUiSize(viewUi);
-    assignContentSize(viewUi, viewSize && viewSize.width > 0 ? viewSize.width : 520, height);
+    assignContentSize(viewUi, viewSize && viewSize.width > 0 ? viewSize.width : useW, height);
   }
+  const maskHost = port || scroll;
+  let mask = maskHost.getComponent(Mask);
+  if (!mask) mask = maskHost.addComponent(Mask);
+  if (mask.type !== Mask.Type.GRAPHICS_RECT) mask.type = Mask.Type.GRAPHICS_RECT;
+  mask.enabled = false;
+  mask.enabled = true;
   const scroller = scroll.getComponent(ScrollView);
-  if (!scroller) GameLog.shared.warn("Bag", "BagScroll 没有 ScrollView");
+  if (!scroller) GameLog.shared.warn(warnTag, scroll.name + " 没有 ScrollView");
   else if (scroller.content !== content) scroller.content = content;
   return content;
+}
+
+function adoptLayer(node: Node, layer: number): void {
+  node.layer = layer;
+  const kids = node.children;
+  for (let i = 0; i < kids.length; i++) adoptLayer(kids[i], layer);
+}
+
+function pinBagScroll(content: Node): void {
+  let node: Node | null = content.parent;
+  while (node) {
+    const scroller = node.getComponent(ScrollView);
+    if (scroller && typeof scroller.scrollToTop === "function") {
+      scroller.scrollToTop(0);
+      return;
+    }
+    node = node.parent;
+  }
 }
 
 /** spr_box/HeroScroll 写在 HeroListHeroLayer 里。这里只把视口拉到羊皮纸增高后的高度。 */
@@ -1311,7 +1363,10 @@ function bindBagCell(cell: Node, item: StoreBagItem | null, selected: boolean, o
   const mark = findNamed(cell, "spr_select");
   if (mark) mark.active = selected;
   if (!item) {
-    if (frame) paintSprite(frame, "ui/common/other_spr-null");
+    if (frame) {
+      frame.active = true;
+      paintSprite(frame, "ui/common/other_spr-null");
+    }
     if (icon) icon.active = false;
     if (count) {
       count.active = false;
