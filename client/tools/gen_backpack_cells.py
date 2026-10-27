@@ -4,10 +4,11 @@
 Writes:
   prefabs/ui/backpack/BackpackItemCell.prefab
   prefabs/ui/backpack/BackpackTabButton.prefab
-and patches BackpackLayer with node_portrait + lbl_talk.
+and patches BackpackLayer with node_portrait, lbl_talk, and spr_box/BagScroll.
 
-Cells and tabs are templates. screenFill instantiates them and only writes
-icon, count, and the language line. It does not build the slot chrome.
+Cells and tabs are templates. screenFill instantiates them into BagScroll/content
+and only writes icon, count, and the language line. It does not build the slot
+chrome or a second scroll host.
 """
 import hashlib
 import json
@@ -302,14 +303,132 @@ def build_tab(frames):
     return b.dump()
 
 
+def append_node(objs, name, parent, x, y, w, h, ax, ay, sx=1, sy=1):
+    def add(obj):
+        objs.append(obj)
+        return len(objs) - 1
+
+    node_id = add(None)
+    ui = add({
+        "__type__": "cc.UITransform",
+        "_name": "",
+        "_objFlags": 0,
+        "__editorExtras__": {},
+        "node": {"__id__": node_id},
+        "_enabled": True,
+        "__prefab": None,
+        "_contentSize": size(w, h),
+        "_anchorPoint": vec2(ax, ay),
+        "_id": "",
+    })
+    ui_info = add({"__type__": "cc.CompPrefabInfo", "fileId": fid("layer" + name + "ui")})
+    objs[ui]["__prefab"] = {"__id__": ui_info}
+    info = add({
+        "__type__": "cc.PrefabInfo",
+        "root": {"__id__": 1},
+        "asset": {"__id__": 0},
+        "fileId": fid("layer" + name + "node"),
+        "instance": None,
+        "targetOverrides": None,
+        "nestedPrefabInstanceRoots": None,
+    })
+    objs[node_id] = {
+        "__type__": "cc.Node",
+        "_name": name,
+        "_objFlags": 0,
+        "__editorExtras__": {},
+        "_parent": {"__id__": parent},
+        "_children": [],
+        "_active": True,
+        "_components": [{"__id__": ui}],
+        "_prefab": {"__id__": info},
+        "_lpos": vec3(x, y, 0),
+        "_lrot": quat(),
+        "_lscale": vec3(sx, sy, 1),
+        "_mobility": 0,
+        "_layer": LAYER,
+        "_euler": vec3(),
+        "_id": "",
+    }
+    objs[parent]["_children"].append({"__id__": node_id})
+    return node_id
+
+
+def ensure_bag_scroll(objs):
+    """Item grid host under spr_box. Matches the other backpack scrolls: mask on the host, view + content beside it."""
+    for obj in objs:
+        if isinstance(obj, dict) and obj.get("__type__") == "cc.Node" and obj.get("_name") == "BagScroll":
+            return False
+    box = None
+    for i, obj in enumerate(objs):
+        if isinstance(obj, dict) and obj.get("__type__") == "cc.Node" and obj.get("_name") == "spr_box":
+            box = i
+            break
+    if box is None:
+        raise SystemExit("BackpackLayer missing spr_box")
+
+    def add(obj):
+        objs.append(obj)
+        return len(objs) - 1
+
+    # Box is 560×461.76, anchor top-center. The grid sits 12px under that top and 20px in from each side.
+    scroll = append_node(objs, "BagScroll", box, 0, -12, 520, 400, 0.5, 1)
+    append_node(objs, "view", scroll, 0, 0, 520, 400, 0.5, 1)
+    content = append_node(objs, "content", scroll, 0, 0, 520, 400, 0.5, 1)
+    mask = add({
+        "__type__": "cc.Mask",
+        "_name": "",
+        "_objFlags": 0,
+        "_enabled": True,
+        "__editorExtras__": {},
+        "_type": 0,
+        "_inverted": False,
+        "_segments": 64,
+        "_alphaThreshold": 0.1,
+        "_id": "",
+        "__prefab": None,
+        "node": {"__id__": scroll},
+    })
+    mask_info = add({"__type__": "cc.CompPrefabInfo", "fileId": fid("layerBagScrollmask")})
+    objs[mask]["__prefab"] = {"__id__": mask_info}
+    objs[scroll]["_components"].append({"__id__": mask})
+    scroll_view = add({
+        "__type__": "cc.ScrollView",
+        "_name": "",
+        "_objFlags": 0,
+        "_enabled": True,
+        "__editorExtras__": {},
+        "bounceDuration": 1,
+        "brake": 0.5,
+        "elastic": True,
+        "inertia": True,
+        "_content": {"__id__": content},
+        "horizontal": False,
+        "vertical": True,
+        "_horizontalScrollBar": None,
+        "_verticalScrollBar": None,
+        "cancelInnerEvents": True,
+        "scrollEvents": [],
+        "_id": "",
+        "__prefab": None,
+        "node": {"__id__": scroll},
+    })
+    scroll_info = add({"__type__": "cc.CompPrefabInfo", "fileId": fid("layerBagScrollview")})
+    objs[scroll_view]["__prefab"] = {"__id__": scroll_info}
+    objs[scroll]["_components"].append({"__id__": scroll_view})
+    return True
+
+
 def patch_layer():
     path = os.path.join(OUT, "BackpackLayer.prefab")
     with open(path, encoding="utf-8") as handle:
         objs = json.load(handle)
     names = [obj.get("_name") for obj in objs if isinstance(obj, dict)]
+    changed = False
     if "node_portrait" in names and "lbl_talk" in names:
         print("BackpackLayer already has portrait and talk")
-        return
+    else:
+        changed = True
 
     def add(obj):
         objs.append(obj)
@@ -416,6 +535,12 @@ def patch_layer():
         objs[comp]["__prefab"] = {"__id__": info}
         objs[talk]["_components"].append({"__id__": comp})
         print("added lbl_talk", talk)
+    if ensure_bag_scroll(objs):
+        print("added BagScroll under spr_box")
+        changed = True
+    if not changed:
+        print("BackpackLayer already has portrait, talk, and BagScroll")
+        return
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(objs, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
