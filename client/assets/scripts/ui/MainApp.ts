@@ -48,6 +48,7 @@ import { CityChrome, mountCityChrome, mountCityChromePrefab, TabState } from "./
 import { formatAvatarIcon, formatCombatPower } from "./hangHud";
 import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
 import { attachPagePrefabShell, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
+import { pagePrefabShell } from "./prefabShellMap";
 import { buildHeroDetail, buildHeroList, HeroDetailPage, HeroListPage, mountHeroDetailPrefab, mountHeroListPrefab, USE_HERO_PREFAB } from "./HeroPage";
 import { buildSummonPage, mountSummonPrefab, SummonPage, USE_SUMMON_PREFAB } from "./SummonPage";
 import { buildWireSummonPage, WireSummonPage } from "./WireSummonPage";
@@ -642,16 +643,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "tab " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
-    if ((id === "hero" || id === "summon") && Session.source === "wire") {
-      // 英雄名册在本地快照里。未同步由 blockWirePage 拦。打开不看 net.state。
-      if (id === "summon") {
-        const net = this.cityNet();
-        if (net.state !== "connected") {
-          this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
-          return;
-        }
-      }
-    } else if ((id === "hero" || id === "summon" || id === "smith") && !this.ensureNet()) return;
+    if (Session.source !== "wire" && (id === "hero" || id === "summon" || id === "smith") && !this.ensureNet()) return;
     this.panels?.openRoot(id);
     this.refreshChrome();
   }
@@ -660,7 +652,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "zhuShenJiTan" || id === "midFood" || id === "qiuShangMingYue" || id === "wanShengLottery" || id === "heiWuMission" || id === "christmasGift" || id === "springOuting" || id === "christmasMission" || id === "magicTowerLevelRank" || id === "springOutingGrid" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (!pagePrefabShell(id) && Session.source === "wire" && (id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "zhuShenJiTan" || id === "midFood" || id === "qiuShangMingYue" || id === "wanShengLottery" || id === "heiWuMission" || id === "christmasGift" || id === "springOuting" || id === "christmasMission" || id === "magicTowerLevelRank" || id === "springOutingGrid" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -706,7 +698,7 @@ export class MainApp extends Component {
   private presentPage(id: string): Node {
     const page = this.buildPage(id);
     if (id === "mainline") {
-      if (!this.battleTabIsProbe()) void mountHangBattleShell(page);
+      void mountHangBattleShell(page);
       return page;
     }
     if (USE_PAGE_PREFAB_SHELL && id !== CITY_TAB) void attachPagePrefabShell(page, id);
@@ -720,6 +712,7 @@ export class MainApp extends Component {
 
   private buildPage(id: string): Node {
     if (id === "mainline") return this.mountMainline();
+    if (pagePrefabShell(id)) return uiNode("LiveShell");
     if (id === "idle") return this.mountIdle();
     if (id === "hero") return this.mountHeroList();
     if (id === "hero-detail") return this.mountHeroDetail();
@@ -862,8 +855,8 @@ export class MainApp extends Component {
     place(
       createLabel(
         slot === "activity"
-          ? "活动只读入口。新的只读活动挂这里，不铺主屏。"
-          : "系统和数据入口。拿不准的只读钮挂这里，不铺主屏。",
+          ? "有 1:1 壳的活动才打开。没有壳的不另做一页。"
+          : "有 1:1 壳的系统才打开。背包、英雄、挂机和邮件走同一张壳。",
         16,
         { color: MUTED, width: 640 }
       ),
@@ -871,7 +864,7 @@ export class MainApp extends Component {
       0,
       428
     );
-    const entries = cityHubEntries(slot);
+    const entries = cityHubEntries(slot).filter((entry) => this.hubEntryLive(entry));
     const spots = cityHubSpots(entries.length);
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
@@ -905,7 +898,7 @@ export class MainApp extends Component {
     if (entry.action === "simulateDrop") {
       GameLog.shared.info("MainApp", "click net-drop");
       if (Session.source === "wire") {
-        this.shell?.showToast("真服连接留着。这颗按钮只模拟 Mock 断线", 2200);
+        GameLog.shared.info("MainApp", "bridge stays up");
         return;
       }
       this.cityNet().simulateDrop();
@@ -1421,19 +1414,9 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 打开挂机站场。Mock 的挑战在 MainlinePage。真服点中间「战斗」发 3001。?dev=wire 才是探针页。 */
+  /** 打开挂机站场。中间「战斗」仍发 3001。空关卡也进壳。 */
   private openMainline(): void {
     GameLog.shared.info("MainApp", "click mainline");
-    if (Session.source === "wire") {
-      this.openWireMainline();
-      return;
-    }
-    if (this.blockWirePage("mainline")) return;
-    const net = NetClient.shared;
-    if (net.state !== "connected") {
-      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
-      return;
-    }
     this.openChild("mainline");
   }
 
@@ -1444,80 +1427,28 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 真服主城只显示壳。玩法仍是 Mock，打开会把金币写成假进度。日志可以看。挂机另走 3004。主线有 idx 时另走只读页。背包收到 5001 时另走只读页。邮件收到 15000 时另走只读页。英雄收到 4001 时另走只读页。召唤收到 4004 时另走只读页，不发 4002。先知召唤收到 13044 时另走只读页，不发 13041。英雄宝石收到 4101 时另走只读页，不发 4102。英雄图鉴收到 4013 时另走只读页，不发 4014。宠物信息收到 74100 时另走只读页，不发 74101、74102、74103。世界等级收到 51001 时另走只读页，不做 20101。基金列表收到 20001 时另走只读页，不发 20018，不发 20004、20010，不做 3007。超值首充收到 20012 时另走只读页，不发 20013，不做 13260。灵器数据收到 70001 时另走只读页，不发 70002、70003、70004、70005、70006，70007、70008 不当拉包请求，不做 20011。浮空岛时间收到 73001 时另走只读页，不发 73002、73003、73004，不做 20011。图腾信息收到 74300 时另走只读页，不发 74301、74302、74303。74304 是推送，勿发、勿当拉包。不做 20011。星盘数据收到 68001 时另走只读页，不发 68002、68003、68004、68006。68005 是更新星数常量，勿当拉包。不做 20011。魔方数据收到 75501 时另走只读页，不发 75502、75503、75504、75505。75506 是等级推送，勿当拉包。不做 34001。不做 20011。圣龙数据收到 59001 时另走只读页，不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。59010 是另只读，单独在 59001 之后拉包，勿与 59001 合并成一个请求，勿当写号。不做 34001。不做 20011。圣物图鉴收到 59010 时另走只读页，不发 59002、59003、59005、59006、59007、59008、59009、59011、59012、59013。勿与 59001 合并成一个请求。不做 34001。不做 20011。称号列表收到 55001 时另走只读页。Title.proto 仅 55001 读写对，同模块无写号。轻懒建，TitleService.getTitle → dao.add。无扣费，无领奖，无日刷。34001 是另只读，单独在 55001 之后拉包，勿与 55001 合并。头像列表收到 34001 时另走只读页。不发 34002 更换头像。34003 是解锁推送，勿发、勿当拉包。32001 另只读接在其后。不做 20011。轻懒建，RoleHeadPortraitService.select 无记录则 dao.add 默认解锁头。无扣费，无领奖，不改当前头像。头像框数据收到 32001 时另走只读页。不发 32002 道具激活。不发 32003 使用/切换边框。32003 是服侧推送，勿当拉包。4402 另只读接在其后。29001 有 page，硬禁。不做 20011。轻懒建免费框可接受。激活皮肤列表收到 4402 时另走只读页。不发 4403 激活、4404 替换/使用、4405 皮肤升级。4406 无实现，勿发。4401 另只读接在其后，勿合并。不做 20011。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮剔除，并可能把英雄 fashionId 置 0。只读展示。无扣费，无领奖。穿戴皮肤英雄列表收到 4401 时另走只读页。不发 4403 激活、4404 替换/使用、4405 皮肤升级。4406 无实现，勿发。与 4402 分刀，勿合并。本刀不重复拉 4402。4201 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建 HeroFashion 可接受。过期限时皮清理，并可能卸英雄 fashionId。只读展示。无扣费，无领奖，无邮件。英雄祈愿数据收到 4201 时另走只读页。不发 4202。74104 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建 hero_prayer。特权过期清字段。只读展示。无扣费，无领奖。无祈愿写入口。挂在 4401 之后，与已合刀分开发，勿合并。本刀不重复拉 4401。宠物图鉴收到 74104 时另走只读页。不发 74101 升级、74102 携带、74103 卸下。74105、74106 是背包增减推送，勿当拉包。28100 羁绊数据另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建空 PetIllustrate。无扣费，无发奖。只读展示已解锁宠物类型。无升级、携带、卸下入口。挂在 4201 之后，与 74100、4201 分开发，勿合并。本刀不重复拉 74100，也不重复拉 4201。点金收到 17000 时另走只读页。成就收到 12010 时另走只读页。竞技场收到 18001 时另走只读页。七日登录收到 22000 时另走只读页，不绑 17000。七日目标收到 21010 时另走只读页，不绑 22000，也不绑 17000。许愿池收到 27001 时另走只读页，不看 Mock 的主线 Lv10。羁绊皮肤收到 28200 时另走只读页。不发 28201 熔炼、28202 激活、28204 领任务奖、28205 使用皮肤。28203 任务列表虽只读，本刀勿夹发。不发 28101–28109、28002、28003。75601 另只读接在其后，勿合并。不做 20011。4601 有 page，硬禁。29001 有 page，硬禁。轻懒建 goddess_fashion。无扣费，无发奖，不改皮肤。只读展示。挂在 28100 之后，与 28100 分开发，勿合并。本刀不重复拉 28100。 */
+  /**
+   * 有 1:1 壳的页面直接打开。没有壳的不进只读列表，也不进离线页。
+   * 空号照样进壳，格子跟服务器同步结果，可以为空。
+   */
   private blockWirePage(id: string): boolean {
-    if (id === "achieve") return this.blockWireAchievement();
-    if (id === "buygold") return this.blockWireBuyGold();
-    if (id === "arena") return this.blockWireArena();
-    if (id === "login7") return this.blockWireSevenDay();
-    if (id === "goal7") return this.blockWireGoal7();
-    if (id === "wish") return this.blockWireWish();
-    if (id === "summon") return this.blockWireSummon();
-    if (id === "prophet") return this.blockWireProphet();
-    if (id === "jewel") return this.blockWireJewel();
-    if (id === "illustrat") return this.blockWireIllustrat();
-    if (id === "pet") return this.blockWirePet();
-    if (id === "world") return this.blockWireWorld();
-    if (id === "promotion") return this.blockWirePromotion();
-    if (id === "firstRecharge") return this.blockWireFirstRecharge();
-    if (id === "reiki") return this.blockWireReiki();
-    if (id === "islands") return this.blockWireIslands();
-    if (id === "totems") return this.blockWireTotems();
-    if (id === "astrolabe") return this.blockWireAstrolabe();
-    if (id === "tweakCube") return this.blockWireTweakCube();
-    if (id === "dragon") return this.blockWireDragon();
-    if (id === "dragonCollection") return this.blockWireDragonCollection();
-    if (id === "titleList") return this.blockWireTitleList();
-    if (id === "headPortrait") return this.blockWireHeadPortrait();
-    if (id === "borderData") return this.blockWireBorder();
-    if (id === "fashionList") return this.blockWireFashion();
-    if (id === "wornFashion") return this.blockWireWornFashion();
-    if (id === "heroPrayer") return this.blockWireHeroPrayer();
-    if (id === "petIllustrate") return this.blockWirePetIllustrate();
-    if (id === "fetterData") return this.blockWireFetter();
-    if (id === "fetterFashion") return this.blockWireFetterFashion();
-    if (id === "shenBin") return this.blockWireShenBin();
-    if (id === "occupation") return this.blockWireOccupation();
-    if (id === "roleShenBin") return this.blockWireRoleShenBin();
-    if (id === "fetterContract") return this.blockWireFetterContract();
-    if (id === "formation") return this.blockWireFormation();
-    if (id === "lineUp") return this.blockWireLineUp();
-    if (id === "runningPromotion") return this.blockWireRunningPromotion();
-    if (id === "towerReward") return this.blockWireTowerReward();
-    if (id === "heroLevelResetTimes") return this.blockWireHeroLevelResetTimes();
-    if (id === "signInList") return this.blockWireSignInList();
-    if (id === "dailyTaskList") return this.blockWireDailyTaskList();
-    if (id === "dailyWelfareList") return this.blockWireDailyWelfareList();
-    if (id === "mouthWelfareList") return this.blockWireMouthWelfareList();
-    if (id === "weekendGift") return this.blockWireWeekendGift();
-    if (id === "godRelic") return this.blockWireGodRelic();
-    if (id === "heroPalace") return this.blockWireHeroPalace();
-    if (id === "rechargeDaysB") return this.blockWireRechargeDaysB();
-    if (id === "timeTower") return this.blockWireTimeTower();
-    if (id === "spaceTimeAdventure") return this.blockWireSpaceTimeAdventure();
-    if (id === "magicTowerRoad") return this.blockWireMagicTowerRoad();
-    if (id === "qiShenQi") return this.blockWireQiShenQi();
-    if (id === "zhuShenJiTan") return this.blockWireZhuShenJiTan();
-    if (id === "midFood") return this.blockWireMidFood();
-    if (id === "qiuShangMingYue") return this.blockWireQiuShangMingYue();
-    if (id === "wanShengLottery") return this.blockWireWanShengLottery();
-    if (id === "heiWuMission") return this.blockWireHeiWuMission();
-    if (id === "christmasGift") return this.blockWireChristmasGift();
-    if (id === "springOuting") return this.blockWireSpringOuting();
-    if (id === "christmasMission") return this.blockWireChristmasMission();
-    if (id === "magicTowerLevelRank") return this.blockWireMagicTowerLevelRank();
-    if (id === "springOutingGrid") return this.blockWireSpringOutingGrid();
-    if (Session.source !== "wire") return false;
-    if (id === "city" || id === "log" || id === CITY_HUB_ACTIVITY_ID || id === CITY_HUB_MORE_ID) return false;
-    if (id === "idle") return this.blockWireIdle();
-    if (id === "mainline") return this.blockWireMainline();
-    if (id === "bag") return this.blockWireBag();
-    if (id === "mail") return this.blockWireMail();
-    if (id === "hero") return this.blockWireHero();
-    if (id === "hero-detail") return this.blockWireHeroDetail();
-    GameLog.shared.info("MainApp", "wire skip " + id);
-    this.shell?.showToast("真服这一页还没接，不会打开 Mock 页面", 2200);
+    if (this.livePage(id)) return false;
+    GameLog.shared.info("MainApp", "skip substitute " + id);
     return true;
+  }
+
+  /** 主城、日志、玩法列表，以及对照表里的 Prefab 壳。 */
+  private livePage(id: string): boolean {
+    if (id === "city" || id === "log" || id === "plays" || id === CITY_HUB_ACTIVITY_ID || id === CITY_HUB_MORE_ID) return true;
+    return pagePrefabShell(id) !== null;
+  }
+
+  /** 活动 / 更多里只留下会打开 1:1 壳的入口。公告仍是弹窗。 */
+  private hubEntryLive(entry: CityHubEntry): boolean {
+    if (entry.action === "notice") return true;
+    if (entry.action) return false;
+    if (entry.id === "log") return true;
+    return this.livePage(entry.id);
   }
 
   /** 没收到过 s2c 5001 就停在主城。空列表也算同步，放行后页面写「空背包」。 */
@@ -3938,15 +3869,7 @@ export class MainApp extends Component {
    */
   private openBag(): void {
     GameLog.shared.info("MainApp", "click bag");
-    if (Session.source === "wire") {
-      this.openWireBag();
-      return;
-    }
-    if (this.blockWirePage("bag")) return;
-    if (!this.allow("bag")) return;
-    if (!this.ensureNet()) return;
-    this.panels?.openChild("bag");
-    this.refreshChrome();
+    this.openChild("bag");
   }
 
   /** 未同步 Toast。已同步（含空背包）压入只读页，不走 bag.list，也不看 net.state。 */
@@ -3992,15 +3915,7 @@ export class MainApp extends Component {
    */
   private openMail(): void {
     GameLog.shared.info("MainApp", "click mail");
-    if (Session.source === "wire") {
-      this.openWireMail();
-      return;
-    }
-    if (this.blockWirePage("mail")) return;
-    if (!this.allow("mail")) return;
-    if (!this.ensureNet()) return;
-    this.panels?.openChild("mail");
-    this.refreshChrome();
+    this.openChild("mail");
   }
 
   /** 未同步 Toast。已同步（含空邮箱）压入只读页，不走 mail.list，不领取。 */
@@ -4048,21 +3963,9 @@ export class MainApp extends Component {
     return page.node;
   }
 
-  /** 挂机随时可进。Mock 的时长和领取在 IdlePage 里。真服走 3004，不改场景。 */
+  /** 挂机收益壳。空号也打开，格子跟 GameStore。 */
   private openIdle(): void {
     GameLog.shared.info("MainApp", "click idle");
-    if (Session.source === "wire") {
-      if (this.blockWirePage("idle")) return;
-      this.panels?.openChild("idle");
-      this.refreshChrome();
-      return;
-    }
-    if (this.blockWirePage("idle")) return;
-    const net = NetClient.shared;
-    if (net.state !== "connected") {
-      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
-      return;
-    }
     this.openChild("idle");
   }
 
@@ -4099,24 +4002,7 @@ export class MainApp extends Component {
   }
 
   private mountMainline(): Node {
-    if (Session.source === "wire") return this.mountWireMainline();
-    this.mainline?.dispose();
-    const page = buildMainlinePage({
-      level: () => this.level(),
-      roleName: () => Session.role?.name || "勇者",
-      stageId: () => this.mockStageId(),
-      showToast: (text) => this.shell?.showToast(text, 2200),
-      alive: () => this.isValid,
-      enter: (stageId) => Proto.stageEnter({ stageId }, NetClient.shared),
-      settle: (req) => Proto.stageResult(req, NetClient.shared),
-      push: (target) => Proto.stagePush({ target }, NetClient.shared),
-      onProgress: () => {
-        if (this.isValid) this.refreshHub();
-      },
-      close: () => this.back(),
-    });
-    this.mainline = page;
-    return page.node;
+    return this.mountWireMainline();
   }
 
   private mountWireMainline(): Node {
@@ -4133,7 +4019,7 @@ export class MainApp extends Component {
       },
       connected: () => this.cityNet().state === "connected",
       level: () => this.level(),
-      probe: wireDebugEnabled(),
+      probe: false,
     });
     this.mainline = page;
     return page.node;

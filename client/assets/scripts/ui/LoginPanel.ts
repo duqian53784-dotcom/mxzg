@@ -1,5 +1,5 @@
 import { BlockInputEvents, Button, Color, Label, Node, Overflow, UITransform } from "cc";
-import { findServer, GameServer, MOCK_SERVERS } from "../core/servers";
+import { GameServer, MOCK_SERVERS } from "../core/servers";
 import {
   bindClick,
   loadPrefab,
@@ -40,7 +40,7 @@ export interface LoginPanelView {
 export interface LoginPanelOptions {
   account?: string;
   serverId?: number;
-  /** 只有显式 mock 才列出本地Mock / 提审 / 正式占位。没写 mode 也走本机桥。 */
+  /** 登录只列本机桥。 */
   mode?: "mock" | "ws";
   wsUrl?: string;
 }
@@ -60,19 +60,17 @@ export function buildLoginPanel(
   handlers: LoginHandlers,
   options?: LoginPanelOptions
 ): LoginPanelView {
-  const ws = options?.mode !== "mock";
   const root = uiNode("LoginPanel");
   const rootUi = root.addComponent(UITransform);
   rootUi.setContentSize(2000, 2000);
   root.addComponent(BlockInputEvents);
   root.parent = parent;
 
-  const live = !ws && !!handlers.onLive;
-  const card = createRect("card", 560, ws || live ? 780 : 700, new Color(16, 28, 52, 245));
-  place(card, root, 0, ws || live ? 0 : 10);
+  const card = createRect("card", 560, 780, new Color(16, 28, 52, 245));
+  place(card, root, 0, 0);
 
   place(createLabel("mxzg", 48, { color: new Color(255, 228, 170, 255), width: 500 }), root, 0, 280);
-  const subtitle = ws ? "本机 WebSocket " + (options?.wsUrl || "") : "Mock 登录，不连服务器";
+  const subtitle = "本机 WebSocket " + (options?.wsUrl || "");
   place(createLabel(subtitle, 20, { color: new Color(180, 196, 220, 255), width: 520 }), root, 0, 230);
 
   place(createLabel("账号", 20, { color: new Color(180, 196, 220, 255), width: 460 }), root, 0, 180);
@@ -80,13 +78,13 @@ export function buildLoginPanel(
   place(accountField.node, root, 0, 140);
 
   place(createLabel("密码（可留空）", 20, { color: new Color(180, 196, 220, 255), width: 460 }), root, 0, 88);
-  const passwordField = createField("Mock 不校验", 460, 48, { password: true, maxLength: 16 });
+  const passwordField = createField("可留空", 460, 48, { password: true, maxLength: 16 });
   place(passwordField.node, root, 0, 48);
 
   place(createLabel("选服", 20, { color: new Color(180, 196, 220, 255), width: 460 }), root, 0, -4);
 
-  const choices = loginServers(ws);
-  let selected = pickedServer(ws, options?.serverId);
+  const choices = loginServers(true);
+  let selected = pickedServer(true, options?.serverId);
   const buttons: Array<{ server: GameServer; node: Node }> = [];
   const rowY = -52;
   const gap = 168;
@@ -106,7 +104,7 @@ export function buildLoginPanel(
   place(picked, root, 0, -108);
 
   const status = createLabel("", 20, { color: new Color(240, 240, 240, 255), width: 520 });
-  place(status, root, 0, ws ? -148 : -156);
+  place(status, root, 0, -148);
   const detail = place(
     createLabel("", 18, { color: new Color(180, 196, 220, 255), width: 520 }),
     root,
@@ -115,20 +113,9 @@ export function buildLoginPanel(
   );
 
   const enterNode = createButton("进入游戏", handlers.onEnter, 280, 56);
-  place(enterNode, root, 0, ws ? -232 : -220);
+  place(enterNode, root, 0, -232);
   const createNode = createButton("创角", handlers.onCreate, 280, 52, new Color(62, 96, 78, 255));
-  place(createNode, root, 0, ws ? -292 : -286);
-  let mockButton: Button | null = null;
-  let liveButton: Button | null = null;
-  if (ws && handlers.onMock) {
-    const mockNode = createButton("改走 Mock", handlers.onMock, 280, 48, new Color(72, 78, 96, 255), 22);
-    place(mockNode, root, 0, -352);
-    mockButton = mockNode.getComponent(Button);
-  } else if (live && handlers.onLive) {
-    const liveNode = createButton("连本机服", handlers.onLive, 280, 48, new Color(72, 78, 96, 255), 22);
-    place(liveNode, root, 0, -352);
-    liveButton = liveNode.getComponent(Button);
-  }
+  place(createNode, root, 0, -292);
 
   const enterButton = enterNode.getComponent(Button);
   const createButtonNode = createNode.getComponent(Button);
@@ -152,8 +139,6 @@ export function buildLoginPanel(
     setBusy(busy: boolean) {
       if (enterButton) enterButton.interactable = !busy;
       if (createButtonNode) createButtonNode.interactable = !busy;
-      if (mockButton) mockButton.interactable = !busy;
-      if (liveButton) liveButton.interactable = !busy;
     },
     account(): string {
       return readField(accountField);
@@ -180,15 +165,13 @@ function readField(field: TextField): string {
   return field.getValue();
 }
 
-/** 真桥登录只显示本机桥。Mock 仍是三台占位服。id 1 在表里仍叫本地Mock，这里不改那张表。 */
-function loginServers(ws: boolean): GameServer[] {
-  if (ws) return [{ id: 1, name: "本机桥" }];
-  return MOCK_SERVERS;
+/** 登录只显示本机桥。 */
+function loginServers(_ws: boolean): GameServer[] {
+  return [{ id: 1, name: "本机桥" }];
 }
 
-function pickedServer(ws: boolean, serverId?: number): GameServer {
-  if (ws) return { id: 1, name: "本机桥" };
-  return findServer(serverId ?? MOCK_SERVERS[0].id);
+function pickedServer(_ws: boolean, _serverId?: number): GameServer {
+  return { id: 1, name: "本机桥" };
 }
 
 const PREFAB_SELECTED = new Color(255, 214, 150, 255);
@@ -232,8 +215,7 @@ function bindLoginPrefab(
   handlers: LoginHandlers,
   options?: LoginPanelOptions
 ): LoginPanelView {
-  const ws = options?.mode !== "mock";
-  const subtitle = ws ? "本机 WebSocket " + (options?.wsUrl || "") : "Mock 登录，不连服务器";
+  const subtitle = "本机 WebSocket " + (options?.wsUrl || "");
   fitCardTitle(root);
   setText(requireNode(root, "Card/Subtitle"), subtitle);
 
@@ -247,8 +229,8 @@ function bindLoginPrefab(
   setText(status, "");
   setText(detail, "");
 
-  const choices = loginServers(ws);
-  let selected = pickedServer(ws, options?.serverId);
+  const choices = loginServers(true);
+  let selected = pickedServer(true, options?.serverId);
   const buttons: Array<{ server: GameServer; node: Node }> = [];
   for (let i = 0; i < MOCK_SERVERS.length; i++) {
     const slot = MOCK_SERVERS[i];
@@ -286,9 +268,7 @@ function bindLoginPrefab(
   const mockNode = requireNode(root, "Card/BtnMock");
   bindClick(enterNode, handlers.onEnter);
   bindClick(createNode, handlers.onCreate);
-  const showMock = ws && !!handlers.onMock;
-  mockNode.active = showMock;
-  if (showMock && handlers.onMock) bindClick(mockNode, handlers.onMock);
+  mockNode.active = false;
 
   return {
     root,

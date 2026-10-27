@@ -4,7 +4,6 @@
  * 进游戏仍走 Boot 原来的 onEnter。关掉本开关就回到 LoginPanel / 代码登录。
  */
 import { BlockInputEvents, Button, Color, Label, Node, Overflow, UITransform } from "cc";
-import { findServer, MOCK_SERVERS } from "../core/servers";
 import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import { isP1ProgressStatus } from "./prefabShellMap";
@@ -37,8 +36,7 @@ export async function mountP1LoginPrefab(
   const pfField = { current: null as TextField | null };
   const statusNode = place(createLabel("", 20, { color: new Color(255, 244, 210, 255), width: 640 }), host, 0, -400);
   const detailNode = place(createLabel("", 16, { color: new Color(190, 205, 225, 255), width: 640, height: 48 }), host, 0, -448);
-  const bridgeLogin = options?.mode !== "mock";
-  let selected = bridgeLogin ? { id: 1, name: "本机桥" } : findServer(options?.serverId ?? MOCK_SERVERS[0].id);
+  let selected = { id: 1, name: "本机桥" };
   let serverLabel: Node | null = null;
   let loginButton: Node | null = null;
   let busy = false;
@@ -97,12 +95,7 @@ export async function mountP1LoginPrefab(
       });
     }
 
-    place(createButton("创角", () => handlers.onCreate(), 200, 44), host, -120, -520);
-    if (bridgeLogin && handlers.onMock) {
-      place(createButton("改走 Mock", () => handlers.onMock && handlers.onMock(), 200, 44), host, 120, -520);
-    } else if (!bridgeLogin && handlers.onLive) {
-      place(createButton("连本机服", () => handlers.onLive && handlers.onLive(), 200, 44), host, 120, -520);
-    }
+    place(createButton("创角", () => handlers.onCreate(), 200, 44), host, 0, -520);
 
     void openSimple(NOTICE_PREFAB_PATH, (layer) => {
       const confirm = findDescendant(layer, "btn_confirm");
@@ -141,7 +134,7 @@ export async function mountP1LoginPrefab(
     if (!content) return;
     const tabWell = findDescendant(layer, "spr_tab_bg");
     if (tabWell) tabWell.active = false;
-    const rows = bridgeLogin ? [{ id: 1, name: "本机桥" }] : MOCK_SERVERS;
+    const rows = [{ id: 1, name: "本机桥" }];
     try {
       const cellPrefab = await loadPrefab(CHOOSE_SERVER_CELL_PATH);
       if (!content.isValid) return;

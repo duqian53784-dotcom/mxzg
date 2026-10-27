@@ -32,7 +32,6 @@ import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
 import { mockRuntimeEnabled } from "../net/transportSelect";
 import { emptyBagToast } from "../module/bag/items";
 import { formatStoreBagLine } from "../module/bag/bagView";
-import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
 import { growAnchorDelta, listWindowSpread } from "./ccbiPlace";
 import { assignContentSize, positiveUiSize, uiSize } from "./visibleFit";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
@@ -617,7 +616,7 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
     });
     const owned = GameStore.heroes();
     const roster = rosterOf(elem);
-    if (!owned) writeNamed(view, "lbl_tip", "真服英雄未同步");
+    if (!owned) writeNamed(view, "lbl_tip", "名册未到");
     else if (owned.length === 0) writeNamed(view, "lbl_tip", "空名册，没有可上阵的英雄");
     else if (roster.length === 0) writeNamed(view, "lbl_tip", "这个元素没有");
     else writeNamed(view, "lbl_tip", selected.length >= FORM_MAX ? "上阵 " + FORM_MAX + "/" + FORM_MAX : "已选 " + selected.length + "/" + FORM_MAX);
@@ -1138,7 +1137,7 @@ function fillBag(view: Node): void {
             showBagInfo(view, item);
             paint();
           })
-        : emptyBag(rows.length === 0 ? () => flashToast(view, all === null ? WIRE_BAG_UNSYNCED_TOAST : emptyBagToast()) : null);
+        : emptyBag(rows.length === 0 ? () => flashToast(view, emptyBagToast()) : null);
       place(cell, content, gridX(i, -168, BAG_PITCH_X), gridY(i, -56, BAG_PITCH_Y));
     }
     sizeScroll(content, slotRows(shown) * BAG_PITCH_Y + 24, 400 + fit.extra);

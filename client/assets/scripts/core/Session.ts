@@ -13,7 +13,7 @@ export type SessionSource = "mock" | "wire";
 export class Session {
   static account = "";
   static token = "";
-  /** 选服。默认本地Mock。 */
+  /** 选服。登录显示本机桥。 */
   static serverId = findServer(1).id;
   static serverName = findServer(1).name;
   static role: MockRole | null = null;
@@ -149,7 +149,7 @@ export function formatNameLine(): string {
 
 /**
  * 日志和创角条上的服名。
- * 服表 id 1 仍叫「本地Mock」。真桥显示「本机桥」，眼检才不会把 source=wire 看成 Mock。
+ * 登录和日志都写「本机桥」。不把选服画成离线服。
  * 不改 source，也不改服表。
  */
 export function formatServerLabel(wire = Session.source === "wire"): string {

@@ -2,7 +2,7 @@
  * 预览选传输。默认连本机游戏服，不必加 ?transport=ws。
  * 地址是本机桥 ws://127.0.0.1:13111/game ，由 scripts/start-ws-bridge.bat 转到 TCP 9902。
  * 游戏服自带的 13101 能完成握手，但不回这套帧。不要把它当默认地址。
- * Mock 只在地址显式带 ?dev=mock（或 ?transport=mock）时打开，默认关。
+ * ?dev=mock / ?transport=mock 不再离线。预览始终走这条桥。
  * 查询和安全区的 ?safe= 可以同时放在地址上。
  */
 
@@ -51,9 +51,9 @@ export function setMockRuntime(on: boolean): void {
 /** 登录页状态一行放得下。长说明写在 GameLog。 */
 export const WS_DOWN_STATUS = "服未启动，请检查启动 bat";
 export const WS_DOWN_DETAIL =
-  "ws://127.0.0.1:13111/game 指的是正在跑 Creator 预览的这台电脑。请在这台电脑上双击 scripts/start-local-all.bat，确认 9902 和 13111 都在听。用别的浏览器或另一台机器打开预览时，127.0.0.1 不是桥所在的机器，桥在听也会连不上。不要直连 13101。Mock 只在 ?dev=mock。";
+  "ws://127.0.0.1:13111/game 指的是正在跑 Creator 预览的这台电脑。请在这台电脑上双击 scripts/start-local-all.bat，确认 9902 和 13111 都在听。用别的浏览器或另一台机器打开预览时，127.0.0.1 不是桥所在的机器，桥在听也会连不上。不要直连 13101。";
 export const WS_DOWN_LOG =
-  "服或桥没接上。请先双击 scripts/start-local-all.bat，或分拆双击 scripts/start-local-server.bat，确认 TCP 9902 在听，再双击 scripts/start-ws-bridge.bat，确认 ws://127.0.0.1:13111/game 在听。127.0.0.1 是正在预览的这台电脑，不是另一台机器上的浏览器。不要直连 13101。默认连真服。Mock 只在 ?dev=mock。";
+  "服或桥没接上。请先双击 scripts/start-local-all.bat，或分拆双击 scripts/start-local-server.bat，确认 TCP 9902 在听，再双击 scripts/start-ws-bridge.bat，确认 ws://127.0.0.1:13111/game 在听。127.0.0.1 是正在预览的这台电脑，不是另一台机器上的浏览器。不要直连 13101。";
 export const WS_OPEN_STATUS = "已打开，心跳 1004 已发送";
 export const WS_OPEN_TOAST = "心跳 1004 已发送";
 export const WS_CLOSE_STATUS = "连接已关闭";
@@ -65,7 +65,7 @@ export function wsDownDetail(wsUrl: string): string {
   return (
     "没连上查询参数 ws= 里的隧道 " +
     wsUrl.trim() +
-    "。请核对预览地址栏的 ws= 仍是这条 wss，并且隧道还在听。这不是只在 127.0.0.1 上双击 start-local-all.bat 就能连上的地址。Mock 只在 ?dev=mock。"
+    "。请核对预览地址栏的 ws= 仍是这条 wss，并且隧道还在听。这不是只在 127.0.0.1 上双击 start-local-all.bat 就能连上的地址。"
   );
 }
 
@@ -74,7 +74,7 @@ export function wsDownLog(wsUrl: string): string {
   return (
     "服或桥没接上。这次地址是查询参数 ws= 的隧道 " +
     wsUrl.trim() +
-    "，不是 ws://127.0.0.1:13111/game。请确认地址栏里的 ws= 就是这条 wss，隧道要在听。不要只看 start-local-all.bat。不要直连 13101。Mock 只在 ?dev=mock。"
+    "，不是 ws://127.0.0.1:13111/game。请确认地址栏里的 ws= 就是这条 wss，隧道要在听。不要只看 start-local-all.bat。不要直连 13101。"
   );
 }
 
@@ -102,15 +102,13 @@ export function parseTransportSearch(search: string, config: { defaultKind: Tran
 }
 
 /**
- * 只有地址显式 ?dev=mock / ?transport=mock 才离线。
- * 上次记住的 mock、或 defaultKind=auto 留下的非显式 mock，都不能把预览拉回 Mock。
- * auto：先短连。没带 ?dev=mock 时失败停在「服未启动」，不进 Mock。
+ * 预览始终走桥。?dev=mock / ?transport=mock 被忽略，不离线。
+ * auto 仍先短连；失败停在「服未启动」，不改走别的传输。
  */
 export function resolveBootTransport(
   choice: TransportChoice,
   _saved: "mock" | "ws" | null | undefined
 ): { useWs: boolean; autoFallback: boolean } {
-  if (choice.kind === "mock" && choice.explicit) return { useWs: false, autoFallback: false };
   if (choice.kind === "auto") return { useWs: true, autoFallback: true };
   return { useWs: true, autoFallback: false };
 }

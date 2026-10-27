@@ -71,7 +71,6 @@ import {
   TransportChoice,
   WS_CLOSE_STATUS,
   WS_DOWN_STATUS,
-  WS_MOCK_STATUS,
   WS_OPEN_STATUS,
   wsDownDetail,
   wsDownLog,
@@ -210,7 +209,7 @@ export class Boot extends Component {
 
   /**
    * 读本页、父页、最外层和 referrer 上的预览查询。
-   * 只有显式 ?dev=mock / ?transport=mock 才 useWs=false，登录才会重建成 MOCK_SERVERS。
+   * ?dev=mock / ?transport=mock 不离线。登录始终连本机桥。
    */
   private applyPreviewTransport(): void {
     const rawSearch = readPreviewSearch();
@@ -219,8 +218,8 @@ export class Boot extends Component {
     const resolved = resolveBootTransport(this.wsChoice, stored?.transport);
     this.useWs = resolved.useWs;
     this.autoFallback = resolved.autoFallback;
-    this.devMock = this.wsChoice.kind === "mock" && this.wsChoice.explicit;
-    setMockRuntime(this.devMock && !this.useWs);
+    this.devMock = false;
+    setMockRuntime(false);
     if (stored?.transport === "mock" || stored?.transport === "ws") this.transportPref = stored.transport;
     GameLog.shared.info(
       "Boot",
@@ -237,13 +236,11 @@ export class Boot extends Component {
     );
     GameLog.shared.info(
       "Boot",
-      this.useWs
-        ? "transport=" +
-            (this.autoFallback ? "auto" : "ws") +
-            " " +
-            this.wsChoice.wsUrl +
-            " 默认连真服。Mock 仅 ?dev=mock"
-        : "transport=mock 已开 ?dev=mock。关掉该参数即回真服 " + this.wsChoice.wsUrl
+      "transport=" +
+        (this.autoFallback ? "auto" : "ws") +
+        " " +
+        this.wsChoice.wsUrl +
+        (this.wsChoice.kind === "mock" ? " 忽略 mock 参数，仍连本机桥" : " 连本机桥")
     );
   }
 
@@ -687,24 +684,12 @@ export class Boot extends Component {
     await this.onMockLoginClicked(panel, create);
   }
 
-  /** 仅 ?dev=mock 时关掉桥，改走 Mock。默认路径不进 Mock。 */
+  /** 登录不再改走离线。按钮若还在，点了也留在本机桥。 */
   private onUseMock(panel: LoginPanelView): void {
     if (!this.alive || this.entering || this.authBusy) return;
-    if (!this.devMock) {
-      GameLog.shared.info("Boot", "Mock 已关闭。地址加 ?dev=mock 才打开");
-      return;
-    }
-    this.autoFallback = false;
-    this.useWs = false;
-    setMockRuntime(true);
-    this.transportPref = "mock";
-    this.pendingStatus = null;
-    this.dropWs();
-    GameLog.shared.info("Boot", WS_MOCK_STATUS);
-    this.showBootToast(WS_MOCK_STATUS);
-    panel.setStatus(WS_MOCK_STATUS);
+    GameLog.shared.info("Boot", "离线入口已去掉，仍连 " + this.wsChoice.wsUrl);
+    panel.setStatus("仍连本机桥");
     panel.setDetail("");
-    void this.onMockLoginClicked(panel, false);
   }
 
   /** 登录或创角中途换了连接时，把进入按钮放开。组件已经拆掉就不动面板。 */
@@ -756,19 +741,6 @@ export class Boot extends Component {
       if (!already) await net.connect(url);
     } catch (err) {
       if (!this.alive || epoch !== this.wsEpoch) return false;
-      if (this.autoFallback && this.devMock) {
-        this.autoFallback = false;
-        this.useWs = false;
-        setMockRuntime(true);
-        GameLog.shared.warn("Boot", "本机桥没接上，已改走 Mock。" + messageOf(err));
-        this.dropWs();
-        this.pendingStatus = "已改走 Mock";
-        this.authBusy = false;
-        const parent = this.loginPanel && this.loginPanel.root.parent;
-        if (parent && parent.isValid) this.showLogin(parent);
-        else this.showBootToast(this.pendingStatus);
-        return false;
-      }
       this.autoFallback = false;
       GameLog.shared.error("Boot", "WebSocket 连接失败 " + messageOf(err) + "。" + wsDownLog(url));
       if (this.chrome) this.chrome.hide();

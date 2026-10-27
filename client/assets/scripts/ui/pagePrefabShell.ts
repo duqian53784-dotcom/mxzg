@@ -15,7 +15,6 @@ import { formatWireQuickBattle } from "../net/protocol/wireQuickBattle";
 import { bindHangFill, mountIdleHang } from "./idleHangView";
 import { beginHangBattle } from "./hangBattle";
 import { hangLineupReady } from "./localLineup";
-import { wireDebugEnabled } from "../net/transportSelect";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
 import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from "./chapterMapView";
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption, pinSprites } from "./screenFill";
@@ -113,12 +112,6 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     if (close) {
       liftNode(close, view);
       bindTap(close, () => setPagePrefabShellVisible(page, false));
-    }
-    // 真服路径不留「功能页」。这颗钮会把壳藏起来，底下的只读标题就露出来。
-    if (wireDebugEnabled()) {
-      const probe = createButton("功能页", () => setPagePrefabShellVisible(page, false), 96, 32);
-      probe.name = "BtnShellProbe";
-      place(probe, root, -300, 600);
     }
     const raise = () => pinShell(root, page);
     page.on(Node.EventType.CHILD_ADDED, raise);

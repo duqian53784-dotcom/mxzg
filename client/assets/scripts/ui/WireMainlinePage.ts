@@ -579,11 +579,10 @@ class WireMainlineController implements WireMainlinePage {
     return this.host.probe === true || this.probeLatched;
   }
 
-  /** 挂机左侧长按。战斗进行中不拆回放。 */
+  /** 挂机左侧长按。只读探针页已去掉，挂机壳保持打开。 */
   private openProbe(): void {
-    if (this.disposed || this.phase !== "info" || this.waiting) return;
-    this.probeLatched = true;
-    this.showInfo();
+    if (this.disposed) return;
+    GameLog.shared.info("Mainline", "探针页已去掉，挂机壳保持打开");
   }
 
   private showInfo(): void {
