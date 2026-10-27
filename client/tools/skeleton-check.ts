@@ -138,6 +138,21 @@ import {
   HANG_LOOT_BUBBLE_X,
 } from "../assets/scripts/ui/hangChrome";
 import {
+  CHAPTER_MAP_H,
+  CHAPTER_MAP_W,
+  chapterMapCloseSeat,
+  chapterMapResource,
+  chapterMapRewardSeat,
+  chapterMapStageStripY,
+  chapterMapTitleY,
+  chapterStageScreenPos,
+  extraRewardProgress,
+  extraRewardTipPath,
+  fillRewardTip,
+  mainlineClearedCount,
+} from "../assets/scripts/ui/chapterBoardPlan";
+import { HERO_DETAIL_SPINE_SEAT_Y, HERO_SKILL_BADGE_OFFSET } from "../assets/scripts/ui/heroDetailPlan";
+import {
   hangTalkAnchor,
   heroTalkCandidates,
   pickHeroTalkLan,
@@ -27147,6 +27162,57 @@ function checkCityHub(): void {
       shellSrc.indexOf("HangMissionChip") >= 0 &&
       shellSrc.indexOf("main-city_icon-main_mission") >= 0,
     "hang mission chip opens the existing chapter preview and fight still goes through the battle button"
+  );
+  const mapSrc = readFileSync(uiSource("chapterMapView.ts"), "utf8");
+  const spineSrc = readFileSync(uiSource("battleSpine.ts"), "utf8");
+  const closeSeat = chapterMapCloseSeat();
+  const rewardSeat = chapterMapRewardSeat();
+  const rewardTip = fillRewardTip("通关<font>%s</font>关领取烈焰骑士", 100);
+  assert(
+    chapterStageScreenPos(2) === null &&
+      chapterStageScreenPos(null) === null &&
+      chapterMapResource("map01") === "ui/chapter/map01" &&
+      chapterMapResource("nope") === null &&
+      chapterMapResource("map1") === null &&
+      extraRewardProgress(null, 100) === "—/100" &&
+      extraRewardProgress(100, 100) === "100/100" &&
+      extraRewardProgress(150, 100) === "100/100" &&
+      mainlineClearedCount(1, true) === 0 &&
+      mainlineClearedCount(1, false) === null &&
+      mainlineClearedCount(null, true) === null &&
+      rewardTip === "通关100关领取烈焰骑士" &&
+      extraRewardTipPath(1) === "ui/chapter-reward-lang/chapter-reward-lang_1" &&
+      extraRewardTipPath(5) === "ui/chapter-reward-lang/chapter-reward-lang_5" &&
+      extraRewardTipPath(6) === null &&
+      extraRewardTipPath(0) === null &&
+      CHAPTER_MAP_W === 640 &&
+      CHAPTER_MAP_H === 1280 &&
+      chapterMapStageStripY() === -580 &&
+      Math.abs(chapterMapTitleY() - 592.857) < 0.001 &&
+      Math.abs(closeSeat.x - 246.111) < 0.001 &&
+      Math.abs(closeSeat.y - 604.53) < 0.001 &&
+      Math.abs(rewardSeat.x + closeSeat.x) < 0.001 &&
+      rewardSeat.y === closeSeat.y &&
+      HERO_DETAIL_SPINE_SEAT_Y === 0 &&
+      HERO_SKILL_BADGE_OFFSET.x === -20 &&
+      HERO_SKILL_BADGE_OFFSET.y === 20 &&
+      fillSrc.indexOf("HeroInfoAttrLayer") >= 0 &&
+      fillSrc.indexOf("seatY") >= 0 &&
+      fillSrc.indexOf("不发穿戴协议") >= 0 &&
+      fillSrc.indexOf("不发跳关") >= 0 &&
+      fillSrc.indexOf("node_nil_skill") >= 0 &&
+      fillSrc.indexOf("3011") < 0 &&
+      spineSrc.indexOf("seatY") >= 0 &&
+      mapSrc.indexOf("不发 3011") >= 0 &&
+      mapSrc.indexOf("chapterStageScreenPos") < 0 &&
+      mapSrc.indexOf("wire.3011") < 0 &&
+      mapSrc.indexOf("encodeFrame") < 0 &&
+      mapSrc.indexOf("这一关没有同图关卡") >= 0 &&
+      shellSrc.indexOf("ChapterMapSheet") >= 0 &&
+      shellSrc.indexOf("mountChapterMap") >= 0 &&
+      shellSrc.indexOf("ChapterRewardLayer") >= 0 &&
+      shellSrc.indexOf("dressChapterRewardBoard") >= 0,
+    "chapter map lists stages without using formation slots, reward chrome stays read-only, and the hero spine seat is the equip circle"
   );
   const hangBattleSrc = readFileSync(uiSource("hangBattle.ts"), "utf8");
   assert(

@@ -112,10 +112,43 @@ export interface ChapterStageFace {
   name: string;
 }
 
+interface StageBoardRow {
+  idx: number;
+  mode: number;
+  chapterId: number;
+  missionId: number;
+  map: string;
+  name: string;
+}
+
+/** 同一张地图上的关。顺序跟表。没有屏幕坐标。 */
+export interface ChapterMapStage {
+  idx: number;
+  chapterId: number;
+  missionId: number;
+  map: string;
+  name: string;
+  /** chapter 表的「第 N 章 · 第 M 关」。对不上章号时仍用这两列。 */
+  label: string;
+}
+
+/** chapterextrareward。gate 是通关关号，也是 chapterreward.idx。 */
+export interface ChapterExtraFace {
+  gate: number;
+  chapter: number;
+  tipImg: number;
+  /** language，字体标签已去掉，%s 留给关号。 */
+  tip: string;
+  itemType: number;
+  itemNum: number;
+}
+
 const idleByIdx = new Map<number, IdleMinute>();
 const clearByIdx = new Map<number, CostStack[]>();
 const dropGroupByIdx = new Map<number, number>();
 const stageFaceByIdx = new Map<number, ChapterStageFace>();
+const stageBoardRows: StageBoardRow[] = [];
+const extraRewards: ChapterExtraFace[] = [];
 const triggersByGroup = new Map<number, number[]>();
 const itemsByTrigger = new Map<number, DropFace[]>();
 const vipRows = new Map<number, VipIdleBonus>();
@@ -135,6 +168,8 @@ export function clearRosterCatalog(): void {
   clearByIdx.clear();
   dropGroupByIdx.clear();
   stageFaceByIdx.clear();
+  stageBoardRows.length = 0;
+  extraRewards.length = 0;
   triggersByGroup.clear();
   itemsByTrigger.clear();
   vipRows.clear();
@@ -154,6 +189,7 @@ export function bindRosterCatalog(tables: Map<string, ConfigTableFile<Row>>): vo
   clearRosterCatalog();
   const text = languageMap(tables.get("language"));
   bindIdle(tables.get("chapterreward"), text);
+  bindExtraRewards(tables.get("chapterextrareward"), text);
   bindDrops(tables.get("droptrigger"), tables.get("dropgroup"));
   bindSystem(tables.get("system"));
   bindVip(tables.get("vip"));
@@ -175,6 +211,50 @@ export function chapterStageFace(stageIdx: number): ChapterStageFace | null {
   if (pick === null) return null;
   const row = stageFaceByIdx.get(pick);
   return row ? { map: row.map, name: row.name } : null;
+}
+
+/**
+ * 和当前关同一 mode、同一章、同一张 map 的关。
+ * 不读 chapter.pos。那一列是阵位，不是地图上的点。
+ */
+export function chapterMapStages(stageIdx: number): ChapterMapStage[] {
+  const pick = pickIdleIdx(stageIdx);
+  if (pick === null) return [];
+  let cur: StageBoardRow | null = null;
+  for (let i = 0; i < stageBoardRows.length; i++) {
+    if (stageBoardRows[i].idx === pick) cur = stageBoardRows[i];
+  }
+  if (!cur || !cur.map) return [];
+  const out: ChapterMapStage[] = [];
+  for (let i = 0; i < stageBoardRows.length; i++) {
+    const row = stageBoardRows[i];
+    if (row.mode !== cur.mode || row.chapterId !== cur.chapterId || row.map !== cur.map) continue;
+    out.push({
+      idx: row.idx,
+      chapterId: row.chapterId,
+      missionId: row.missionId,
+      map: row.map,
+      name: row.name,
+      label: "第" + row.chapterId + "章 · 第" + row.missionId + "关",
+    });
+  }
+  return out;
+}
+
+export function chapterExtraRewards(): ChapterExtraFace[] {
+  const out: ChapterExtraFace[] = [];
+  for (let i = 0; i < extraRewards.length; i++) {
+    const row = extraRewards[i];
+    out.push({
+      gate: row.gate,
+      chapter: row.chapter,
+      tipImg: row.tipImg,
+      tip: row.tip,
+      itemType: row.itemType,
+      itemNum: row.itemNum,
+    });
+  }
+  return out;
 }
 
 /** 当前关的每分钟收益。表还没登记时是 null，调用方留原来的句子。 */
@@ -343,6 +423,32 @@ function bindIdle(table: Table, text: Map<string, string>): void {
     const nameKey = num(row.name);
     const name = nameKey === null ? "" : plainLanguage(text.get(String(nameKey)) || "");
     stageFaceByIdx.set(idx, { map, name });
+    const mode = num(row.mode_id);
+    const chapterId = num(row.chapter_id);
+    const missionId = num(row.mission_id);
+    if (mode === null || chapterId === null || missionId === null) continue;
+    stageBoardRows.push({ idx, mode, chapterId, missionId, map, name });
+  }
+}
+
+function bindExtraRewards(table: Table, text: Map<string, string>): void {
+  for (const row of rows(table)) {
+    const gate = num(row.idx);
+    const chapter = num(row.chapter);
+    if (gate === null || gate < 1 || chapter === null) continue;
+    const stacks = parseStacks(row.reward);
+    if (stacks.length === 0) continue;
+    const tipKey = num(row.tips_lang);
+    const tip = tipKey === null ? "" : plainLanguage(text.get(String(tipKey)) || "");
+    const tipImg = num(row.tip_img);
+    extraRewards.push({
+      gate,
+      chapter,
+      tipImg: tipImg === null ? 0 : tipImg,
+      tip,
+      itemType: stacks[0].itemType,
+      itemNum: stacks[0].num,
+    });
   }
 }
 

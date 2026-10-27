@@ -17,6 +17,7 @@ import { beginHangBattle } from "./hangBattle";
 import { hangLineupReady } from "./localLineup";
 import { wireDebugEnabled } from "../net/transportSelect";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
+import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from "./chapterMapView";
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
@@ -487,7 +488,7 @@ function bindFightChrome(view: Node, root: Node, page: Node): void {
 
 const CHIP_INK = new Color(255, 236, 190, 255);
 
-/** 左上角关卡标。点开已有 ChapterPreviewLayer，不把整窗铺在地上。 */
+/** 左上角关卡标。点开章节地图，再进已有 ChapterPreviewLayer。不把整窗铺在地上。 */
 function mountHangMissionChip(root: Node, page: Node): void {
   if (!root.isValid || root.getChildByName("HangMissionChip")) return;
   const chip = uiNode("HangMissionChip");
@@ -506,13 +507,7 @@ function mountHangMissionChip(root: Node, page: Node): void {
   place(label, chip, 24, 0);
   if (!chip.getComponent(Button)) chip.addComponent(Button);
   chip.on(Button.EventType.CLICK, () => {
-    void openHangSheet(root, HANG_CHAPTER_PREFAB, (sheet) => {
-      dressChapterPreview(sheet, () => {
-        const host = sheet.parent;
-        if (host && host.isValid) host.destroy();
-        startShellFight(root, page);
-      });
-    });
+    openChapterMap(root, page);
   });
   const refresh = () => {
     if (!label.isValid) return;
@@ -521,6 +516,40 @@ function mountHangMissionChip(root: Node, page: Node): void {
   refresh();
   const off = WireSession.onSync(refresh);
   chip.once(Node.EventType.NODE_DESTROYED, () => off());
+}
+
+/** 章节地图盖在挂机上。关卡条再打开 ChapterPreviewLayer。奖励窗是 ChapterRewardLayer，不发 3011。 */
+function openChapterMap(root: Node, page: Node): void {
+  if (!root.isValid) return;
+  const old = root.getChildByName("ChapterMapSheet");
+  if (old) old.destroy();
+  const sheet = uiNode("ChapterMapSheet");
+  const ui = sheet.addComponent(UITransform);
+  ui.setContentSize(720, 1280);
+  sheet.addComponent(BlockInputEvents);
+  place(createRect("dim", 720, 1280, new Color(8, 16, 32, 170)), sheet, 0, 0);
+  const close = () => {
+    if (sheet.isValid) sheet.destroy();
+  };
+  const openPreview = (idx: number) => {
+    void openHangSheet(sheet, HANG_CHAPTER_PREFAB, (view) => {
+      dressChapterPreview(view, () => {
+        close();
+        startShellFight(root, page);
+      }, idx);
+    });
+  };
+  mountChapterMap(sheet, {
+    onStage: openPreview,
+    onReward: () => {
+      void openHangSheet(sheet, CHAPTER_REWARD_PREFAB, (view) => {
+        dressChapterRewardBoard(view, (gate) => openPreview(gate));
+      });
+    },
+    onClose: close,
+  });
+  sheet.parent = root;
+  sheet.setSiblingIndex(Math.max(0, root.children.length - 1));
 }
 
 function paintChipIcon(node: Node): void {
