@@ -11,7 +11,7 @@ export type TransportKind = "mock" | "ws" | "auto";
 export interface TransportChoice {
   kind: TransportKind;
   wsUrl: string;
-  /** 地址上写了 transport= 才是 true。没写时才看上次记住的 mock / ws。 */
+  /** 地址上写了 transport=、dev=mock，或 ws=ws(s):// 才是 true。没写时不因上次记住的 mock 改回离线。 */
   explicit: boolean;
 }
 
@@ -59,64 +59,108 @@ export const WS_OPEN_TOAST = "心跳 1004 已发送";
 export const WS_CLOSE_STATUS = "连接已关闭";
 export const WS_MOCK_STATUS = "已改走 Mock";
 
+/** wss 且不是 127.0.0.1 / localhost 时，断开文案要写明查询参数 ws= 上的隧道。 */
+export function wsDownDetail(wsUrl: string): string {
+  if (!isTunnelWsUrl(wsUrl)) return WS_DOWN_DETAIL;
+  return (
+    "没连上查询参数 ws= 里的隧道 " +
+    wsUrl.trim() +
+    "。请核对预览地址栏的 ws= 仍是这条 wss，并且隧道还在听。这不是只在 127.0.0.1 上双击 start-local-all.bat 就能连上的地址。Mock 只在 ?dev=mock。"
+  );
+}
+
+export function wsDownLog(wsUrl: string): string {
+  if (!isTunnelWsUrl(wsUrl)) return WS_DOWN_LOG;
+  return (
+    "服或桥没接上。这次地址是查询参数 ws= 的隧道 " +
+    wsUrl.trim() +
+    "，不是 ws://127.0.0.1:13111/game。请确认地址栏里的 ws= 就是这条 wss，隧道要在听。不要只看 start-local-all.bat。不要直连 13101。Mock 只在 ?dev=mock。"
+  );
+}
+
 export function parseTransportSearch(search: string, config: { defaultKind: TransportKind; wsUrl: string } = TransportConfig): TransportChoice {
   const kindRaw = queryParam(search, "transport");
   const wsRaw = queryParam(search, "ws");
+  const devRaw = queryParam(search, "dev");
+  const wsUrlGiven = isAbsoluteWsUrl(wsRaw);
   let kind: TransportKind = config.defaultKind === "auto" ? "mock" : config.defaultKind;
   let explicit = false;
-  const devRaw = queryParam(search, "dev");
-  if (kindRaw === "ws" || kindRaw === "websocket" || kindRaw === "wss") {
-    kind = "ws";
-    explicit = true;
-  } else if (kindRaw === "mock" || devRaw === "mock") {
+  // 显式 Mock 优先。除此之外，transport=ws|websocket|wss 或 ws=ws(s):// 都强制真桥。
+  if (kindRaw === "mock" || devRaw === "mock") {
     kind = "mock";
+    explicit = true;
+  } else if (kindRaw === "ws" || kindRaw === "websocket" || kindRaw === "wss" || wsUrlGiven) {
+    kind = "ws";
     explicit = true;
   } else if (kindRaw === "auto") {
     kind = "auto";
     explicit = true;
   }
   let wsUrl = config.wsUrl;
-  if (wsRaw) {
-    const scheme = wsRaw.toLowerCase();
-    if (scheme.indexOf("ws://") === 0 || scheme.indexOf("wss://") === 0) wsUrl = wsRaw;
-  }
+  if (wsUrlGiven && wsRaw) wsUrl = wsRaw.trim();
   return { kind, wsUrl, explicit };
 }
 
 /**
- * 地址优先。没写 transport 时走默认真服，不因上次记住的 mock 改回离线。
- * auto：先短连本机桥。没带 ?dev=mock 时失败停在「服未启动」，不进 Mock。
+ * 只有地址显式 ?dev=mock / ?transport=mock 才离线。
+ * 上次记住的 mock、或 defaultKind=auto 留下的非显式 mock，都不能把预览拉回 Mock。
+ * auto：先短连。没带 ?dev=mock 时失败停在「服未启动」，不进 Mock。
  */
 export function resolveBootTransport(
   choice: TransportChoice,
-  saved: "mock" | "ws" | null | undefined
+  _saved: "mock" | "ws" | null | undefined
 ): { useWs: boolean; autoFallback: boolean } {
-  if (choice.kind === "ws") return { useWs: true, autoFallback: false };
+  if (choice.kind === "mock" && choice.explicit) return { useWs: false, autoFallback: false };
   if (choice.kind === "auto") return { useWs: true, autoFallback: true };
-  if (!choice.explicit && saved === "ws") return { useWs: true, autoFallback: false };
-  return { useWs: false, autoFallback: false };
+  return { useWs: true, autoFallback: false };
 }
 
-/** 先看本页查询，再看父页面。Creator 预览若把参数放在外层地址上，这里也能读到。 */
+/** 先看本页查询，再看父页面、最外层页面和 referrer。Creator 预览若把参数放在外层地址上，这里也能读到。 */
 export function readPreviewTransport(): TransportChoice {
   return parseTransportSearch(readPreviewSearch());
 }
 
 export function readPreviewSearch(): string {
   const parts: string[] = [];
-  pushSearch(parts, readSearchOf(globalThis as LocationHost));
+  const self = globalThis as unknown;
+  collectHost(parts, globalThis as LocationHost);
   try {
     const parent = (globalThis as { parent?: LocationHost }).parent;
-    if (parent && parent !== (globalThis as unknown)) pushSearch(parts, readSearchOf(parent));
+    if (parent && parent !== self) collectHost(parts, parent);
   } catch (_err) {
-    // 父页面跨域时读不到，只用本页查询。
+    // 父页面跨域时读不到，继续看最外层和 referrer。
+  }
+  try {
+    const top = (globalThis as { top?: LocationHost }).top;
+    const parent = (globalThis as { parent?: unknown }).parent;
+    if (top && top !== self && top !== parent) collectHost(parts, top);
+  } catch (_err) {
+    // 最外层跨域时读不到。
+  }
+  try {
+    const referrer = (globalThis as { document?: { referrer?: string } }).document?.referrer;
+    if (typeof referrer === "string" && referrer) pushSearch(parts, queryFromUrl(referrer));
+  } catch (_err) {
+    // 没有 document 时跳过。
   }
   return parts.join("&");
 }
 
 interface LocationHost {
-  location?: { search?: string };
+  location?: { search?: string; href?: string };
   search?: string;
+  href?: string;
+}
+
+function collectHost(parts: string[], host: LocationHost | null | undefined): void {
+  try {
+    if (!host) return;
+    pushSearch(parts, readSearchOf(host));
+    const href = hrefOf(host);
+    if (href) pushSearch(parts, queryFromUrl(href));
+  } catch (_err) {
+    // 跨域 location 读不到这一层。
+  }
 }
 
 function pushSearch(parts: string[], search: string): void {
@@ -131,6 +175,44 @@ function readSearchOf(host: LocationHost | null | undefined): string {
   const raw = fromLoc || direct;
   if (!raw || raw === "?") return "";
   return raw.charAt(0) === "?" ? raw.slice(1) : raw;
+}
+
+function hrefOf(host: LocationHost): string {
+  const fromLoc = host.location && typeof host.location.href === "string" ? host.location.href : "";
+  if (fromLoc) return fromLoc;
+  return typeof host.href === "string" ? host.href : "";
+}
+
+/** 从整段 URL 里取出查询。也认 hash 上的 ?transport= / ws=，隧道预览有时把参数放在 hash。 */
+function queryFromUrl(url: string): string {
+  if (!url) return "";
+  const hashAt = url.indexOf("#");
+  const before = hashAt >= 0 ? url.slice(0, hashAt) : url;
+  const hash = hashAt >= 0 ? url.slice(hashAt + 1) : "";
+  const q = before.indexOf("?");
+  const search = q >= 0 ? before.slice(q + 1) : "";
+  let hashQuery = "";
+  if (hash) {
+    const hq = hash.indexOf("?");
+    if (hq >= 0) hashQuery = hash.slice(hq + 1);
+    else if (hash.indexOf("=") >= 0) hashQuery = hash;
+  }
+  if (search && hashQuery) return search + "&" + hashQuery;
+  return search || hashQuery;
+}
+
+function isAbsoluteWsUrl(value: string | null): boolean {
+  if (!value) return false;
+  const scheme = value.trim().toLowerCase();
+  return scheme.indexOf("ws://") === 0 || scheme.indexOf("wss://") === 0;
+}
+
+function isTunnelWsUrl(wsUrl: string): boolean {
+  const lower = (wsUrl || "").trim().toLowerCase();
+  if (lower.indexOf("wss://") !== 0) return false;
+  const host = lower.slice("wss://".length);
+  if (host.indexOf("127.0.0.1") === 0 || host.indexOf("localhost") === 0) return false;
+  return true;
 }
 
 export interface WireTimeoutReport {

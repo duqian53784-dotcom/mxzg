@@ -9,7 +9,11 @@
     "skipLibCheck": true,
     "noEmit": true,
     "types": [],
-    "lib": ["ES2017", "DOM"]
+    "lib": ["ES2017", "DOM"],
+    "baseUrl": ".",
+    "paths": {
+      "cc": ["./cc-runtime.ts"]
+    }
   },
   "include": ["cc-shim.d.ts", "../assets/scripts/**/*.ts"]
 }

@@ -40,7 +40,7 @@ export interface LoginPanelView {
 export interface LoginPanelOptions {
   account?: string;
   serverId?: number;
-  /** ws 时多一行地址和「改走 Mock」。默认 mock，版面与原来一致。 */
+  /** 只有显式 mock 才列出本地Mock / 提审 / 正式占位。没写 mode 也走本机桥。 */
   mode?: "mock" | "ws";
   wsUrl?: string;
 }
@@ -60,7 +60,7 @@ export function buildLoginPanel(
   handlers: LoginHandlers,
   options?: LoginPanelOptions
 ): LoginPanelView {
-  const ws = options?.mode === "ws";
+  const ws = options?.mode !== "mock";
   const root = uiNode("LoginPanel");
   const rootUi = root.addComponent(UITransform);
   rootUi.setContentSize(2000, 2000);
@@ -232,7 +232,7 @@ function bindLoginPrefab(
   handlers: LoginHandlers,
   options?: LoginPanelOptions
 ): LoginPanelView {
-  const ws = options?.mode === "ws";
+  const ws = options?.mode !== "mock";
   const subtitle = ws ? "本机 WebSocket " + (options?.wsUrl || "") : "Mock 登录，不连服务器";
   fitCardTitle(root);
   setText(requireNode(root, "Card/Subtitle"), subtitle);

@@ -1682,6 +1682,12 @@ import {
 } from "../assets/scripts/net/protocol/wireSpringOutingGrid";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import {
+  browserSkipsRemoteVersion,
+  fetchRemoteVersion,
+  remoteVersionUrls,
+  versionUrls,
+} from "../assets/scripts/core/clientVersion";
+import {
   DEFAULT_WS_URL,
   explainWireTimeout,
   parseTransportSearch,
@@ -1689,9 +1695,12 @@ import {
   resolveBootTransport,
   TransportConfig,
   wireDebugFromSearch,
+  WS_DOWN_DETAIL,
   WS_DOWN_LOG,
   WS_DOWN_STATUS,
   WS_OPEN_STATUS,
+  wsDownDetail,
+  wsDownLog,
 } from "../assets/scripts/net/transportSelect";
 import { Cmd, CmdId, P0_CMDS, Proto } from "../assets/scripts/net/protocol";
 import { PageStack } from "../assets/scripts/ui/PageStack";
@@ -2212,6 +2221,17 @@ function checkGameStore(): void {
   assert(auto.kind === "auto" && auto.explicit && autoBoot.useWs && autoBoot.autoFallback, "auto falls back");
   const mistaken = parseTransportSearch("", { defaultKind: "auto", wsUrl: DEFAULT_WS_URL });
   assert(mistaken.kind === "mock" && mistaken.explicit === false, "config auto does not change empty search");
+  const mistakenBoot = resolveBootTransport(mistaken, "mock");
+  assert(mistakenBoot.useWs && !mistakenBoot.autoFallback, "non-explicit mock does not follow a saved mock");
+  const tunnelOnly = parseTransportSearch("?ws=wss://bridge.trycloudflare.com/game", {
+    defaultKind: "auto",
+    wsUrl: DEFAULT_WS_URL,
+  });
+  assert(
+    tunnelOnly.kind === "ws" && tunnelOnly.explicit && tunnelOnly.wsUrl === "wss://bridge.trycloudflare.com/game",
+    "ws= wss forces the bridge"
+  );
+  assert(resolveBootTransport(tunnelOnly, "mock").useWs, "tunnel query ignores saved mock");
 
   GameStore.noteWire({
     enabled: false,
@@ -4802,6 +4822,34 @@ async function checkWs(): Promise<void> {
   assert(flagged.kind === "ws" && flagged.wsUrl === "ws://127.0.0.1:9", "config flag without query");
   const junk = parseTransportSearch("?transport=tcp&ws=http://127.0.0.1:13101");
   assert(junk.kind === "ws" && junk.wsUrl === DEFAULT_WS_URL, "bad scheme ignored");
+  const eye = parseTransportSearch("?transport=ws&ws=wss://bridge.trycloudflare.com/game");
+  assert(
+    eye.kind === "ws" && eye.explicit && eye.wsUrl === "wss://bridge.trycloudflare.com/game" && resolveBootTransport(eye, "mock").useWs,
+    "tunnel eye-check forces ws"
+  );
+  assert(parseTransportSearch("?transport=websocket").kind === "ws" && parseTransportSearch("?transport=wss").explicit, "ws aliases");
+  const explicitMock = parseTransportSearch("?dev=mock&transport=ws&ws=wss://bridge.trycloudflare.com/game");
+  assert(explicitMock.kind === "mock" && !resolveBootTransport(explicitMock, null).useWs, "explicit mock stays offline");
+  const tunnelUrl = "wss://bridge.trycloudflare.com/game";
+  assert(wsDownLog(DEFAULT_WS_URL) === WS_DOWN_LOG && wsDownDetail(DEFAULT_WS_URL) === WS_DOWN_DETAIL, "local down copy stays");
+  assert(
+    wsDownLog(tunnelUrl).indexOf("ws=") >= 0 &&
+      wsDownLog(tunnelUrl).indexOf(tunnelUrl) >= 0 &&
+      wsDownDetail(tunnelUrl).indexOf("ws=") >= 0 &&
+      wsDownDetail(tunnelUrl).indexOf(tunnelUrl) >= 0,
+    "tunnel down copy names the ws= url"
+  );
+  const versionSample = {
+    version: 201191119,
+    platformUrl: "http://106.52.67.63:2011/",
+    downloadUrl: "http://cdn-mxzg.anyaojs.com/release/qyzh/chn/",
+  };
+  assert(remoteVersionUrls(versionSample, true).length === 0, "browser remote version urls are empty");
+  assert(
+    remoteVersionUrls(versionSample, false).indexOf("http://106.52.67.63:2011/") >= 0 &&
+      versionUrls(versionSample).indexOf("http://cdn-mxzg.anyaojs.com/release/qyzh/chn/") >= 0,
+    "native version urls still list the http hosts"
+  );
   assert(WS_DOWN_STATUS.indexOf("服未启动") >= 0 && WS_DOWN_LOG.indexOf("start-local-server.bat") >= 0, "down copy");
   assert(WS_DOWN_LOG.indexOf("start-ws-bridge.bat") >= 0 && WS_DOWN_LOG.indexOf("13111") >= 0 && WS_DOWN_LOG.indexOf("不要直连 13101") >= 0, "down copy names the bridge");
   assert(WS_OPEN_STATUS.indexOf("1004") >= 0, "open copy");
@@ -17321,18 +17369,74 @@ async function checkWs(): Promise<void> {
   const noSend = explainWireTimeout([]);
   assert(noSend.summary.indexOf("没有发出登录 1001") >= 0 && noSend.tail.length === 0, "empty log");
 
-  const host = globalThis as { location?: { search?: string }; parent?: { location?: { search?: string } } };
+  const host = globalThis as {
+    location?: { search?: string; href?: string; protocol?: string };
+    parent?: { location?: { search?: string; href?: string; protocol?: string } };
+    top?: { location?: { search?: string; href?: string } };
+    document?: { referrer?: string };
+    XMLHttpRequest?: unknown;
+  };
   const prevLocation = host.location;
   const prevParent = host.parent;
+  const prevTop = host.top;
+  const prevDocument = host.document;
+  const prevXhr = host.XMLHttpRequest;
   try {
     host.location = { search: "" };
     host.parent = { location: { search: "?transport=ws" } };
     assert(readPreviewTransport().kind === "ws", "parent query");
     host.location = { search: "?transport=mock" };
     assert(readPreviewTransport().kind === "mock", "own query wins");
+    host.location = { search: "", href: "https://game.trycloudflare.com/index.html" };
+    host.parent = { location: { search: "", href: "https://game.trycloudflare.com/index.html" } };
+    host.top = {
+      location: {
+        search: "?transport=ws&ws=wss://bridge.trycloudflare.com/game",
+        href: "https://preview.trycloudflare.com/?transport=ws&ws=wss://bridge.trycloudflare.com/game",
+      },
+    };
+    const fromTop = readPreviewTransport();
+    assert(
+      fromTop.kind === "ws" &&
+        fromTop.explicit &&
+        fromTop.wsUrl === "wss://bridge.trycloudflare.com/game" &&
+        resolveBootTransport(fromTop, "mock").useWs,
+      "top tunnel query forces ws"
+    );
+    host.top = undefined;
+    host.parent = undefined;
+    host.location = { search: "", href: "https://game.trycloudflare.com/#?transport=ws&ws=wss://hash.trycloudflare.com/game" };
+    const fromHash = readPreviewTransport();
+    assert(fromHash.kind === "ws" && fromHash.wsUrl === "wss://hash.trycloudflare.com/game", "hash query reaches boot");
+    host.location = { search: "", href: "https://iframe.trycloudflare.com/index.html", protocol: "https:" };
+    host.document = { referrer: "https://preview.trycloudflare.com/?transport=ws&ws=wss://ref.trycloudflare.com/game" };
+    const fromRef = readPreviewTransport();
+    assert(fromRef.kind === "ws" && fromRef.wsUrl === "wss://ref.trycloudflare.com/game", "referrer query reaches boot");
+    let opened = "";
+    host.XMLHttpRequest = function XhrStub(this: { open: (method: string, url: string) => void; send: () => void }) {
+      this.open = (_method: string, url: string) => {
+        opened = url;
+      };
+      this.send = () => {
+        throw new Error("sent " + opened);
+      };
+    };
+    assert(browserSkipsRemoteVersion(), "https page skips remote version");
+    const remote = await fetchRemoteVersion(
+      {
+        version: 201191119,
+        platformUrl: "http://106.52.67.63:2011/",
+        downloadUrl: "http://cdn-mxzg.anyaojs.com/release/qyzh/chn/",
+      },
+      50
+    );
+    assert(remote === null && opened === "", "fetchRemoteVersion does not touch http version hosts");
   } finally {
     host.location = prevLocation;
     host.parent = prevParent;
+    host.top = prevTop;
+    host.document = prevDocument;
+    host.XMLHttpRequest = prevXhr;
   }
 
   const lines: string[] = [];
