@@ -21,6 +21,7 @@ import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from 
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
+import { bindVisibleRefresh, fitVisibleRoot, positiveUiSize } from "./visibleFit";
 
 /** 挂机底栏「快速战斗」。已有壳。3013 开战硬禁，只读 3012 次数。 */
 export const HANG_QUICK_PREFAB = "prefabs/ui/quick-battle/QuickBattleLayer";
@@ -127,6 +128,8 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     if (spec.fight) {
       bindHangFill(root);
       bindFightChrome(view, root, page);
+    } else if (backdrop) {
+      seatListShell(root);
     }
     GameLog.shared.info("MainApp", "page prefab shell " + id + " " + spec.path);
   } catch (err) {
@@ -346,6 +349,45 @@ export function mountCcbiView(node: Node): void {
   repairCcbiView(node);
   centerInParent(node);
   seatAboveChrome(node);
+  watchCcbiSize(node);
+}
+
+/**
+ * 第一帧 contentSize 还是 null 或 0。先按 Prefab 落点摆，尺寸活了再归一次中。
+ * 不在这里重跑 fillPageShell，格子和监听只挂一次。
+ */
+function watchCcbiSize(node: Node): void {
+  const mark = node as Node & { mxzgCcbiWait?: boolean };
+  if (mark.mxzgCcbiWait) return;
+  if (positiveUiSize(node.getComponent(UITransform))) return;
+  mark.mxzgCcbiWait = true;
+  let frames = 0;
+  const retry = () => {
+    if (!node.isValid) {
+      director.off(Director.EVENT_AFTER_UPDATE, retry);
+      return;
+    }
+    frames += 1;
+    const live = positiveUiSize(node.getComponent(UITransform));
+    if (!live && frames < 45) return;
+    director.off(Director.EVENT_AFTER_UPDATE, retry);
+    mark.mxzgCcbiWait = false;
+    if (!live) return;
+    repairCcbiView(node);
+    centerInParent(node);
+    seatAboveChrome(node);
+  };
+  director.on(Director.EVENT_AFTER_UPDATE, retry);
+  node.once(Node.EventType.NODE_DESTROYED, () => {
+    director.off(Director.EVENT_AFTER_UPDATE, retry);
+  });
+}
+
+/** 英雄/背包壳跟主城、挂机一样抵消安全区缩放，羊皮纸才落在画面里。 */
+function seatListShell(root: Node): void {
+  bindVisibleRefresh(root, () => {
+    fitVisibleRoot(root);
+  });
 }
 
 /** 九宫格按底左角归位，小按钮上的字回到盒子中心并缩进按钮。 */
@@ -364,9 +406,12 @@ function repairSlice(node: Node): void {
   const sprite = node.getComponent(Sprite);
   if (!sprite || sprite.type !== Sprite.Type.SLICED) return;
   const ui = node.getComponent(UITransform);
-  if (!ui) return;
+  const self = positiveUiSize(ui);
+  if (!ui || !self) return;
   const host = sizedAncestor(node);
   if (!host) return;
+  const hostSize = positiveUiSize(host.ui);
+  if (!hostSize) return;
   const pos = anchorIn(node, host.node);
   const shift = sliceAnchorShift(
     {
@@ -374,16 +419,16 @@ function repairSlice(node: Node): void {
       y: pos.y,
       ax: ui.anchorX,
       ay: ui.anchorY,
-      w: ui.contentSize.width,
-      h: ui.contentSize.height,
+      w: self.width,
+      h: self.height,
       sx: node.scale.x,
       sy: node.scale.y,
     },
     {
       ax: host.ui.anchorX,
       ay: host.ui.anchorY,
-      w: host.ui.contentSize.width,
-      h: host.ui.contentSize.height,
+      w: hostSize.width,
+      h: hostSize.height,
     }
   );
   if (!shift) return;
@@ -395,9 +440,10 @@ function repairLabel(node: Node): void {
   const parent = node.parent;
   if (!label || !parent) return;
   const parentUi = parent.getComponent(UITransform);
-  if (!parentUi) return;
-  const width = parentUi.contentSize.width;
-  const height = parentUi.contentSize.height;
+  const parentSize = positiveUiSize(parentUi);
+  if (!parentSize) return;
+  const width = parentSize.width;
+  const height = parentSize.height;
   const center = labelCenterInParent(parentUi.anchorX, parentUi.anchorY, width, height, node.position.x, node.position.y);
   if (center) node.setPosition(center.x, center.y, node.position.z);
   if (Math.abs(node.scale.x - 1) > 0.05 || Math.abs(node.scale.y - 1) > 0.05) return;
@@ -415,7 +461,7 @@ function sizedAncestor(node: Node): { node: Node; ui: UITransform } | null {
   let cur = node.parent;
   while (cur) {
     const ui = cur.getComponent(UITransform);
-    if (ui && ui.contentSize.width > 1 && ui.contentSize.height > 1) return { node: cur, ui };
+    if (positiveUiSize(ui)) return { node: cur, ui };
     cur = cur.parent;
   }
   return null;
@@ -439,16 +485,25 @@ export function centerInParent(node: Node): void {
     node.setPosition(0, 0, 0);
     return;
   }
-  const width = ui.contentSize.width;
-  const height = ui.contentSize.height;
-  node.setPosition(-(0.5 - ui.anchorX) * width, -(0.5 - ui.anchorY) * height, 0);
+  const size = positiveUiSize(ui);
+  if (!size) {
+    // 0×0 再套居中公式会写成 (0,0)，底左角锚点的列表就整页偏出画面。
+    // 已经写过偏移的 Prefab（背包、挂机、登录）留在原位。只有还在原点的才先按 640×960 放进中间。
+    const ax = typeof ui.anchorX === "number" ? ui.anchorX : 0.5;
+    const ay = typeof ui.anchorY === "number" ? ui.anchorY : 0.5;
+    const nearOrigin = Math.abs(node.position.x) < 1 && Math.abs(node.position.y) < 1;
+    if (nearOrigin && Math.abs(ax) < 0.01 && Math.abs(ay) < 0.01) node.setPosition(-320, -480, 0);
+    return;
+  }
+  node.setPosition(-(0.5 - ui.anchorX) * size.width, -(0.5 - ui.anchorY) * size.height, 0);
 }
 
 /** 底边落到 720×1280 底栏下面时，整页上移。短弹窗本来就在安全区里则不动。 */
 export function seatAboveChrome(node: Node): void {
   const ui = node.getComponent(UITransform);
-  if (!ui || !ui.contentSize) return;
-  const height = ui.contentSize.height;
+  const size = positiveUiSize(ui);
+  if (!ui || !size) return;
+  const height = size.height;
   const anchorY = typeof ui.anchorY === "number" ? ui.anchorY : 0.5;
   const bottom = node.position.y - height * anchorY;
   const limit = -CITY_VIEW_H / 2 + CITY_BAR_BOTTOM;
@@ -737,7 +792,8 @@ function silenceSheetMenus(root: Node): void {
     for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
     if (node.name.indexOf("Menu") < 0 && node.name !== "menu" && node.name.indexOf("menu") < 0) continue;
     const ui = node.getComponent(UITransform);
-    if (!ui || ui.contentSize.width < 400 || ui.contentSize.height < 400) continue;
+    const size = positiveUiSize(ui);
+    if (!size || size.width < 400 || size.height < 400) continue;
     ui.setContentSize(0, 0);
   }
 }

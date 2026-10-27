@@ -34,6 +34,7 @@ import {
   formatGoldLine,
   formatLevelBadge,
   formatNameLine,
+  formatServerLabel,
   formatSubLine,
   Session,
 } from "../core/Session";
@@ -607,7 +608,7 @@ export class MainApp extends Component {
         " role=" +
         (Session.role?.name || "(none)") +
         " server=" +
-        (Session.serverName || "(none)") +
+        formatServerLabel() +
         " gold=" +
         goldText +
         " diamond=" +

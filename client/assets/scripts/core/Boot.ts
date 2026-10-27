@@ -92,7 +92,7 @@ import { ErrorCode, errorText, GameError, messageOf } from "./errors";
 import { GameLog } from "./GameLog";
 import { GameStore } from "./GameStore";
 import { browserPrefStore, loadLoginPrefs, PrefStore, resolveAccount, saveLoginPrefs, TransportPref } from "./LoginPrefs";
-import { Session } from "./Session";
+import { formatServerLabel, Session } from "./Session";
 
 const { ccclass, property } = _decorator;
 
@@ -990,14 +990,15 @@ export class Boot extends Component {
   private showCreate(parent: Node, account: string, hadRole: boolean, wire = false): void {
     this.authBusy = false;
     const epoch = this.authEpoch;
+    const serverLabel = formatServerLabel(wire);
     GameLog.shared.info(
       "Boot",
-      "stage=create account=" + account + " server=" + Session.serverName + (wire ? " wire" : "")
+      "stage=create account=" + account + " server=" + serverLabel + (wire ? " wire" : "")
     );
     if (this.chrome) this.chrome.hide();
     const options = {
       account,
-      serverName: Session.serverName,
+      serverName: serverLabel,
       hadRole,
     };
     const slot: { panel: CreateRolePanelView | null } = { panel: null };
@@ -1306,7 +1307,7 @@ export class Boot extends Component {
     const name = Session.role ? Session.role.name : "";
     GameLog.shared.info(
       "Boot",
-      prefix + " " + Session.account + " " + name + " " + Session.serverName + " stage " + Session.stageId
+      prefix + " " + Session.account + " " + name + " " + formatServerLabel() + " stage " + Session.stageId
     );
   }
 
