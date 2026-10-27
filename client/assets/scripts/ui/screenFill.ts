@@ -34,7 +34,7 @@ import { emptyBagToast } from "../module/bag/items";
 import { formatStoreBagLine } from "../module/bag/bagView";
 import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
 import { growAnchorDelta, listWindowSpread } from "./ccbiPlace";
-import { positiveUiSize } from "./visibleFit";
+import { assignContentSize, positiveUiSize, uiSize } from "./visibleFit";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
@@ -113,11 +113,12 @@ export function dressHangPanel(view: Node): void {
     frame.active = true;
     maskCrystalHole(frame);
   }
+  // 先收成自定义尺寸。RAW 贴图在 originalSize 还是 null 时，引擎 setContentSize 会读 width。
+  pinSprites(view);
   seatHangButton(findNamed(view, "btn_lineup"), "战力UP", 22);
   seatHangButton(findNamed(view, "btn_battle"), "战斗", 22);
   seatHangButton(findNamed(view, "btn_speed_battle"), "高速战斗", 20);
   seatBattleGlow(findNamed(view, "btn_battle"));
-  pinSprites(view);
   let claimNote = "";
   let seenReward = GameStore.idle().rewardTime;
   let seenClaim = WireSession.claimSerial;
@@ -355,7 +356,7 @@ function writeBar(view: Node, name: string, text: string): void {
   const ui = node.getComponent(UITransform);
   if (ui) {
     ui.setAnchorPoint(1, 0.5);
-    ui.setContentSize(118, 24);
+    assignContentSize(ui, 118, 24);
   }
 }
 
@@ -365,49 +366,88 @@ function setBarFill(view: Node, barName: string, art: string, ratio: number): vo
   let fill = bar.getChildByName("HangFill");
   if (!fill) {
     const box = hangBarFillBox(art);
-    fill = sprite("HangFill", box.w, box.h, art);
-    const image = fill.getComponent(Sprite);
-    if (image) {
+    const next = sprite("HangFill", box.w, box.h, art);
+    // 进树会走装配并读 width。尺寸还是 null 时这一拍不挂，下一拍再试。
+    if (!uiSize(next.getComponent(UITransform))) {
+      next.destroy();
+      return;
+    }
+    try {
+      place(next, bar, 0, 0);
+    } catch (_err) {
+      if (next.isValid) next.destroy();
+      return;
+    }
+    fill = next;
+  }
+  const image = fill.getComponent(Sprite);
+  if (image && image.type !== Sprite.Type.FILLED && uiSize(fill.getComponent(UITransform))) {
+    try {
       image.type = Sprite.Type.FILLED;
       image.fillType = Sprite.FillType.HORIZONTAL;
       image.fillStart = 0;
+    } catch (_err) {
+      // 装配仍读到空尺寸时这一拍留普通图，下一拍再改。
     }
-    place(fill, bar, 0, 0);
   }
   const span = ratio <= 0 ? 0 : Math.min(1, ratio);
-  const image = fill.getComponent(Sprite);
-  if (image) image.fillRange = span;
+  if (image && image.type === Sprite.Type.FILLED) image.fillRange = span;
   fill.active = span > 0;
   if (barName === "spr_progress_AFK_bg") seatHangProgressSpine(bar, span);
 }
 
-/** jindutiao 铺在宝箱条上，遮罩跟着已挂机比例拉开。底下的填充图仍在。 */
+/**
+ * jindutiao 铺在宝箱条上，遮罩跟着已挂机比例拉开。底下的填充图仍在。
+ * Mask 一启用就会读 contentSize.width。节点还没挂上尺寸时先不挂遮罩，下一拍再试。
+ */
 function seatHangProgressSpine(bar: Node, ratio: number): void {
-  const ui = bar.getComponent(UITransform);
-  const width = ui && ui.contentSize && ui.contentSize.width > 0 ? ui.contentSize.width : 166;
-  const height = ui && ui.contentSize && ui.contentSize.height > 0 ? ui.contentSize.height : 36;
+  const size = uiSize(bar.getComponent(UITransform));
+  const width = size && size.width > 0 ? size.width : 166;
+  const height = size && size.height > 0 ? size.height : 36;
+  const drawn = Math.max(0, Math.round(width * ratio));
   let mask = bar.getChildByName("HangSpineMask");
   if (!mask) {
     mask = uiNode("HangSpineMask");
-    const maskUi = mask.addComponent(UITransform);
-    maskUi.setAnchorPoint(0, 0.5);
-    maskUi.setContentSize(0, height);
-    const maskComp = mask.addComponent(Mask);
-    maskComp.type = Mask.Type.GRAPHICS_RECT;
+    const created = mask.addComponent(UITransform);
+    created.setAnchorPoint(0, 0.5);
+    if (!assignContentSize(created, drawn, height)) {
+      mask.destroy();
+      return;
+    }
     mask.setPosition(-width * 0.5, 0, 0);
-    mask.parent = bar;
+    try {
+      mask.parent = bar;
+    } catch (_err) {
+      if (mask.isValid) mask.destroy();
+      return;
+    }
     const spine = uiNode("Spine");
-    spine.addComponent(UITransform).setContentSize(275, 39);
-    const scaleX = width / 275;
-    const scaleY = height / 39;
-    spine.setScale(scaleX, scaleY, 1);
+    const spineUi = spine.addComponent(UITransform);
+    assignContentSize(spineUi, 275, 39);
+    spine.setScale(width / 275, height / 39, 1);
     spine.setPosition(width * 0.5, 0, 0);
-    spine.parent = mask;
-    mountNamedSpine(spine, "jindutiao", "stand");
+    try {
+      spine.parent = mask;
+    } catch (_err) {
+      if (spine.isValid) spine.destroy();
+    }
+    if (spine.isValid && spine.parent === mask) mountNamedSpine(spine, "jindutiao", "stand");
   }
   const maskUi = mask.getComponent(UITransform);
-  if (maskUi) maskUi.setContentSize(Math.max(0, Math.round(width * ratio)), height);
-  mask.active = ratio > 0;
+  if (!assignContentSize(maskUi, drawn, height)) {
+    mask.active = false;
+    return;
+  }
+  try {
+    if (!mask.getComponent(Mask)) {
+      const maskComp = mask.addComponent(Mask);
+      maskComp.type = Mask.Type.GRAPHICS_RECT;
+    }
+    mask.active = ratio > 0;
+  } catch (_err) {
+    // onEnable 仍可能在尺寸空档读 width。条上的填充图还在，下一拍再挂遮罩。
+    if (mask.isValid) mask.active = false;
+  }
 }
 
 /** 底栏宝箱。Mock 走 idle.claim，真服只发已有的空 3005。 */
@@ -1713,7 +1753,7 @@ function seatHangButton(node: Node | null, text: string, size: number): void {
     const parentSize = positiveUiSize(node.getComponent(UITransform));
     if (box && parentSize && parentSize.width > 8) {
       box.setAnchorPoint(0.5, 0.5);
-      box.setContentSize(Math.max(8, parentSize.width - 16), Math.max(8, parentSize.height - 8));
+      assignContentSize(box, Math.max(8, parentSize.width - 16), Math.max(8, parentSize.height - 8));
     }
     label.string = text;
     label.fontSize = drawn;
@@ -1737,7 +1777,7 @@ function fitButton(node: Node | null, text: string, size: number): void {
     const parent = host.parent ? host.parent.getComponent(UITransform) : null;
     const parentSize = positiveUiSize(parent);
     if (ui && parentSize && parentSize.width > 8) {
-      ui.setContentSize(Math.max(8, parentSize.width - 8), Math.max(8, parentSize.height - 4));
+      assignContentSize(ui, Math.max(8, parentSize.width - 8), Math.max(8, parentSize.height - 4));
     }
   });
 }
@@ -1753,8 +1793,7 @@ function writeNamed(root: Node, name: string, text: string): void {
     label.overflow = Overflow.SHRINK;
     const namedSize = positiveUiSize(node.getComponent(UITransform));
     if (namedSize && namedSize.width < 40) {
-      const namedUi = node.getComponent(UITransform);
-      if (namedUi) namedUi.setContentSize(360, 64);
+      assignContentSize(node.getComponent(UITransform), 360, 64);
     }
     return;
   }
@@ -1905,7 +1944,7 @@ function writeStageTitle(view: Node, text: string, wide: boolean): void {
     label.overflow = Overflow.SHRINK;
     label.horizontalAlign = HorizontalTextAlignment.CENTER;
   }
-  if (ui) ui.setContentSize(Math.max(8, (barW - 16) / used), Math.max(8, 36 / used));
+  assignContentSize(ui, Math.max(8, (barW - 16) / used), Math.max(8, 36 / used));
 }
 
 function showSkillCard(view: Node, skillId: number, level: number | null): void {
@@ -2032,10 +2071,7 @@ function writeWrap(root: Node, name: string, text: string): void {
   label.string = text;
   label.overflow = Overflow.RESIZE_HEIGHT;
   const wrapSize = positiveUiSize(node.getComponent(UITransform));
-  if (wrapSize && wrapSize.width < 8) {
-    const wrapUi = node.getComponent(UITransform);
-    if (wrapUi) wrapUi.setContentSize(720, 0);
-  }
+  if (wrapSize && wrapSize.width < 8) assignContentSize(node.getComponent(UITransform), 720, 0);
 }
 
 function overlayHost(view: Node): Node {
@@ -2410,7 +2446,7 @@ function hideNamed(root: Node, name: string): void {
 function sprite(name: string, width: number, height: number, path: string, fallback?: string): Node {
   const node = uiNode(name);
   const ui = node.addComponent(UITransform);
-  ui.setContentSize(width, height);
+  assignContentSize(ui, width, height);
   const image = node.addComponent(Sprite);
   image.sizeMode = Sprite.SizeMode.CUSTOM;
   image.type = Sprite.Type.SIMPLE;

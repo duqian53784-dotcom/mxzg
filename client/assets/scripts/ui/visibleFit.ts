@@ -225,12 +225,19 @@ function findCanvas(node: Node): Node | null {
   return null;
 }
 
-/** contentSize 还没挂上时是 null。读 .width 会把主城第一帧打成预览错误层。 */
+/**
+ * contentSize 还没挂上时是 null。读 .width 会抛。
+ * 预览里 getter 自己也会在内部读 width，所以这里把读取包住。
+ */
 export function uiSize(ui: UITransform | null): { width: number; height: number } | null {
   if (!ui) return null;
-  const size = ui.contentSize;
-  if (!size || typeof size.width !== "number" || typeof size.height !== "number") return null;
-  return { width: size.width, height: size.height };
+  try {
+    const size = ui.contentSize;
+    if (!size || typeof size.width !== "number" || typeof size.height !== "number") return null;
+    return { width: size.width, height: size.height };
+  } catch (_err) {
+    return null;
+  }
 }
 
 /**
@@ -241,6 +248,21 @@ export function positiveUiSize(ui: UITransform | null): { width: number; height:
   const size = uiSize(ui);
   if (!size || !(size.width > 1) || !(size.height > 1)) return null;
   return size;
+}
+
+/**
+ * 尺寸还是 null 时不要调用 setContentSize。
+ * 引擎会读 _contentSize.width，挂机壳第一帧和稍后的遮罩布局都会抛 reading 'width'。
+ */
+export function assignContentSize(ui: UITransform | null, width: number, height: number): boolean {
+  if (!ui || !uiSize(ui)) return false;
+  if (!isFinite(width) || !isFinite(height)) return false;
+  try {
+    ui.setContentSize(width, height);
+  } catch (_err) {
+    return false;
+  }
+  return true;
 }
 
 /**

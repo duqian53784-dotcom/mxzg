@@ -25,7 +25,7 @@ import { mountIdleSkirmish } from "./idleHangSkirmish";
 import { mountHangTalk } from "./idleHangTalk";
 import { IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
 import { localLineupIds, onLocalLineup } from "./localLineup";
-import { bindVisibleRefresh, fitVisibleRoot } from "./visibleFit";
+import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, uiSize } from "./visibleFit";
 import { createRect, place, uiNode } from "./UiKit";
 
 export { IDLE_HANG_SPOTS };
@@ -135,7 +135,9 @@ export function bindHangFill(shell: Node): void {
     const sky = hang.getChildByName("IdleSky");
     if (sky) {
       const ui = sky.getComponent(UITransform);
-      if (ui) ui.setContentSize(width, ui.contentSize.height > 0 ? ui.contentSize.height : 420);
+      const skySize = uiSize(ui);
+      const skyH = skySize && skySize.height > 0 ? skySize.height : 420;
+      assignContentSize(ui, width, skyH);
     }
   };
   bindVisibleRefresh(shell, apply);
@@ -302,7 +304,7 @@ export function writeHangClock(bubble: Node, text: string): void {
   const ui = labelNode.getComponent(UITransform);
   if (ui) {
     ui.setAnchorPoint(0.5, 0.5);
-    ui.setContentSize(70, 28);
+    assignContentSize(ui, 70, 28);
   }
 }
 

@@ -41,6 +41,7 @@ import {
   planIdleWave,
 } from "./idleHangSkirmishPlan";
 import { place, uiNode } from "./UiKit";
+import { assignContentSize, uiSize } from "./visibleFit";
 
 const FOE_LATE_MS = 2600;
 const ENTER_STEPS = 8;
@@ -562,8 +563,8 @@ function layoutLoop(layer: Node | null, elapsed: number, speed: number): void {
 }
 
 function layerWidth(layer: Node): number {
-  const ui = layer.getComponent(UITransform);
-  const width = ui ? ui.contentSize.width : 0;
+  const size = uiSize(layer.getComponent(UITransform));
+  const width = size ? size.width : 0;
   return width >= 2 ? width : 720;
 }
 
@@ -589,9 +590,9 @@ function loopChild(layer: Node, name: string): Node {
 
 function sizeLoop(node: Node, layer: Node, width: number): void {
   const ui = node.getComponent(UITransform);
-  const parent = layer.getComponent(UITransform);
-  const height = parent && parent.contentSize.height > 0 ? parent.contentSize.height : 1280;
-  if (ui) ui.setContentSize(width, height);
+  const parentSize = uiSize(layer.getComponent(UITransform));
+  const height = parentSize && parentSize.height > 0 ? parentSize.height : 1280;
+  assignContentSize(ui, width, height);
 }
 
 function copyFrame(node: Node, frame: SpriteFrame): void {
