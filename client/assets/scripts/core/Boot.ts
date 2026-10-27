@@ -84,6 +84,7 @@ import { mountP1LoginPrefab, USER_LOGIN_PREFAB_PATH } from "../ui/p1Login";
 import { CREATE_ROLE_PREFAB_PATH, LOGIN_PREFAB_PATH } from "../ui/prefabLoad";
 import { BootChrome, BootCopy, loadBootCopy, preloadBootAsset } from "../ui/bootChrome";
 import { playLogoSplash, LogoSplashHandle } from "../ui/logoSplash";
+import { primeCityHub } from "../ui/CityHub";
 import { MainApp } from "../ui/MainApp";
 import { bindSafeArea, SafeAreaBinding } from "../ui/SafeArea";
 import { Toast } from "../ui/Toast";
@@ -448,6 +449,8 @@ export class Boot extends Component {
     }
     jobs.push(preloadBootAsset("spine/jindutiao", sp.SkeletonData));
     jobs.push(preloadBootAsset("audio/bgm-logo", AudioClip));
+    // 主城预制在加载条里解完。不要拖到进主城再和解五张底板抢管道，否则同步角色之后会黑几十秒。
+    jobs.push(primeCityHub());
     let finished = 0;
     const total = jobs.length;
     await Promise.all(

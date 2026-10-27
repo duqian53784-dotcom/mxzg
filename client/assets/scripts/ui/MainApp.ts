@@ -199,7 +199,7 @@ import { buildMainlinePage, MainlinePage } from "./MainlinePage";
 import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
 import { CityMapHandle, mountCityMap } from "./CityMap";
-import { mountCityHubPrefab, primeCityHub } from "./CityHub";
+import { mountCityHubPrefab } from "./CityHub";
 import { cityAtomRoute } from "./cityMapLayout";
 import {
   CITY_DRAG_HINT,
@@ -556,7 +556,6 @@ export class MainApp extends Component {
   }
 
   private async build(): Promise<void> {
-    primeCityHub();
     const canvas = this.resolveCanvas();
     this.shell = UIShell.mount(canvas);
     if (!ConfigDb.current) {
