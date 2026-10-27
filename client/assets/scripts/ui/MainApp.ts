@@ -771,7 +771,7 @@ export class MainApp extends Component {
     if (id === "christmasMission") return this.mountChristmasMission();
     if (id === "magicTowerLevelRank") return this.mountMagicTowerLevelRank();
     if (id === "springOutingGrid") return this.mountSpringOutingGrid();
-    if (id === "bag") return this.mountBag();
+    if (id === "bag") return uiNode("LiveShell");
     if (id === "mail") return this.mountMail();
     if (id === "smith") return this.mountSmith();
     if (id === "arena") return this.mountArena();

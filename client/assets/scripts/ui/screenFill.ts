@@ -1,9 +1,11 @@
 /**
  * 英雄列表、背包、挂机底栏、出阵，把已有贴图填进 P4 壳。
- * 格子是运行时拼的：HeroListLayer / BackpackLayer 本身没有网格。
+ * 背包格子和页签来自 BackpackItemCell / BackpackTabButton，只改字和图。
+ * 英雄列表壳本身没有网格，格子仍是运行时拼的。
  * 不造假英雄、不造假道具、不发新协议。
  */
-import { BlockInputEvents, Button, Color, director, Director, HorizontalTextAlignment, Label, Mask, Node, Overflow, resources, ScrollView, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
+import { BlockInputEvents, Button, Color, director, Director, HorizontalTextAlignment, Label, Mask, Node, Overflow, Prefab, resources, ScrollView, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
+import { ConfigDb } from "../config/ConfigLoader";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameStore, StoreBagItem, StoreHero } from "../core/GameStore";
 import { GameLog } from "../core/GameLog";
@@ -18,6 +20,7 @@ import { IDLE_UNIX_FLOOR, wireIdleCapMs, wireIdleElapsedMs } from "../net/protoc
 import { formationFaceSlot, WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/wireLineUpSave";
 import { mainFormationHeroes } from "../net/protocol/starterLineup";
 import { formatHangClock, goldPerMin, itemEveryMs } from "../module/idle/rewards";
+import { plainTalk } from "./idleHangTalkPlan";
 import { hangSpineStem } from "./idleHangRoster";
 import {
   hangBarFillBox,
@@ -49,6 +52,12 @@ const HERO_STAR_BOARD = "prefabs/ui/hero/HeroInfoUpStarLayer";
 const HERO_SKILL_BOARD = "prefabs/ui/hero/HeroSkillInfoLayer";
 const HERO_ATTR_BOARD = "prefabs/ui/hero/HeroInfoAttrLayer";
 const BAG_INFO_BOARD = "prefabs/ui/backpack/BackpackInfoLayer";
+const BAG_CELL = "prefabs/ui/backpack/BackpackItemCell";
+const BAG_TAB = "prefabs/ui/backpack/BackpackTabButton";
+/** language 5788。店员那句，不另写文案。 */
+const BAG_SHOP_LAN = "5788";
+const BAG_SHOP_FALLBACK = "欢迎光临～";
+const BAG_PORTRAIT = "shangcheng";
 const HERO_EXP_ITEM = 900101;
 const CHECK = new Color(70, 210, 90, 255);
 const NAME_GREEN = new Color(134, 236, 149, 255);
@@ -869,12 +878,10 @@ interface ParchmentFit {
 
 const NO_PARCHMENT: ParchmentFit = { extraTop: 0, extraBottom: 0, extra: 0 };
 
-/** 调试绿字气泡。正式服那句活动文案不在这张表里，空着会剩一截绿字。 */
+/** 英雄列表上的绿字调试气泡。背包的店员框是 1:1 壳，不在这里收。 */
 function hideDebugBubble(view: Node): void {
   const bubble = findNamed(view, "node_bubble");
   if (bubble) bubble.active = false;
-  const bagBubble = findNamed(view, "spr_bubble_bg");
-  if (bagBubble) bagBubble.active = false;
 }
 
 /**
@@ -908,7 +915,7 @@ function fitParchmentWindow(view: Node): ParchmentFit {
   growNode(bg, spread.extraTop, spread.extraBottom);
   const box = view.getChildByName("spr_box");
   if (box) growNode(box, spread.extraTop, spread.extraBottom);
-  const lift = ["node_title", "UIMenu_1", "node_bubble", "btn_scroll_view", "CCNode_1", "btn_lineup", "btn_astrolabe"];
+  const lift = ["node_title", "UIMenu_1", "node_bubble", "btn_scroll_view", "CCNode_1", "node_portrait", "btn_lineup", "btn_astrolabe"];
   for (let i = 0; i < lift.length; i++) nudge(view, lift[i], spread.extraTop);
   const fit = {
     extraTop: spread.extraTop,
@@ -1112,9 +1119,11 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
 function fillBag(view: Node): void {
   silenceBigMenus(view);
   hideDebugBubble(view);
+  dressBagTalk(view);
   const fit = fitParchmentWindow(view);
   let tab: BagTab = "item";
   let picked: StoreBagItem | null = null;
+  let cellPrefab: Prefab | null = null;
   const host = uiNode("BagFill");
   place(host, view, 0, 0);
   const box = findNamed(view, "spr_box");
@@ -1122,41 +1131,125 @@ function fillBag(view: Node): void {
   const tabHost = bagTabHost(view) || host;
   const tabs: Node[] = [];
   const paint = () => {
-    if (!content.isValid) return;
+    if (!content.isValid || !cellPrefab) return;
     clearChildren(content);
     for (let i = 0; i < tabs.length; i++) paintTab(tabs[i], BAG_TABS[i].id === tab);
-    const all = GameStore.bag();
     const rows = bagRows(tab);
     if (picked && !rows.some((row) => sameBag(row, picked as StoreBagItem))) picked = null;
     const shown = paddedSlots(rows.length);
     for (let i = 0; i < shown; i++) {
       const item = i < rows.length ? rows[i] : null;
-      const cell = item
-        ? bagCell(item, picked !== null && sameBag(item, picked), () => {
+      const cell = spawnPrefab(cellPrefab, content);
+      const selected = item !== null && picked !== null && sameBag(item, picked);
+      const onTap = item
+        ? () => {
             picked = item;
             showBagInfo(view, item);
             paint();
-          })
-        : emptyBag(rows.length === 0 ? () => flashToast(view, emptyBagToast()) : null);
+          }
+        : rows.length === 0
+          ? () => flashToast(view, emptyBagToast())
+          : null;
+      bindBagCell(cell, item, selected, onTap);
       place(cell, content, gridX(i, -168, BAG_PITCH_X), gridY(i, -56, BAG_PITCH_Y));
     }
     sizeScroll(content, slotRows(shown) * BAG_PITCH_Y + 24, 400 + fit.extra);
   };
-  for (let i = 0; i < BAG_TABS.length; i++) {
-    const spec = BAG_TABS[i];
-    const button = sprite(spec.title, 108, 40, "ui/common/button_btn-tab-23");
-    place(button, tabHost, tabHost === host ? 125 + i * 118 : 64 + i * 120, tabHost === host ? 590 : -24);
-    place(createLabel(spec.title, 18, { color: INK, width: 96, height: 28 }), button, 0, 0);
-    tabs.push(button);
-    if (!button.getComponent(Button)) button.addComponent(Button);
-    button.on(Button.EventType.CLICK, () => {
-      tab = spec.id;
+  void Promise.all([loadPrefab(BAG_CELL), loadPrefab(BAG_TAB)]).then(
+    (loaded) => {
+      if (!view.isValid || !tabHost.isValid) return;
+      cellPrefab = loaded[0];
+      const tabPrefab = loaded[1];
+      for (let i = 0; i < BAG_TABS.length; i++) {
+        const spec = BAG_TABS[i];
+        const button = spawnPrefab(tabPrefab, tabHost);
+        const title = findNamed(button, "lbl_title");
+        if (title) setText(title, spec.title);
+        place(button, tabHost, tabHost === host ? 125 + i * 118 : 64 + i * 120, tabHost === host ? 590 : -24);
+        tabs.push(button);
+        if (!button.getComponent(Button)) button.addComponent(Button);
+        button.on(Button.EventType.CLICK, () => {
+          tab = spec.id;
+          paint();
+        });
+      }
       paint();
-    });
-  }
-  paint();
+    },
+    (err) => {
+      GameLog.shared.warn("Bag", "背包格子预制没挂上 " + messageOf(err));
+    }
+  );
   const offBag = WireSession.onSync(() => paint());
   view.once(Node.EventType.NODE_DESTROYED, () => offBag());
+}
+
+/** 上半区店员和对话框都在 BackpackLayer 上。句子用 language 5788。 */
+function dressBagTalk(view: Node): void {
+  const mark = view as Node & { mxzgBagTalk?: boolean };
+  if (mark.mxzgBagTalk) return;
+  mark.mxzgBagTalk = true;
+  const bubble = findNamed(view, "spr_bubble_bg");
+  if (bubble) bubble.active = true;
+  const line = findNamed(view, "lbl_talk");
+  if (line) {
+    line.active = true;
+    setText(line, bagShopLine());
+  }
+  const portrait = findNamed(view, "node_portrait");
+  if (!portrait) {
+    GameLog.shared.warn("Bag", "BackpackLayer 没有 node_portrait");
+    return;
+  }
+  portrait.active = true;
+  mountNamedSpine(portrait, BAG_PORTRAIT, "act");
+}
+
+function bagShopLine(): string {
+  const db = ConfigDb.current;
+  const file = db ? db.tables.get("language") : null;
+  const rows = file && Array.isArray(file.rows) ? file.rows : [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] as { key?: unknown; value?: unknown };
+    if (row.key === undefined || String(row.key) !== BAG_SHOP_LAN) continue;
+    const text = plainTalk(typeof row.value === "string" ? row.value : "");
+    if (text) return text;
+  }
+  return BAG_SHOP_FALLBACK;
+}
+
+function bindBagCell(cell: Node, item: StoreBagItem | null, selected: boolean, onTap: (() => void) | null): void {
+  const frame = findNamed(cell, "spr_frame");
+  const icon = findNamed(cell, "spr_icon");
+  const count = findNamed(cell, "lbl_count");
+  const mark = findNamed(cell, "spr_select");
+  if (mark) mark.active = selected;
+  if (!item) {
+    if (frame) paintSprite(frame, "ui/common/other_spr-null");
+    if (icon) icon.active = false;
+    if (count) {
+      count.active = false;
+      setText(count, "");
+    }
+  } else {
+    const profile = itemProfile(item.itemType, item.itemId);
+    if (frame) paintSprite(frame, rareFrame(profile ? profile.rare : 0));
+    if (icon) {
+      icon.active = true;
+      const path = itemIconResource(item.itemType, item.itemId);
+      if (path) paintFirst(icon, [path, "ui/bag/backpack_spr-default"]);
+      else if (item.itemId) paintFirst(icon, ["ui/bag/backpack_" + item.itemId, "ui/bag/backpack_spr-default"]);
+      else paintSprite(icon, "ui/bag/backpack_spr-default");
+    }
+    if (count) {
+      const text = item.num === null ? "" : String(item.num);
+      count.active = text.length > 0;
+      setText(count, text);
+    }
+  }
+  if (onTap) {
+    if (!cell.getComponent(Button)) cell.addComponent(Button);
+    cell.on(Button.EventType.CLICK, onTap);
+  }
 }
 
 function paintFormationGrid(view: Node, elem: number, selected: number[], toggle: (id: number) => void): void {
@@ -1358,41 +1451,6 @@ function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void)
   }
   if (locked) place(sprite("lock", 28, 28, "ui/hero/hero-icon_spr-lock"), root, 28, 32);
   else if (deployed) place(sprite("battle", 28, 28, "ui/hero/hero-icon_spr-battle"), root, 30, 32);
-  if (onTap) {
-    if (!root.getComponent(Button)) root.addComponent(Button);
-    root.on(Button.EventType.CLICK, onTap);
-  }
-  return root;
-}
-
-function bagCell(item: StoreBagItem, selected: boolean, onTap: (() => void) | null): Node {
-  const root = uiNode("BagCell");
-  const ui = root.addComponent(UITransform);
-  ui.setContentSize(96, 96);
-  const profile = itemProfile(item.itemType, item.itemId);
-  place(sprite("frame", 88, 88, rareFrame(profile ? profile.rare : 0)), root, 0, 0);
-  if (selected) place(sprite("select", 96, 96, "ui/bag/backpack_spr-select"), root, 0, 0);
-  const icon = itemIconResource(item.itemType, item.itemId);
-  const face = sprite("icon", 72, 72, icon || "ui/bag/backpack_spr-default", "ui/bag/backpack_spr-default");
-  place(face, root, 0, 6);
-  if (!icon && item.itemId) paintFirst(face, ["ui/bag/backpack_" + item.itemId, "ui/bag/backpack_spr-default"]);
-  const count = item.num === null ? "" : String(item.num);
-  if (count) {
-    const label = createLabel(count, 16, { color: COUNT, width: 72, height: 22 });
-    place(label, root, 18, -30);
-  }
-  if (onTap) {
-    if (!root.getComponent(Button)) root.addComponent(Button);
-    root.on(Button.EventType.CLICK, onTap);
-  }
-  return root;
-}
-
-function emptyBag(onTap: (() => void) | null): Node {
-  const root = uiNode("BagEmpty");
-  const ui = root.addComponent(UITransform);
-  ui.setContentSize(96, 96);
-  place(sprite("frame", 88, 88, "ui/common/other_spr-null"), root, 0, 0);
   if (onTap) {
     if (!root.getComponent(Button)) root.addComponent(Button);
     root.on(Button.EventType.CLICK, onTap);
