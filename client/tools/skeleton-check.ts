@@ -3163,6 +3163,7 @@ function checkCityMap(): void {
   assert(battleSpineEarly.indexOf("yanwu") >= 0 && battleSpineEarly.indexOf('uiNode("VfxFallback")') < 0, "yanwu stays a spine stem and is not a code fallback plate");
   const hubDragSrc = readFileSync(uiSource("CityHub.ts"), "utf8");
   assert(cityMapSrc.indexOf('uiNode("CityMap")') < 0 && cityMapSrc.indexOf("不手搓一整城") >= 0, "code city is not built");
+  assert(cityMapSrc.indexOf("function placeBuilding") < 0 && cityMapSrc.indexOf("uiNode(\"spot-") < 0, "code building spots are not placed");
   assert(hubDragSrc.indexOf("TOUCH_MOVE") >= 0 && hubDragSrc.indexOf("placeBuildings") >= 0, "building drag stays on the prefab hub");
   assert(
     cityMapSrc.indexOf("loadCitySpriteFrame") >= 0 &&
@@ -26977,7 +26978,7 @@ function checkCityHub(): void {
 
   const mainApp = readFileSync(mainAppFile(), "utf8");
   const start = mainApp.indexOf("private buildCity()");
-  const end = mainApp.indexOf("private buildCityHub(");
+  const end = mainApp.indexOf("private async mountCityHub(");
   assert(start >= 0 && end > start, "buildCity is still in MainApp");
   const body = mainApp.slice(start, end);
   assert(body.indexOf("CITY_HUB_ACTIVITY_ID") < 0 && body.indexOf("CITY_HUB_MORE_ID") < 0, "city screen no longer draws the hub rectangles");
@@ -26988,8 +26989,11 @@ function checkCityHub(): void {
   assert(body.indexOf('createButton("查询阵法"') < 0, "查询阵法 is not a city-screen button");
   assert(body.indexOf('createButton("主线') < 0 && body.indexOf("openMainline()") < 0, "主线 is not placed on the city screen");
   assert(
-    mainApp.indexOf("openChild(CITY_HUB_ACTIVITY_ID)") >= 0 && mainApp.indexOf("openChild(CITY_HUB_MORE_ID)") >= 0,
-    "prefab entries still open the two hubs"
+    mainApp.indexOf("buildCityHub") < 0 &&
+      mainApp.indexOf("openChild(CITY_HUB_ACTIVITY_ID)") < 0 &&
+      mainApp.indexOf("openChild(CITY_HUB_MORE_ID)") < 0 &&
+      mainApp.indexOf("不手搓按钮页") >= 0,
+    "activity and more buttons do not open a code hub page"
   );
   assert(mainApp.indexOf("export const USE_CITY_CHROME_PREFAB = true") >= 0, "prefab chrome default stays");
   assert(mainApp.indexOf("export const USE_CITY_HUB_PREFAB = true") >= 0, "city hub prefab default stays on");
@@ -27095,7 +27099,15 @@ function checkCityHub(): void {
   assert(boot.indexOf("USE_PAGE_PREFAB_SHELL") < 0, "Boot does not grow a page prefab shell switch");
   assert(boot.indexOf("export const USE_P1_LOGIN_PREFAB = true") >= 0, "p1 login prefab default stays on");
   assert(boot.indexOf("export const USE_LOGIN_PREFAB = true") >= 0, "old login prefab stays the fallback");
-  assert(boot.indexOf("mountP1LoginPrefab") >= 0 && boot.indexOf("buildLoginPanel") >= 0, "p1 login falls back to the old panel");
+  assert(
+    boot.indexOf("mountP1LoginPrefab") >= 0 &&
+      boot.indexOf("mountLoginPrefab") >= 0 &&
+      boot.indexOf("buildLoginPanel") < 0 &&
+      boot.indexOf("不手搓登录壳") >= 0 &&
+      boot.indexOf("stageCityShell(") >= 0 &&
+      boot.indexOf("liftStagedCity()") >= 0,
+    "missing login prefab only logs and the staged city still enters"
+  );
   assert(mainApp.indexOf("USE_PAGE_PREFAB_SHELL") >= 0 && mainApp.indexOf("attachPagePrefabShell") >= 0, "page shells mount from MainApp");
   assert(mainApp.indexOf("text: tab.title") >= 0, "city bar keeps the cn title and does not prefix 锁·");
   const shellSrc = readFileSync(uiSource("pagePrefabShell.ts"), "utf8");
@@ -27660,8 +27672,16 @@ function checkCityHub(): void {
   }
   assert(existsSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "login", "UserLoginLayer.prefab")), "p1 user login prefab exists");
   assert(existsSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "login", "ChooseServerLayer.prefab")), "p1 choose server prefab exists");
-  const mainlineSrc = readFileSync(uiSource("MainlinePage.ts"), "utf8");
-  assert(mainlineSrc.indexOf("PAGE_SHELL_FIGHT") >= 0 && mainlineSrc.indexOf("onRow") >= 0, "mock mainline fight still enters the current stage");
+  assert(!existsSync(uiSource("MainlinePage.ts")), "code mainline page is not mounted");
+  assert(
+    shellSrc.indexOf("PAGE_SHELL_FIGHT") >= 0 && shellSrc.indexOf("beginHangBattle") >= 0,
+    "fight still enters the hang battle from the prefab shell"
+  );
+  assert(
+    !existsSync(uiSource("HeroPage.ts")) && !existsSync(uiSource("BagPage.ts")) && !existsSync(uiSource("MailPage.ts")),
+    "unmounted hero bag and mail code pages are gone"
+  );
+  assert(existsSync(uiSource("BattlePage.ts")) && existsSync(uiSource("hangBattle.ts")), "hang fight helper stays mounted");
   const battlePageSrc = readFileSync(uiSource("BattlePage.ts"), "utf8");
   const battleLayoutSrc = readFileSync(uiSource("battlePrefabLayout.ts"), "utf8");
   assert(!existsSync(uiSource("WireMainlinePage.ts")), "wire battle page is not mounted");
