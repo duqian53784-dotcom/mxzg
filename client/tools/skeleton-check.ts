@@ -27463,6 +27463,30 @@ function checkCityHub(): void {
       shellSrc.indexOf('uiNode("HangMissionChip")') < 0,
     "hero, chapter, and page shells come from prefabs and are not built with gridScroll or uiNode"
   );
+  const heroFillAt = fillSrc.indexOf("function fillHero");
+  const heroFillEnd = fillSrc.indexOf("function fillBag");
+  const heroFill = heroFillAt >= 0 && heroFillEnd > heroFillAt ? fillSrc.slice(heroFillAt, heroFillEnd) : "";
+  assert(
+    heroListPaths.indexOf("node_elem/elem_menu/btn_elem0") >= 0 &&
+      heroListPaths.indexOf("node_elem/elem_menu/btn_elem1") >= 0 &&
+      heroListPaths.indexOf("node_elem/elem_menu/btn_elem2") >= 0 &&
+      heroListPaths.indexOf("node_elem/elem_menu/btn_elem3") >= 0 &&
+      heroListPaths.indexOf("node_elem/elem_menu/btn_elem4") >= 0 &&
+      heroListPaths.indexOf("node_elem/elem_menu/btn_elem5") >= 0 &&
+      heroListPaths.indexOf("node_elem/elem_menu/btn_elem6") < 0 &&
+      fillSrc.indexOf('const HERO_ELEM_BUTTON = "node_elem/elem_menu/btn_elem"') >= 0 &&
+      fillSrc.indexOf("findNode(root, HERO_ELEM_BUTTON + id)") >= 0 &&
+      fillSrc.indexOf("HeroListHeroLayer 没有 ") >= 0 &&
+      fillSrc.indexOf("function heroListElem") >= 0 &&
+      fillSrc.indexOf("function holdElemScale") >= 0 &&
+      fillSrc.indexOf("WireSession.heroes") >= 0 &&
+      heroFill.indexOf("bindElemRow(node, pickElem)") >= 0 &&
+      heroFill.indexOf('sprite("elem') < 0 &&
+      heroFill.indexOf('uiNode("elem') < 0 &&
+      heroFill.indexOf('uiNode("HeroFill")') < 0 &&
+      fillSrc.indexOf('getChildByName("elem') < 0,
+    "hero list element filter binds prefab btn_elem0-5 and does not build the bar"
+  );
   assert(
     mainApp.indexOf("formatCombatPower") >= 0 &&
       mainApp.indexOf("formatAvatarIcon") >= 0 &&
