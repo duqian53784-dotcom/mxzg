@@ -3,6 +3,7 @@
  * 背包格子和页签来自 BackpackItemCell / BackpackTabButton，只改字和图。
  * 背包滚动是 BackpackLayer/spr_box/BagScroll，运行时只往 content 里放格子。
  * 英雄滚动是 HeroListHeroLayer/spr_box/HeroScroll，详情是 HeroInfoLayer/node_panel/DetailBody/DetailScroll。
+ * 元素筛选是 HeroListHeroLayer/node_elem/elem_menu/btn_elem0…5（全部、火、水、木、光、暗）。
  * 格子、页签、羊皮纸垫、弹层底都在预制里。找不到只打日志，不新造壳。
  * 不造假英雄、不造假道具、不发新协议。
  */
@@ -39,7 +40,7 @@ import { emptyBagToast } from "../module/bag/items";
 import { formatStoreBagLine } from "../module/bag/bagView";
 import { growAnchorDelta, listWindowSpread } from "./ccbiPlace";
 import { assignContentSize, positiveUiSize, uiSize } from "./visibleFit";
-import { loadPrefab, spawnPrefab } from "./prefabLoad";
+import { findNode, loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 const INK = new Color(122, 71, 45, 255);
@@ -73,8 +74,14 @@ const HERO_PITCH_X = 108;
 const HERO_PITCH_Y = 112;
 const BAG_PITCH_X = 112;
 const BAG_PITCH_Y = 104;
-/** language 2101–2105。elem 0 是筛选里的全部。 */
+/** language 2101–2105。elem 0 是筛选里的全部。六个钮是全部、火、水、木、光、暗。 */
 const ELEM_NAME = ["", "火", "水", "木", "光", "暗"];
+const HERO_ELEM_BUTTONS = 6;
+/** HeroListHeroLayer 上已有的路径。缺了只打日志，不在代码里造钮。 */
+const HERO_ELEM_ROW = "node_elem";
+const HERO_ELEM_MENU = "node_elem/elem_menu";
+const HERO_ELEM_BUTTON = "node_elem/elem_menu/btn_elem";
+const HERO_ELEM_SPRITE = "ui/hero/hero-icon_elem-";
 const GEM_PLACES = [
   { id: 1, title: "攻击" },
   { id: 2, title: "生命" },
@@ -1092,9 +1099,11 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     paintHeroBook(view, content, elem, deployed, openHero, cells, texts);
   };
   const pickElem = (id: number) => {
+    if (id === elem && tab !== "dragon") return;
     elem = id;
     if (tab === "dragon") tab = "hero";
     paint();
+    pinHeroScrollTop(board);
   };
   bindTab(view, "btn_hero", () => {
     tab = "hero";
@@ -1649,11 +1658,11 @@ function bindHeroCell(
     name.active = showName;
     if (showName && hero) setText(name, shortName(hero.name));
   }
-  const elem = profile && profile.elem !== null ? profile.elem : null;
+  const elem = hero ? heroListElem(hero) : null;
   if (elemNode) {
-    const showElem = elem !== null && elem >= 0 && elem <= 5;
+    const showElem = elem !== null;
     elemNode.active = showElem;
-    if (showElem) paintSprite(elemNode, "ui/hero/hero-icon_elem-" + elem);
+    if (showElem && elem !== null) paintSprite(elemNode, HERO_ELEM_SPRITE + elem);
   }
   const stars = hero ? hero.star ?? (profile && profile.star) ?? 0 : 0;
   const n = hero ? clamp(stars, 0, 5) : 0;
@@ -1846,14 +1855,32 @@ function placeText(prefab: Prefab | null, parent: Node, text: string, x: number,
   node.setPosition(x, y, 0);
 }
 
+/**
+ * 元素跟 herotype。类型对不上表时才用 s2c 4001 字段 6。
+ * 0 是全部。1–5 以外不当成某一系。
+ */
+function heroListElem(hero: StoreHero): number | null {
+  const profile = heroProfile(hero.heroType);
+  if (profile && profile.elem !== null && profile.elem >= 1 && profile.elem <= HERO_ELEM_BUTTONS - 1) return profile.elem;
+  if (hero.heroId === null) return null;
+  const list = WireSession.heroes;
+  if (!list) return null;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].heroId !== hero.heroId) continue;
+    const elem = list[i].elem;
+    if (elem === null || elem < 1 || elem > HERO_ELEM_BUTTONS - 1) return null;
+    return elem;
+  }
+  return null;
+}
+
 function rosterOf(elem: number): StoreHero[] {
   const all = GameStore.heroes();
   if (!all) return [];
-  if (elem === 0) return all;
+  if (elem <= 0) return all;
   const rows: StoreHero[] = [];
   for (let i = 0; i < all.length; i++) {
-    const profile = heroProfile(all[i].heroType);
-    if (profile && profile.elem === elem) rows.push(all[i]);
+    if (heroListElem(all[i]) === elem) rows.push(all[i]);
   }
   return rows;
 }
@@ -2654,22 +2681,65 @@ function markHeroTabs(view: Node, tab: "hero" | "book" | "dragon"): void {
 
 function markElem(board: Node | null, elem: number): void {
   if (!board) return;
-  for (let i = 0; i <= 5; i++) {
-    const button = findNamed(board, "btn_elem" + i);
+  for (let i = 0; i < HERO_ELEM_BUTTONS; i++) {
+    const button = findNode(board, HERO_ELEM_BUTTON + i);
     if (!button) continue;
-    const scale = i === elem ? 1 : 0.8;
-    button.setScale(scale, scale, 1);
+    holdElemScale(button, i === elem ? 1 : 0.8);
   }
 }
 
+/**
+ * 只绑预制上的六个钮。没有这条路径就打日志，不 new 节点。
+ * 选中的一颗用预制默认 0.8 放大到 1。Button 的缩放过渡会把这一档盖回去，所以关掉。
+ */
 function bindElemRow(root: Node, pick: (id: number) => void): void {
-  for (let i = 0; i <= 5; i++) {
+  const row = findNode(root, HERO_ELEM_ROW);
+  const menu = findNode(root, HERO_ELEM_MENU);
+  if (!row || !menu) {
+    GameLog.shared.warn(
+      "Hero",
+      "HeroListHeroLayer 没有 " +
+        (row ? HERO_ELEM_MENU : HERO_ELEM_ROW) +
+        "。请在 prefabs/ui/hero/HeroListHeroLayer 加上 node_elem/elem_menu/btn_elem0…5，贴图 ui/hero/hero-icon_elem-0.png … hero-icon_elem-5.png"
+    );
+  } else if (row.parent) {
+    row.active = true;
+    row.setSiblingIndex(row.parent.children.length - 1);
+  }
+  for (let i = 0; i < HERO_ELEM_BUTTONS; i++) {
     const id = i;
-    const button = findNamed(root, "btn_elem" + id) || root.getChildByName("elem" + id);
-    if (!button || (button as Node & { mxzgElem?: boolean }).mxzgElem) continue;
-    (button as Node & { mxzgElem?: boolean }).mxzgElem = true;
-    if (!button.getComponent(Button)) button.addComponent(Button);
+    const button = findNode(root, HERO_ELEM_BUTTON + id);
+    if (!button) {
+      GameLog.shared.warn("Hero", "HeroListHeroLayer 没有 " + HERO_ELEM_BUTTON + id + "，贴图 " + HERO_ELEM_SPRITE + id + ".png");
+      continue;
+    }
+    button.active = true;
+    holdElemScale(button, button.scale.x > 0.9 ? 1 : 0.8);
+    const mark = button as Node & { mxzgElem?: boolean };
+    if (mark.mxzgElem) continue;
+    mark.mxzgElem = true;
+    const click = button.getComponent(Button) || button.addComponent(Button);
+    click.transition = Button.Transition.NONE;
+    paintSprite(button, HERO_ELEM_SPRITE + id);
     button.on(Button.EventType.CLICK, () => pick(id));
+  }
+}
+
+function holdElemScale(button: Node, scale: number): void {
+  const click = button.getComponent(Button);
+  if (click) click.transition = Button.Transition.NONE;
+  button.setScale(scale, scale, 1);
+}
+
+function pinHeroScrollTop(board: Node | null): void {
+  if (!board) return;
+  const scroll = findNode(board, "spr_box/HeroScroll");
+  const scroller = scroll ? scroll.getComponent(ScrollView) : null;
+  if (!scroller || !scroller.content || typeof scroller.scrollToTop !== "function") return;
+  try {
+    scroller.scrollToTop(0);
+  } catch (_err) {
+    /* 视口尺寸还是空的时候滚顶会读 width。列表已经按元素画好。 */
   }
 }
 
