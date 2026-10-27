@@ -9,8 +9,9 @@
  * 不给每个站位写「待命」。计时泡只有 Prefab 里那一个，挪到掉落堆上。
  * 左英雄头顶另挂一句 herotalk，进真战报时藏起来。
  * main-scene_spr-drop-1 是空的蓝金匾，不拿来当掉落堆。
- * 掉落堆和计时泡抬到金环顶上面，不盖住环。
- * 站场一次铺上 idleHangStems 返回的每一只（最多三格），演武不拆它们。点「战斗」才进真战报。
+ * 掉落堆和计时泡抬到金环顶上面，不盖住环，堆心仍在金环中线。
+ * 站场按阵位号铺人（日服 getHangHeroPosition），不是按 0、1、2 往三角表里塞。
+ * 一次铺上挂机名单的每一只（最多三格），演武不拆它们。点「战斗」才进真战报。
  */
 import { Color, HorizontalTextAlignment, Label, Node, Overflow, resources, sp, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
 import { chapterStageFace } from "../config/rosterCatalog";
@@ -20,10 +21,10 @@ import { WireSession } from "../net/WireSession";
 import { mountBattleSpine, mountNamedSpine, SpineActor } from "./battleSpine";
 import { harvestCollectClip } from "./cityMapLayout";
 import { hangLootBubbleY, hangLootIconY, hangLootSpineY, HANG_LOOT_BUBBLE_X } from "./hangChrome";
-import { hangStemsForFormation, idleHangStemsFrom } from "./idleHangRoster";
+import { HangCastMember, hangCastForFormation, idleHangCastFrom } from "./idleHangRoster";
 import { mountIdleSkirmish } from "./idleHangSkirmish";
 import { mountHangTalk } from "./idleHangTalk";
-import { IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
+import { hangAllyFloorPoint, hangLinePosition, IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
 import { localLineupIds, onLocalLineup } from "./localLineup";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, uiSize } from "./visibleFit";
 import { createRect, place, uiNode } from "./UiKit";
@@ -37,21 +38,33 @@ export const IDLE_HANG_FLOOR = "ui/chapter/hang/map01_F";
 export const IDLE_HANG_MISSING_PREFAB =
   "没有整张挂机 Prefab。殿堂用 chapterreward.map 对应的 chapter/hang/mapXX_B + mapXX_F，对不上仍是 map01。底栏三钮仍是 BattlePanelLayer，不是森林 BattlePage。";
 
-/** 大理石地砖上的三格。定义在 idleHangSkirmishPlan，和怪的后沿是同一套地平面。 */
+/** 大理石地砖上的默认三格（阵位 1、4、5）。定义在 idleHangSkirmishPlan，和怪的后沿是同一套地平面。 */
 
-/** 当前 3101 / 4001。本局出阵优先。没有 MAIN 英雄时是三套默认。 */
-export function idleHangStems(): string[] {
+/** 当前 3101 / 4001。本局出阵优先。没有 MAIN 英雄时是三套默认，阵位 1、4、5。 */
+export function idleHangCast(): HangCastMember[] {
   const localIds = localLineupIds();
   if (localIds.length > 0) {
     const formation = [];
-    for (let i = 0; i < localIds.length; i++) formation.push({ heroId: localIds[i], position: i + 1 });
-    const stems = hangStemsForFormation(formation, GameStore.heroes(), IDLE_HANG_SPOTS.length);
-    if (stems.length > 0) return stems;
+    const n = localIds.length < IDLE_HANG_SPOTS.length ? localIds.length : IDLE_HANG_SPOTS.length;
+    const used: number[] = [];
+    for (let i = 0; i < n; i++) {
+      formation.push({ heroId: localIds[i], position: hangLinePosition(null, i, used) });
+    }
+    const cast = hangCastForFormation(formation, GameStore.heroes(), IDLE_HANG_SPOTS.length);
+    if (cast.length > 0) return cast;
   }
   const roster = GameStore.hangRoster();
-  if (roster) return idleHangStemsFrom(roster.lineUp, roster.heroes, IDLE_HANG_SPOTS.length);
+  if (roster) return idleHangCastFrom(roster.lineUp, roster.heroes, IDLE_HANG_SPOTS.length);
   const bag = WireSession.heroes;
-  return idleHangStemsFrom(WireSession.lineUp, bag, IDLE_HANG_SPOTS.length);
+  return idleHangCastFrom(WireSession.lineUp, bag, IDLE_HANG_SPOTS.length);
+}
+
+/** 只要套名。站位看 idleHangCast 的 position。 */
+export function idleHangStems(): string[] {
+  const cast = idleHangCast();
+  const stems: string[] = [];
+  for (let i = 0; i < cast.length; i++) stems.push(cast[i].stem);
+  return stems;
 }
 
 /** 盖在主线壳最底层。BattlePanelLayer 后挂，所以三钮在上面。阵容晚到会换站场。 */
@@ -87,17 +100,20 @@ export function mountIdleHang(parent: Node): Node {
   let painted = "";
   const paint = () => {
     if (!heroes.isValid) return;
-    const stems = idleHangStems();
-    const key = stems.join(",");
+    const cast = idleHangCast();
+    const parts: string[] = [];
+    for (let i = 0; i < cast.length; i++) parts.push(cast[i].stem + "@" + cast[i].position);
+    const key = parts.join(",");
     if (key === painted) return;
     painted = key;
     const kids = heroes.children.slice();
     for (let i = 0; i < kids.length; i++) kids[i].destroy();
     const actors: SpineActor[] = [];
-    for (let i = 0; i < stems.length; i++) {
-      const spot = IDLE_HANG_SPOTS[i];
-      const slot = place(uiNode("IdleHero"), heroes, spot.x, spot.y);
-      actors.push(mountBattleSpine(slot, stems[i], () => {
+    for (let i = 0; i < cast.length; i++) {
+      const spot = hangAllyFloorPoint(cast[i].position);
+      const slot = place(uiNode("IdleHero"), heroes, spot.x, spot.y) as Node & { mxzgHangPos?: number };
+      slot.mxzgHangPos = cast[i].position;
+      actors.push(mountBattleSpine(slot, cast[i].stem, () => {
         if (slot.isValid) slot.active = false;
       }, { face: spot.face }));
     }
@@ -169,7 +185,7 @@ const LOOT_AT: ReadonlyArray<{ x: number; y: number; w: number }> = [
 
 /**
  * 用已有金币、水晶、宝箱和掉落图标叠一堆。没有图标时不留节点。
- * 不使用 main-scene_spr-drop-1。
+ * 不使用 main-scene_spr-drop-1。堆心在金环中线，高度用 hangLootIconY，不跟英雄脚叠在一起。
  */
 export function paintIdleLoot(hang: Node, icons: string[]): void {
   const key = icons.join("|");

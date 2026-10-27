@@ -99,8 +99,10 @@ import {
 } from "../assets/scripts/ui/battlePresentation";
 import { plantHangLocomotion, SPINE_RUNTIME_VERSION, upgradeSpine37Json } from "../assets/scripts/ui/spineUpgrade";
 import {
+  hangAllyFloorPoint,
   IDLE_HANG_SPOTS,
   IDLE_SKIRMISH_HITS,
+  jpHangHeroPosition,
   IDLE_SKIRMISH_SPOTS,
   idleFoeEnterX,
   idleHangLoopOffset,
@@ -1328,7 +1330,7 @@ import {
   planStarterChallenge,
   STARTER_LINEUP_NOTE,
 } from "../assets/scripts/net/protocol/starterLineup";
-import { idleHangDefaultStems, idleHangStemsFrom } from "../assets/scripts/ui/idleHangRoster";
+import { idleHangDefaultCast, idleHangDefaultStems, idleHangStemsFrom } from "../assets/scripts/ui/idleHangRoster";
 import {
   decodeWireRunningPromotion,
   formatWireRunningPromotionHead,
@@ -16383,6 +16385,11 @@ async function checkWs(): Promise<void> {
     "camp 1 on a shared pos hits the enemy head, floats, and skill banner without a demo beat"
   );
   assert(idleHangDefaultStems(3).join(",") === WIRE_SPINE_ALLY_STEMS.join(","), "empty hang still uses the three default spines");
+  const defaultCast = idleHangDefaultCast(3);
+  assert(
+    defaultCast.length === 3 && defaultCast[0].position === 1 && defaultCast[1].position === 4 && defaultCast[2].position === 5,
+    "empty hang stands the three defaults on lineup positions 1, 4 and 5"
+  );
   assert(mainFormationHeroes(null).length === 0 && idleHangStemsFrom(null, null, 3).join(",") === WIRE_SPINE_ALLY_STEMS.join(","), "missing lineup keeps the hang defaults");
   assert(
     idleHangStemsFrom({ rows: [] }, [], 3).join(",") === WIRE_SPINE_ALLY_STEMS.join(","),
@@ -27225,7 +27232,7 @@ function checkCityHub(): void {
       hangSrc.indexOf("map01_F") >= 0 &&
       hangSrc.indexOf("不是森林 BattlePage") >= 0 &&
       hangSrc.indexOf("mountIdleHang") >= 0 &&
-      hangSrc.indexOf("idleHangStemsFrom") >= 0 &&
+      hangSrc.indexOf("idleHangCastFrom") >= 0 &&
       hangSrc.indexOf("slot.active = false") >= 0,
     "battle tab hang scene uses the marble hall and does not pretend BattlePage is the idle shell"
   );
@@ -27966,10 +27973,38 @@ function checkIdleSkirmish(): void {
       IDLE_SKIRMISH_SPOTS[2].face === -1 &&
       IDLE_HANG_SPOTS.length === 3 &&
       IDLE_HANG_SPOTS[0].face === 1 &&
+      IDLE_HANG_SPOTS[1].face === 1 &&
       IDLE_HANG_SPOTS[2].face === 1 &&
+      IDLE_HANG_SPOTS[0].x < 0 &&
+      IDLE_HANG_SPOTS[1].x < 0 &&
+      IDLE_HANG_SPOTS[2].x < 0 &&
+      IDLE_HANG_SPOTS[0].x > IDLE_HANG_SPOTS[1].x &&
+      IDLE_HANG_SPOTS[1].x === IDLE_HANG_SPOTS[2].x &&
+      IDLE_HANG_SPOTS[1].y > IDLE_HANG_SPOTS[0].y &&
+      IDLE_HANG_SPOTS[0].y > IDLE_HANG_SPOTS[2].y &&
       IDLE_HANG_SPOTS[2].x < IDLE_SKIRMISH_SPOTS[0].x &&
-      IDLE_HANG_SPOTS[1].y < IDLE_SKIRMISH_SPOTS[1].y,
-    "idle foes stand on the right and face the allies, allies face the foes"
+      IDLE_HANG_SPOTS[0].x === hangAllyFloorPoint(1).x &&
+      IDLE_HANG_SPOTS[1].y === hangAllyFloorPoint(4).y &&
+      IDLE_HANG_SPOTS[2].y === hangAllyFloorPoint(5).y,
+    "idle foes stand on the right and face the allies; allies use hang slots 1, 4 and 5 on the left"
+  );
+  const jpOne = jpHangHeroPosition(1, 720, 1280, true);
+  const jpFour = jpHangHeroPosition(4, 720, 1280, true);
+  const jpFive = jpHangHeroPosition(5, 720, 1280, true);
+  const jpFoe = jpHangHeroPosition(1, 720, 1280, false);
+  assert(
+    jpFour.x < jpOne.x &&
+      jpFour.x === jpFive.x &&
+      jpFour.y > jpFive.y &&
+      jpFoe.x > jpOne.x &&
+      hangAllyFloorPoint(1).x < 0 &&
+      hangAllyFloorPoint(4).x === hangAllyFloorPoint(5).x &&
+      hangAllyFloorPoint(4).x < hangAllyFloorPoint(1).x &&
+      hangAllyFloorPoint(4).y > hangAllyFloorPoint(1).y &&
+      hangAllyFloorPoint(1).y > hangAllyFloorPoint(5).y &&
+      hangAllyFloorPoint(5).y <= 120 &&
+      hangAllyFloorPoint(5).y > hangLootIconY(),
+    "hang allies follow getHangHeroPosition and stand left of the loot pile"
   );
   const hallStep = idleHangLoopOffset(1000, 720, IDLE_HALL_SCROLL_PX);
   const skyStep = idleHangLoopOffset(1000, 720, IDLE_SKY_SCROLL_PX);
@@ -28072,7 +28107,7 @@ function checkIdleSkirmish(): void {
       skirmishSrc.indexOf("idleSkirmishMayStrike") >= 0 &&
       skirmishSrc.indexOf("hangSkillVfx") >= 0 &&
       skirmishSrc.indexOf("skip swing, foe not visible") >= 0 &&
-      hangSrc.indexOf("stems.length") >= 0 &&
+      hangSrc.indexOf("cast.length") >= 0 &&
       hangSrc.indexOf("slice(0, 1)") < 0,
     "skirmish runs in place, scrolls only while marching, and hits the visible foe"
   );

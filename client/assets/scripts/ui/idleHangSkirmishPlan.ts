@@ -1,6 +1,10 @@
 /**
  * 挂机演武的纯规则。不碰场景，也不发协议。
- * 敌人格子和挂机真战斗的后侧三格是同一组。
+ * 我方站位移植日服 BattleUtils.getHangHeroPosition（挂机 isMirror，人在左边）。
+ * 下标是阵容 position（协议站位 1..9），不是把人按 0、1、2 塞进一张固定三角表。
+ * 不是 BattlePage battlePrefabLayout（那是左敌右我），也不是 c2s 3100 的写入格子。
+ * 没有阵位时，三只默认英雄占阵位 1、4、5。坐标由公式收到地砖左半边，不另造一张和公式无关的六格表。
+ * 敌方仍用右侧三格。日服非镜像公式把怪排在同一高度，还会走出右缘，所以不替换这三格。
  */
 
 /**
@@ -9,24 +13,150 @@
  */
 export const IDLE_FLOOR_TOP = 120;
 
-/** 地砖前排。左、前、右都在我方，朝右对着敌方。 */
-export const IDLE_HANG_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1 }> = [
-  { x: -150, y: -30, face: 1 },
-  { x: 10, y: -120, face: 1 },
-  { x: 150, y: -10, face: 1 },
+/** 日服挂机层。底左角，和挂机壳的设计分辨率同一套 720×1280。 */
+export const HANG_LAYER_W = 720;
+export const HANG_LAYER_H = 1280;
+
+/**
+ * 没有阵位时占的三格，也是战报只有顺序下标时的三格。
+ * 日服公式按阵位号分列分行：floor(位号/2) 越大越靠左，位号大于 1 时偶数高、奇数低。
+ * 1 在近列中行，4 在远列高行，5 和 4 同列、在低行。三格都在左半边，没有人站到 x≥0。
+ */
+export const IDLE_HANG_DEFAULT_POSITIONS = [1, 4, 5] as const;
+
+/**
+ * 左队收进金环左边。掉落堆心在 x≈0，图标大约铺到 x=-123，近列停在 -200。
+ * 远列停在 -320，还在 720 宽的地砖里。
+ * 三行收在柱廊下沿和金环上沿之间，低行的脚不踩进掉落堆。
+ */
+const ALLY_LANE_NEAR_X = -200;
+const ALLY_LANE_FAR_X = -320;
+const ALLY_LANE_LOW_Y = -36;
+const ALLY_LANE_HIGH_Y = 84;
+
+export interface HangSpot {
+  x: number;
+  y: number;
+  face: -1 | 1;
+}
+
+/**
+ * 日服 BattleUtils.getHangHeroPosition。
+ * index 是 heroSrcData.position。isMirror 为真是我方（左），为假是敌方（右）。
+ * 返回层的底左角坐标，还不是画面中心。
+ */
+export function jpHangHeroPosition(
+  index: number,
+  layerWidth: number,
+  layerHeight: number,
+  isMirror: boolean
+): { x: number; y: number } {
+  const width = layerWidth > 0 && isFinite(layerWidth) ? layerWidth : 0;
+  const height = layerHeight > 0 && isFinite(layerHeight) ? layerHeight : 0;
+  const bgH = height * 0.9;
+  const centerX = width * 0.5;
+  const slot = wholeIndex(index);
+  let offsetX = 0;
+  let offsetY = 0;
+  if (isMirror) {
+    const baseX = width * 0.22;
+    offsetX = -baseX * (1 + Math.floor(slot / 2)) * 1.1;
+    if (slot > 1) offsetY = bgH * 0.2 * (slot % 2 === 0 ? 1 : -1);
+  } else {
+    const baseX = width * 0.1;
+    offsetX = baseX + slot * (width * 0.15);
+  }
+  return {
+    x: centerX + offsetX + (isMirror ? width * 0.2 : 0),
+    y: bgH * 0.5 + offsetY - 20,
+  };
+}
+
+/**
+ * 阵位号落到挂机地砖。画面中心是原点。
+ * 日服底左角先减去层的一半。低行会落进底栏金环，列距也会把 4、5 号推出左缘，
+ * 所以按公式的列、行比例收进左半边地砖，不改哪一号跟哪一号同列、谁高谁低。
+ * 人朝右。x 保持为负，y 不超过地砖上沿。
+ */
+export function hangAllyFloorPoint(position: number): HangSpot {
+  const slot = wholeIndex(position);
+  const raw = hangCenterPoint(slot, true);
+  const near = hangCenterPoint(1, true);
+  const far = hangCenterPoint(9, true);
+  const low = hangCenterPoint(3, true);
+  const high = hangCenterPoint(2, true);
+  let x = Math.round(lerp(near.x, far.x, ALLY_LANE_NEAR_X, ALLY_LANE_FAR_X, raw.x));
+  let y = Math.round(lerp(low.y, high.y, ALLY_LANE_LOW_Y, ALLY_LANE_HIGH_Y, raw.y));
+  if (!(x < 0) || x > ALLY_LANE_NEAR_X) x = ALLY_LANE_NEAR_X;
+  if (x < ALLY_LANE_FAR_X) x = ALLY_LANE_FAR_X;
+  if (y > IDLE_FLOOR_TOP) y = IDLE_FLOOR_TOP;
+  if (y < ALLY_LANE_LOW_Y) y = ALLY_LANE_LOW_Y;
+  return { x, y, face: 1 };
+}
+
+/**
+ * 阵位号原样用。没有阵位时按顺序补 1、4、5，避开已经占了的号。
+ * used 由调用方带着，避免两只人叠在同一格。
+ */
+export function hangLinePosition(position: number | null, order: number, used: number[]): number {
+  if (typeof position === "number" && isFinite(position) && position >= 1) {
+    const n = Math.floor(position);
+    used.push(n);
+    return n;
+  }
+  const start = isFinite(order) && order >= 0 ? Math.floor(order) : 0;
+  for (let step = 0; step < IDLE_HANG_DEFAULT_POSITIONS.length; step++) {
+    const candidate = IDLE_HANG_DEFAULT_POSITIONS[(start + step) % IDLE_HANG_DEFAULT_POSITIONS.length];
+    if (used.indexOf(candidate) < 0) {
+      used.push(candidate);
+      return candidate;
+    }
+  }
+  let extra = IDLE_HANG_DEFAULT_POSITIONS.length + 1;
+  while (used.indexOf(extra) >= 0) extra += 1;
+  used.push(extra);
+  return extra;
+}
+
+/** 默认三格：阵位 1、4、5。战报条只有顺序下标时也站这三格。 */
+export const IDLE_HANG_SPOTS: ReadonlyArray<HangSpot> = [
+  hangAllyFloorPoint(IDLE_HANG_DEFAULT_POSITIONS[0]),
+  hangAllyFloorPoint(IDLE_HANG_DEFAULT_POSITIONS[1]),
+  hangAllyFloorPoint(IDLE_HANG_DEFAULT_POSITIONS[2]),
 ];
 
 /** 右侧地砖。三格都朝左对着我方。入场从格子再往右滑进来，不落到我方阵上。 */
-export const IDLE_SKIRMISH_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1 }> = [
+export const IDLE_SKIRMISH_SPOTS: ReadonlyArray<HangSpot> = [
   { x: 230, y: -20, face: -1 },
   { x: 300, y: 36, face: -1 },
   { x: 260, y: 84, face: -1 },
 ];
 
-export function hangStandPoint(side: "ally" | "enemy", index: number): { x: number; y: number; face: -1 | 1 } {
+/**
+ * 演武条和战报格子只有顺序下标。我方 0、1、2 是默认阵位 1、4、5，不是 BattlePage 槽，也不是把下标当成阵位号。
+ * 知道阵位号时用 hangAllyFloorPoint。敌方下标仍是右侧三格。
+ */
+export function hangStandPoint(side: "ally" | "enemy", index: number): HangSpot {
   const spots = side === "enemy" ? IDLE_SKIRMISH_SPOTS : IDLE_HANG_SPOTS;
   const i = index < 0 || !isFinite(index) ? 0 : Math.floor(index);
-  return spots[i % spots.length];
+  const n = i % spots.length;
+  return spots[n < 0 ? n + spots.length : n];
+}
+
+function hangCenterPoint(index: number, isMirror: boolean): { x: number; y: number } {
+  const jp = jpHangHeroPosition(index, HANG_LAYER_W, HANG_LAYER_H, isMirror);
+  return { x: jp.x - HANG_LAYER_W / 2, y: jp.y - HANG_LAYER_H / 2 };
+}
+
+function lerp(from: number, to: number, outFrom: number, outTo: number, value: number): number {
+  const span = to - from;
+  if (span === 0) return outFrom;
+  return outFrom + ((value - from) / span) * (outTo - outFrom);
+}
+
+function wholeIndex(index: number): number {
+  if (!isFinite(index)) return 0;
+  return Math.floor(index);
 }
 
 /** 站位都在地砖上沿以下。柱廊上的 y 不算。 */
