@@ -27036,9 +27036,11 @@ function checkCityHub(): void {
       hubSrc.indexOf("assignContentSize") >= 0 &&
       hubSrc.indexOf("uiSize(") >= 0 &&
       primeBody.indexOf("loadPrefab(CITY_HUB_PREFAB_PATH)") >= 0 &&
+      primeBody.indexOf("CITY_CHROME_PREFAB_PATH") >= 0 &&
       primeBody.indexOf("loadCitySpriteFrame") < 0 &&
-      primeBody.indexOf("mapFramePath") < 0,
-    "city hub shows plates before config, guards null width, and prime does not fetch map plates again"
+      primeBody.indexOf("mapFramePath") < 0 &&
+      hubSrc.indexOf("takeStagedHub()") >= 0,
+    "city hub shows plates before config, guards null width, and prime warms chrome without fetching map plates again"
   );
   assert(mainApp.indexOf("id !== CITY_TAB") >= 0, "city page does not take a prefab shell");
   assert(hubPaths.indexOf("BtnIdle") < 0 && hubPaths.indexOf("BtnBag") < 0 && hubPaths.indexOf("BtnLogin7") < 0, "city hub prefab is not the debug button matrix");
@@ -27074,6 +27076,7 @@ function checkCityHub(): void {
     chrome.indexOf("openActivity") >= 0 && chrome.indexOf("openMore") >= 0 && chrome.indexOf("openMail") >= 0,
     "hub clicks stay on the prefab"
   );
+  assert(chrome.indexOf("takeStagedChrome()") >= 0, "city chrome adopts the shell staged during boot");
   assert(
     chrome.indexOf("ui/city/main-scene-lang_lbl-fetters-unlock") >= 0 &&
       chrome.indexOf("ui/city/main-scene_spr-fetters-unlock") >= 0 &&
@@ -27093,9 +27096,22 @@ function checkCityHub(): void {
   const assetEnd = boot.indexOf("private async loadConfig");
   const assetBody = assetAt >= 0 && assetEnd > assetAt ? boot.slice(assetAt, assetEnd) : "";
   assert(assetBody.indexOf("primeCityHub()") >= 0, "boot asset stage warms the city hub before character sync");
+  assert(assetBody.indexOf("stageCityShell(") >= 0, "boot asset stage instantiates the city shell before login");
+  const enterAt = boot.indexOf("private enterMain()");
+  const enterBody = enterAt >= 0 ? boot.slice(enterAt, enterAt + 900) : "";
+  assert(
+    enterBody.indexOf("liftStagedCity()") >= 0 &&
+      enterBody.indexOf("liftStagedCity()") < enterBody.indexOf("director.loadScene"),
+    "staged city is persisted before the main scene swap"
+  );
   const buildAt = mainApp.indexOf("private async build()");
   const buildHead = buildAt >= 0 ? mainApp.slice(buildAt, mainApp.indexOf("this.panels.start(this.buildCity())")) : "";
-  assert(buildHead.indexOf("primeCityHub") < 0, "main build paints chrome before any city prime");
+  assert(buildHead.indexOf("primeCityHub") < 0, "main build does not prime the city hub again");
+  const buildFnEnd = mainApp.indexOf("private onTab(");
+  const buildFn = buildAt >= 0 && buildFnEnd > buildAt ? mainApp.slice(buildAt, buildFnEnd) : "";
+  const cityPos = buildFn.indexOf("this.panels.start(this.buildCity())");
+  const chromePos = buildFn.indexOf("mountCityChromePrefab");
+  assert(cityPos >= 0 && chromePos > cityPos, "city page starts before the chrome prefab is awaited");
   assert(boot.indexOf("USE_CITY_CHROME") < 0, "Boot does not grow a city chrome switch");
   assert(boot.indexOf("USE_BATTLE_PREFAB") < 0, "Boot does not grow a battle prefab switch");
   assert(boot.indexOf("USE_PAGE_PREFAB_SHELL") < 0, "Boot does not grow a page prefab shell switch");

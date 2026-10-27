@@ -1,5 +1,6 @@
 import { Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { CITY_BAR, cityBarSlot } from "../config/nav";
+import { takeStagedChrome } from "./cityStage";
 import {
   bindClick,
   CITY_CHROME_PREFAB_PATH,
@@ -208,8 +209,9 @@ export async function mountCityChromePrefab(
   onTab: (id: string) => void,
   actions: CityChromeActions
 ): Promise<CityChrome> {
-  const prefab = await loadPrefab(CITY_CHROME_PREFAB_PATH);
-  const root = spawnPrefab(prefab, parent);
+  const staged = takeStagedChrome();
+  const root = staged ?? spawnPrefab(await loadPrefab(CITY_CHROME_PREFAB_PATH), parent);
+  if (staged) root.parent = parent;
   try {
     return bindCityChromePrefab(root, onTab, actions);
   } catch (err) {
