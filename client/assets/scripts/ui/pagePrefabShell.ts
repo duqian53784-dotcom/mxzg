@@ -3,7 +3,7 @@
  * 关闭壳只是藏起来，下面的代码页 / 旧 Prefab / 协议探针还在。
  * 加载失败留原来的页面，不留空画面。
  */
-import { BlockInputEvents, Button, Color, director, Director, instantiate, Label, Node, Overflow, Prefab, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, director, Director, Graphics, instantiate, Label, Node, Overflow, Prefab, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { labelCenterInParent, sliceAnchorShift } from "./ccbiPlace";
 import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
@@ -39,6 +39,8 @@ export { PAGE_SHELL_FIGHT, USE_PAGE_PREFAB_SHELL };
 /** 挂机左侧空地长按，打开真服探针。不画在底栏上。 */
 export const HANG_PROBE_EVENT = "mxzg-wire-probe";
 const HANG_PROBE_MS = 720;
+/** 壳底图还没挂上时垫一层近黑，避免透出只读标题。贴图到了就盖住它。 */
+const LIST_BACKDROP_DIM = new Color(22, 16, 20, 255);
 
 interface ShellHold {
   want: boolean;
@@ -61,8 +63,8 @@ export function setPagePrefabShellVisible(page: Node, visible: boolean): void {
   }
   if (hold.root && hold.root.isValid) hold.root.active = visible;
   if (page.isValid) {
-    const dim = page.getChildByName("ShellBackdropDim");
-    const art = page.getChildByName("ShellBackdrop");
+    const dim = findShellBackdrop(page, "ShellBackdropDim");
+    const art = findShellBackdrop(page, "ShellBackdrop");
     if (dim) dim.active = visible;
     if (art) art.active = visible;
   }
@@ -156,7 +158,7 @@ function veilUnderShell(page: Node, hold: ShellHold, paths: string[]): void {
     veiled.push(kids[i]);
   }
   hold.veiled = veiled;
-  place(createRect("ShellBackdropDim", 720, 1280, new Color(22, 16, 20, 255)), page, 0, 0);
+  place(createRect("ShellBackdropDim", 720, 1280, LIST_BACKDROP_DIM), page, 0, 0);
   const art = uiNode("ShellBackdrop");
   const ui = art.addComponent(UITransform);
   ui.setContentSize(720, 1280);
@@ -180,8 +182,8 @@ function veilUnderShell(page: Node, hold: ShellHold, paths: string[]): void {
 
 function restoreVeil(page: Node, hold: ShellHold): void {
   if (page.isValid) {
-    const dim = page.getChildByName("ShellBackdropDim");
-    const art = page.getChildByName("ShellBackdrop");
+    const dim = findShellBackdrop(page, "ShellBackdropDim");
+    const art = findShellBackdrop(page, "ShellBackdrop");
     if (dim && dim.isValid) dim.destroy();
     if (art && art.isValid) art.destroy();
   }
@@ -438,11 +440,64 @@ function watchCcbiSize(node: Node): void {
   });
 }
 
-/** 英雄/背包壳跟主城、挂机一样抵消安全区缩放，羊皮纸才落在画面里。 */
+/**
+ * 岩洞 / 店内底先铺在页面上，挡住只读标题。
+ * 壳会抵消安全区缩放，底图如果留在页面上就会比羊皮纸小一圈，宽屏两侧露出黑底。
+ * 收进壳里以后，跟羊皮纸用同一套可见尺寸。
+ */
 function seatListShell(root: Node): void {
+  adoptListBackdrop(root);
   bindVisibleRefresh(root, () => {
-    fitVisibleRoot(root);
+    const box = fitVisibleRoot(root);
+    stretchListBackdrop(root, box.width, box.height);
   });
+}
+
+function findShellBackdrop(page: Node, name: string): Node | null {
+  const onPage = page.isValid ? page.getChildByName(name) : null;
+  if (onPage) return onPage;
+  const hold = holds.get(page);
+  const root = hold && hold.root && hold.root.isValid ? hold.root : null;
+  if (!root) return null;
+  return root.getChildByName(name);
+}
+
+function adoptListBackdrop(root: Node): void {
+  const page = root.parent;
+  if (!page) return;
+  const names = ["ShellBackdropDim", "ShellBackdrop"];
+  for (let i = 0; i < names.length; i++) {
+    const node = page.getChildByName(names[i]);
+    if (!node) continue;
+    node.parent = root;
+    node.setSiblingIndex(i);
+  }
+}
+
+/** 底图铺满壳的可见框。羊皮纸仍按 720 留边，左右露出岩壁或店景。 */
+function stretchListBackdrop(root: Node, width: number, height: number): void {
+  if (!(width > 1) || !(height > 1)) return;
+  const names = ["ShellBackdropDim", "ShellBackdrop"];
+  for (let i = 0; i < names.length; i++) {
+    const node = root.getChildByName(names[i]);
+    if (!node || !node.isValid) continue;
+    const ui = node.getComponent(UITransform);
+    assignContentSize(ui, width, height);
+    if (ui) ui.setAnchorPoint(0.5, 0.5);
+    node.setPosition(0, 0, 0);
+    const sprite = node.getComponent(Sprite);
+    if (sprite) sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    if (node.name === "ShellBackdropDim") paintListDim(node, width, height);
+  }
+}
+
+function paintListDim(node: Node, width: number, height: number): void {
+  const g = node.getComponent(Graphics);
+  if (!g || typeof g.clear !== "function" || typeof g.rect !== "function" || typeof g.fill !== "function") return;
+  g.clear();
+  g.fillColor = LIST_BACKDROP_DIM;
+  g.rect(-width / 2, -height / 2, width, height);
+  g.fill();
 }
 
 /** 九宫格按底左角归位，小按钮上的字回到盒子中心并缩进按钮。 */
