@@ -27034,10 +27034,10 @@ function checkCityHub(): void {
   const shellSrc = readFileSync(uiSource("pagePrefabShell.ts"), "utf8");
   assert(shellSrc.indexOf("mountCcbiView") >= 0 && shellSrc.indexOf("sliceAnchorShift") >= 0, "page shells repair ccbi slice anchors before centering");
   const visibleFitSrc = readFileSync(uiSource("visibleFit.ts"), "utf8");
-  const fillSrc = readFileSync(uiSource("screenFill.ts"), "utf8");
+  const shellFillSrc = readFileSync(uiSource("screenFill.ts"), "utf8");
   assert(visibleFitSrc.indexOf("export function positiveUiSize") >= 0, "positiveUiSize rejects null and zero contentSize");
   assert(
-    shellSrc.indexOf("positiveUiSize") >= 0 && fillSrc.indexOf("positiveUiSize") >= 0,
+    shellSrc.indexOf("positiveUiSize") >= 0 && shellFillSrc.indexOf("positiveUiSize") >= 0,
     "hang and list shells do not read a null width"
   );
   assert(
@@ -27045,7 +27045,7 @@ function checkCityHub(): void {
     "hero and bag shells seat on the visible canvas"
   );
   assert(
-    fillSrc.indexOf("ParchmentPlate") >= 0 && fillSrc.indexOf("mxzgParchment = NO_PARCHMENT") < 0,
+    shellFillSrc.indexOf("ParchmentPlate") >= 0 && shellFillSrc.indexOf("mxzgParchment = NO_PARCHMENT") < 0,
     "empty parchment waits for a live size and still paints a plate"
   );
   assert(boot.indexOf("formatServerLabel") >= 0 && mainApp.indexOf("formatServerLabel()") >= 0, "wire logs say 本机桥");
