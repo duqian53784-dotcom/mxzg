@@ -3,7 +3,7 @@
  * 关闭壳只是藏起来，下面的代码页 / 旧 Prefab / 协议探针还在。
  * 加载失败留原来的页面，不留空画面。
  */
-import { BlockInputEvents, Button, Color, director, Director, Graphics, instantiate, Label, Node, Overflow, Prefab, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { Button, Color, director, Director, Graphics, instantiate, Label, Node, Overflow, Prefab, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { labelCenterInParent, sliceAnchorShift } from "./ccbiPlace";
 import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
@@ -19,7 +19,7 @@ import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./pref
 import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from "./chapterMapView";
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption, pinSprites } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
-import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
+import { setText } from "./UiKit";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize, uiSize } from "./visibleFit";
 
 /** 挂机底栏「快速战斗」。已有壳。3013 开战硬禁，只读 3012 次数。 */
@@ -32,6 +32,10 @@ export const HANG_FORMATION_PREFAB = "prefabs/ui/hero/HeroSelectLayer";
 export const HANG_CHAPTER_PREFAB = "prefabs/ui/chapter/ChapterPreviewLayer";
 /** 英雄格子点开的详情。 */
 export const HERO_INFO_PREFAB = "prefabs/ui/hero/HeroInfoLayer";
+const PAGE_SHELL_PREFAB = "prefabs/ui/common/PagePrefabShell";
+const LIST_BACKDROP_PREFAB = "prefabs/ui/common/ListBackdrop";
+const DIM_SHEET = "prefabs/ui/common/DimSheet";
+const HANG_CHIP = "prefabs/ui/battle/HangMissionChip";
 
 export { PAGE_SHELL_FIGHT, USE_PAGE_PREFAB_SHELL };
 
@@ -87,21 +91,26 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
   }
   hold.pending = true;
   const backdrop = shellBackdrop(id);
-  if (backdrop) veilUnderShell(page, hold, backdrop);
+  if (backdrop) veilUnderShell(page, hold);
   page.once(Node.EventType.NODE_DESTROYED, () => {
     holds.delete(page);
   });
   try {
+    if (backdrop) await mountListBackdrop(page, backdrop);
     const prefab = await loadPrefab(spec.path);
+    const shellPrefab = await loadPrefab(PAGE_SHELL_PREFAB);
     if (!page.isValid) return;
     if (hold.root) return;
-    const root = uiNode("PagePrefabShell");
-    const ui = root.addComponent(UITransform);
-    ui.setContentSize(720, 1280);
-    ui.setAnchorPoint(0.5, 0.5);
-    root.addComponent(BlockInputEvents);
+    const root = instantiate(shellPrefab);
+    root.name = "PagePrefabShell";
     if (spec.fight) mountIdleHang(root);
-    else if (!backdrop) place(createRect("dim", 720, 1280, new Color(8, 16, 32, 255)), root, 0, 0);
+    else if (!backdrop) {
+      const dim = root.getChildByName("dim");
+      if (dim) {
+        dim.active = true;
+        paintShellDim(dim, 720, 1280);
+      } else GameLog.shared.warn("MainApp", "PagePrefabShell 下没有 dim");
+    }
     const view = spawnPrefab(prefab, root);
     mountCcbiView(view);
     fillPageShell(id, view, (hero) => {
@@ -141,8 +150,8 @@ function shellBackdrop(id: string): string[] | null {
   return null;
 }
 
-/** 先藏只读页，再铺底图。壳加载期间不再闪「真服只读」。 */
-function veilUnderShell(page: Node, hold: ShellHold, paths: string[]): void {
+/** 先藏只读页。底图预制随后再铺，壳加载期间不再闪「真服只读」。 */
+function veilUnderShell(page: Node, hold: ShellHold): void {
   const veiled: Node[] = [];
   const kids = page.children.slice();
   for (let i = 0; i < kids.length; i++) {
@@ -151,14 +160,33 @@ function veilUnderShell(page: Node, hold: ShellHold, paths: string[]): void {
     veiled.push(kids[i]);
   }
   hold.veiled = veiled;
-  place(createRect("ShellBackdropDim", 720, 1280, LIST_BACKDROP_DIM), page, 0, 0);
-  const art = uiNode("ShellBackdrop");
-  const ui = art.addComponent(UITransform);
-  ui.setContentSize(720, 1280);
-  const sprite = art.addComponent(Sprite);
-  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-  sprite.type = Sprite.Type.SIMPLE;
-  place(art, page, 0, 0);
+}
+
+async function mountListBackdrop(page: Node, paths: string[]): Promise<void> {
+  if (!page.isValid || page.getChildByName("ListBackdrop")) return;
+  let prefab: Prefab;
+  try {
+    prefab = await loadPrefab(LIST_BACKDROP_PREFAB);
+  } catch (err) {
+    GameLog.shared.warn("MainApp", "ListBackdrop 没有挂上 " + messageOf(err));
+    return;
+  }
+  if (!page.isValid || page.getChildByName("ListBackdrop")) return;
+  const pack = spawnPrefab(prefab, page);
+  pack.name = "ListBackdrop";
+  const dim = pack.getChildByName("ShellBackdropDim");
+  const art = pack.getChildByName("ShellBackdrop");
+  if (dim) paintListDim(dim, 720, 1280);
+  else GameLog.shared.warn("MainApp", "ListBackdrop 下没有 ShellBackdropDim");
+  if (!art) {
+    GameLog.shared.warn("MainApp", "ListBackdrop 下没有 ShellBackdrop");
+    return;
+  }
+  const sprite = art.getComponent(Sprite);
+  if (sprite) {
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    sprite.type = Sprite.Type.SIMPLE;
+  }
   const loadAt = (index: number) => {
     if (!art.isValid || index >= paths.length) return;
     resources.load(paths[index] + "/spriteFrame", SpriteFrame, (err, frame) => {
@@ -167,19 +195,15 @@ function veilUnderShell(page: Node, hold: ShellHold, paths: string[]): void {
         loadAt(index + 1);
         return;
       }
-      sprite.spriteFrame = frame;
+      if (sprite) sprite.spriteFrame = frame;
     });
   };
   loadAt(0);
 }
 
 function restoreVeil(page: Node, hold: ShellHold): void {
-  if (page.isValid) {
-    const dim = findShellBackdrop(page, "ShellBackdropDim");
-    const art = findShellBackdrop(page, "ShellBackdrop");
-    if (dim && dim.isValid) dim.destroy();
-    if (art && art.isValid) art.destroy();
-  }
+  dropBackdrop(page);
+  dropBackdrop(hold.root);
   const veiled = hold.veiled || [];
   for (let i = 0; i < veiled.length; i++) {
     if (veiled[i].isValid) veiled[i].active = true;
@@ -192,7 +216,7 @@ function restoreVeil(page: Node, hold: ShellHold): void {
  * 底钮仍是 BattlePanelLayer（战力UP / 战斗 / 高速战斗）和收益条。
  * 顶栏战力、头像仍是主城壳上的 hangHud，不在这一页再画一条。
  * 没有「功能页」。探针只留给 ?dev=wire，或左侧空地长按。
- * Prefab 失败时站场还在，并补三颗代码钮，中间「战斗」仍发 PAGE_SHELL_FIGHT。
+ * Prefab 失败时站场还在。不补代码按钮。中间「战斗」仍发 PAGE_SHELL_FIGHT。
  */
 export async function mountHangBattleShell(page: Node): Promise<void> {
   if (!page.isValid) return;
@@ -202,11 +226,16 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
     hold = { want: true, root: null };
     holds.set(page, hold);
   }
-  const root = uiNode("PagePrefabShell");
-  const ui = root.addComponent(UITransform);
-  ui.setContentSize(720, 1280);
-  ui.setAnchorPoint(0.5, 0.5);
-  root.addComponent(BlockInputEvents);
+  let shellPrefab: Prefab;
+  try {
+    shellPrefab = await loadPrefab(PAGE_SHELL_PREFAB);
+  } catch (err) {
+    GameLog.shared.warn("MainApp", "PagePrefabShell 没有挂上 " + messageOf(err));
+    return;
+  }
+  if (!page.isValid || hold.root) return;
+  const root = instantiate(shellPrefab);
+  root.name = "PagePrefabShell";
   mountIdleHang(root);
   bindHangProbe(root, page);
   root.on(Node.EventType.CHILD_ADDED, () => raiseHangProbe(root));
@@ -239,7 +268,7 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
     if (isWidthRead(err) && root.isValid) {
       noteHangShellWidth(view && view.isValid ? "afterPanel" : "spawnPanel");
       if (!view || !view.isValid) {
-        mountCodeHangBar(root, page);
+        GameLog.shared.warn("MainApp", "不补代码按钮");
         mountHangMissionChip(root, page);
         raiseHangProbe(root);
       }
@@ -259,7 +288,7 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
       raiseHangProbe(root);
       return;
     }
-    mountCodeHangBar(root, page);
+    GameLog.shared.warn("MainApp", "不补代码按钮");
     mountHangMissionChip(root, page);
     raiseHangProbe(root);
   }
@@ -341,8 +370,12 @@ function pinShell(root: Node, page: Node): void {
 
 /** 左侧空地。不挡中间「战斗」和底栏三钮。按住约 0.7 秒才打开探针。 */
 function bindHangProbe(root: Node, page: Node): void {
-  const spot = createRect("HangProbeHotspot", 72, 88, new Color(0, 0, 0, 0));
-  place(spot, root, -320, 120);
+  const spot = root.getChildByName("HangProbeHotspot");
+  if (!spot) {
+    GameLog.shared.warn("Mainline", "PagePrefabShell 下没有 HangProbeHotspot");
+    return;
+  }
+  spot.active = true;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const clear = () => {
     if (!timer) return;
@@ -371,22 +404,6 @@ function raiseHangProbe(root: Node): void {
   const spot = root.getChildByName("HangProbeHotspot");
   if (!spot || !spot.isValid) return;
   spot.setSiblingIndex(Math.max(0, root.children.length - 1));
-}
-
-function mountCodeHangBar(root: Node, page: Node): void {
-  const grow = createButton("战力UP", () => {
-    void openHangSheet(root, HANG_GROW_PREFAB, (sheet) => bindGrowSheet(sheet));
-  }, 180, 56);
-  grow.name = "btn_lineup";
-  place(grow, root, -220, -470);
-  const fight = createButton("战斗", () => startShellFight(root, page), 180, 64);
-  fight.name = "btn_battle";
-  place(fight, root, 0, -470);
-  const quick = createButton("高速战斗", () => {
-    void openHangSheet(root, HANG_QUICK_PREFAB, (sheet) => bindQuickSheet(sheet));
-  }, 180, 56);
-  quick.name = "btn_speed_battle";
-  place(quick, root, 220, -470);
 }
 
 /**
@@ -447,17 +464,40 @@ function seatListShell(root: Node): void {
 }
 
 function findShellBackdrop(page: Node, name: string): Node | null {
-  const onPage = page.isValid ? page.getChildByName(name) : null;
+  const onPage = backdropChild(page, name);
   if (onPage) return onPage;
   const hold = holds.get(page);
   const root = hold && hold.root && hold.root.isValid ? hold.root : null;
-  if (!root) return null;
-  return root.getChildByName(name);
+  return backdropChild(root, name);
+}
+
+function backdropChild(host: Node | null, name: string): Node | null {
+  if (!host || !host.isValid) return null;
+  const direct = host.getChildByName(name);
+  if (direct) return direct;
+  const pack = host.getChildByName("ListBackdrop");
+  return pack ? pack.getChildByName(name) : null;
+}
+
+function dropBackdrop(host: Node | null): void {
+  if (!host || !host.isValid) return;
+  const pack = host.getChildByName("ListBackdrop");
+  if (pack) pack.destroy();
+  const dim = host.getChildByName("ShellBackdropDim");
+  const art = host.getChildByName("ShellBackdrop");
+  if (dim && dim.isValid) dim.destroy();
+  if (art && art.isValid) art.destroy();
 }
 
 function adoptListBackdrop(root: Node): void {
   const page = root.parent;
   if (!page) return;
+  const pack = page.getChildByName("ListBackdrop");
+  if (pack) {
+    pack.parent = root;
+    pack.setSiblingIndex(0);
+    return;
+  }
   const names = ["ShellBackdropDim", "ShellBackdrop"];
   for (let i = 0; i < names.length; i++) {
     const node = page.getChildByName(names[i]);
@@ -470,9 +510,16 @@ function adoptListBackdrop(root: Node): void {
 /** 底图铺满壳的可见框。羊皮纸仍按 720 留边，左右露出岩壁或店景。 */
 function stretchListBackdrop(root: Node, width: number, height: number): void {
   if (!(width > 1) || !(height > 1)) return;
+  const pack = root.getChildByName("ListBackdrop");
+  if (pack) {
+    const packUi = pack.getComponent(UITransform);
+    assignContentSize(packUi, width, height);
+    if (packUi) packUi.setAnchorPoint(0.5, 0.5);
+    pack.setPosition(0, 0, 0);
+  }
   const names = ["ShellBackdropDim", "ShellBackdrop"];
   for (let i = 0; i < names.length; i++) {
-    const node = root.getChildByName(names[i]);
+    const node = backdropChild(root, names[i]);
     if (!node || !node.isValid) continue;
     const ui = node.getComponent(UITransform);
     assignContentSize(ui, width, height);
@@ -485,10 +532,20 @@ function stretchListBackdrop(root: Node, width: number, height: number): void {
 }
 
 function paintListDim(node: Node, width: number, height: number): void {
+  paintFill(node, width, height, LIST_BACKDROP_DIM);
+}
+
+const SHELL_DIM = new Color(8, 16, 32, 255);
+
+function paintShellDim(node: Node, width: number, height: number): void {
+  paintFill(node, width, height, SHELL_DIM);
+}
+
+function paintFill(node: Node, width: number, height: number, ink: Color): void {
   const g = node.getComponent(Graphics);
   if (!g || typeof g.clear !== "function" || typeof g.rect !== "function" || typeof g.fill !== "function") return;
   g.clear();
-  g.fillColor = LIST_BACKDROP_DIM;
+  g.fillColor = ink;
   g.rect(-width / 2, -height / 2, width, height);
   g.fill();
 }
@@ -648,36 +705,35 @@ function bindFightChrome(view: Node, root: Node, page: Node): void {
   });
 }
 
-const CHIP_INK = new Color(255, 236, 190, 255);
-
 /** 左上角关卡标。点开章节地图，再进已有 ChapterPreviewLayer。不把整窗铺在地上。 */
 function mountHangMissionChip(root: Node, page: Node): void {
   if (!root.isValid || root.getChildByName("HangMissionChip")) return;
-  const chip = uiNode("HangMissionChip");
-  const ui = chip.addComponent(UITransform);
-  assignContentSize(ui, 196, 64);
-  place(chip, root, -240, 220);
-  const icon = uiNode("icon");
-  const iconUi = icon.addComponent(UITransform);
-  assignContentSize(iconUi, 56, 56);
-  const iconSprite = icon.addComponent(Sprite);
-  iconSprite.sizeMode = Sprite.SizeMode.CUSTOM;
-  place(icon, chip, -64, 0);
-  paintChipIcon(icon);
-  const label = createLabel(hangMissionCaption(), 16, { color: CHIP_INK, width: 120, height: 40 });
-  label.name = "HangMissionLabel";
-  place(label, chip, 24, 0);
-  if (!chip.getComponent(Button)) chip.addComponent(Button);
-  chip.on(Button.EventType.CLICK, () => {
-    openChapterMap(root, page);
-  });
-  const refresh = () => {
-    if (!label.isValid) return;
-    setText(label, hangMissionCaption());
-  };
-  refresh();
-  const off = WireSession.onSync(refresh);
-  chip.once(Node.EventType.NODE_DESTROYED, () => off());
+  void loadPrefab(HANG_CHIP).then(
+    (prefab) => {
+      if (!root.isValid || root.getChildByName("HangMissionChip")) return;
+      const chip = spawnPrefab(prefab, root);
+      chip.name = "HangMissionChip";
+      chip.setPosition(-240, 220, 0);
+      const icon = chip.getChildByName("icon");
+      if (icon) paintChipIcon(icon);
+      const label = chip.getChildByName("HangMissionLabel");
+      if (!label) GameLog.shared.warn("Mainline", "HangMissionChip 下没有 HangMissionLabel");
+      if (!chip.getComponent(Button)) chip.addComponent(Button);
+      chip.on(Button.EventType.CLICK, () => {
+        openChapterMap(root, page);
+      });
+      const refresh = () => {
+        if (!label || !label.isValid) return;
+        setText(label, hangMissionCaption());
+      };
+      refresh();
+      const off = WireSession.onSync(refresh);
+      chip.once(Node.EventType.NODE_DESTROYED, () => off());
+    },
+    (err) => {
+      GameLog.shared.warn("Mainline", "HangMissionChip 没有挂上 " + messageOf(err));
+    }
+  );
 }
 
 /** 章节地图盖在挂机上。关卡条再打开 ChapterPreviewLayer。奖励窗是 ChapterRewardLayer，不发 3011。 */
@@ -685,33 +741,41 @@ function openChapterMap(root: Node, page: Node): void {
   if (!root.isValid) return;
   const old = root.getChildByName("ChapterMapSheet");
   if (old) old.destroy();
-  const sheet = uiNode("ChapterMapSheet");
-  const ui = sheet.addComponent(UITransform);
-  ui.setContentSize(720, 1280);
-  sheet.addComponent(BlockInputEvents);
-  place(createRect("dim", 720, 1280, new Color(8, 16, 32, 170)), sheet, 0, 0);
-  const close = () => {
-    if (sheet.isValid) sheet.destroy();
-  };
-  const openPreview = (idx: number) => {
-    void openHangSheet(sheet, HANG_CHAPTER_PREFAB, (view) => {
-      dressChapterPreview(view, () => {
-        close();
-        startShellFight(root, page);
-      }, idx);
-    });
-  };
-  mountChapterMap(sheet, {
-    onStage: openPreview,
-    onReward: () => {
-      void openHangSheet(sheet, CHAPTER_REWARD_PREFAB, (view) => {
-        dressChapterRewardBoard(view, (gate) => openPreview(gate));
+  void loadPrefab(DIM_SHEET).then(
+    (prefab) => {
+      if (!root.isValid) return;
+      const again = root.getChildByName("ChapterMapSheet");
+      if (again) again.destroy();
+      const sheet = spawnPrefab(prefab, root);
+      sheet.name = "ChapterMapSheet";
+      const dim = sheet.getChildByName("dim");
+      if (!dim) GameLog.shared.warn("Mainline", "ChapterMapSheet 下没有 dim");
+      const close = () => {
+        if (sheet.isValid) sheet.destroy();
+      };
+      const openPreview = (idx: number) => {
+        void openHangSheet(sheet, HANG_CHAPTER_PREFAB, (view) => {
+          dressChapterPreview(view, () => {
+            close();
+            startShellFight(root, page);
+          }, idx);
+        });
+      };
+      mountChapterMap(sheet, {
+        onStage: openPreview,
+        onReward: () => {
+          void openHangSheet(sheet, CHAPTER_REWARD_PREFAB, (view) => {
+            dressChapterRewardBoard(view, (gate) => openPreview(gate));
+          });
+        },
+        onClose: close,
       });
+      sheet.setSiblingIndex(Math.max(0, root.children.length - 1));
     },
-    onClose: close,
-  });
-  sheet.parent = root;
-  sheet.setSiblingIndex(Math.max(0, root.children.length - 1));
+    (err) => {
+      GameLog.shared.warn("Mainline", "DimSheet 没有挂上，不新建 ChapterMapSheet " + messageOf(err));
+    }
+  );
 }
 
 function paintChipIcon(node: Node): void {
@@ -921,27 +985,22 @@ async function openHangSheet(host: Node, path: string, onReady?: (view: Node) =>
   if (old) old.destroy();
   try {
     const prefab = await loadPrefab(path);
+    const dimPrefab = await loadPrefab(DIM_SHEET);
     if (!host.isValid) return;
-    const sheet = uiNode("BattleSheet");
-    const ui = sheet.addComponent(UITransform);
-    ui.setContentSize(720, 1280);
-    sheet.addComponent(BlockInputEvents);
-    place(createRect("dim", 720, 1280, new Color(8, 16, 32, 170)), sheet, 0, 0);
+    const sheet = spawnPrefab(dimPrefab, host);
+    sheet.name = "BattleSheet";
+    if (!sheet.getChildByName("dim")) GameLog.shared.warn("Mainline", "BattleSheet 下没有 dim");
     const view = spawnPrefab(prefab, sheet);
     mountCcbiView(view);
     silenceSheetMenus(view);
     const close = () => {
       if (sheet.isValid) sheet.destroy();
     };
-    const button = findDescendant(view, "btn_close");
+    const button = findDescendant(view, "btn_close") || findDescendant(view, "btn_back");
     if (button) {
       liftNode(button, view);
       bindTap(button, close);
-    } else {
-      const back = createButton("关闭", close, 160, 44);
-      back.name = "BtnSheetClose";
-      place(back, sheet, 0, -460);
-    }
+    } else GameLog.shared.warn("Mainline", path + " 没有 btn_close");
     if (onReady) onReady(view);
     sheet.parent = host;
     sheet.setSiblingIndex(Math.max(0, host.children.length - 1));
