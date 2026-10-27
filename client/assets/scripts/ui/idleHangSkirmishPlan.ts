@@ -9,18 +9,18 @@
  */
 export const IDLE_FLOOR_TOP = 120;
 
-/** 地砖前排。左、前、右，朝向怪所在的上沿。 */
+/** 地砖前排。左、前、右都在我方，朝右对着敌方。 */
 export const IDLE_HANG_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1 }> = [
   { x: -150, y: -30, face: 1 },
   { x: 10, y: -120, face: 1 },
-  { x: 150, y: -10, face: -1 },
+  { x: 150, y: -10, face: 1 },
 ];
 
-/** 地砖后沿，和我方隔开一排，仍在地砖上。左怪朝右，中、右朝左。 */
+/** 右侧地砖。三格都朝左对着我方。入场从格子再往右滑进来，不落到我方阵上。 */
 export const IDLE_SKIRMISH_SPOTS: ReadonlyArray<{ x: number; y: number; face: -1 | 1 }> = [
-  { x: -80, y: 40, face: 1 },
-  { x: 36, y: 86, face: -1 },
-  { x: 168, y: 28, face: -1 },
+  { x: 230, y: -20, face: -1 },
+  { x: 300, y: 36, face: -1 },
+  { x: 260, y: 84, face: -1 },
 ];
 
 export function hangStandPoint(side: "ally" | "enemy", index: number): { x: number; y: number; face: -1 | 1 } {

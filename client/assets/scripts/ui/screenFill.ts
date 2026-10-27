@@ -3,7 +3,7 @@
  * 格子是运行时拼的：HeroListLayer / BackpackLayer 本身没有网格。
  * 不造假英雄、不造假道具、不发新协议。
  */
-import { BlockInputEvents, Button, Color, HorizontalTextAlignment, Label, Mask, Node, Overflow, resources, ScrollView, Sprite, SpriteFrame, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, HorizontalTextAlignment, Label, Mask, Node, Overflow, resources, ScrollView, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameStore, StoreBagItem, StoreHero } from "../core/GameStore";
 import { GameLog } from "../core/GameLog";
@@ -25,7 +25,7 @@ import {
   hangBattleGlowStepMs,
   HANG_BATTLE_GLOW_SPEED,
 } from "./hangChrome";
-import { paintIdleLoot, playIdleHarvest, seatHangTimer } from "./idleHangView";
+import { paintIdleLoot, playIdleHarvest, seatHangTimer, writeHangClock } from "./idleHangView";
 import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
 import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
 import { mockRuntimeEnabled } from "../net/transportSelect";
@@ -92,8 +92,9 @@ export function fillPageShell(id: string, view: Node, openHero: (hero: StoreHero
 
 /**
  * 藏掉殿堂缩略图和「地图 / 999」字。地图框 main-scene_spr-map-frame-1 留着，
- * 它是底栏中间的金环水晶，盖住奶油色空板。掉落堆抬到环顶上面。
- * 四条收益按原图高度填充。中间「战斗」循环 btn-battle 光，字仍在光上面。
+ * 它是底栏中间的金环水晶，盖住奶油色空板。环心是透明的，后面垫一块奶油色，
+ * 底板那两颗黑圆不透出来。不放蓝核。掉落堆抬到环顶上面。
+ * 四条收益按原图高度填充。三颗钮各留一个居中的字。中间「战斗」循环 btn-battle 光，字仍在光上面。
  */
 export function dressHangPanel(view: Node): void {
   const mark = view as Node & { mxzgHang?: boolean };
@@ -105,10 +106,13 @@ export function dressHangPanel(view: Node): void {
   hideNamed(view, "spr_world_icon");
   hideNamed(view, "lbl_mission_name");
   const frame = plate ? plate.getChildByName("CCSprite_1") : null;
-  if (frame) frame.active = true;
-  fitButton(findNamed(view, "btn_lineup"), "战力UP", 22);
-  fitButton(findNamed(view, "btn_battle"), "战斗", 22);
-  fitButton(findNamed(view, "btn_speed_battle"), "高速战斗", 20);
+  if (frame) {
+    frame.active = true;
+    maskCrystalHole(frame);
+  }
+  seatHangButton(findNamed(view, "btn_lineup"), "战力UP", 22);
+  seatHangButton(findNamed(view, "btn_battle"), "战斗", 22);
+  seatHangButton(findNamed(view, "btn_speed_battle"), "高速战斗", 20);
   seatBattleGlow(findNamed(view, "btn_battle"));
   pinSprites(view);
   let claimNote = "";
@@ -132,8 +136,7 @@ export function dressHangPanel(view: Node): void {
     if (hang) paintIdleLoot(hang, hangLootIcons(rates));
     const bubble = findNamed(view, "node_bubble") || (hang ? hang.getChildByName("node_bubble") : null);
     if (bubble) {
-      const clockNode = bubble.getChildByName("lbl_progress_time2");
-      if (clockNode) setText(clockNode, claimNote || clock);
+      writeHangClock(bubble, claimNote || clock);
       if (hang) seatHangTimer(hang, bubble);
     }
   };
@@ -1575,6 +1578,53 @@ function bindTab(view: Node, name: string, fn: () => void): void {
   if (!node) return;
   if (!node.getComponent(Button)) node.addComponent(Button);
   node.on(Button.EventType.CLICK, fn);
+}
+
+/** 环心透明。垫在金环后面，底板黑圆不从洞里露出来。不放蓝核。 */
+function maskCrystalHole(frame: Node): void {
+  const parent = frame.parent;
+  if (!parent || parent.getChildByName("HangCrystalFill")) return;
+  const ui = frame.getComponent(UITransform);
+  const w = ui && ui.contentSize.width > 8 ? ui.contentSize.width : 162;
+  const h = ui && ui.contentSize.height > 8 ? ui.contentSize.height : 162;
+  const fill = createRect("HangCrystalFill", w, h, new Color(249, 233, 211, 255));
+  const index = frame.getSiblingIndex();
+  fill.parent = parent;
+  fill.setPosition(frame.position.x, frame.position.y, frame.position.z);
+  fill.setSiblingIndex(index);
+}
+
+/** 一颗钮只留一个居中的字。不另画扁平色块。 */
+function seatHangButton(node: Node | null, text: string, size: number): void {
+  if (!node) return;
+  fitButton(node, text, size);
+  const kids = node.children;
+  let kept = false;
+  for (let i = 0; i < kids.length; i++) {
+    const child = kids[i];
+    const label = child.getComponent(Label);
+    if (!label) continue;
+    if (kept) {
+      child.active = false;
+      continue;
+    }
+    kept = true;
+    child.active = true;
+    child.setPosition(0, 0, 0);
+    child.setScale(1, 1, 1);
+    const box = child.getComponent(UITransform);
+    const parentUi = node.getComponent(UITransform);
+    if (box && parentUi && parentUi.contentSize.width > 8) {
+      box.setAnchorPoint(0.5, 0.5);
+      box.setContentSize(Math.max(8, parentUi.contentSize.width - 16), Math.max(8, parentUi.contentSize.height - 8));
+    }
+    label.string = text;
+    label.fontSize = size;
+    label.lineHeight = size + 4;
+    label.overflow = Overflow.SHRINK;
+    label.horizontalAlign = HorizontalTextAlignment.CENTER;
+    label.verticalAlign = VerticalTextAlignment.CENTER;
+  }
 }
 
 function fitButton(node: Node | null, text: string, size: number): void {

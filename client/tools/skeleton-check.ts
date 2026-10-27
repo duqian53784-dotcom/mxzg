@@ -27654,13 +27654,20 @@ function mainAppFile(): string {
 function checkIdleSkirmish(): void {
   assert(
     IDLE_SKIRMISH_SPOTS.length === 3 &&
-      IDLE_SKIRMISH_SPOTS[0].x === -80 &&
-      IDLE_SKIRMISH_SPOTS[0].y === 40 &&
-      IDLE_SKIRMISH_SPOTS[0].face === 1 &&
+      IDLE_SKIRMISH_SPOTS[0].x === 230 &&
+      IDLE_SKIRMISH_SPOTS[0].y === -20 &&
+      IDLE_SKIRMISH_SPOTS[0].face === -1 &&
+      IDLE_SKIRMISH_SPOTS[1].x === 300 &&
+      IDLE_SKIRMISH_SPOTS[1].face === -1 &&
+      IDLE_SKIRMISH_SPOTS[2].x === 260 &&
+      IDLE_SKIRMISH_SPOTS[2].y === 84 &&
       IDLE_SKIRMISH_SPOTS[2].face === -1 &&
       IDLE_HANG_SPOTS.length === 3 &&
+      IDLE_HANG_SPOTS[0].face === 1 &&
+      IDLE_HANG_SPOTS[2].face === 1 &&
+      IDLE_HANG_SPOTS[2].x < IDLE_SKIRMISH_SPOTS[0].x &&
       IDLE_HANG_SPOTS[1].y < IDLE_SKIRMISH_SPOTS[1].y,
-    "idle foes and allies stand on the tile floor, allies in front"
+    "idle foes stand on the right and face the allies, allies face the foes"
   );
   const hallStep = idleHangLoopOffset(1000, 720, IDLE_HALL_SCROLL_PX);
   const skyStep = idleHangLoopOffset(1000, 720, IDLE_SKY_SCROLL_PX);
@@ -27705,7 +27712,7 @@ function checkIdleSkirmish(): void {
   assert(idleSkirmishSwings(0) === IDLE_SKIRMISH_HITS && idleSkirmishSwings(1) === 2 && idleSkirmishSwings(3) === 3, "each standing hero swings, at least twice");
   assert(idleSkirmishStageIdx(null, null, 0) === 1 && idleSkirmishStageIdx(null, 3, 9) === 3 && idleSkirmishStageIdx(4, 3, 9) === 4, "skirmish stage follows mock, then now, then max");
   const named = planIdleFoe(0, [{ heroType: 10101001, hp: 900 }], (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
-  assert(named.stem === "10101001" && named.spot === 0 && named.face === 1 && named.maxHp === 900, "stage monster with stand is the foe");
+  assert(named.stem === "10101001" && named.spot === 0 && named.face === -1 && named.maxHp === 900, "stage monster with stand is the foe and faces the allies");
   const rotated = planIdleFoe(1, [{ heroType: 10101001, hp: 900 }, { heroType: 10405006, hp: 400 }], (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
   assert(rotated.stem === "10405006" && rotated.spot === 1 && rotated.maxHp === 400, "next wave uses the next stage monster and the next spot");
   const fallback = planIdleFoe(1, [{ heroType: 99999999, hp: 10 }], (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
@@ -27752,6 +27759,7 @@ function checkIdleSkirmish(): void {
       skirmishSrc.indexOf("planIdleWave") >= 0 &&
       skirmishSrc.indexOf("idleFoeEnterX") >= 0 &&
       skirmishSrc.indexOf("plantAllies") >= 0 &&
+      skirmishSrc.indexOf("applyHangFace") >= 0 &&
       skirmishSrc.indexOf('damaged.actor.play("hit")') >= 0 &&
       skirmishSrc.indexOf('ally.play("hit")') < 0 &&
       skirmishSrc.indexOf("idleMarchScroll") < 0 &&
@@ -27767,6 +27775,19 @@ function checkIdleSkirmish(): void {
     "skirmish runs in place, scrolls only while marching, and hits the visible foe"
   );
   assert(fillSrc.indexOf("金环水晶") >= 0 && fillSrc.indexOf("frame.active = true") >= 0, "hang plate keeps the crystal frame");
+  const spineSrc = readFileSync(uiSource("battleSpine.ts"), "utf8");
+  assert(
+    fillSrc.indexOf("HangCrystalFill") >= 0 &&
+      fillSrc.indexOf("maskCrystalHole") >= 0 &&
+      fillSrc.indexOf("seatHangButton") >= 0 &&
+      fillSrc.indexOf("btn-scale-battle") < 0 &&
+      hangSrc.indexOf("writeHangClock") >= 0 &&
+      hangSrc.indexOf("不留在场上") >= 0 &&
+      shellSrc.indexOf("不补扁平调试钮") >= 0 &&
+      shellSrc.indexOf("dropFlatHangButtons") >= 0 &&
+      spineSrc.indexOf("再写朝向") >= 0,
+    "hang crystal hole is filled, the 999 bubble is replaced, and a loaded panel does not add flat debug buttons"
+  );
   assert(battleSrc.indexOf("seatHangField") >= 0 && battleSrc.indexOf('findNamed(field, "Slot_A"') >= 0, "report slots sit on the hang floor");
   assert(wireSrc.indexOf("hangStandPoint") >= 0 && wireSrc.indexOf("hangFloatOrigin") >= 0, "report playback uses the hang floor spots");
 }

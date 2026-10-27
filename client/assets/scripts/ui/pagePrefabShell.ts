@@ -223,22 +223,48 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
   });
   const spec = pagePrefabShell("mainline");
   const path = spec ? spec.path : "prefabs/ui/battle/BattlePanelLayer";
+  let view: Node | null = null;
   try {
     const prefab = await loadPrefab(path);
     if (!page.isValid || !root.isValid) return;
-    const view = spawnPrefab(prefab, root);
+    view = spawnPrefab(prefab, root);
     mountCcbiView(view);
     dressHangPanel(view);
     bindFightChrome(view, root, page);
+    dropFlatHangButtons(root);
     mountHangMissionChip(root, page);
     raiseHangProbe(root);
     GameLog.shared.info("MainApp", "hang battle shell " + path);
   } catch (err) {
     GameLog.shared.error("MainApp", "hang battle shell " + messageOf(err) + "，站场仍在");
     if (!root.isValid) return;
+    if (view && view.isValid) {
+      GameLog.shared.error("MainApp", "挂机面板已经在，不补扁平调试钮");
+      dropFlatHangButtons(root);
+      try {
+        bindFightChrome(view, root, page);
+      } catch (wireErr) {
+        GameLog.shared.error("MainApp", "hang fight chrome " + messageOf(wireErr));
+      }
+      mountHangMissionChip(root, page);
+      raiseHangProbe(root);
+      return;
+    }
     mountCodeHangBar(root, page);
     mountHangMissionChip(root, page);
     raiseHangProbe(root);
+  }
+}
+
+/** 面板已经在时，清掉代码补的扁平蓝钮。Prefab 钮没有叫 bg 的色块。 */
+function dropFlatHangButtons(root: Node): void {
+  const names = ["btn_lineup", "btn_battle", "btn_speed_battle"];
+  const kids = root.children.slice();
+  for (let i = 0; i < kids.length; i++) {
+    const node = kids[i];
+    if (names.indexOf(node.name) < 0) continue;
+    if (!node.getChildByName("bg")) continue;
+    node.destroy();
   }
 }
 
@@ -807,9 +833,21 @@ export function liftNode(node: Node, host: Node): void {
     node.setSiblingIndex(Math.max(0, from.children.length - 1));
     return;
   }
-  const world = fromConv.convertToWorldSpaceAR(pos);
-  if (node.parent !== host) node.parent = host;
-  const local = hostConv.convertToNodeSpaceAR(world);
-  node.setPosition(local.x, local.y, local.z || 0);
-  node.setSiblingIndex(Math.max(0, host.children.length - 1));
+  try {
+    const world = fromConv.convertToWorldSpaceAR(pos);
+    if (!world || !isFinite(world.x) || !isFinite(world.y)) {
+      node.setSiblingIndex(Math.max(0, from.children.length - 1));
+      return;
+    }
+    if (node.parent !== host) node.parent = host;
+    const local = hostConv.convertToNodeSpaceAR(world);
+    if (!local || !isFinite(local.x) || !isFinite(local.y)) {
+      node.setSiblingIndex(Math.max(0, host.children.length - 1));
+      return;
+    }
+    node.setPosition(local.x, local.y, local.z || 0);
+    node.setSiblingIndex(Math.max(0, host.children.length - 1));
+  } catch (_err) {
+    if (node.parent) node.setSiblingIndex(Math.max(0, node.parent.children.length - 1));
+  }
 }
