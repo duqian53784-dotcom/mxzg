@@ -49,6 +49,63 @@ export function sliceAnchorShift(box: CcbiBox, frame: CcbiFrame): { x: number; y
   return { x: box.ax * box.w, y: box.ay * box.h };
 }
 
+/**
+ * 英雄列表 / 背包的羊皮纸铺进 720×1280。
+ * 左右各留一点岩壁或店景，上下贴在顶栏和底栏之间。
+ * 根锚点在底边（ccbi 列表根是 0）。bg 坐标是修复九宫格之后的锚点位置。
+ */
+export const LIST_WINDOW_TOP = 470;
+export const LIST_WINDOW_BOTTOM = -480;
+export const LIST_WINDOW_SIDE = 18;
+
+export interface ListWindowInput {
+  rootW: number;
+  rootH: number;
+  anchorY: number;
+  bgY: number;
+  bgAy: number;
+  bgH: number;
+}
+
+export interface ListWindowSpread {
+  scale: number;
+  rootY: number;
+  extraTop: number;
+  extraBottom: number;
+  screenTop: number;
+  screenBottom: number;
+}
+
+export function listWindowSpread(input: ListWindowInput): ListWindowSpread {
+  const rootW = input.rootW > 1 ? input.rootW : 640;
+  const rootH = input.rootH > 1 ? input.rootH : 960;
+  const targetW = 720 - LIST_WINDOW_SIDE * 2;
+  const scale = targetW / rootW;
+  const rootY = -(0.5 - input.anchorY) * rootH * scale;
+  const bgH = input.bgH > 1 ? input.bgH : 1;
+  const bgBottom = input.bgY - input.bgAy * bgH;
+  const bgTop = bgBottom + bgH;
+  const screenTop = rootY + bgTop * scale;
+  const screenBottom = rootY + bgBottom * scale;
+  let extraTop = (LIST_WINDOW_TOP - screenTop) / scale;
+  let extraBottom = (screenBottom - LIST_WINDOW_BOTTOM) / scale;
+  if (!isFinite(extraTop) || extraTop < 0) extraTop = 0;
+  if (!isFinite(extraBottom) || extraBottom < 0) extraBottom = 0;
+  return {
+    scale,
+    rootY,
+    extraTop,
+    extraBottom,
+    screenTop: screenTop + extraTop * scale,
+    screenBottom: screenBottom - extraBottom * scale,
+  };
+}
+
+/** 九宫格拉高后锚点的位移。上沿抬 extraTop，下沿降 extraBottom。 */
+export function growAnchorDelta(anchorY: number, extraTop: number, extraBottom: number): number {
+  return anchorY * extraTop - (1 - anchorY) * extraBottom;
+}
+
 /** 小按钮里贴在锚点上的字，挪到按钮盒子中心。大面板上的标题不动。 */
 export function labelCenterInParent(
   parentAx: number,

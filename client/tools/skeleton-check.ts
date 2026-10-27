@@ -35,7 +35,7 @@ import {
   MainCityPosFile,
 } from "../assets/scripts/ui/cityMapLayout";
 import { horizontalFillMargins, widthSqueeze } from "../assets/scripts/ui/visibleChrome";
-import { labelCenterInParent, sliceAnchorShift } from "../assets/scripts/ui/ccbiPlace";
+import { growAnchorDelta, labelCenterInParent, listWindowSpread, sliceAnchorShift } from "../assets/scripts/ui/ccbiPlace";
 import { isP1ProgressStatus, pagePrefabShell } from "../assets/scripts/ui/prefabShellMap";
 import {
   attachReadonlyCityEntry,
@@ -26924,6 +26924,37 @@ function checkCityHub(): void {
     { ax: 0, ay: 0, w: 640, h: 960 }
   );
   assert(!!heroBg && Math.round(heroBg.x) === 320 && Math.round(heroBg.y) === 336, "hero list plate shifts into the page");
+  const heroWindow = listWindowSpread({
+    rootW: 640,
+    rootH: 960,
+    anchorY: 0,
+    bgY: 105.75 + 336,
+    bgAy: 0.5,
+    bgH: 672,
+  });
+  const bagWindow = listWindowSpread({
+    rootW: 640,
+    rootH: 960,
+    anchorY: 0,
+    bgY: 105.75,
+    bgAy: 0,
+    bgH: 614.4,
+  });
+  assert(
+    Math.abs(heroWindow.screenTop - 470) < 0.6 &&
+      Math.abs(heroWindow.screenBottom - -480) < 0.6 &&
+      heroWindow.extraTop > 40 &&
+      heroWindow.extraBottom > 20 &&
+      heroWindow.scale > 1 &&
+      heroWindow.scale < 1.2 &&
+      Math.abs(bagWindow.screenTop - 470) < 0.6 &&
+      Math.abs(bagWindow.screenBottom - -480) < 0.6,
+    "hero and bag parchment fill the band between the top and bottom bars"
+  );
+  assert(
+    growAnchorDelta(0.5, 142, 75) === 33.5 && growAnchorDelta(0, 10, 20) === -20 && growAnchorDelta(1, 10, 20) === 10,
+    "parchment grow keeps the top and bottom edges"
+  );
   const loginBg = sliceAnchorShift(
     { x: 288, y: 1.029, ax: 0.5, ay: 0, w: 576, h: 576, sx: 1, sy: 1 },
     { ax: 0, ay: 0, w: 576, h: 576 }
