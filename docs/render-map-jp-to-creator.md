@@ -18,7 +18,7 @@
 
 以前的公式 `scale = (720 - 18×2) / 640 = 1.06875` 就是 Inspector 里 `BackpackLayer`（以及同一条路径上的 `HeroListLayer`）的 **Scale 1.069**，位置约 `(-342, -513)`。日服背包只把全屏底图拉到 `winSize`，不把 640×960 的 ccbi 窗再整页放大。放大之后再把 `spr_bg` / `spr_box` 拉高约 200+75，羊皮纸中心被撑成大块空壳，店员节点也被顶上去。
 
-改完后根节点应为 **scale 1**，底左角锚点落在 **(-320, -480)**（640×960 在 720×1280 壳里居中）。左右各约 40 设计像素露出店景或岩洞。
+改完后根节点应为 **scale 1**，底左角锚点落在 **(-320, -480)**（640×960 在 720×1280 壳里居中）。左右各约 40 设计像素露出店景或岩洞。`fitParchmentWindow` 把缩放写成 `setScale(1, 1, 1)`，不把 `listWindowSpread` 的返回值再乘到节点上。旧公式即使还在某个缓存模块里，也不会再写成 Inspector 的 Scale 1.069 / Pos (-342, -513)。
 
 ## 背包格子
 
@@ -26,7 +26,7 @@
 
 格子预制是 `BackpackItemCell`。空槽把 `spr_frame` 换成 `ui/common/other_spr-null`（深色菱格），不造第二套滚动壳。滚动节点仍是预制里的 `spr_box/BagScroll`。
 
-预制原来把 `content` 和空的 `view` 并列，遮罩挂在 `BagScroll` 上。Creator 3.8 的 ScrollView 用 **content 的父节点** 当视口；宿主上的矩形遮罩在模板没画出来时会把子节点全部裁掉。运行时把 `content` 放进已有的 `view`，遮罩改画在 `view` 上，再按 `spr_box` 的高度留出 4 行空槽。不 `uiNode` 新的 `BagScroll`。
+预制原来把 `content` 和空的 `view` 并列，遮罩挂在 `BagScroll` 上。Creator 3.8 的 ScrollView 用 **content 的父节点** 当视口；宿主上的矩形遮罩在模板没画出来时会把子节点全部裁掉。运行时把 `content` 放进已有的 `view`，并把本地坐标钉在 `(0, 0)`。壳还没进场景时改 parent 会保留错误的世界坐标，格子留在层级里却被裁出视口。遮罩改画在 `view` 上，并且等节点 `activeInHierarchy` 之后再描矩形；提前描出来的模板是空的，`BackpackItemCell` 会整块看不见。视口高度仍跟 `spr_box`，空账号留 4 行。不 `uiNode` 新的 `BagScroll`。
 
 ## 已知限制（不是本分支用代码补的画）
 
@@ -36,4 +36,4 @@
 
 ## 复验
 
-Creator 预览真桥进背包（不要用 mock）。看 `BackpackLayer` 的 Scale 是否为 1，中央是否有 4 列空槽菱格，外框是否还是被拉高的空壳。英雄列表走同一条 `fitParchmentWindow`，Scale 也应为 1，羊皮纸不再被拉高。本环境没有 Creator，不能代替这次复验。
+Creator 预览真桥进背包（不要用 mock）。合入后本机必须 `git pull --ff-only`，并且 **关掉再开 Creator 预览**（硬刷新隧道），否则运行时仍是旧 bundle：Scale 1.069、Pos (-342, -513)，英雄 Tab 也会在旧 `MainApp` 上抛 `CITY_HUB_MORE_ID is not defined`。看 `BackpackLayer` 的 Scale 是否为 1、Pos 是否约 (-320, -480)，中央是否有 4 列空槽菱格。英雄 Tab 应打开 `HeroListLayer`，Scale 同样为 1。本环境没有 Creator，不能代替这次复验。

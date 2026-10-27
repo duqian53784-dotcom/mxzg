@@ -109,6 +109,7 @@ import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
 import { CityMapHandle } from "./CityMap";
 import { mountCityHubPrefab } from "./CityHub";
+import { CITY_HUB_MORE_ID } from "./cityHubEntries";
 import { cityAtomRoute } from "./cityMapLayout";
 import { createRect, paintRect, place, setText, uiNode } from "./UiKit";
 

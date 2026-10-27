@@ -26995,6 +26995,11 @@ function checkCityHub(): void {
       mainApp.indexOf("不手搓按钮页") >= 0,
     "activity and more buttons do not open a code hub page"
   );
+  assert(
+    mainApp.indexOf('import { CITY_HUB_MORE_ID } from "./cityHubEntries"') >= 0 &&
+      mainApp.indexOf("if (id === CITY_HUB_MORE_ID) this.mainButton = null") >= 0,
+    "noteClose imports CITY_HUB_MORE_ID so closing a page does not throw"
+  );
   assert(mainApp.indexOf("export const USE_CITY_CHROME_PREFAB = true") >= 0, "prefab chrome default stays");
   assert(mainApp.indexOf("export const USE_CITY_HUB_PREFAB = true") >= 0, "city hub prefab default stays on");
   assert(mainApp.indexOf("mountCityHubPrefab") >= 0, "city hub prefab is mounted from MainApp");
@@ -27299,6 +27304,18 @@ function checkCityHub(): void {
       fillSrc.indexOf("HangSpineMask") >= 0,
     "hang panel fills the four bars, hides the vip debug line, and does not mount the empty plaque"
   );
+  const placeSrc = readFileSync(uiSource("ccbiPlace.ts"), "utf8");
+  const fitAt = fillSrc.indexOf("function fitParchmentWindow");
+  const fitEnd = fillSrc.indexOf("function watchParchment");
+  const fitBody = fitAt >= 0 && fitEnd > fitAt ? fillSrc.slice(fitAt, fitEnd) : "";
+  assert(
+    placeSrc.indexOf("const scale = 1") >= 0 &&
+      placeSrc.indexOf("targetW / rootW") < 0 &&
+      fitBody.indexOf("view.setScale(1, 1, 1)") >= 0 &&
+      fitBody.indexOf("setScale(spread.scale") < 0 &&
+      fitBody.indexOf("growNode") < 0,
+    "list window stays at design scale 1 and fit does not write 684/640 onto the layer"
+  );
   const roleFill = hangBarFillBox("ui/city/main-scene_progress-role-exp");
   const afkFill = hangBarFillBox("ui/city/main-scene_progress-AFK");
   const goldFill = hangBarFillBox("ui/city/main-scene_progress-hangs");
@@ -27393,7 +27410,9 @@ function checkCityHub(): void {
       bagFill.indexOf('uiNode("BagFill")') < 0 &&
       bagFill.indexOf('getChildByName("BagScroll")') >= 0 &&
       bagFill.indexOf("content.parent = port") >= 0 &&
+      bagFill.indexOf("content.setPosition(0, 0, 0)") >= 0 &&
       bagFill.indexOf("GRAPHICS_RECT") >= 0 &&
+      bagFill.indexOf("activeInHierarchy") >= 0 &&
       fillSrc.indexOf("other_spr-null") >= 0 &&
       fillSrc.indexOf("function gridScroll") < 0,
     "bag scroll lives under spr_box and fillBag does not build BagScroll"
