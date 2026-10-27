@@ -2207,7 +2207,7 @@ function checkGameStore(): void {
   assert(resolveBootTransport(plain, "mock").useWs, "saved mock does not override the real server");
   const devMock = parseTransportSearch("?dev=mock");
   assert(devMock.kind === "mock" && devMock.explicit, "dev=mock is explicit and off unless requested");
-  assert(!resolveBootTransport(devMock, "ws").useWs, "dev=mock stays offline");
+  assert(resolveBootTransport(devMock, "ws").useWs && !resolveBootTransport(devMock, "ws").autoFallback, "dev=mock stays on the bridge");
   const devWire = parseTransportSearch("?dev=wire");
   assert(devWire.kind === "ws" && devWire.explicit === false, "dev=wire does not leave the real server");
   assert(resolveBootTransport(devWire, null).useWs, "dev=wire still uses the bridge");
@@ -2219,7 +2219,7 @@ function checkGameStore(): void {
   assert(savedWs.useWs && !savedWs.autoFallback, "empty plus saved ws uses the bridge");
   const forced = parseTransportSearch("?transport=mock");
   const beat = resolveBootTransport(forced, "ws");
-  assert(forced.explicit && !beat.useWs && !beat.autoFallback, "explicit mock beats saved ws");
+  assert(forced.explicit && beat.useWs && !beat.autoFallback, "explicit mock stays on the bridge");
   const auto = parseTransportSearch("?transport=auto");
   const autoBoot = resolveBootTransport(auto, "mock");
   assert(auto.kind === "auto" && auto.explicit && autoBoot.useWs && autoBoot.autoFallback, "auto falls back");
@@ -2594,8 +2594,8 @@ function checkStoreScreens(): void {
 
 function checkLoginPrefs(): void {
   assert(MOCK_SERVERS.length === 3, "three servers");
-  assert(findServer(1).name === "本地Mock" && findServer(2).name === "提审" && findServer(3).name === "正式占位", "server names");
-  assert(findServer(99).id === 1 && findServer(Number.NaN).name === "本地Mock", "unknown server");
+  assert(findServer(1).name === "本机桥" && findServer(2).name === "提审" && findServer(3).name === "正式占位", "server names");
+  assert(findServer(99).id === 1 && findServer(Number.NaN).name === "本机桥", "unknown server");
   assert(resolveAccount("  ", "mock") === "mock", "blank account falls back");
   assert(resolveAccount(" qian ", "mock") === "qian", "account trimmed");
   assert(resolveAccount("", "") === "mock", "default account");
@@ -4872,7 +4872,7 @@ async function checkWs(): Promise<void> {
   );
   assert(parseTransportSearch("?transport=websocket").kind === "ws" && parseTransportSearch("?transport=wss").explicit, "ws aliases");
   const explicitMock = parseTransportSearch("?dev=mock&transport=ws&ws=wss://bridge.trycloudflare.com/game");
-  assert(explicitMock.kind === "mock" && !resolveBootTransport(explicitMock, null).useWs, "explicit mock stays offline");
+  assert(explicitMock.kind === "mock" && resolveBootTransport(explicitMock, null).useWs, "explicit mock stays on the bridge");
   const tunnelUrl = "wss://bridge.trycloudflare.com/game";
   assert(wsDownLog(DEFAULT_WS_URL) === WS_DOWN_LOG && wsDownDetail(DEFAULT_WS_URL) === WS_DOWN_DETAIL, "local down copy stays");
   assert(

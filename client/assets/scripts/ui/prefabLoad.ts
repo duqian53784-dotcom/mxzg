@@ -57,6 +57,8 @@ const PREFAB_UUID: { [path: string]: string } = {
   "prefabs/ui/summon/SummonLayer": "c046c79b-a2a4-4bf1-b93a-966094c105b8",
   "prefabs/ui/smith/SmithLayer": "d3530a27-d51a-478c-870a-21203cd26e70",
   "prefabs/ui/backpack/BackpackLayer": "6bfdfd78-65e9-403c-b7c8-7e6cd94ffebb",
+  "prefabs/ui/backpack/BackpackItemCell": "c4e8a1b2-7d33-4f61-9a20-6b5e0d4c8f11",
+  "prefabs/ui/backpack/BackpackTabButton": "d5f9b2c3-8e44-4072-ab31-7c6f1e5d9022",
   "prefabs/ui/mail/MailLayer": "42a4160b-5cca-41b5-beb4-520375f560e0",
   "prefabs/ui/pvp/PvpLayer": "f7e674a7-9365-432d-834c-641d10fb5db4",
   "prefabs/ui/fantasy-tower/FantasyTowerLayer": "8fd8261a-b435-492c-8fce-2e5dcad41158",
