@@ -1622,10 +1622,15 @@ function maskCrystalHole(frame: Node): void {
   fill.setSiblingIndex(index);
 }
 
-/** 一颗钮只留一个居中的字。不另画扁平色块。 */
+/**
+ * 一颗钮只留一个居中的字。不另画扁平色块。
+ * 请求的字号是画面上的大小。侧钮缩放 0.8，本地字号要除掉这一档，避免再缩一次。
+ */
 function seatHangButton(node: Node | null, text: string, size: number): void {
   if (!node) return;
-  fitButton(node, text, size);
+  const scale = Math.abs(node.scale.y);
+  const drawn = scale > 0.05 && scale < 0.99 ? Math.round(size / scale) : size;
+  fitButton(node, text, drawn);
   const kids = node.children;
   let kept = false;
   for (let i = 0; i < kids.length; i++) {
@@ -1647,8 +1652,8 @@ function seatHangButton(node: Node | null, text: string, size: number): void {
       box.setContentSize(Math.max(8, parentUi.contentSize.width - 16), Math.max(8, parentUi.contentSize.height - 8));
     }
     label.string = text;
-    label.fontSize = size;
-    label.lineHeight = size + 4;
+    label.fontSize = drawn;
+    label.lineHeight = drawn + 4;
     label.overflow = Overflow.SHRINK;
     label.horizontalAlign = HorizontalTextAlignment.CENTER;
     label.verticalAlign = VerticalTextAlignment.CENTER;
@@ -1811,19 +1816,28 @@ function bindSkillFace(node: Node, view: Node, skillId: number, level: number | 
   });
 }
 
+/** 地名标题按 lbl_name 的缩放收进 spr_title_bg，不把 0.5 的字再写成 28。 */
 function writeStageTitle(view: Node, text: string, wide: boolean): void {
   const node = findNamed(view, "lbl_name");
   if (!node) return;
   setText(node, text);
   if (!wide) return;
   const label = node.getComponent(Label);
-  if (label) {
-    label.fontSize = 28;
-    label.lineHeight = 32;
-    label.overflow = Overflow.SHRINK;
-  }
   const ui = node.getComponent(UITransform);
-  if (ui) ui.setContentSize(520, 64);
+  const scale = Math.abs(node.scale.x);
+  const used = scale > 0.05 ? scale : 1;
+  const bar = findNamed(view, "spr_title_bg");
+  const barUi = bar ? bar.getComponent(UITransform) : null;
+  const barW = barUi && barUi.contentSize.width > 8 ? barUi.contentSize.width : 184;
+  const visual = 22;
+  if (label) {
+    const font = Math.max(12, Math.round(visual / used));
+    label.fontSize = font;
+    label.lineHeight = font + 4;
+    label.overflow = Overflow.SHRINK;
+    label.horizontalAlign = HorizontalTextAlignment.CENTER;
+  }
+  if (ui) ui.setContentSize(Math.max(8, (barW - 16) / used), Math.max(8, 36 / used));
 }
 
 function showSkillCard(view: Node, skillId: number, level: number | null): void {

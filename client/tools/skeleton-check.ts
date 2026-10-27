@@ -27309,6 +27309,23 @@ function checkCityHub(): void {
     "BattleEndLayer hides the auto-close timer and confirms without sending 3002"
   );
   assert(
+    endSrc.indexOf("battle-end-lang_lbl-result-1") >= 0 &&
+      endSrc.indexOf("battle-end-lang_lbl-result-0") >= 0 &&
+      endSrc.indexOf("胜负未带") >= 0 &&
+      endSrc.indexOf("lbl_hero_name") >= 0 &&
+      endSrc.indexOf("lbl_role_exp_num") >= 0 &&
+      endSrc.indexOf("setText(name, headline)") < 0 &&
+      endSrc.indexOf('setText(fail, "失败，不要气馁")') < 0 &&
+      endSrc.indexOf("show_rich") >= 0,
+    "victory swaps the result banner and does not write the headline into the mvp name"
+  );
+  assert(
+    fillSrc.indexOf("请求的字号是画面上的大小。侧钮缩放 0.8，本地字号要除掉这一档，避免再缩一次。") >= 0 &&
+      fillSrc.indexOf("地名标题按 lbl_name 的缩放收进 spr_title_bg，不把 0.5 的字再写成 28。") >= 0 &&
+      fillSrc.indexOf("spr_title_bg") >= 0,
+    "hang side labels follow the 0.8 scale and stage titles fit the title bar"
+  );
+  assert(
     shellSrc.indexOf("mountIdleHang") >= 0 && shellSrc.indexOf("if (spec.fight) mountIdleHang") >= 0,
     "fight shell paints the hang scene before the battle panel"
   );
