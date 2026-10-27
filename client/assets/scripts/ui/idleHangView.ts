@@ -12,7 +12,7 @@
  * 掉落堆和计时泡抬到金环顶上面，不盖住环。
  * 站场一次铺上 idleHangStems 返回的每一只（最多三格），演武不拆它们。点「战斗」才进真战报。
  */
-import { Color, Node, resources, sp, Sprite, SpriteFrame, UITransform } from "cc";
+import { Color, HorizontalTextAlignment, Label, Node, Overflow, resources, sp, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
 import { chapterStageFace } from "../config/rosterCatalog";
 import { GameLog } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
@@ -269,19 +269,41 @@ function ensureLootSpine(hang: Node): Node {
   return host;
 }
 
-/** Prefab 计时泡的子节点偏移是按底板算的。收到挂机地上，盖在掉落堆上沿。只挪一次。 */
+/**
+ * Prefab 计时泡的子节点按底板写在 y≈400，会飘到演武场中间。
+ * 每次都收回掉落堆上沿。占位「999」不留在场上。
+ */
 export function seatHangTimer(hang: Node, bubble: Node): void {
-  const mark = bubble as Node & { mxzgSeat?: boolean };
-  if (!mark.mxzgSeat) {
-    mark.mxzgSeat = true;
-    const spr = bubble.getChildByName("spr_bubble");
-    const label = bubble.getChildByName("lbl_progress_time2");
-    if (bubble.parent !== hang) bubble.parent = hang;
-    if (spr) spr.setPosition(0, 4, 0);
-    if (label) label.setPosition(0, 10, 0);
-    bubble.setPosition(HANG_LOOT_BUBBLE_X, hangLootBubbleY(), 0);
-  }
+  const spr = bubble.getChildByName("spr_bubble");
+  const label = bubble.getChildByName("lbl_progress_time2");
+  if (bubble.parent !== hang) bubble.parent = hang;
+  if (spr) spr.setPosition(0, 4, 0);
+  if (label) label.setPosition(0, 10, 0);
+  bubble.setPosition(HANG_LOOT_BUBBLE_X, hangLootBubbleY(), 0);
   if (bubble.parent === hang) bubble.setSiblingIndex(Math.max(0, hang.children.length - 1));
+}
+
+/** 泡上的字换成时钟。Prefab 的 0×0、占位「999」不留在场上。 */
+export function writeHangClock(bubble: Node, text: string): void {
+  const labelNode = bubble.getChildByName("lbl_progress_time2");
+  const show = text !== "" && text !== "999";
+  bubble.active = show;
+  if (!labelNode || !show) return;
+  labelNode.setScale(1, 1, 1);
+  const label = labelNode.getComponent(Label);
+  if (label) {
+    label.overflow = Overflow.SHRINK;
+    label.horizontalAlign = HorizontalTextAlignment.CENTER;
+    label.verticalAlign = VerticalTextAlignment.CENTER;
+    label.fontSize = 16;
+    label.lineHeight = 20;
+    label.string = text;
+  }
+  const ui = labelNode.getComponent(UITransform);
+  if (ui) {
+    ui.setAnchorPoint(0.5, 0.5);
+    ui.setContentSize(70, 28);
+  }
 }
 
 function spriteNode(name: string, width: number, height: number): Node {

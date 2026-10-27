@@ -185,14 +185,24 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     return !!(battle && battle.isValid && battle.active);
   }
 
+  function applyHangFace(actor: SpineActor, face: -1 | 1): void {
+    const node = actor.node;
+    if (!node || !node.isValid) return;
+    const sy = Math.abs(node.scale.y);
+    const scale = sy > 0.05 && sy < 0.95 ? sy : 0.58;
+    node.setScale(scale * face, scale, 1);
+  }
+
   function plantAllies(): void {
     const n = actors.length < IDLE_HANG_SPOTS.length ? actors.length : IDLE_HANG_SPOTS.length;
     for (let i = 0; i < n; i++) {
       const spot = IDLE_HANG_SPOTS[i];
-      const home = actors[i].node.parent;
+      const actor = actors[i];
+      const home = actor.node.parent;
       if (!home || !home.isValid) continue;
       home.active = true;
       home.setPosition(spot.x, spot.y, 0);
+      applyHangFace(actor, spot.face);
     }
   }
 
@@ -324,7 +334,10 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
           if (gen !== waveGen || !node.isValid || foe.dead) return;
           foe.ready = true;
           node.active = true;
-          if (foe.actor) foe.actor.play("stand");
+          if (foe.actor) {
+            applyHangFace(foe.actor, plan.face);
+            foe.actor.play("stand");
+          }
           maybeFight(gen);
         },
       });
@@ -350,7 +363,9 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     }
     for (let i = 0; i < waveFoes.length; i++) {
       const foe = waveFoes[i];
-      if (!foe.dead) foe.entered = true;
+      if (foe.dead) continue;
+      foe.entered = true;
+      if (foe.actor) applyHangFace(foe.actor, foe.plan.face);
     }
     maybeFight(gen);
   }

@@ -196,6 +196,8 @@ export function mountBattleSpine(parent: Node, stem: string, onFail: () => void,
             /* 缺省皮仍可播站场和攻击 */
           }
         }
+        // 骨架挂上后再写朝向，避免缩放被组件清掉。
+        node.setScale(scale * face, scale, 1);
         skel = view;
         if (effect) {
           if (pending) burst(pending);
