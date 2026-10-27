@@ -1619,6 +1619,14 @@ function paintPreviewDrops(view: Node, drops: DropFace[]): void {
   );
 }
 
+/** 名册用 heroId。图鉴格子还没有实例 id 时用 heroType，空槽保持预制名。 */
+function heroCellId(hero: StoreHero | null): number | null {
+  if (!hero) return null;
+  if (typeof hero.heroId === "number" && isFinite(hero.heroId)) return Math.floor(hero.heroId);
+  if (typeof hero.heroType === "number" && isFinite(hero.heroType)) return Math.floor(hero.heroType);
+  return null;
+}
+
 function bindHeroCell(
   cell: Node,
   hero: StoreHero | null,
@@ -1627,6 +1635,8 @@ function bindHeroCell(
   locked: boolean,
   marked = false
 ): void {
+  const cellId = heroCellId(hero);
+  if (cellId !== null) cell.name = "HeroIconCell_" + cellId;
   const face = findNamed(cell, "spr_face");
   const name = findNamed(cell, "lbl_name");
   const elemNode = findNamed(cell, "spr_elem");
@@ -2667,53 +2677,44 @@ function markHeroTabs(view: Node, tab: "hero" | "book" | "dragon"): void {
 }
 
 /**
- * 页签在 HeroListLayer/UIMenu_1。fillHero 早于壳进场景，只听 CLICK 时指针列表收不到这三颗。
- * 板子挂上、页面已经在场景里之后再绑。这排是 640×960，抬到最前后收成 0，命中留给三颗钮。
- * 图鉴留着元素条。圣龙收起元素条。缺路径只打日志。
+ * 页签在 HeroListLayer/UIMenu_1。板子挂上之后再绑，和 node_elem 的六颗筛选同一套：
+ * findNode、钮保持显示、关掉 Button 过渡、只听 CLICK，再把这一排抬到父节点最前。
+ * 不把 UIMenu_1 收成 0。缺路径只打日志，不 new 节点。
+ * 图鉴留着元素条。圣龙收起元素条。
  */
 function bindHeroPageTabs(view: Node, pick: (tab: "hero" | "book" | "dragon") => void): void {
   const menu = findNode(view, HERO_TAB_MENU);
+  console.log("[HeroTab] bind UIMenu_1 found=" + !!menu);
   if (!menu) {
     GameLog.shared.warn("Hero", "HeroListLayer 没有 UIMenu_1。请在 prefabs/ui/hero/HeroListLayer 保留 UIMenu_1/btn_hero、btn_illustrat、btn_dragon");
-    return;
+  } else if (menu.parent) {
+    menu.active = true;
+    menu.setSiblingIndex(menu.parent.children.length - 1);
   }
-  if (menu.parent === view) menu.setSiblingIndex(view.children.length - 1);
-  const menuUi = menu.getComponent(UITransform);
-  if (menuUi) menuUi.setContentSize(0, 0);
-  const paths: { id: "hero" | "book" | "dragon"; path: string }[] = [
-    { id: "hero", path: HERO_TAB_HERO },
-    { id: "book", path: HERO_TAB_BOOK },
-    { id: "dragon", path: HERO_TAB_DRAGON },
+  const paths: { id: "hero" | "book" | "dragon"; path: string; name: string }[] = [
+    { id: "hero", path: HERO_TAB_HERO, name: "btn_hero" },
+    { id: "book", path: HERO_TAB_BOOK, name: "btn_illustrat" },
+    { id: "dragon", path: HERO_TAB_DRAGON, name: "btn_dragon" },
   ];
   for (let i = 0; i < paths.length; i++) {
     const spec = paths[i];
     const node = findNode(view, spec.path);
+    console.log("[HeroTab] bind " + spec.name + " found=" + !!node);
     if (!node) {
       GameLog.shared.warn("Hero", "HeroListLayer 没有 " + spec.path);
       continue;
     }
+    node.active = true;
     const mark = node as Node & { mxzgHeroTab?: boolean };
     if (mark.mxzgHeroTab) continue;
     mark.mxzgHeroTab = true;
     const click = node.getComponent(Button) || node.addComponent(Button);
     click.transition = Button.Transition.NONE;
-    let last = 0;
-    const fire = () => {
-      const now = Date.now();
-      if (now - last < 80) return;
-      last = now;
+    click.interactable = true;
+    node.on(Button.EventType.CLICK, () => {
+      console.log("[HeroTab] click " + spec.name);
       pick(spec.id);
-    };
-    node.on(Button.EventType.CLICK, fire);
-    node.on(Node.EventType.TOUCH_END, fire);
-    if (node.activeInHierarchy) {
-      try {
-        node.active = false;
-        node.active = true;
-      } catch (_err) {
-        if (node.isValid && !node.active) node.active = true;
-      }
-    }
+    });
   }
 }
 
@@ -2993,7 +2994,7 @@ export function pinSprites(node: Node): void {
   for (let i = 0; i < kids.length; i++) pinSprites(kids[i]);
 }
 
-/** 全屏 menu 会吃掉格子和页签。收成 0 以后，点击落到子按钮上。 */
+/** 全屏 menu 会盖住格子。页签那排 UIMenu_1 例外，尺寸留着。其余大 menu 收成 0。 */
 function silenceBigMenus(root: Node): void {
   const stack: Node[] = [root];
   while (stack.length > 0) {
@@ -3001,6 +3002,9 @@ function silenceBigMenus(root: Node): void {
     const kids = node.children;
     for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
     if (node.name.toLowerCase().indexOf("menu") < 0) continue;
+    // HeroListLayer/UIMenu_1 下面就是 btn_hero / btn_illustrat / btn_dragon，预制 640×960。
+    // 元素条 elem_menu 预制高度是 0，进不了这里。页签这排保持预制尺寸，不收成 0。
+    if (node.name === "UIMenu_1" && node.getChildByName("btn_illustrat")) continue;
     const menuSize = positiveUiSize(node.getComponent(UITransform));
     if (!menuSize || menuSize.width < 500 || menuSize.height < 500) continue;
     const ui = node.getComponent(UITransform);
