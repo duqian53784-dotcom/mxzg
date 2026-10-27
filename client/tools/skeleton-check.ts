@@ -100,6 +100,7 @@ import {
 import { plantHangLocomotion, SPINE_RUNTIME_VERSION, upgradeSpine37Json } from "../assets/scripts/ui/spineUpgrade";
 import {
   hangAllyFloorPoint,
+  hangAllyVisibleShift,
   IDLE_HANG_SPOTS,
   IDLE_SKIRMISH_HITS,
   jpHangHeroPosition,
@@ -2994,7 +2995,7 @@ function checkCityMap(): void {
   assert(ids.length === 5 && ids.join(",") === "city,hero,summon,smith,plays", "nav roots stay five");
   const barTitles: string[] = [];
   for (let i = 0; i < CITY_BAR.length; i++) barTitles.push(CITY_BAR[i].title);
-  assert(barTitles.join(",") === "主城,英雄,背包,战斗,副本,公会,羁绊", "city chrome bar is the seven cn entries");
+  assert(barTitles.join(",") === "主城,英雄,背包,战斗,副本,公会,VIP", "city chrome bar ends with VIP");
 
   const config = configDir();
   const resources = join(config, "..");
@@ -3167,9 +3168,10 @@ function checkCityMap(): void {
     cityMapSrc.indexOf("loadCitySpriteFrame") >= 0 &&
       cityMapSrc.indexOf("CITY_PLATE_WAIT_MS") >= 0 &&
       cityMapSrc.indexOf("paintCityFrames(frameJobs)") >= 0 &&
+      cityMapSrc.indexOf("paintCitySpriteWhenReady") >= 0 &&
       cityMapSrc.indexOf("startCityEffects(views, layout.effects, placeBottomLeft)") <
         cityMapSrc.indexOf("layout.buildings.map"),
-    "city map starts effects before a plate load can stall the buildings"
+    "city map starts effects before a plate load can stall the buildings, and a late frame still paints"
   );
 
   const gates = {
@@ -27027,8 +27029,10 @@ function checkCityHub(): void {
       hubSrc.indexOf("ensureCityPlates(views);") >= 0 &&
       hubSrc.indexOf("ensureCityPlates(views);") <
         hubSrc.indexOf("startCityEffects(views, layout.effects, placeBottomLeft)") &&
-      hubSrc.indexOf("loadCitySpriteFrame") >= 0,
-    "city hub refills missing plates without blocking effects"
+      hubSrc.indexOf("loadCitySpriteFrame") >= 0 &&
+      hubSrc.indexOf("ensureCityPlates(views);") < hubSrc.indexOf("await Promise.all") &&
+      hubSrc.indexOf("primeCityHub") >= 0,
+    "city hub shows plates before config and refills missing ones without blocking effects"
   );
   assert(mainApp.indexOf("id !== CITY_TAB") >= 0, "city page does not take a prefab shell");
   assert(hubPaths.indexOf("BtnIdle") < 0 && hubPaths.indexOf("BtnBag") < 0 && hubPaths.indexOf("BtnLogin7") < 0, "city hub prefab is not the debug button matrix");
@@ -27063,6 +27067,20 @@ function checkCityHub(): void {
   assert(
     chrome.indexOf("openActivity") >= 0 && chrome.indexOf("openMore") >= 0 && chrome.indexOf("openMail") >= 0,
     "hub clicks stay on the prefab"
+  );
+  assert(
+    chrome.indexOf("ui/city/main-scene-lang_lbl-fetters-unlock") >= 0 &&
+      chrome.indexOf("ui/city/main-scene_spr-fetters-unlock") >= 0 &&
+      chrome.indexOf('ui/city/main-scene-lang_lbl-fetter"') < 0 &&
+      chrome.indexOf('ui/city/main-scene_spr-fetter"') < 0,
+    "shared bottom bar uses the VIP caption and crown, not the fetter gem"
+  );
+  const chromePrefab = readFileSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "city", "CityChrome.prefab"), "utf8");
+  assert(
+    chromePrefab.indexOf("e7c4c986-adc1-45d9-a0d4-543d7e560024@f9941") >= 0 &&
+      chromePrefab.indexOf("071be665-4e92-45bc-9a1d-e375f3118f4f") < 0 &&
+      chromePrefab.indexOf('"羁绊"') < 0,
+    "city chrome prefab paints the crown and does not keep the fetter label"
   );
   const boot = readFileSync(bootSource(), "utf8");
   assert(boot.indexOf("USE_CITY_CHROME") < 0, "Boot does not grow a city chrome switch");
@@ -27479,16 +27497,19 @@ function checkCityHub(): void {
   );
   const talkFile = JSON.parse(readFileSync(join(configDir(), "herotalk.json"), "utf8")) as { rows?: unknown };
   const talkRows = readHeroTalkRows(talkFile);
-  const talkAt = hangTalkAnchor({ x: -150, y: -30 }, 120);
+  const talkAt = hangTalkAnchor({ x: HANG_LOOT_BUBBLE_X, y: hangLootBubbleY() });
   assert(
     talkRows.length === 53 &&
       pickHeroTalkLan(talkRows, 1, 0) === 70901 &&
       heroTalkCandidates(talkRows, 1).every((row) => row.levelMin <= 1) &&
       heroTalkCandidates(talkRows, 3).every((row) => row.lan !== 70914) &&
       plainTalk("十连召唤<font color='#ec4529'>必出五星</font>呀") === "十连召唤必出五星呀" &&
-      talkAt.x === -60 &&
-      talkAt.y === 198,
-    "hang talk cycles herotalk by level and does not invent a sentence"
+      talkAt.x === HANG_LOOT_BUBBLE_X + 68 &&
+      talkAt.y === hangLootBubbleY() + 100 &&
+      talkAt.y > hangLootBubbleY() &&
+      talkAt.y + 40 < hangAllyFloorPoint(4).y &&
+      talkAt.x - 100 > hangAllyFloorPoint(4).x,
+    "hang talk cycles herotalk by level and sits above the loot, clear of the upper ally"
   );
   const talkSrc = readFileSync(uiSource("idleHangTalk.ts"), "utf8");
   const cityLayoutSrc = readFileSync(uiSource("cityMapLayout.ts"), "utf8");
@@ -28003,8 +28024,15 @@ function checkIdleSkirmish(): void {
       hangAllyFloorPoint(4).y > hangAllyFloorPoint(1).y &&
       hangAllyFloorPoint(1).y > hangAllyFloorPoint(5).y &&
       hangAllyFloorPoint(5).y <= 120 &&
-      hangAllyFloorPoint(5).y > hangLootIconY(),
-    "hang allies follow getHangHeroPosition and stand left of the loot pile"
+      hangAllyFloorPoint(5).y > hangLootIconY() &&
+      hangAllyFloorPoint(4).x === -170 &&
+      hangAllyFloorPoint(1).x === -120 &&
+      hangAllyFloorPoint(4).x > -190 &&
+      hangAllyFloorPoint(1).x > hangAllyFloorPoint(4).x &&
+      hangAllyVisibleShift(720) === 0 &&
+      hangAllyVisibleShift(640) === 40 &&
+      hangAllyVisibleShift(0) === 0,
+    "hang allies follow getHangHeroPosition, stay inside the layer, and stand left of the loot pile"
   );
   const hallStep = idleHangLoopOffset(1000, 720, IDLE_HALL_SCROLL_PX);
   const skyStep = idleHangLoopOffset(1000, 720, IDLE_SKY_SCROLL_PX);

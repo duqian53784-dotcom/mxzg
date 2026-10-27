@@ -12,12 +12,17 @@ export interface HeroTalkRow {
 /** 大约 8 秒换一句。 */
 export const HANG_TALK_MS = 8000;
 
+/** 对白泡画在掉落计时泡上方。宽高按这个留白，不盖左列头顶。 */
+export const HANG_TALK_BUBBLE_W = 200;
+export const HANG_TALK_BUBBLE_H = 80;
+
 /**
- * 气泡中心。默认第一格是阵位 1（IDLE_HANG_SPOTS[0]），气泡底边停在地砖上沿之上。
- * other_spr-bubble-5 的尾巴在左边，所以中心放到格子右侧。
+ * 气泡中心。loot 是计时泡中心（掉落堆上方那一颗）。
+ * 句子放在计时泡上沿和左列头顶之间的空地，不跟阵位 4 的高行英雄叠。
+ * other_spr-bubble-5 的尾巴在左边，中心再往堆的右侧偏一截。窄屏左列右移后仍躲开。
  */
-export function hangTalkAnchor(spot: { x: number; y: number }, floorTop: number): { x: number; y: number } {
-  return { x: spot.x + 90, y: floorTop + 78 };
+export function hangTalkAnchor(loot: { x: number; y: number }): { x: number; y: number } {
+  return { x: loot.x + 68, y: loot.y + 100 };
 }
 
 export function hangTalkBucket(nowMs: number): number {

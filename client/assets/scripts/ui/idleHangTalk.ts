@@ -1,5 +1,5 @@
 /**
- * 挂机左英雄头顶的一句对白。
+ * 挂机掉落堆上方的一句对白。不盖左列英雄的头。
  * 图是 other_spr-bubble-5（224×74）。other_spr-bubble-1 只有 54×44，装不下一句 language。
  * 节点名 IdleTalk，进真战报时由 hangBattle 藏起来。不给每个站位写空等。
  */
@@ -7,8 +7,10 @@ import { Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransfo
 import { ConfigDb } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
 import { Session } from "../core/Session";
-import { IDLE_FLOOR_TOP, IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
+import { hangLootBubbleY, HANG_LOOT_BUBBLE_X } from "./hangChrome";
 import {
+  HANG_TALK_BUBBLE_H,
+  HANG_TALK_BUBBLE_W,
   hangTalkAnchor,
   hangTalkBucket,
   hangTalkLevel,
@@ -19,8 +21,8 @@ import {
 import { createLabel, place, uiNode } from "./UiKit";
 
 const BUBBLE = "ui/common/other_spr-bubble-5";
-const BUBBLE_W = 320;
-const BUBBLE_H = 112;
+const BUBBLE_W = HANG_TALK_BUBBLE_W;
+const BUBBLE_H = HANG_TALK_BUBBLE_H;
 const INK = new Color(255, 244, 220, 255);
 
 let bubbleMiss = false;
@@ -32,7 +34,7 @@ export function mountHangTalk(hang: Node): void {
   const node = uiNode("IdleTalk");
   const ui = node.addComponent(UITransform);
   ui.setContentSize(BUBBLE_W, BUBBLE_H);
-  const at = hangTalkAnchor(IDLE_HANG_SPOTS[0], IDLE_FLOOR_TOP);
+  const at = hangTalkAnchor({ x: HANG_LOOT_BUBBLE_X, y: hangLootBubbleY() });
   place(node, hang, at.x, at.y);
 
   const plate = uiNode("HangTalkPlate");
@@ -44,7 +46,7 @@ export function mountHangTalk(hang: Node): void {
   place(plate, node, 0, 0);
   paintBubble(sprite);
 
-  const line = createLabel("", 18, { color: INK, width: 286, height: 88 });
+  const line = createLabel("", 18, { color: INK, width: 172, height: 64 });
   line.name = "HangTalkLine";
   const label = line.getComponent(Label);
   if (label) {

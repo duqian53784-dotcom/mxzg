@@ -73,7 +73,21 @@ const PREFAB_UUID: { [path: string]: string } = {
   "prefabs/ui/magic-cube/MagicCubeLayer": "f99b58f3-39fc-4096-bad0-ecd9dbeb8b9b",
 };
 
+const prefabPending = new Map<string, Promise<Prefab>>();
+
+/** 同一路径共用一次加载。预热和进城挂载不要各解一遍。失败删掉，下次还能再试。 */
 export function loadPrefab(assetPath: string): Promise<Prefab> {
+  const cached = prefabPending.get(assetPath);
+  if (cached) return cached;
+  const pending = loadPrefabOnce(assetPath);
+  prefabPending.set(assetPath, pending);
+  pending.catch(() => {
+    if (prefabPending.get(assetPath) === pending) prefabPending.delete(assetPath);
+  });
+  return pending;
+}
+
+function loadPrefabOnce(assetPath: string): Promise<Prefab> {
   const parsed = splitAssetPath(assetPath);
   return loadBundlePrefab(parsed.bundle, parsed.inner).catch((bundleErr: unknown) => {
     const uuid = PREFAB_UUID[assetPath];
