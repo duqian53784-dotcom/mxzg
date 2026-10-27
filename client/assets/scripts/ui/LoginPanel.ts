@@ -1,4 +1,4 @@
-import { BlockInputEvents, Button, Color, Node, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, Label, Node, Overflow, UITransform } from "cc";
 import { findServer, GameServer, MOCK_SERVERS } from "../core/servers";
 import {
   bindClick,
@@ -201,6 +201,20 @@ export async function mountLoginPrefab(
   }
 }
 
+/** 标题格子只有 60 高。48 号会顶出盒子，收成大约 0.55 倍高度。 */
+function fitCardTitle(root: Node): void {
+  const title = requireNode(root, "Card/Title");
+  const label = title.getComponent(Label);
+  const ui = title.getComponent(UITransform);
+  if (!label || !ui) return;
+  const height = ui.contentSize.height;
+  if (!(height > 8) || !(label.fontSize > height * 0.7)) return;
+  const font = Math.max(12, Math.floor(height * 0.55));
+  label.fontSize = font;
+  label.lineHeight = font + 4;
+  label.overflow = Overflow.SHRINK;
+}
+
 function bindLoginPrefab(
   root: Node,
   handlers: LoginHandlers,
@@ -208,6 +222,7 @@ function bindLoginPrefab(
 ): LoginPanelView {
   const ws = options?.mode === "ws";
   const subtitle = ws ? "本机 WebSocket " + (options?.wsUrl || "") : "Mock 登录，不连服务器";
+  fitCardTitle(root);
   setText(requireNode(root, "Card/Subtitle"), subtitle);
 
   const accountField = requireNode(root, "Card/AccountField");
