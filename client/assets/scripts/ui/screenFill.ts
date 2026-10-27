@@ -32,6 +32,7 @@ import { mockRuntimeEnabled } from "../net/transportSelect";
 import { emptyBagToast } from "../module/bag/items";
 import { formatStoreBagLine } from "../module/bag/bagView";
 import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
+import { growAnchorDelta, listWindowSpread } from "./ccbiPlace";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
@@ -722,8 +723,101 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
   paint();
 }
 
+interface ParchmentFit {
+  extraTop: number;
+  extraBottom: number;
+  extra: number;
+}
+
+const NO_PARCHMENT: ParchmentFit = { extraTop: 0, extraBottom: 0, extra: 0 };
+
+/** 调试绿字气泡。正式服那句活动文案不在这张表里，空着会剩一截绿字。 */
+function hideDebugBubble(view: Node): void {
+  const bubble = findNamed(view, "node_bubble");
+  if (bubble) bubble.active = false;
+  const bagBubble = findNamed(view, "spr_bubble_bg");
+  if (bagBubble) bagBubble.active = false;
+}
+
+/**
+ * 把 640 宽的羊皮纸拉到 720×1280 里、顶栏和底栏之间。
+ * 左右留 LIST_WINDOW_SIDE，底图从壳后面露出来。
+ */
+function fitParchmentWindow(view: Node): ParchmentFit {
+  const mark = view as Node & { mxzgParchment?: ParchmentFit };
+  if (mark.mxzgParchment) return mark.mxzgParchment;
+  const bg = view.getChildByName("spr_bg");
+  const ui = view.getComponent(UITransform);
+  const bgUi = bg ? bg.getComponent(UITransform) : null;
+  if (!bg || !ui || !bgUi || bgUi.contentSize.height < 1 || ui.contentSize.width < 1) {
+    mark.mxzgParchment = NO_PARCHMENT;
+    return NO_PARCHMENT;
+  }
+  const spread = listWindowSpread({
+    rootW: ui.contentSize.width,
+    rootH: ui.contentSize.height,
+    anchorY: ui.anchorY,
+    bgY: bg.position.y,
+    bgAy: bgUi.anchorY,
+    bgH: bgUi.contentSize.height * Math.abs(bg.scale.y || 1),
+  });
+  view.setScale(spread.scale, spread.scale, 1);
+  view.setPosition(-(0.5 - ui.anchorX) * ui.contentSize.width * spread.scale, spread.rootY, 0);
+  growNode(bg, spread.extraTop, spread.extraBottom);
+  const box = view.getChildByName("spr_box");
+  if (box) growNode(box, spread.extraTop, spread.extraBottom);
+  const lift = ["node_title", "UIMenu_1", "node_bubble", "btn_scroll_view", "CCNode_1", "btn_lineup", "btn_astrolabe"];
+  for (let i = 0; i < lift.length; i++) nudge(view, lift[i], spread.extraTop);
+  const fit = {
+    extraTop: spread.extraTop,
+    extraBottom: spread.extraBottom,
+    extra: spread.extraTop + spread.extraBottom,
+  };
+  mark.mxzgParchment = fit;
+  return fit;
+}
+
+function growNode(node: Node, extraTop: number, extraBottom: number): void {
+  const ui = node.getComponent(UITransform);
+  if (!ui) return;
+  const extra = extraTop + extraBottom;
+  if (extra === 0) return;
+  ui.setContentSize(ui.contentSize.width, ui.contentSize.height + extra);
+  node.setPosition(node.position.x, node.position.y + growAnchorDelta(ui.anchorY, extraTop, extraBottom), node.position.z);
+}
+
+function nudge(root: Node, name: string, dy: number): void {
+  if (dy === 0) return;
+  const node = findNamed(root, name);
+  if (!node) return;
+  node.setPosition(node.position.x, node.position.y + dy, node.position.z);
+}
+
+/** 图鉴页才露出进化图鉴。英雄页是永久皮肤，两颗不叠在一起。圣龙两颗都收起。 */
+function showHeroCorner(board: Node | null, tab: "hero" | "book" | "dragon"): void {
+  if (!board) return;
+  const evolve = findNamed(board, "btn_evolve");
+  const skin = findNamed(board, "btn_permanent_skin");
+  if (evolve) evolve.active = tab === "book";
+  if (skin) skin.active = tab === "hero";
+}
+
+function spreadHeroBoard(board: Node, fit: ParchmentFit): void {
+  nudge(board, "node_elem", fit.extraTop);
+  const box = board.getChildByName("spr_box");
+  if (box) growNode(box, fit.extraTop, fit.extraBottom);
+  nudge(board, "node_capacity", -fit.extraBottom);
+  nudge(board, "bottom_menu", -fit.extraBottom);
+  const pattern = board.getChildByName("CCSprite_1");
+  if (pattern && fit.extraBottom !== 0) {
+    pattern.setPosition(pattern.position.x, pattern.position.y - fit.extraBottom, pattern.position.z);
+  }
+}
+
 function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
   silenceBigMenus(view);
+  hideDebugBubble(view);
+  const fit = fitParchmentWindow(view);
   fitButton(findNamed(view, "btn_hero"), "英雄", 20);
   fitButton(findNamed(view, "btn_illustrat"), "图鉴", 20);
   fitButton(findNamed(view, "btn_dragon"), "圣龙", 20);
@@ -734,11 +828,12 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
   let board: Node | null = null;
   const host = uiNode("HeroFill");
   place(host, view, 0, 0);
-  let content = gridScroll(host, "HeroScroll", 270, 560, 520, 400);
+  let content = gridScroll(host, "HeroScroll", 270, 560, 520, 400 + fit.extra);
   const paint = () => {
     if (!content.isValid) return;
     clearChildren(content);
     markHeroTabs(view, tab);
+    showHeroCorner(board, tab);
     markElem(board, elem);
     const elemRow = board ? findNamed(board, "node_elem") : null;
     if (elemRow) elemRow.active = tab !== "dragon";
@@ -747,7 +842,6 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     writeNamed(view, "lbl_capacity", space);
     if (board) writeNamed(board, "lbl_capacity", space);
     if (tab === "dragon") {
-      writeNamed(view, "lbl_go", dragonHeadLine());
       paintDragonBoard(view, content);
       return;
     }
@@ -755,21 +849,18 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     if (tab === "hero") {
       const roster = rosterOf(elem);
       if (all && all.length > 0) {
-        writeNamed(view, "lbl_go", roster.length > 0 ? "点头像看详情" : "这个元素没有");
         const shown = paddedSlots(roster.length);
         for (let i = 0; i < shown; i++) {
           const hero = i < roster.length ? roster[i] : null;
           const cell = heroCell(hero, hero ? deployed.has(hero.heroId || 0) : false, hero ? () => openHero(hero) : null, false);
           place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
         }
-        sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 360);
+        sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 360 + fit.extra);
         return;
       }
-      writeNamed(view, "lbl_go", all === null ? "真服英雄未同步，灰的是图鉴" : "空名册，灰的是图鉴");
       paintHeroBook(view, content, elem, deployed, openHero);
       return;
     }
-    writeNamed(view, "lbl_go", "灰头像是还没有");
     paintHeroBook(view, content, elem, deployed, openHero);
   };
   const pickElem = (id: number) => {
@@ -799,12 +890,14 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     board = node;
     const menu = findNamed(view, "UIMenu_1");
     if (menu && menu.parent === view) node.setSiblingIndex(menu.getSiblingIndex());
+    spreadHeroBoard(node, fit);
+    showHeroCorner(node, tab);
     const box = findNamed(node, "spr_box");
     if (box) {
       const old = host.getChildByName("HeroScroll");
       if (old) old.destroy();
       // 元素钮在盒子顶上，格子从钮下沿再往下排。
-      content = gridScroll(box, "HeroScroll", 0, -108, 540, 320);
+      content = gridScroll(box, "HeroScroll", 0, -108, 540, 320 + fit.extra);
     }
     if (cap) cap.active = false;
     const big = findNamed(node, "node_capacity");
@@ -822,12 +915,14 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
 
 function fillBag(view: Node): void {
   silenceBigMenus(view);
+  hideDebugBubble(view);
+  const fit = fitParchmentWindow(view);
   let tab: BagTab = "item";
   let picked: StoreBagItem | null = null;
   const host = uiNode("BagFill");
   place(host, view, 0, 0);
   const box = findNamed(view, "spr_box");
-  const content = box ? gridScroll(box, "BagScroll", 0, -12, 520, 400) : gridScroll(host, "BagScroll", 313, 540, 460, 400);
+  const content = box ? gridScroll(box, "BagScroll", 0, -12, 520, 400 + fit.extra) : gridScroll(host, "BagScroll", 313, 540, 460, 400 + fit.extra);
   const tabHost = bagTabHost(view) || host;
   const tabs: Node[] = [];
   const paint = () => {
@@ -835,9 +930,6 @@ function fillBag(view: Node): void {
     clearChildren(content);
     for (let i = 0; i < tabs.length; i++) paintTab(tabs[i], BAG_TABS[i].id === tab);
     const all = GameStore.bag();
-    if (all === null) writeNamed(view, "lbl_title", "背包 · 真服未同步");
-    else if (countBag(all) === 0) writeNamed(view, "lbl_title", "背包 · 空背包");
-    else writeNamed(view, "lbl_title", "背包");
     const rows = bagRows(tab);
     if (picked && !rows.some((row) => sameBag(row, picked as StoreBagItem))) picked = null;
     const shown = paddedSlots(rows.length);
@@ -852,7 +944,7 @@ function fillBag(view: Node): void {
         : emptyBag(rows.length === 0 ? () => flashToast(view, all === null ? WIRE_BAG_UNSYNCED_TOAST : emptyBagToast()) : null);
       place(cell, content, gridX(i, -168, BAG_PITCH_X), gridY(i, -56, BAG_PITCH_Y));
     }
-    sizeScroll(content, slotRows(shown) * BAG_PITCH_Y + 24, 400);
+    sizeScroll(content, slotRows(shown) * BAG_PITCH_Y + 24, 400 + fit.extra);
   };
   for (let i = 0; i < BAG_TABS.length; i++) {
     const spec = BAG_TABS[i];
@@ -865,12 +957,6 @@ function fillBag(view: Node): void {
       tab = spec.id;
       paint();
     });
-  }
-  const bubble = findNamed(view, "spr_bubble_bg");
-  if (bubble && bubble.parent && !findNamed(bubble.parent, "BagTip")) {
-    const tip = createLabel("点格子看说明", 16, { color: INK, width: 200, height: 48 });
-    tip.name = "BagTip";
-    place(tip, bubble.parent, 150, 90);
   }
   paint();
   const offBag = WireSession.onSync(() => paint());
@@ -1374,24 +1460,6 @@ function paintHeroBook(
     place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
   }
   sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 400);
-}
-
-function countBag(all: StoreBagItem[]): number {
-  let n = 0;
-  for (let i = 0; i < all.length; i++) {
-    const item = all[i];
-    if (item.num !== null && item.num <= 0) continue;
-    if (itemIsWallet(item.itemType, item.itemId)) continue;
-    n += 1;
-  }
-  return n;
-}
-
-function dragonHeadLine(): string {
-  const snap = WireSession.dragon;
-  if (!snap) return "圣龙图鉴";
-  if (snap.attrLevel !== null) return "圣龙等级 " + snap.attrLevel;
-  return "圣龙已同步";
 }
 
 function dragonBlurb(): string {

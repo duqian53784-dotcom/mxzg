@@ -121,7 +121,7 @@ export function mountCityChrome(parent: Node, onTab: (id: string) => void): City
     root,
     setIdentity(nameLine: string, subLine: string): void {
       setText(nameNode, nameLine);
-      setText(subNode, subLine);
+      applySubLine(subNode, subLine);
     },
     setCurrencies(goldLine: string, diamondLine: string): void {
       setText(goldNode, goldLine);
@@ -143,6 +143,13 @@ export function mountCityChrome(parent: Node, onTab: (id: string) => void): City
     },
     setCityExtras(): void {},
   };
+}
+
+/** 「真服 · 角色 id」是调试行。正式服顶栏只留名字和等级。 */
+function applySubLine(node: Node, subLine: string): void {
+  const debug = subLine.indexOf("真服 ·") === 0;
+  node.active = !debug;
+  setText(node, debug ? "" : subLine);
 }
 
 function fillOf(state: TabVisual): Color {
@@ -240,7 +247,7 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
     root,
     setIdentity(nameLine: string, subLine: string): void {
       setText(nameNode, nameLine);
-      setText(subNode, subLine);
+      applySubLine(subNode, subLine);
     },
     setCurrencies(goldLine: string, diamondLine: string): void {
       setText(goldNode, goldLine);

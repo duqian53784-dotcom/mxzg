@@ -15,6 +15,7 @@ import { formatWireQuickBattle } from "../net/protocol/wireQuickBattle";
 import { bindHangFill, mountIdleHang } from "./idleHangView";
 import { beginHangBattle } from "./hangBattle";
 import { hangLineupReady } from "./localLineup";
+import { wireDebugEnabled } from "../net/transportSelect";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
@@ -40,6 +41,10 @@ const HANG_PROBE_MS = 720;
 interface ShellHold {
   want: boolean;
   root: Node | null;
+  /** 壳还在加载。第二次进来不再盖一层。 */
+  pending?: boolean;
+  /** 真服只读页的节点。壳盖住之前先藏，避免切换时闪出标题。 */
+  veiled?: Node[];
 }
 
 const holds = new Map<Node, ShellHold>();
@@ -53,6 +58,17 @@ export function setPagePrefabShellVisible(page: Node, visible: boolean): void {
     hold.want = visible;
   }
   if (hold.root && hold.root.isValid) hold.root.active = visible;
+  if (page.isValid) {
+    const dim = page.getChildByName("ShellBackdropDim");
+    const art = page.getChildByName("ShellBackdrop");
+    if (dim) dim.active = visible;
+    if (art) art.active = visible;
+  }
+  const veiled = hold.veiled || [];
+  for (let i = 0; i < veiled.length; i++) {
+    const node = veiled[i];
+    if (node.isValid) node.active = !visible;
+  }
 }
 
 /** 盖上对照表里的 Prefab。没有对照就什么都不做。 */
@@ -61,21 +77,28 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
   const spec = pagePrefabShell(id);
   if (!spec || !page.isValid) return;
   let hold = holds.get(page);
-  if (hold && hold.root) return;
+  if (hold && (hold.root || hold.pending)) return;
   if (!hold) {
     hold = { want: true, root: null };
     holds.set(page, hold);
   }
+  hold.pending = true;
+  const backdrop = shellBackdrop(id);
+  if (backdrop) veilUnderShell(page, hold, backdrop);
+  page.once(Node.EventType.NODE_DESTROYED, () => {
+    holds.delete(page);
+  });
   try {
     const prefab = await loadPrefab(spec.path);
     if (!page.isValid) return;
+    if (hold.root) return;
     const root = uiNode("PagePrefabShell");
     const ui = root.addComponent(UITransform);
     ui.setContentSize(720, 1280);
     ui.setAnchorPoint(0.5, 0.5);
     root.addComponent(BlockInputEvents);
     if (spec.fight) mountIdleHang(root);
-    else place(createRect("dim", 720, 1280, new Color(8, 16, 32, 255)), root, 0, 0);
+    else if (!backdrop) place(createRect("dim", 720, 1280, new Color(8, 16, 32, 255)), root, 0, 0);
     const view = spawnPrefab(prefab, root);
     mountCcbiView(view);
     fillPageShell(id, view, (hero) => {
@@ -87,26 +110,82 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
       liftNode(close, view);
       bindTap(close, () => setPagePrefabShellVisible(page, false));
     }
-    const probe = createButton("功能页", () => setPagePrefabShellVisible(page, false), 96, 32);
-    probe.name = "BtnShellProbe";
-    place(probe, root, -300, 600);
+    // 真服路径不留「功能页」。这颗钮会把壳藏起来，底下的只读标题就露出来。
+    if (wireDebugEnabled()) {
+      const probe = createButton("功能页", () => setPagePrefabShellVisible(page, false), 96, 32);
+      probe.name = "BtnShellProbe";
+      place(probe, root, -300, 600);
+    }
     const raise = () => pinShell(root, page);
     page.on(Node.EventType.CHILD_ADDED, raise);
     root.parent = page;
     root.active = hold.want;
     hold.root = root;
+    hold.pending = false;
     raise();
     if (spec.fight) {
       bindHangFill(root);
       bindFightChrome(view, root, page);
     }
-    page.once(Node.EventType.NODE_DESTROYED, () => {
-      holds.delete(page);
-    });
     GameLog.shared.info("MainApp", "page prefab shell " + id + " " + spec.path);
   } catch (err) {
+    hold.pending = false;
+    restoreVeil(page, hold);
     GameLog.shared.error("MainApp", "page prefab shell " + id + " " + messageOf(err) + "，仍用原来的页面");
   }
+}
+
+/** 英雄列表用角色岩洞，背包用店内。正式服羊皮纸是浮在这张全屏底上的。 */
+function shellBackdrop(id: string): string[] | null {
+  if (id === "hero") return ["ui/maps/map-bg-role-1"];
+  if (id === "bag") return ["ui/bag/map-bg-backpack-1", "ui/maps/map-bg-backpack-1"];
+  return null;
+}
+
+/** 先藏只读页，再铺底图。壳加载期间不再闪「真服只读」。 */
+function veilUnderShell(page: Node, hold: ShellHold, paths: string[]): void {
+  const veiled: Node[] = [];
+  const kids = page.children.slice();
+  for (let i = 0; i < kids.length; i++) {
+    if (!kids[i].active) continue;
+    kids[i].active = false;
+    veiled.push(kids[i]);
+  }
+  hold.veiled = veiled;
+  place(createRect("ShellBackdropDim", 720, 1280, new Color(22, 16, 20, 255)), page, 0, 0);
+  const art = uiNode("ShellBackdrop");
+  const ui = art.addComponent(UITransform);
+  ui.setContentSize(720, 1280);
+  const sprite = art.addComponent(Sprite);
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  sprite.type = Sprite.Type.SIMPLE;
+  place(art, page, 0, 0);
+  const loadAt = (index: number) => {
+    if (!art.isValid || index >= paths.length) return;
+    resources.load(paths[index] + "/spriteFrame", SpriteFrame, (err, frame) => {
+      if (!art.isValid) return;
+      if (err || !frame) {
+        loadAt(index + 1);
+        return;
+      }
+      sprite.spriteFrame = frame;
+    });
+  };
+  loadAt(0);
+}
+
+function restoreVeil(page: Node, hold: ShellHold): void {
+  if (page.isValid) {
+    const dim = page.getChildByName("ShellBackdropDim");
+    const art = page.getChildByName("ShellBackdrop");
+    if (dim && dim.isValid) dim.destroy();
+    if (art && art.isValid) art.destroy();
+  }
+  const veiled = hold.veiled || [];
+  for (let i = 0; i < veiled.length; i++) {
+    if (veiled[i].isValid) veiled[i].active = true;
+  }
+  hold.veiled = [];
 }
 
 /**
