@@ -85,13 +85,14 @@ export function buildLoginPanel(
 
   place(createLabel("选服", 20, { color: new Color(180, 196, 220, 255), width: 460 }), root, 0, -4);
 
-  let selected = findServer(options?.serverId ?? MOCK_SERVERS[0].id);
+  const choices = loginServers(ws);
+  let selected = pickedServer(ws, options?.serverId);
   const buttons: Array<{ server: GameServer; node: Node }> = [];
   const rowY = -52;
   const gap = 168;
-  const startX = -((MOCK_SERVERS.length - 1) * gap) / 2;
-  for (let i = 0; i < MOCK_SERVERS.length; i++) {
-    const server = MOCK_SERVERS[i];
+  const startX = -((choices.length - 1) * gap) / 2;
+  for (let i = 0; i < choices.length; i++) {
+    const server = choices[i];
     const node = createButton(server.name, () => {
       selected = server;
       paintServers();
@@ -179,6 +180,17 @@ function readField(field: TextField): string {
   return field.getValue();
 }
 
+/** 真桥登录只显示本机桥。Mock 仍是三台占位服。id 1 在表里仍叫本地Mock，这里不改那张表。 */
+function loginServers(ws: boolean): GameServer[] {
+  if (ws) return [{ id: 1, name: "本机桥" }];
+  return MOCK_SERVERS;
+}
+
+function pickedServer(ws: boolean, serverId?: number): GameServer {
+  if (ws) return { id: 1, name: "本机桥" };
+  return findServer(serverId ?? MOCK_SERVERS[0].id);
+}
+
 const PREFAB_SELECTED = new Color(255, 214, 150, 255);
 const PREFAB_IDLE = new Color(255, 255, 255, 255);
 
@@ -235,11 +247,21 @@ function bindLoginPrefab(
   setText(status, "");
   setText(detail, "");
 
-  let selected = findServer(options?.serverId ?? MOCK_SERVERS[0].id);
+  const choices = loginServers(ws);
+  let selected = pickedServer(ws, options?.serverId);
   const buttons: Array<{ server: GameServer; node: Node }> = [];
   for (let i = 0; i < MOCK_SERVERS.length; i++) {
-    const server = MOCK_SERVERS[i];
-    const node = requireNode(root, "Card/ServerRow/Btn_" + server.id);
+    const slot = MOCK_SERVERS[i];
+    const node = requireNode(root, "Card/ServerRow/Btn_" + slot.id);
+    let server: GameServer | null = null;
+    for (let j = 0; j < choices.length; j++) {
+      if (choices[j].id === slot.id) server = choices[j];
+    }
+    if (!server) {
+      node.active = false;
+      continue;
+    }
+    node.active = true;
     const label = node.getChildByName("Label");
     if (label) setText(label, server.name);
     bindClick(node, () => {

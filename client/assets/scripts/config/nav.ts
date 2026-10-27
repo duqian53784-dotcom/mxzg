@@ -40,7 +40,7 @@ export const CITY_BAR: NavEntry[] = [
   { id: "bag", title: "背包", gateId: "bag", blurb: "强化石、英雄碎片，以及可使用的金币袋和经验药水" },
   { id: "battle", title: "战斗", blurb: "主线战斗" },
   { id: "dungeon", title: "副本", gateId: "main_mission", blurb: "日常副本" },
-  { id: "clan", title: "公会", blurb: "公会占位。老主城底栏入口，公会系统还没接。" },
+  { id: "clan", title: "公会", gateId: "main_clan", blurb: "公会占位。主线 Lv18 开启。公会系统还没接。" },
   { id: "fetter", title: "羁绊", gateId: "main_fetter", blurb: "羁绊占位" },
 ];
 
@@ -156,6 +156,14 @@ export function entryAccess(
   if (!blocked) return { open: true, hint: "" };
   if (reasons.length === 0) reasons.push("尚未达到开启条件");
   return { open: false, hint: entry.title + "未开启，需要" + reasons.join("、") };
+}
+
+/** 主线等级门槛。没有这种门槛，或等级不超过 1，返回 0。底栏用它写 Lv。 */
+export function entryLockLevel(entry: NavEntry, db: GateSnapshot | null): number {
+  if (!entry.gateId || !db) return 0;
+  const row = findOpen(db.opencondition, entry.gateId);
+  if (!row || row.condition_type !== 1 || !(row.level > 1)) return 0;
+  return row.level;
 }
 
 export function tabLabel(title: string, open: boolean): string {

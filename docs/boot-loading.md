@@ -13,7 +13,7 @@ Boot 场景按旧工程的顺序走完才进 Main：logo、版本比较、热更
 | 顺序 | GameLog | 屏幕上的字 | 做什么 |
 |---|---|---|---|
 | 1 | | logo | 节点 `logo-scene_spr-logo` 淡入 1 秒、停 1 秒、淡出 0.5 秒。点一下跳过停留和淡出。`bgm-logo` 从淡入开始循环，进 Main 时停。字标文件仍是 3×3 时，画面改成左右饰纹拼的焰环 |
-| 2 | `version` | 检查版本 | 读 `config/version` 的整数 `version`，再向 `platform_urls` 和 `download_urls` 要远程版本。拉不到不挡 |
+| 2 | `version` | 检查版本 | 读 `config/version` 的整数 `version`。Creator / 浏览器预览不向表里的 http 地址发请求。其它平台再向 `platform_urls` 和 `download_urls` 要远程版本。拉不到不挡 |
 | 3 | `hot-update` | 更新资源 | 远程更大才打开 UpdateLayer。相等、本地更新，或远程拉不到，则跳过下载 |
 | 4 | `assets` | 加载资源 | 预加载底图、进度条、`spine/jindutiao`、`audio/bgm-logo` |
 | 5 | `config` | 读取配置 | `ConfigLoader.loadAll`，进度按已完成张数 |
@@ -31,7 +31,7 @@ Boot 场景按旧工程的顺序走完才进 Main：logo、版本比较、热更
 
 远程地址按表里的 `platform_urls`、`download_urls` 各试四个：`version.json`、`version.manifest`、`version`，以及目录本身。能读出不少于 5 位的整数，或 JSON 里的 `version` / `remoteVersion` / `clientVersion` / `rows[0].version`，就拿来比。远程更大才打开 UpdateLayer。相等或本地更大则跳过下载，日志仍是 `stage=hot-update skip`。
 
-地址是空的，或者这些请求都失败（网络错误、超时、404、CORS、读不出版本号），不挡启动，也不把加载层换成失败页。`fetchRemoteVersion` 返回 null，不抛「校验版本失败」。GameLog 打警告，文案是「本地已是最新 / 跳过热更」，然后继续加载资源、读表、登录。H5（`isH5Client()`：Creator 浏览器预览、手机浏览器、桌面浏览器）走这条：本机预览到不了表里的 CDN 时，检查版本最多等到请求超时（默认 4 秒），然后进入后面的阶段，不再停在 0% 的重试。其它平台拉不到同样不卡死。远程真的更大时，UpdateLayer 仍会出来。
+地址是空的，或者这些请求都失败（网络错误、超时、404、CORS、读不出版本号），不挡启动，也不把加载层换成失败页。`fetchRemoteVersion` 返回 null，不抛「校验版本失败」。GameLog 打警告，文案是「本地已是最新 / 跳过热更」，然后继续加载资源、读表、登录。H5（`isH5Client()`：Creator 浏览器预览、手机浏览器、桌面浏览器）不发这些请求：表里的 `http://106.52.67.63:2011/` 和 `http://cdn-mxzg.anyaojs.com/release/qyzh/chn/` 在 https 预览里会被当成混合内容拦住。配置仍读本地 `resources`。真服只走 `ws://127.0.0.1:13111/game`。其它平台拉不到同样不卡死。远程真的更大时，UpdateLayer 仍会出来。
 
 本地版本表本身读失败时，加载层仍换成热更层，文案用 language `47741`（校验版本失败），按钮用 `110013`（重试）。点过这一次重试还失败，按钮改成 language `47647`（跳过）；这句还没读到时按钮写成「继续」。点下去同样按「本地已是最新 / 跳过热更」往下走，不再无限停在重试。
 

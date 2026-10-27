@@ -50,8 +50,10 @@ export function setMockRuntime(on: boolean): void {
 
 /** 登录页状态一行放得下。长说明写在 GameLog。 */
 export const WS_DOWN_STATUS = "服未启动，请检查启动 bat";
+export const WS_DOWN_DETAIL =
+  "ws://127.0.0.1:13111/game 指的是正在跑 Creator 预览的这台电脑。请在这台电脑上双击 scripts/start-local-all.bat，确认 9902 和 13111 都在听。用别的浏览器或另一台机器打开预览时，127.0.0.1 不是桥所在的机器，桥在听也会连不上。不要直连 13101。Mock 只在 ?dev=mock。";
 export const WS_DOWN_LOG =
-  "服或桥没接上。请先双击 scripts/start-local-all.bat，或分拆双击 scripts/start-local-server.bat，确认 TCP 9902 在听，再双击 scripts/start-ws-bridge.bat，确认 ws://127.0.0.1:13111/game 在听。不要直连 13101。默认连真服。Mock 只在 ?dev=mock。";
+  "服或桥没接上。请先双击 scripts/start-local-all.bat，或分拆双击 scripts/start-local-server.bat，确认 TCP 9902 在听，再双击 scripts/start-ws-bridge.bat，确认 ws://127.0.0.1:13111/game 在听。127.0.0.1 是正在预览的这台电脑，不是另一台机器上的浏览器。不要直连 13101。默认连真服。Mock 只在 ?dev=mock。";
 export const WS_OPEN_STATUS = "已打开，心跳 1004 已发送";
 export const WS_OPEN_TOAST = "心跳 1004 已发送";
 export const WS_CLOSE_STATUS = "连接已关闭";
