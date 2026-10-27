@@ -74,6 +74,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
   placeBottomLeft(parallax, root, layout.scroll, 0);
 
   const views = new Map<string, Node>();
+  const frameJobs: { node: Node; path: string }[] = [];
   for (let i = 0; i < layout.nodes.length; i++) {
     const desc = layout.nodes[i];
     const node = uiNode(desc.name);
@@ -88,17 +89,19 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
     } else {
       placeBottomLeft(node, host, desc.x, desc.y);
     }
-    if (desc.frame) {
-      const frame = await loadFrame(desc.frame);
-      if (frame) paintSprite(node, frame);
-    }
+    if (desc.frame) frameJobs.push({ node, path: desc.frame });
     views.set(desc.name, node);
   }
 
   const spots = new Map<string, { sprite: Sprite | null }>();
+  // 特效不等底板。一张图加载不回调时，后面的层和建筑仍然挂上。
   const fxHandle: CityEffectHandle = startCityEffects(views, layout.effects, placeBottomLeft);
+  paintCityFrames(frameJobs);
+  const builtList = await Promise.all(
+    layout.buildings.map((spot) => placeBuilding(views, spot, clickAtom))
+  );
   for (let i = 0; i < layout.buildings.length; i++) {
-    const built = await placeBuilding(views, layout.buildings[i], clickAtom);
+    const built = builtList[i];
     if (built) spots.set(layout.buildings[i].atom, built);
   }
 
@@ -261,21 +264,57 @@ function frameSizeOf(frame: SpriteFrame, fallbackW: number, fallbackH: number): 
 
 async function loadFirst(paths: string[]): Promise<SpriteFrame | null> {
   for (let i = 0; i < paths.length; i++) {
-    const frame = await loadFrame(paths[i]);
+    const frame = await loadCitySpriteFrame(paths[i]);
     if (frame) return frame;
   }
   return null;
 }
 
-function loadFrame(path: string): Promise<SpriteFrame | null> {
+/** 单张底板大约 1.2 秒还不回调就放行。调用方再试，不把整张城卡死。 */
+export const CITY_PLATE_WAIT_MS = 1200;
+
+const cityPlateMisses = new Set<string>();
+
+export function loadCitySpriteFrame(path: string): Promise<SpriteFrame | null> {
   return new Promise((resolve) => {
-    resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
-      if (err || !asset) {
-        resolve(null);
-        return;
-      }
-      resolve(asset);
-    });
+    let settled = false;
+    const finish = (frame: SpriteFrame | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(frame);
+    };
+    const timer = setTimeout(() => finish(null), CITY_PLATE_WAIT_MS);
+    try {
+      resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
+        clearTimeout(timer);
+        if (err || !asset) finish(null);
+        else finish(asset);
+      });
+    } catch (_err) {
+      clearTimeout(timer);
+      finish(null);
+    }
+  });
+}
+
+function paintCityFrames(jobs: { node: Node; path: string }[]): void {
+  for (let i = 0; i < jobs.length; i++) paintCityFrame(jobs[i].node, jobs[i].path, 3);
+}
+
+function paintCityFrame(node: Node, path: string, left: number): void {
+  void loadCitySpriteFrame(path).then((frame) => {
+    if (!node.isValid) return;
+    if (frame) {
+      paintSprite(node, frame);
+      return;
+    }
+    if (left > 1) {
+      paintCityFrame(node, path, left - 1);
+      return;
+    }
+    if (cityPlateMisses.has(path)) return;
+    cityPlateMisses.add(path);
+    GameLog.shared.warn("CityMap", "plate miss " + path);
   });
 }
 

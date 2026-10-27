@@ -7,10 +7,10 @@
  * 建筑点击交给原来的 onCityAtom。根上的 BtnMainline 打开原来的主线页。
  * 活动通栏不画在这张 Prefab 上，避免盖住建筑。右上活动仍是 CityChrome 的 ActGroup。
  */
-import { Button, Color, EventTouch, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { Button, Color, EventTouch, Node, Sprite, UITransform } from "cc";
 import { ConfigLoader } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
-import { CityMapHandle, CityMapQuery } from "./CityMap";
+import { CityMapHandle, CityMapQuery, loadCitySpriteFrame } from "./CityMap";
 import {
   CITY_CFG_BTN,
   CITY_CFG_EFFECT,
@@ -169,7 +169,8 @@ async function bindCityHub(
   };
 
   bindVisibleRefresh(root, applyVisible);
-  await ensureCityPlates(views);
+  // 底板丢了再补。不 await：一张图不回调时，视差和特效先挂上。
+  ensureCityPlates(views);
   let fxHandle: CityEffectHandle | null = startCityEffects(views, layout.effects, placeBottomLeft);
 
   let moved = 0;
@@ -260,31 +261,62 @@ const CITY_PLATES: { name: string; layer: number; piece: number }[] = [
   { name: "spr_map_bg1_2", layer: 1, piece: 2 },
 ];
 
-/** Prefab 跨 bundle 丢了 spriteFrame 时，城景会空。按 resources 再补一次。 */
-async function ensureCityPlates(views: Map<string, Node>): Promise<void> {
+const cityHubPlateMisses = new Set<string>();
+
+/** Prefab 跨 bundle 丢了 spriteFrame 时，城景会空。按 resources 再补，单张超时就放行再试。 */
+function ensureCityPlates(views: Map<string, Node>, left = 3): void {
+  const jobs: Promise<void>[] = [];
   for (let i = 0; i < CITY_PLATES.length; i++) {
     const plate = CITY_PLATES[i];
     const node = views.get(plate.name);
     if (!node) continue;
     const sprite = node.getComponent(Sprite);
-    if (!sprite || sprite.spriteFrame) continue;
-    const frame = await loadFrame(mapFramePath(plate.layer, plate.piece, 1));
-    if (!frame || !sprite.isValid) continue;
-    sprite.spriteFrame = frame;
-    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    if (!sprite || cityPlateReady(sprite)) continue;
+    const path = mapFramePath(plate.layer, plate.piece, 1);
+    jobs.push(
+      loadCitySpriteFrame(path).then((frame) => {
+        if (!frame || !sprite.isValid || cityPlateReady(sprite)) return;
+        sprite.spriteFrame = frame;
+        sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      })
+    );
   }
+  if (jobs.length === 0) return;
+  void Promise.all(jobs).then(() => {
+    if (!views) return;
+    let missing = false;
+    for (let i = 0; i < CITY_PLATES.length; i++) {
+      const node = views.get(CITY_PLATES[i].name);
+      const sprite = node && node.isValid ? node.getComponent(Sprite) : null;
+      if (sprite && !cityPlateReady(sprite)) missing = true;
+    }
+    if (!missing) return;
+    if (left > 1) {
+      ensureCityPlates(views, left - 1);
+      return;
+    }
+    for (let i = 0; i < CITY_PLATES.length; i++) {
+      const plate = CITY_PLATES[i];
+      const node = views.get(plate.name);
+      const sprite = node && node.isValid ? node.getComponent(Sprite) : null;
+      if (!sprite || cityPlateReady(sprite)) continue;
+      const path = mapFramePath(plate.layer, plate.piece, 1);
+      if (cityHubPlateMisses.has(path)) continue;
+      cityHubPlateMisses.add(path);
+      GameLog.shared.warn("CityHub", "plate miss " + path);
+    }
+  });
 }
 
-function loadFrame(path: string): Promise<SpriteFrame | null> {
-  return new Promise((resolve) => {
-    resources.load(path + "/spriteFrame", SpriteFrame, (err, asset) => {
-      if (err || !asset) {
-        resolve(null);
-        return;
-      }
-      resolve(asset);
-    });
-  });
+function cityPlateReady(sprite: Sprite): boolean {
+  try {
+    const frame = sprite.spriteFrame;
+    if (!frame) return false;
+    const texture = frame.texture;
+    return !!texture && typeof texture.width === "number" && texture.width > 0;
+  } catch (_err) {
+    return false;
+  }
 }
 
 function indexByName(root: Node): Map<string, Node> {

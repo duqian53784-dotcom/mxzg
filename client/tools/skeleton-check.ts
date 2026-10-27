@@ -3161,6 +3161,14 @@ function checkCityMap(): void {
     "missing battle frames fall back to the existing yanwu hit"
   );
   assert(cityMapSrc.indexOf("TOUCH_MOVE") >= 0 && cityMapSrc.indexOf("placeBuilding") >= 0, "building drag stays");
+  assert(
+    cityMapSrc.indexOf("loadCitySpriteFrame") >= 0 &&
+      cityMapSrc.indexOf("CITY_PLATE_WAIT_MS") >= 0 &&
+      cityMapSrc.indexOf("paintCityFrames(frameJobs)") >= 0 &&
+      cityMapSrc.indexOf("startCityEffects(views, layout.effects, placeBottomLeft)") <
+        cityMapSrc.indexOf("layout.buildings.map"),
+    "city map starts effects before a plate load can stall the buildings"
+  );
 
   const gates = {
     opencondition: [
@@ -27007,6 +27015,14 @@ function checkCityHub(): void {
   assert(hubPaths.indexOf("BtnMainline") >= 0, "city hub prefab has the mainline entry");
   const hubSrc = readFileSync(uiSource("CityHub.ts"), "utf8");
   assert(hubSrc.indexOf("CITY_BAR_BOTTOM") < 0 && hubSrc.indexOf("placeBottomLeft(parallax, root, scroll, 0)") >= 0 && hubSrc.indexOf("addComponent(Mask)") < 0, "city hub stays on the screen bottom and does not stencil the map");
+  assert(
+    hubSrc.indexOf("await ensureCityPlates") < 0 &&
+      hubSrc.indexOf("ensureCityPlates(views);") >= 0 &&
+      hubSrc.indexOf("ensureCityPlates(views);") <
+        hubSrc.indexOf("startCityEffects(views, layout.effects, placeBottomLeft)") &&
+      hubSrc.indexOf("loadCitySpriteFrame") >= 0,
+    "city hub refills missing plates without blocking effects"
+  );
   assert(mainApp.indexOf("id !== CITY_TAB") >= 0, "city page does not take a prefab shell");
   assert(hubPaths.indexOf("BtnIdle") < 0 && hubPaths.indexOf("BtnBag") < 0 && hubPaths.indexOf("BtnLogin7") < 0, "city hub prefab is not the debug button matrix");
   assert(mainApp.indexOf("mountCityChrome(") >= 0, "code chrome fallback stays");
@@ -27107,6 +27123,13 @@ function checkCityHub(): void {
   assert(
     shellSrc.indexOf("seatListShell") >= 0 && shellSrc.indexOf("fitVisibleRoot") >= 0,
     "hero and bag shells seat on the visible canvas"
+  );
+  assert(
+    shellSrc.indexOf("adoptListBackdrop") >= 0 &&
+      shellSrc.indexOf("stretchListBackdrop") >= 0 &&
+      shellSrc.indexOf("map-bg-role-1") >= 0 &&
+      shellSrc.indexOf("map-bg-backpack-1") >= 0,
+    "hero cave and bag shop fill the fitted shell"
   );
   assert(
     shellFillSrc.indexOf("ParchmentPlate") >= 0 && shellFillSrc.indexOf("mxzgParchment = NO_PARCHMENT") < 0,
