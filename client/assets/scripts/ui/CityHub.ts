@@ -10,7 +10,7 @@
 import { Button, Color, EventTouch, Node, Sprite, UITransform } from "cc";
 import { ConfigLoader } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
-import { CityMapHandle, CityMapQuery, dropCitySpriteLoad, loadCitySpriteFrame, paintCitySpriteWhenReady } from "./CityMap";
+import { CityMapHandle, CityMapQuery, dropCitySpriteLoad, paintCitySpriteWhenReady } from "./CityMap";
 import {
   CITY_CFG_BTN,
   CITY_CFG_EFFECT,
@@ -27,7 +27,7 @@ import {
 } from "./cityMapLayout";
 import { startCityEffects, CityEffectHandle } from "./cityEffectPlay";
 import { CITY_HUB_PREFAB_PATH, bindClick, loadPrefab, spawnPrefab } from "./prefabLoad";
-import { bindVisibleRefresh, fitCityViewport, squeezeWideNode } from "./visibleFit";
+import { assignContentSize, bindVisibleRefresh, fitCityViewport, squeezeWideNode, uiSize } from "./visibleFit";
 
 export { CITY_HUB_PREFAB_PATH };
 
@@ -119,7 +119,7 @@ async function bindCityHub(
     layout = buildCityMapLayout(pos, btn, effect, { viewW: box.width, viewH: box.height });
     const parallaxUi = parallax.getComponent(UITransform);
     if (parallaxUi) {
-      parallaxUi.setContentSize(layout.contentW, layout.viewH);
+      assignContentSize(parallaxUi, layout.contentW, layout.viewH);
       parallaxUi.setAnchorPoint(0, 0);
     }
     for (let i = 0; i < layout.nodes.length; i++) {
@@ -250,7 +250,8 @@ function bindAtom(node: Node, atom: string, onAtom: (atom: string) => void, drag
 function fitNode(node: Node, w: number, h: number, ax: number, ay: number, scale: number): void {
   const ui = node.getComponent(UITransform);
   if (ui) {
-    ui.setContentSize(w, h);
+    // 预制刚挂上时 _contentSize 还是 null，直接 setContentSize 会读 width 抛错。
+    assignContentSize(ui, w, h);
     ui.setAnchorPoint(ax, ay);
   }
   node.setScale(scale, scale, 1);
@@ -270,22 +271,30 @@ const CITY_PLATES: { name: string; layer: number; piece: number }[] = [
 ];
 
 /**
- * 进主城前提前把 Prefab、三张布局表和 map-bg 底板丢进加载。
- * 和顶栏 Prefab、配置表并行，避免进城后才开始解码，暗页多停几秒。
+ * 只预热 CityHub 预制和三张布局表。
+ * 五张 map-bg 已经是预制依赖，不要再 resources.load 一遍。
+ * 和预制抢同一张大图时，管道会卡到超时，顶栏还没画出来，进城就是几十秒黑屏。
+ * 放在开机资源阶段，不要放在 MainApp.build 开头。
  */
-export function primeCityHub(): void {
+export function primeCityHub(): Promise<void> {
+  const jobs: Promise<unknown>[] = [];
   try {
-    void loadPrefab(CITY_HUB_PREFAB_PATH).catch(() => undefined);
-    void ConfigLoader.loadJson(CITY_CFG_POS).catch(() => undefined);
-    void ConfigLoader.loadJson(CITY_CFG_BTN).catch(() => undefined);
-    void ConfigLoader.loadJson(CITY_CFG_EFFECT).catch(() => undefined);
-    for (let i = 0; i < CITY_PLATES.length; i++) {
-      const plate = CITY_PLATES[i];
-      void loadCitySpriteFrame(mapFramePath(plate.layer, plate.piece, 1));
-    }
+    jobs.push(
+      loadPrefab(CITY_HUB_PREFAB_PATH).then((prefab) => {
+        const hold = prefab as { addRef?: () => void };
+        if (hold && typeof hold.addRef === "function") hold.addRef();
+      })
+    );
+    jobs.push(ConfigLoader.loadJson(CITY_CFG_POS));
+    jobs.push(ConfigLoader.loadJson(CITY_CFG_BTN));
+    jobs.push(ConfigLoader.loadJson(CITY_CFG_EFFECT));
   } catch (_err) {
-    /* 预热失败仍走原来的挂载 */
+    return Promise.resolve();
   }
+  return Promise.all(jobs).then(
+    () => undefined,
+    () => undefined
+  );
 }
 
 const cityHubPlateMisses = new Set<string>();
@@ -342,7 +351,7 @@ function indexByName(root: Node): Map<string, Node> {
 
 function placeBottomLeft(node: Node, parent: Node, x: number, y: number): void {
   const ui = parent.getComponent(UITransform);
-  const size = ui && ui.contentSize ? ui.contentSize : { width: 0, height: 0 };
+  const size = uiSize(ui) || { width: 0, height: 0 };
   const anchor = anchorOf(ui);
   node.setPosition(x - size.width * anchor.x, y - size.height * anchor.y, 0);
 }

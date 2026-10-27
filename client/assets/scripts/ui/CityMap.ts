@@ -24,7 +24,7 @@ import {
   layerAnchorX,
 } from "./cityMapLayout";
 import { startCityEffects, CityEffectHandle } from "./cityEffectPlay";
-import { bindVisibleRefresh, fitCityViewport } from "./visibleFit";
+import { assignContentSize, bindVisibleRefresh, fitCityViewport, uiSize } from "./visibleFit";
 
 export interface CityMapQuery {
   level(): number;
@@ -58,17 +58,17 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
 
   const root = uiNode("CityMap");
   const rootUi = root.addComponent(UITransform);
-  rootUi.setContentSize(layout.viewW, layout.viewH);
+  assignContentSize(rootUi, layout.viewW, layout.viewH);
   rootUi.setAnchorPoint(0.5, 0.5);
   root.setPosition(0, 0, 0);
   root.parent = parent;
   const box = fitCityViewport(root);
   layout = buildCityMapLayout(pos, btn, effect, { viewW: box.width, viewH: box.height });
-  rootUi.setContentSize(layout.viewW, layout.viewH);
+  assignContentSize(rootUi, layout.viewW, layout.viewH);
 
   const parallax = uiNode("CityParallax");
   const parallaxUi = parallax.addComponent(UITransform);
-  parallaxUi.setContentSize(layout.contentW, layout.viewH);
+  assignContentSize(parallaxUi, layout.contentW, layout.viewH);
   parallaxUi.setAnchorPoint(0, 0);
   parallax.parent = root;
   placeBottomLeft(parallax, root, layout.scroll, 0);
@@ -79,7 +79,7 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
     const desc = layout.nodes[i];
     const node = uiNode(desc.name);
     const ui = node.addComponent(UITransform);
-    ui.setContentSize(desc.w, desc.h);
+    assignContentSize(ui, desc.w, desc.h);
     ui.setAnchorPoint(desc.ax, desc.ay);
     node.setScale(desc.scale, desc.scale, 1);
     const host = desc.parent ? views.get(desc.parent) || parallax : parallax;
@@ -121,15 +121,15 @@ export async function mountCityMap(parent: Node, onAtom: (atom: string) => void,
     const nextBox = fitCityViewport(root);
     const next = buildCityMapLayout(pos, btn, effect, { viewW: nextBox.width, viewH: nextBox.height });
     layout = next;
-    rootUi.setContentSize(next.viewW, next.viewH);
-    parallaxUi.setContentSize(next.contentW, next.viewH);
+    assignContentSize(rootUi, next.viewW, next.viewH);
+    assignContentSize(parallaxUi, next.contentW, next.viewH);
     for (let i = 0; i < next.nodes.length; i++) {
       const desc = next.nodes[i];
       const node = views.get(desc.name);
       if (!node) continue;
       const ui = node.getComponent(UITransform);
       if (ui) {
-        ui.setContentSize(desc.w, desc.h);
+        assignContentSize(ui, desc.w, desc.h);
         ui.setAnchorPoint(desc.ax, desc.ay);
       }
       node.setScale(desc.scale, desc.scale, 1);
@@ -206,7 +206,7 @@ function placeBuilding(
   if (!parent) return null;
   const node = uiNode("spot-" + spot.atom);
   const ui = node.addComponent(UITransform);
-  ui.setContentSize(88, 48);
+  assignContentSize(ui, 88, 48);
   ui.setAnchorPoint(0.5, 0.5);
   node.setScale(spot.scale, spot.scale, 1);
   node.parent = parent;
@@ -230,7 +230,7 @@ function paintBuildingIcon(node: Node, caption: Node, paths: string[], left: num
     if (!node.isValid) return;
     const size = frameSizeOf(frame, 120, 80);
     const ui = node.getComponent(UITransform);
-    if (ui) ui.setContentSize(size.w, size.h);
+    assignContentSize(ui, size.w, size.h);
     const sprite = node.getComponent(Sprite);
     if (sprite) {
       sprite.sizeMode = Sprite.SizeMode.CUSTOM;
@@ -260,7 +260,7 @@ function bindAtom(node: Node, atom: string, onAtom: (atom: string) => void): voi
 /** x/y 是父节点左下角空间里、本节点锚点的位置。 */
 function placeBottomLeft(node: Node, parent: Node, x: number, y: number): void {
   const ui = parent.getComponent(UITransform);
-  const size = ui && ui.contentSize ? ui.contentSize : { width: 0, height: 0 };
+  const size = uiSize(ui) || { width: 0, height: 0 };
   const anchor = anchorOf(ui);
   node.setPosition(x - size.width * anchor.x, y - size.height * anchor.y, 0);
 }
@@ -283,10 +283,14 @@ function paintSprite(node: Node, frame: SpriteFrame): Sprite {
 }
 
 function frameSizeOf(frame: SpriteFrame, fallbackW: number, fallbackH: number): { w: number; h: number } {
-  const size = frame.originalSize;
-  const w = size && typeof size.width === "number" && size.width > 0 ? size.width : fallbackW;
-  const h = size && typeof size.height === "number" && size.height > 0 ? size.height : fallbackH;
-  return { w, h };
+  try {
+    const size = frame.originalSize;
+    const w = size && typeof size.width === "number" && size.width > 0 ? size.width : fallbackW;
+    const h = size && typeof size.height === "number" && size.height > 0 ? size.height : fallbackH;
+    return { w, h };
+  } catch (_err) {
+    return { w: fallbackW, h: fallbackH };
+  }
 }
 
 /** 单张底板大约 1.2 秒还不回调就放行。调用方再试，不把整张城卡死。晚到的帧仍然贴上。 */

@@ -27024,15 +27024,21 @@ function checkCityHub(): void {
   assert(hubPaths.indexOf("BtnMainline") >= 0, "city hub prefab has the mainline entry");
   const hubSrc = readFileSync(uiSource("CityHub.ts"), "utf8");
   assert(hubSrc.indexOf("CITY_BAR_BOTTOM") < 0 && hubSrc.indexOf("placeBottomLeft(parallax, root, scroll, 0)") >= 0 && hubSrc.indexOf("addComponent(Mask)") < 0, "city hub stays on the screen bottom and does not stencil the map");
+  const primeAt = hubSrc.indexOf("export function primeCityHub");
+  const primeEnd = hubSrc.indexOf("const cityHubPlateMisses");
+  const primeBody = primeAt >= 0 && primeEnd > primeAt ? hubSrc.slice(primeAt, primeEnd) : "";
   assert(
     hubSrc.indexOf("await ensureCityPlates") < 0 &&
       hubSrc.indexOf("ensureCityPlates(views);") >= 0 &&
       hubSrc.indexOf("ensureCityPlates(views);") <
         hubSrc.indexOf("startCityEffects(views, layout.effects, placeBottomLeft)") &&
-      hubSrc.indexOf("loadCitySpriteFrame") >= 0 &&
       hubSrc.indexOf("ensureCityPlates(views);") < hubSrc.indexOf("await Promise.all") &&
-      hubSrc.indexOf("primeCityHub") >= 0,
-    "city hub shows plates before config and refills missing ones without blocking effects"
+      hubSrc.indexOf("assignContentSize") >= 0 &&
+      hubSrc.indexOf("uiSize(") >= 0 &&
+      primeBody.indexOf("loadPrefab(CITY_HUB_PREFAB_PATH)") >= 0 &&
+      primeBody.indexOf("loadCitySpriteFrame") < 0 &&
+      primeBody.indexOf("mapFramePath") < 0,
+    "city hub shows plates before config, guards null width, and prime does not fetch map plates again"
   );
   assert(mainApp.indexOf("id !== CITY_TAB") >= 0, "city page does not take a prefab shell");
   assert(hubPaths.indexOf("BtnIdle") < 0 && hubPaths.indexOf("BtnBag") < 0 && hubPaths.indexOf("BtnLogin7") < 0, "city hub prefab is not the debug button matrix");
@@ -27083,6 +27089,13 @@ function checkCityHub(): void {
     "city chrome prefab paints the crown and does not keep the fetter label"
   );
   const boot = readFileSync(bootSource(), "utf8");
+  const assetAt = boot.indexOf("private async runAssetStage");
+  const assetEnd = boot.indexOf("private async loadConfig");
+  const assetBody = assetAt >= 0 && assetEnd > assetAt ? boot.slice(assetAt, assetEnd) : "";
+  assert(assetBody.indexOf("primeCityHub()") >= 0, "boot asset stage warms the city hub before character sync");
+  const buildAt = mainApp.indexOf("private async build()");
+  const buildHead = buildAt >= 0 ? mainApp.slice(buildAt, mainApp.indexOf("this.panels.start(this.buildCity())")) : "";
+  assert(buildHead.indexOf("primeCityHub") < 0, "main build paints chrome before any city prime");
   assert(boot.indexOf("USE_CITY_CHROME") < 0, "Boot does not grow a city chrome switch");
   assert(boot.indexOf("USE_BATTLE_PREFAB") < 0, "Boot does not grow a battle prefab switch");
   assert(boot.indexOf("USE_PAGE_PREFAB_SHELL") < 0, "Boot does not grow a page prefab shell switch");

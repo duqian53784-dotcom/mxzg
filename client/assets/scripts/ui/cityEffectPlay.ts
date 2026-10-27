@@ -9,6 +9,7 @@ import { GameLog } from "../core/GameLog";
 import { mountNamedSpine } from "./battleSpine";
 import { CITY_SPINE_FRAME_FALLBACK, CityEffectSpot, effectFrameStem, takeFrameRun } from "./cityMapLayout";
 import { uiNode } from "./UiKit";
+import { assignContentSize, uiSize } from "./visibleFit";
 
 const FRAME_MS = 80;
 const FOLLOW_MS = 32;
@@ -133,7 +134,7 @@ function followLayer(node: Node, layer: Node, x: number, y: number, placeBottomL
   let alive = true;
   const sync = () => {
     if (!alive || !node.isValid || !layer.isValid) return;
-    const size = ui.contentSize || { width: 0, height: 0 };
+    const size = uiSize(ui) || { width: 0, height: 0 };
     const ax = typeof ui.anchorX === "number" ? ui.anchorX : 0.5;
     const ay = typeof ui.anchorY === "number" ? ui.anchorY : 0.5;
     const world = convert(new Vec3(x - size.width * ax, y - size.height * ay, 0));
@@ -191,9 +192,18 @@ function playFrameStem(node: Node, stem: string): () => void {
 
 function applyFrame(node: Node, sprite: Sprite, frame: SpriteFrame): void {
   sprite.spriteFrame = frame;
-  const size = frame.originalSize;
+  let w = 0;
+  let h = 0;
+  try {
+    const size = frame.originalSize;
+    if (size && typeof size.width === "number") w = size.width;
+    if (size && typeof size.height === "number") h = size.height;
+  } catch (_err) {
+    w = 0;
+    h = 0;
+  }
   const ui = node.getComponent(UITransform);
-  if (ui && size && size.width > 0 && size.height > 0) ui.setContentSize(size.width, size.height);
+  if (w > 0 && h > 0) assignContentSize(ui, w, h);
   const dirty = sprite as Sprite & { markForUpdateRenderData?: (force?: boolean) => void };
   if (typeof dirty.markForUpdateRenderData === "function") dirty.markForUpdateRenderData(true);
 }
