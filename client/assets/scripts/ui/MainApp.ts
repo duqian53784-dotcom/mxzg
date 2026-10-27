@@ -201,6 +201,7 @@ import { PanelNav } from "./PanelNav";
 import { UIShell } from "./UIShell";
 import { CityMapHandle, mountCityMap } from "./CityMap";
 import { mountCityHubPrefab } from "./CityHub";
+import { discardStagedChrome, discardStagedHub } from "./cityStage";
 import { cityAtomRoute } from "./cityMapLayout";
 import {
   CITY_DRAG_HINT,
@@ -559,6 +560,16 @@ export class MainApp extends Component {
   private async build(): Promise<void> {
     const canvas = this.resolveCanvas();
     this.shell = UIShell.mount(canvas);
+    if (!this.isValid || !this.shell) return;
+    const shell = this.shell;
+    const onTab = (id: string) => this.onTab(id);
+    // 主城页先挂上。顶栏预制若还要等，不能挡天空和建筑。
+    this.panels = new PanelNav<Node>(
+      shell,
+      (id) => this.presentPage(id),
+      (id) => this.noteClose(id)
+    );
+    this.panels.start(this.buildCity());
     if (!ConfigDb.current) {
       try {
         await ConfigLoader.loadAll();
@@ -567,9 +578,8 @@ export class MainApp extends Component {
       }
     }
     if (!this.isValid || !this.shell) return;
-    const shell = this.shell;
-    const onTab = (id: string) => this.onTab(id);
     if (!USE_CITY_CHROME_PREFAB) {
+      discardStagedChrome();
       this.chrome = mountCityChrome(shell.chromeLayer, onTab);
     } else {
       try {
@@ -590,12 +600,6 @@ export class MainApp extends Component {
         this.chrome = mountCityChrome(shell.chromeLayer, onTab);
       }
     }
-    this.panels = new PanelNav<Node>(
-      shell,
-      (id) => this.presentPage(id),
-      (id) => this.noteClose(id)
-    );
-    this.panels.start(this.buildCity());
     this.detachWire();
     this.offWire = WireSession.onSync(() => {
       if (!this.isValid) return;
@@ -808,6 +812,7 @@ export class MainApp extends Component {
     mapHost.setPosition(0, 0, 0);
     mapHost.parent = page;
     if (!USE_CITY_HUB_PREFAB) {
+      discardStagedHub();
       void this.mountCityMap(mapHost);
     } else {
       void this.mountCityHub(mapHost);

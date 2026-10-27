@@ -26,7 +26,8 @@ import {
   mapFramePath,
 } from "./cityMapLayout";
 import { startCityEffects, CityEffectHandle } from "./cityEffectPlay";
-import { CITY_HUB_PREFAB_PATH, bindClick, loadPrefab, spawnPrefab } from "./prefabLoad";
+import { takeStagedHub } from "./cityStage";
+import { CITY_CHROME_PREFAB_PATH, CITY_HUB_PREFAB_PATH, bindClick, loadPrefab, spawnPrefab } from "./prefabLoad";
 import { assignContentSize, bindVisibleRefresh, fitCityViewport, squeezeWideNode, uiSize } from "./visibleFit";
 
 export { CITY_HUB_PREFAB_PATH };
@@ -59,8 +60,10 @@ export async function mountCityHubPrefab(
   onMainline: () => void,
   query: CityMapQuery
 ): Promise<CityHubHandle> {
-  const prefab = await loadPrefab(CITY_HUB_PREFAB_PATH);
-  const root = spawnPrefab(prefab, parent);
+  const staged = takeStagedHub();
+  // 开机已经实例化过就只换父节点。这里再 load + instantiate 会赶在第一帧绘制前，空场景清屏就是几十秒黑。
+  const root = staged ?? spawnPrefab(await loadPrefab(CITY_HUB_PREFAB_PATH), parent);
+  if (staged) root.parent = parent;
   try {
     return await bindCityHub(root, onAtom, onMainline, query);
   } catch (err) {
@@ -271,20 +274,16 @@ const CITY_PLATES: { name: string; layer: number; piece: number }[] = [
 ];
 
 /**
- * 只预热 CityHub 预制和三张布局表。
- * 五张 map-bg 已经是预制依赖，不要再 resources.load 一遍。
- * 和预制抢同一张大图时，管道会卡到超时，顶栏还没画出来，进城就是几十秒黑屏。
- * 放在开机资源阶段，不要放在 MainApp.build 开头。
+ * 开机加载条里把主城、顶栏预制和三张布局表解进缓存，并多留一次引用。
+ * 五张 map-bg 已经是主城预制的依赖，不要再 resources.load 一遍。
+ * 顶栏预制（CityChrome，含 4.5MB 方正字）以前要等进了空的 Main 才解，那段等待清屏全黑。
+ * 放在开机资源阶段。实例化在 stageCityShell，不放在 MainApp.build 开头。
  */
 export function primeCityHub(): Promise<void> {
   const jobs: Promise<unknown>[] = [];
   try {
-    jobs.push(
-      loadPrefab(CITY_HUB_PREFAB_PATH).then((prefab) => {
-        const hold = prefab as { addRef?: () => void };
-        if (hold && typeof hold.addRef === "function") hold.addRef();
-      })
-    );
+    jobs.push(loadPrefab(CITY_HUB_PREFAB_PATH).then(holdPrefab));
+    jobs.push(loadPrefab(CITY_CHROME_PREFAB_PATH).then(holdPrefab));
     jobs.push(ConfigLoader.loadJson(CITY_CFG_POS));
     jobs.push(ConfigLoader.loadJson(CITY_CFG_BTN));
     jobs.push(ConfigLoader.loadJson(CITY_CFG_EFFECT));
@@ -295,6 +294,10 @@ export function primeCityHub(): Promise<void> {
     () => undefined,
     () => undefined
   );
+}
+
+function holdPrefab(prefab: { addRef?: () => void }): void {
+  if (prefab && typeof prefab.addRef === "function") prefab.addRef();
 }
 
 const cityHubPlateMisses = new Set<string>();

@@ -84,6 +84,7 @@ import { CREATE_ROLE_PREFAB_PATH, LOGIN_PREFAB_PATH } from "../ui/prefabLoad";
 import { BootChrome, BootCopy, loadBootCopy, preloadBootAsset } from "../ui/bootChrome";
 import { playLogoSplash, LogoSplashHandle } from "../ui/logoSplash";
 import { primeCityHub } from "../ui/CityHub";
+import { liftStagedCity, stageCityShell } from "../ui/cityStage";
 import { MainApp } from "../ui/MainApp";
 import { bindSafeArea, SafeAreaBinding } from "../ui/SafeArea";
 import { Toast } from "../ui/Toast";
@@ -446,8 +447,9 @@ export class Boot extends Component {
     }
     jobs.push(preloadBootAsset("spine/jindutiao", sp.SkeletonData));
     jobs.push(preloadBootAsset("audio/bgm-logo", AudioClip));
-    // 主城预制在加载条里解完。不要拖到进主城再和解五张底板抢管道，否则同步角色之后会黑几十秒。
+    // 预制在加载条里解完并实例化。进空的 Main 再解顶栏，清屏会黑几十秒。
     jobs.push(primeCityHub());
+    if (this.canvas && this.canvas.isValid) jobs.push(stageCityShell(this.canvas));
     let finished = 0;
     const total = jobs.length;
     await Promise.all(
@@ -1360,6 +1362,8 @@ export class Boot extends Component {
     if (this.entering) return;
     this.entering = true;
     if (this.logo) this.logo.stopMusic();
+    // 先把已经实例化的主城改成常驻，再换场景。留在 Boot 的 Canvas 里会被一起拆掉。
+    liftStagedCity();
     GameLog.shared.info("Boot", "stage=enter-main");
     director.loadScene("Main", (err, scene) => {
       if (err || !scene) {
