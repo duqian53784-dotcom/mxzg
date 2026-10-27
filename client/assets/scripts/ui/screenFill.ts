@@ -6,7 +6,7 @@
  * 格子、页签、羊皮纸垫、弹层底都在预制里。找不到只打日志，不新造壳。
  * 不造假英雄、不造假道具、不发新协议。
  */
-import { BlockInputEvents, Button, Color, director, Director, HorizontalTextAlignment, Label, Mask, Node, Overflow, Prefab, resources, ScrollView, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
+import { BlockInputEvents, Button, Color, director, Director, Graphics, HorizontalTextAlignment, Label, Mask, Node, Overflow, Prefab, resources, ScrollView, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
 import { ConfigDb } from "../config/ConfigLoader";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameStore, StoreBagItem, StoreHero } from "../core/GameStore";
@@ -937,18 +937,13 @@ function fitParchmentWindow(view: Node): ParchmentFit {
     bgAy: bgUi.anchorY,
     bgH: bgSize.height * Math.abs(bg.scale.y || 1),
   });
-  view.setScale(spread.scale, spread.scale, 1);
-  view.setPosition(-(0.5 - ui.anchorX) * rootSize.width * spread.scale, spread.rootY, 0);
-  growNode(bg, spread.extraTop, spread.extraBottom);
-  const box = view.getChildByName("spr_box");
-  if (box) growNode(box, spread.extraTop, spread.extraBottom);
-  const lift = ["node_title", "UIMenu_1", "node_bubble", "btn_scroll_view", "CCNode_1", "node_portrait", "btn_lineup", "btn_astrolabe"];
-  for (let i = 0; i < lift.length; i++) nudge(view, lift[i], spread.extraTop);
-  const fit = {
-    extraTop: spread.extraTop,
-    extraBottom: spread.extraBottom,
-    extra: spread.extraTop + spread.extraBottom,
-  };
+  // 节点只接受设计缩放 1。listWindowSpread 若仍返回 684/640，不写到 BackpackLayer / HeroListLayer。
+  if (spread.scale !== 1 || spread.extraTop !== 0 || spread.extraBottom !== 0) {
+    GameLog.shared.warn("UI", "羊皮纸铺窗忽略非设计缩放 " + spread.scale);
+  }
+  view.setScale(1, 1, 1);
+  view.setPosition(-(0.5 - ui.anchorX) * rootSize.width, -(0.5 - ui.anchorY) * rootSize.height, 0);
+  const fit: ParchmentFit = { extraTop: 0, extraBottom: 0, extra: 0 };
   syncParchmentPlate(view, bg);
   mark.mxzgParchment = fit;
   return fit;
@@ -1221,8 +1216,9 @@ function fillBag(view: Node): void {
 
 /**
  * spr_box/BagScroll 写在 BackpackLayer 里。不另造滚动节点。
- * 预制把 content 和空的 view 并列，遮罩在宿主上。Creator 的 ScrollView 只裁 content 的父节点，
- * 宿主遮罩的模板又经常是空的，格子实例化了也看不见。这里把 content 放进 view，遮罩改画在 view 上。
+ * 预制把 content 和空的 view 并列，遮罩在宿主上。Creator 的 ScrollView 只裁 content 的父节点。
+ * content 收进 view，本地坐标钉在 (0,0)。壳还没进场景时改 parent 会留下错误的世界坐标，格子被裁出视口。
+ * 遮罩等节点进场景后再描，避免空模板把 BackpackItemCell 整块裁掉。
  */
 function bagScrollContent(view: Node, fit: ParchmentFit): Node | null {
   const box = findNamed(view, "spr_box");
@@ -1256,6 +1252,7 @@ function seatPrefabScroll(scroll: Node, width: number, height: number, warnTag: 
   if (!content && port) content = port.getChildByName("content");
   if (!content) return null;
   if (port && content.parent !== port) content.parent = port;
+  content.setPosition(0, 0, 0);
   const hostMask = scroll.getComponent(Mask);
   if (hostMask && port) hostMask.enabled = false;
   const scrollUi = scroll.getComponent(UITransform);
@@ -1267,16 +1264,54 @@ function seatPrefabScroll(scroll: Node, width: number, height: number, warnTag: 
     const viewSize = positiveUiSize(viewUi);
     assignContentSize(viewUi, viewSize && viewSize.width > 0 ? viewSize.width : useW, height);
   }
-  const maskHost = port || scroll;
-  let mask = maskHost.getComponent(Mask);
-  if (!mask) mask = maskHost.addComponent(Mask);
-  if (mask.type !== Mask.Type.GRAPHICS_RECT) mask.type = Mask.Type.GRAPHICS_RECT;
-  mask.enabled = false;
-  mask.enabled = true;
+  armScrollMask(port || scroll);
   const scroller = scroll.getComponent(ScrollView);
   if (!scroller) GameLog.shared.warn(warnTag, scroll.name + " 没有 ScrollView");
   else if (scroller.content !== content) scroller.content = content;
   return content;
+}
+
+/**
+ * 矩形遮罩要等节点进了场景再描。提前 addComponent 时模板经常是空的，视口里的格子全部看不见。
+ */
+function armScrollMask(node: Node): void {
+  const draw = () => {
+    if (!node.isValid) return false;
+    let mask = node.getComponent(Mask);
+    if (!mask) mask = node.addComponent(Mask);
+    if (!node.activeInHierarchy) return false;
+    const ui = node.getComponent(UITransform);
+    const size = positiveUiSize(ui);
+    if (!ui || !size) {
+      mask.enabled = false;
+      return false;
+    }
+    mask.enabled = true;
+    if (mask.type !== Mask.Type.GRAPHICS_RECT) mask.type = Mask.Type.GRAPHICS_RECT;
+    assignContentSize(ui, size.width, size.height);
+    return !!node.getComponent(Graphics);
+  };
+  if (draw()) return;
+  let frames = 0;
+  const retry = () => {
+    if (!node.isValid) {
+      director.off(Director.EVENT_AFTER_UPDATE, retry);
+      return;
+    }
+    frames += 1;
+    const drawn = draw();
+    if (drawn || frames > 45) {
+      if (!drawn && node.isValid && !node.getComponent(Graphics)) {
+        const mask = node.getComponent(Mask);
+        if (mask) mask.enabled = false;
+      }
+      director.off(Director.EVENT_AFTER_UPDATE, retry);
+    }
+  };
+  director.on(Director.EVENT_AFTER_UPDATE, retry);
+  node.once(Node.EventType.NODE_DESTROYED, () => {
+    director.off(Director.EVENT_AFTER_UPDATE, retry);
+  });
 }
 
 function adoptLayer(node: Node, layer: number): void {
@@ -1286,15 +1321,7 @@ function adoptLayer(node: Node, layer: number): void {
 }
 
 function pinBagScroll(content: Node): void {
-  let node: Node | null = content.parent;
-  while (node) {
-    const scroller = node.getComponent(ScrollView);
-    if (scroller && typeof scroller.scrollToTop === "function") {
-      scroller.scrollToTop(0);
-      return;
-    }
-    node = node.parent;
-  }
+  content.setPosition(0, 0, 0);
 }
 
 /** spr_box/HeroScroll 写在 HeroListHeroLayer 里。这里只把视口拉到羊皮纸增高后的高度。 */
