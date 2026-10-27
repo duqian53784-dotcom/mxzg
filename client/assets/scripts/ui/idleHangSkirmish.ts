@@ -20,6 +20,7 @@ import { placeHangFloats } from "./hangFloat";
 import {
   IDLE_FOE_ENTER_MS,
   IDLE_HALL_SCROLL_PX,
+  hangAllyFloorPoint,
   IDLE_HANG_SPOTS,
   IDLE_MARCH_MS,
   IDLE_SKIRMISH_APPEAR_MS,
@@ -196,10 +197,10 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
   function plantAllies(): void {
     const n = actors.length < IDLE_HANG_SPOTS.length ? actors.length : IDLE_HANG_SPOTS.length;
     for (let i = 0; i < n; i++) {
-      const spot = IDLE_HANG_SPOTS[i];
       const actor = actors[i];
-      const home = actor.node.parent;
+      const home = actor.node.parent as (Node & { mxzgHangPos?: number }) | null;
       if (!home || !home.isValid) continue;
+      const spot = typeof home.mxzgHangPos === "number" ? hangAllyFloorPoint(home.mxzgHangPos) : IDLE_HANG_SPOTS[i];
       home.active = true;
       home.setPosition(spot.x, spot.y, 0);
       applyHangFace(actor, spot.face);

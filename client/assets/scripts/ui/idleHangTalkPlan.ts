@@ -13,7 +13,7 @@ export interface HeroTalkRow {
 export const HANG_TALK_MS = 8000;
 
 /**
- * 气泡中心。左格英雄在 IDLE_HANG_SPOTS[0]，气泡底边停在地砖上沿之上。
+ * 气泡中心。默认第一格是阵位 1（IDLE_HANG_SPOTS[0]），气泡底边停在地砖上沿之上。
  * other_spr-bubble-5 的尾巴在左边，所以中心放到格子右侧。
  */
 export function hangTalkAnchor(spot: { x: number; y: number }, floorTop: number): { x: number; y: number } {
