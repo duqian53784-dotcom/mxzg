@@ -2995,7 +2995,7 @@ function checkCityMap(): void {
   assert(ids.length === 5 && ids.join(",") === "city,hero,summon,smith,plays", "nav roots stay five");
   const barTitles: string[] = [];
   for (let i = 0; i < CITY_BAR.length; i++) barTitles.push(CITY_BAR[i].title);
-  assert(barTitles.join(",") === "主城,英雄,背包,战斗,副本,公会,羁绊", "city chrome bar is the seven cn entries");
+  assert(barTitles.join(",") === "主城,英雄,背包,战斗,副本,公会,VIP", "city chrome bar ends with VIP");
 
   const config = configDir();
   const resources = join(config, "..");
@@ -27067,6 +27067,20 @@ function checkCityHub(): void {
   assert(
     chrome.indexOf("openActivity") >= 0 && chrome.indexOf("openMore") >= 0 && chrome.indexOf("openMail") >= 0,
     "hub clicks stay on the prefab"
+  );
+  assert(
+    chrome.indexOf("ui/city/main-scene-lang_lbl-fetters-unlock") >= 0 &&
+      chrome.indexOf("ui/city/main-scene_spr-fetters-unlock") >= 0 &&
+      chrome.indexOf('ui/city/main-scene-lang_lbl-fetter"') < 0 &&
+      chrome.indexOf('ui/city/main-scene_spr-fetter"') < 0,
+    "shared bottom bar uses the VIP caption and crown, not the fetter gem"
+  );
+  const chromePrefab = readFileSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "city", "CityChrome.prefab"), "utf8");
+  assert(
+    chromePrefab.indexOf("e7c4c986-adc1-45d9-a0d4-543d7e560024@f9941") >= 0 &&
+      chromePrefab.indexOf("071be665-4e92-45bc-9a1d-e375f3118f4f") < 0 &&
+      chromePrefab.indexOf('"羁绊"') < 0,
+    "city chrome prefab paints the crown and does not keep the fetter label"
   );
   const boot = readFileSync(bootSource(), "utf8");
   assert(boot.indexOf("USE_CITY_CHROME") < 0, "Boot does not grow a city chrome switch");

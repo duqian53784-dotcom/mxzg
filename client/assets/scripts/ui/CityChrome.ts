@@ -173,7 +173,10 @@ const PREFAB_TAB_LOCKED = new Color(160, 164, 176, 255);
 const BOTTOM_BG_WIDTH = 724;
 const BOTTOM_PAD_COLOR = new Color(46, 26, 22, 255);
 
-/** 国服底栏字图。副本的文件名是 skin，字是「副本」。 */
+/**
+ * 底栏字图。副本的文件名是 skin，字是「副本」。
+ * 最右一格用日服 VIP 字，不用国服「羁绊」。
+ */
 const TAB_CAPTION: { [id: string]: string } = {
   city: "ui/city/main-scene-lang_lbl-city",
   hero: "ui/city/main-scene-lang_lbl-hero",
@@ -181,7 +184,12 @@ const TAB_CAPTION: { [id: string]: string } = {
   battle: "ui/city/main-scene-lang_lbl-battle",
   dungeon: "ui/city/main-scene-lang_lbl-skin",
   clan: "ui/city/main-scene-lang_lbl-clan",
-  fetter: "ui/city/main-scene-lang_lbl-fetter",
+  fetter: "ui/city/main-scene-lang_lbl-fetters-unlock",
+};
+
+/** 最右一格的图标。Prefab 里可能还是粉钻，这里换成同套皇冠。 */
+const TAB_ICON: { [id: string]: string } = {
+  fetter: "ui/city/main-scene_spr-fetters-unlock",
 };
 
 /**
@@ -189,7 +197,7 @@ const TAB_CAPTION: { [id: string]: string } = {
  * TopBar 下是 LblName、LblSub、CurrencyGold/Value、CurrencyGem/Value。
  * BottomBar 下是 TabCity、TabHero、TabBag、TabBattle、TabDungeon、TabClan、TabFetter，子节点 Label、Lock。
  * 路径相对 assets：prefabs/ui/city/CityChrome。Prefab 不走 resources.load。
- * 七个底栏字是 resources 里的国服字图（副本文件名 lbl-skin）。
+ * 七个底栏字是 resources 里的字图（副本文件名 lbl-skin，最右是 VIP）。
  * 不改 USE_CITY_CHROME_PREFAB，也不改 Boot。
  * ActGroup 打开活动列表，UtilityRow/BtnMore 打开更多列表，BtnMail 打开原来的邮件页。
  * BtnActivity / BtnMorePanel 保持 Prefab 里的未激活，避免再盖一层矩形。
@@ -234,6 +242,7 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
     const label = button.getChildByName("Label");
     if (label) label.active = false;
     mountTabCaption(button, TAB_CAPTION[entry.id] || "");
+    mountTabIcon(button, TAB_ICON[entry.id] || "");
     bindClick(button, () => onTab(entry.id));
     buttons[entry.id] = button;
   }
@@ -382,6 +391,18 @@ function mountTabCaption(button: Node, path: string): void {
   sprite.sizeMode = Sprite.SizeMode.CUSTOM;
   node.setPosition(0, plate >= 90 ? -46 : -36, 0);
   node.parent = button;
+  resources.load(path + "/spriteFrame", SpriteFrame, (err, frame) => {
+    if (err || !frame || !sprite.isValid) return;
+    sprite.spriteFrame = frame;
+  });
+}
+
+/** 只换指定格子的 Icon。其它格子继续用 Prefab 里的图。 */
+function mountTabIcon(button: Node, path: string): void {
+  if (!path) return;
+  const icon = button.getChildByName("Icon");
+  const sprite = icon ? icon.getComponent(Sprite) : null;
+  if (!sprite) return;
   resources.load(path + "/spriteFrame", SpriteFrame, (err, frame) => {
     if (err || !frame || !sprite.isValid) return;
     sprite.spriteFrame = frame;

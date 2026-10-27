@@ -797,7 +797,7 @@ def build(shell, sprites):
         ("TabBattle", "battle", "战斗", 0, 27, 96, "plate_hot"),
         ("TabDungeon", "dungeon", "副本", 100, 13, 78, "plate"),
         ("TabClan", "clan", "公会", 200, 13, 78, "plate"),
-        ("TabFetter", "fetter", "羁绊", 300, 13, 78, "plate"),
+        ("TabFetter", "fetter", "VIP", 300, 13, 78, "plate"),
     ]
     icon_box = {
         "city": (58, 56),
@@ -890,7 +890,10 @@ def check(b):
     dungeon = b.comp_sprite("CityChrome/BottomBar/TabDungeon/Icon")
     if dungeon["rel"] != "ui/city/main-scene-lang_spr-skin.png":
         raise SystemExit("TabDungeon icon is not the cn dungeon art")
-    names_expect = ["主城", "英雄", "背包", "战斗", "副本", "公会", "羁绊"]
+    fetter = b.comp_sprite("CityChrome/BottomBar/TabFetter/Icon")
+    if fetter["rel"] != "ui/city/main-scene_spr-fetters-unlock.png":
+        raise SystemExit("TabFetter icon is not the crown")
+    names_expect = ["主城", "英雄", "背包", "战斗", "副本", "公会", "VIP"]
     tab_nodes = ["TabCity", "TabHero", "TabBag", "TabBattle", "TabDungeon", "TabClan", "TabFetter"]
     for i, tab_name in enumerate(tab_nodes):
         got = b.comp_label("CityChrome/BottomBar/" + tab_name + "/Label")["_string"]
@@ -916,7 +919,7 @@ def check(b):
         ("CityChrome/TopBar/CurrencyGem/Value", "钻石 0"),
         ("CityChrome/BottomBar/TabCity/Label", "主城"),
         ("CityChrome/BottomBar/TabBattle/Label", "战斗"),
-        ("CityChrome/BottomBar/TabFetter/Label", "羁绊"),
+        ("CityChrome/BottomBar/TabFetter/Label", "VIP"),
     ):
         got = b.comp_label(path)["_string"]
         if got != text_expect:
@@ -1046,7 +1049,7 @@ def main():
         "bag": "ui/city/main-scene-lang_spr-backpack.png",
         "dungeon": "ui/city/main-scene-lang_spr-skin.png",
         "clan": "ui/city/main-scene-lang_spr-clan.png",
-        "fetter": "ui/city/main-scene_spr-fetter.png",
+        "fetter": "ui/city/main-scene_spr-fetters-unlock.png",
         "lock": "ui/city/main-scene_spr-lock.png",
         "power": "ui/common/other_spr-power.png",
         "coin": "ui/common/res-icon_res-1.png",

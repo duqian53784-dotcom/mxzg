@@ -7864,7 +7864,7 @@
       "a": 255
     },
     "_spriteFrame": {
-      "__uuid__": "071be665-4e92-45bc-9a1d-e375f3118f4f@f9941"
+      "__uuid__": "e7c4c986-adc1-45d9-a0d4-543d7e560024@f9941"
     },
     "_type": 0,
     "_fillType": 0,
@@ -7998,7 +7998,7 @@
       "b": 226,
       "a": 255
     },
-    "_string": "羁绊",
+    "_string": "VIP",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
     "_actualFontSize": 15,

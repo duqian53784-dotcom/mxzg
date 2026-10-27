@@ -29,9 +29,9 @@ export const BOTTOM_TABS: NavEntry[] = [
 ];
 
 /**
- * 国服主城底栏，对照 main-scene-lang 的七张字：
- * 主城、英雄、背包、战斗、副本、公会、羁绊。
+ * 主城底栏七格：主城、英雄、背包、战斗、副本、公会、VIP。
  * 「副本」的图文件名仍是 skin（lbl-skin / spr-skin），字是副本。
+ * 最右一格是日服皇冠和 VIP 字，id 仍是 fetter，避免改点击和占位页。
  * 战斗在正中，略大、略高。不使用日文文案。
  */
 export const CITY_BAR: NavEntry[] = [
@@ -41,7 +41,7 @@ export const CITY_BAR: NavEntry[] = [
   { id: "battle", title: "战斗", blurb: "主线战斗" },
   { id: "dungeon", title: "副本", gateId: "main_mission", blurb: "日常副本" },
   { id: "clan", title: "公会", gateId: "main_clan", blurb: "公会占位。主线 Lv18 开启。公会系统还没接。" },
-  { id: "fetter", title: "羁绊", gateId: "main_fetter", blurb: "羁绊占位" },
+  { id: "fetter", title: "VIP", gateId: "main_fetter", blurb: "VIP" },
 ];
 
 /** 底栏七格在 720 宽画面上的位置。下标 3 是战斗。y 是画面中心系。 */
@@ -80,7 +80,7 @@ export const PLAY_ENTRIES: NavEntry[] = [
     blurb: "限时兑换、点石成金和限时礼包。主城按钮也能进",
   },
   { id: "bag", title: "背包", gateId: "bag", blurb: "强化石、英雄碎片，以及可使用的金币袋和经验药水" },
-  { id: "fetter", title: "羁绊", gateId: "main_fetter", blurb: "羁绊占位" },
+  { id: "fetter", title: "VIP", gateId: "main_fetter", blurb: "VIP" },
   { id: "mail", title: "邮件", gateId: "mail", blurb: "系统欢迎、开服补给和公告。主城按钮也能进" },
   { id: "arena", title: "竞技场", gateId: "main_pvp", blurb: "积分、固定对手、一键挑战。主线 Lv8" },
   { id: "wish", title: "许愿池", gateId: "main_blessingpool", blurb: "低级许愿。花金币、许愿符或钻石抽一次，主线 Lv10" },
