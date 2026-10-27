@@ -147,8 +147,7 @@ export function bindHangFill(shell: Node): void {
 
 function resizeNode(node: Node | null, width: number, height: number): void {
   if (!node) return;
-  const ui = node.getComponent(UITransform);
-  if (ui) ui.setContentSize(width, height);
+  assignContentSize(node.getComponent(UITransform), width, height);
 }
 
 const LOOT_AT: ReadonlyArray<{ x: number; y: number; w: number }> = [
@@ -289,29 +288,36 @@ export function seatHangTimer(hang: Node, bubble: Node): void {
 export function writeHangClock(bubble: Node, text: string): void {
   const labelNode = bubble.getChildByName("lbl_progress_time2");
   const show = text !== "" && text !== "999";
-  bubble.active = show;
+  try {
+    bubble.active = show;
+  } catch (_err) {
+    return;
+  }
   if (!labelNode || !show) return;
   labelNode.setScale(1, 1, 1);
+  const ui = labelNode.getComponent(UITransform);
+  if (ui) {
+    ui.setAnchorPoint(0.5, 0.5);
+    assignContentSize(ui, 70, 28);
+  }
   const label = labelNode.getComponent(Label);
-  if (label) {
+  if (!label) return;
+  try {
     label.overflow = Overflow.SHRINK;
     label.horizontalAlign = HorizontalTextAlignment.CENTER;
     label.verticalAlign = VerticalTextAlignment.CENTER;
     label.fontSize = 16;
     label.lineHeight = 20;
     label.string = text;
-  }
-  const ui = labelNode.getComponent(UITransform);
-  if (ui) {
-    ui.setAnchorPoint(0.5, 0.5);
-    assignContentSize(ui, 70, 28);
+  } catch (_err) {
+    /* 字号装配读到空尺寸时这一拍留原字，下一拍再写。 */
   }
 }
 
 function spriteNode(name: string, width: number, height: number): Node {
   const node = uiNode(name);
   const ui = node.addComponent(UITransform);
-  ui.setContentSize(width, height);
+  assignContentSize(ui, width, height);
   const sprite = node.addComponent(Sprite);
   sprite.sizeMode = Sprite.SizeMode.CUSTOM;
   sprite.type = Sprite.Type.SIMPLE;
@@ -344,7 +350,11 @@ function paintHallSprite(node: Node, path: string, fallback: string): void {
           }
           return;
         }
-        sprite.spriteFrame = asset;
+        try {
+          sprite.spriteFrame = asset;
+        } catch (_err) {
+          return;
+        }
       });
     } catch (_err) {
       return;

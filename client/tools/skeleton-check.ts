@@ -27055,7 +27055,10 @@ function checkCityHub(): void {
   const visibleFitSrc = readFileSync(uiSource("visibleFit.ts"), "utf8");
   const shellFillSrc = readFileSync(uiSource("screenFill.ts"), "utf8");
   assert(visibleFitSrc.indexOf("export function positiveUiSize") >= 0, "positiveUiSize rejects null and zero contentSize");
-  assert(visibleFitSrc.indexOf("export function assignContentSize") >= 0, "assignContentSize skips a null contentSize");
+  assert(
+    visibleFitSrc.indexOf("export function assignContentSize") >= 0 && visibleFitSrc.indexOf("_contentSize") >= 0,
+    "assignContentSize plants a missing content size before setContentSize"
+  );
   assert(
     shellSrc.indexOf("positiveUiSize") >= 0 && shellFillSrc.indexOf("positiveUiSize") >= 0,
     "hang and list shells do not read a null width"
@@ -27073,6 +27076,33 @@ function checkCityHub(): void {
   assert(
     shellFillSrc.indexOf("assignContentSize") >= 0 && shellFillSrc.indexOf("先不挂遮罩") >= 0,
     "hang progress mask waits until content size is live"
+  );
+  const fillFnAt = shellFillSrc.indexOf("function setBarFill");
+  const fillFnEnd = shellFillSrc.indexOf("function seatHangProgressSpine");
+  const fillFn = fillFnAt >= 0 && fillFnEnd > fillFnAt ? shellFillSrc.slice(fillFnAt, fillFnEnd) : "";
+  assert(
+    fillFn.indexOf("fillFrameReady") >= 0 && fillFn.indexOf("image.fillRange = span") > fillFn.indexOf("fillFrameReady"),
+    "hang bar fill does not read sprite frame width before the texture is live"
+  );
+  assert(shellSrc.indexOf("hang shell width") >= 0 && shellFillSrc.indexOf("hang shell width") >= 0, "a late width throw names the step and is not the hang battle shell error");
+  const hangWidthMountAt = shellSrc.indexOf("export async function mountHangBattleShell");
+  const hangWidthMountEnd = shellSrc.indexOf("function spawnHangPanel");
+  const hangWidthMount = hangWidthMountAt >= 0 && hangWidthMountEnd > hangWidthMountAt ? shellSrc.slice(hangWidthMountAt, hangWidthMountEnd) : "";
+  const hangWidthCatchAt = hangWidthMount.indexOf("} catch (err) {");
+  const hangWidthErrorAt = hangWidthMount.indexOf('hang battle shell " + messageOf(err)');
+  const hangWidthGuard = hangWidthCatchAt >= 0 && hangWidthErrorAt > hangWidthCatchAt ? hangWidthMount.slice(hangWidthCatchAt, hangWidthErrorAt) : "";
+  assert(
+    hangWidthGuard.indexOf("return;") >= 0 && hangWidthGuard.indexOf("isWidthRead") >= 0,
+    "a width throw inside the hang shell returns before the hang battle shell error"
+  );
+  const spawnAt = shellSrc.indexOf("function spawnHangPanel");
+  const spawnBody = spawnAt >= 0 ? shellSrc.slice(spawnAt, spawnAt + 700) : "";
+  assert(
+    spawnBody.indexOf("pinSprites(view)") >= 0 &&
+      spawnBody.indexOf("pinSprites(view)") < spawnBody.indexOf("view.active = false") &&
+      spawnBody.indexOf("view.active = false") < spawnBody.indexOf("view.parent = parent") &&
+      spawnBody.indexOf("view.parent = parent") < spawnBody.indexOf("view.active = true"),
+    "hang panel pins custom sprite size before it enables"
   );
   assert(
     shellSrc.indexOf("seatListShell") >= 0 && shellSrc.indexOf("fitVisibleRoot") >= 0,
@@ -27302,7 +27332,7 @@ function checkCityHub(): void {
   assert(
     shellSrc.indexOf("btn_battle") >= 0 &&
       shellSrc.indexOf("EVENT_AFTER_UPDATE") >= 0 &&
-      shellSrc.indexOf("setContentSize(0, 0)") >= 0 &&
+      shellSrc.indexOf("assignContentSize(ui, 0, 0)") >= 0 &&
       shellSrc.indexOf("TOUCH_END") >= 0 &&
       shellSrc.indexOf("bindFightChrome") >= 0,
     "hang fight button rebinds after the page is in the scene and the fullscreen menu is not the hit target"

@@ -122,26 +122,35 @@ export function dressHangPanel(view: Node): void {
   let claimNote = "";
   let seenReward = GameStore.idle().rewardTime;
   let seenClaim = WireSession.claimSerial;
+  let hangTickWidth = false;
   const tick = () => {
     if (!view.isValid) return;
-    const idle = GameStore.idle();
-    const clock = hangClockText(idle);
-    const rates = hangRates();
-    writeBar(view, "lbl_progress_time", clock === "未同步" ? "未同步" : clock);
-    writeBar(view, "lbl_gold", rates.gold);
-    writeBar(view, "lbl_souls", rates.souls);
-    writeBar(view, "lbl_exp", rates.exp);
-    setBarFill(view, "spr_progress_AFK_bg", "ui/city/main-scene_progress-AFK", clock === "未同步" ? 0 : timeFill(idle));
-    setBarFill(view, "CCSprite_4", "ui/city/main-scene_progress-hangs", rates.goldOn ? 1 : 0);
-    setBarFill(view, "CCSprite_3", "ui/city/main-scene_progress-exp", rates.soulsOn ? 1 : 0);
-    setBarFill(view, "CCSprite_2", "ui/city/main-scene_progress-role-exp", rates.expOn ? 1 : 0);
-    syncVip(view, plate);
-    const hang = view.parent ? view.parent.getChildByName("IdleHang") : null;
-    if (hang) paintIdleLoot(hang, hangLootIcons(rates));
-    const bubble = findNamed(view, "node_bubble") || (hang ? hang.getChildByName("node_bubble") : null);
-    if (bubble) {
-      writeHangClock(bubble, claimNote || clock);
-      if (hang) seatHangTimer(hang, bubble);
+    try {
+      const idle = GameStore.idle();
+      const clock = hangClockText(idle);
+      const rates = hangRates();
+      writeBar(view, "lbl_progress_time", clock === "未同步" ? "未同步" : clock);
+      writeBar(view, "lbl_gold", rates.gold);
+      writeBar(view, "lbl_souls", rates.souls);
+      writeBar(view, "lbl_exp", rates.exp);
+      setBarFill(view, "spr_progress_AFK_bg", "ui/city/main-scene_progress-AFK", clock === "未同步" ? 0 : timeFill(idle));
+      setBarFill(view, "CCSprite_4", "ui/city/main-scene_progress-hangs", rates.goldOn ? 1 : 0);
+      setBarFill(view, "CCSprite_3", "ui/city/main-scene_progress-exp", rates.soulsOn ? 1 : 0);
+      setBarFill(view, "CCSprite_2", "ui/city/main-scene_progress-role-exp", rates.expOn ? 1 : 0);
+      syncVip(view, plate);
+      const hang = view.parent ? view.parent.getChildByName("IdleHang") : null;
+      if (hang) paintIdleLoot(hang, hangLootIcons(rates));
+      const bubble = findNamed(view, "node_bubble") || (hang ? hang.getChildByName("node_bubble") : null);
+      if (bubble) {
+        writeHangClock(bubble, claimNote || clock);
+        if (hang) seatHangTimer(hang, bubble);
+      }
+    } catch (err) {
+      if (messageOf(err).indexOf("width") < 0) throw err;
+      if (!hangTickWidth) {
+        hangTickWidth = true;
+        GameLog.shared.warn("MainApp", "hang shell width hangTick");
+      }
     }
   };
   const onIdleSync = () => {
@@ -270,13 +279,19 @@ let battleGlowMissLogged = false;
 function seatBattleGlow(button: Node | null): void {
   if (!button || button.getChildByName("BattleGlow")) return;
   const glow = uiNode("BattleGlow");
-  glow.addComponent(UITransform).setContentSize(224, 102);
+  const glowUi = glow.addComponent(UITransform);
+  assignContentSize(glowUi, 224, 102);
   const image = glow.addComponent(Sprite);
   image.sizeMode = Sprite.SizeMode.CUSTOM;
   image.type = Sprite.Type.SIMPLE;
   glow.setPosition(0, 0, 0);
-  glow.parent = button;
-  glow.setSiblingIndex(0);
+  try {
+    glow.parent = button;
+    glow.setSiblingIndex(0);
+  } catch (_err) {
+    if (glow.isValid) glow.destroy();
+    return;
+  }
   const step = hangBattleGlowStepMs(HANG_BATTLE_GLOW_SPEED);
   const paths = hangBattleGlowPaths();
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -310,10 +325,15 @@ function seatBattleGlow(button: Node | null): void {
         return;
       }
       const frame = ready[index % ready.length];
-      image.spriteFrame = frame;
-      const size = frame.originalSize;
+      try {
+        image.spriteFrame = frame;
+      } catch (_err) {
+        index += 1;
+        return;
+      }
+      const size = frameSize(frame);
       const ui = glow.getComponent(UITransform);
-      if (ui && size && size.width > 0 && size.height > 0) ui.setContentSize(size.width, size.height);
+      if (ui && size) assignContentSize(ui, size.width, size.height);
       index += 1;
     };
     tick();
@@ -345,18 +365,21 @@ function writeBar(view: Node, name: string, text: string): void {
   const node = findNamed(view, name);
   if (!node) return;
   node.setScale(1, 1, 1);
+  const ui = node.getComponent(UITransform);
+  if (ui) {
+    ui.setAnchorPoint(1, 0.5);
+    assignContentSize(ui, 118, 24);
+  }
   const label = node.getComponent(Label);
-  if (label) {
+  if (!label) return;
+  try {
     label.string = text;
     label.fontSize = 16;
     label.lineHeight = 20;
     label.overflow = Overflow.SHRINK;
     label.horizontalAlign = HorizontalTextAlignment.RIGHT;
-  }
-  const ui = node.getComponent(UITransform);
-  if (ui) {
-    ui.setAnchorPoint(1, 0.5);
-    assignContentSize(ui, 118, 24);
+  } catch (_err) {
+    /* 字号装配读到空尺寸时这一拍留原字，下一拍再写。 */
   }
 }
 
@@ -381,19 +404,80 @@ function setBarFill(view: Node, barName: string, art: string, ratio: number): vo
     fill = next;
   }
   const image = fill.getComponent(Sprite);
-  if (image && image.type !== Sprite.Type.FILLED && uiSize(fill.getComponent(UITransform))) {
-    try {
+  const span = ratio <= 0 ? 0 : Math.min(1, ratio);
+  // FILLED 组装器在贴图还没挂上时读 spriteFrame.width。这一拍留普通图，下一拍再填。
+  if (!image || !fillFrameReady(image) || !uiSize(fill.getComponent(UITransform))) {
+    calmFill(image, fill);
+    if (barName === "spr_progress_AFK_bg") seatHangProgressSpine(bar, span);
+    return;
+  }
+  try {
+    if (image.type !== Sprite.Type.FILLED) {
       image.type = Sprite.Type.FILLED;
       image.fillType = Sprite.FillType.HORIZONTAL;
       image.fillStart = 0;
+    }
+    image.fillRange = span;
+    setNodeActive(fill, span > 0);
+  } catch (_err) {
+    calmFill(image, fill);
+    noteHangWidthOnce("setBarFill");
+  }
+  if (barName === "spr_progress_AFK_bg") seatHangProgressSpine(bar, span);
+}
+
+/** 贴图和纹理都在，组装器读 spriteFrame.width 才不会碰到 null。 */
+function fillFrameReady(image: Sprite): boolean {
+  try {
+    const frame = image.spriteFrame;
+    if (!frame) return false;
+    const texture = frame.texture;
+    if (!texture || typeof texture.width !== "number" || !(texture.width > 0)) return false;
+    const rect = frame.rect;
+    if (!rect || typeof rect.width !== "number") return false;
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+function frameSize(frame: SpriteFrame): { width: number; height: number } | null {
+  try {
+    const size = frame.originalSize;
+    if (!size || typeof size.width !== "number" || typeof size.height !== "number") return null;
+    if (!(size.width > 0) || !(size.height > 0)) return null;
+    return { width: size.width, height: size.height };
+  } catch (_err) {
+    return null;
+  }
+}
+
+function calmFill(image: Sprite | null, fill: Node): void {
+  if (image && image.type !== Sprite.Type.SIMPLE) {
+    try {
+      image.type = Sprite.Type.SIMPLE;
     } catch (_err) {
-      // 装配仍读到空尺寸时这一拍留普通图，下一拍再改。
+      /* 下一拍再改回普通图。 */
     }
   }
-  const span = ratio <= 0 ? 0 : Math.min(1, ratio);
-  if (image && image.type === Sprite.Type.FILLED) image.fillRange = span;
-  fill.active = span > 0;
-  if (barName === "spr_progress_AFK_bg") seatHangProgressSpine(bar, span);
+  setNodeActive(fill, false);
+}
+
+function setNodeActive(node: Node, active: boolean): void {
+  if (!node.isValid || node.active === active) return;
+  try {
+    node.active = active;
+  } catch (_err) {
+    /* 启用时引擎仍可能读 width。下一拍再试。 */
+  }
+}
+
+const hangWidthSteps = new Set<string>();
+
+function noteHangWidthOnce(step: string): void {
+  if (hangWidthSteps.has(step)) return;
+  hangWidthSteps.add(step);
+  GameLog.shared.warn("MainApp", "hang shell width " + step);
 }
 
 /**
@@ -435,7 +519,7 @@ function seatHangProgressSpine(bar: Node, ratio: number): void {
   }
   const maskUi = mask.getComponent(UITransform);
   if (!assignContentSize(maskUi, drawn, height)) {
-    mask.active = false;
+    setNodeActive(mask, false);
     return;
   }
   try {
@@ -443,10 +527,10 @@ function seatHangProgressSpine(bar: Node, ratio: number): void {
       const maskComp = mask.addComponent(Mask);
       maskComp.type = Mask.Type.GRAPHICS_RECT;
     }
-    mask.active = ratio > 0;
+    setNodeActive(mask, ratio > 0);
   } catch (_err) {
     // onEnable 仍可能在尺寸空档读 width。条上的填充图还在，下一拍再挂遮罩。
-    if (mask.isValid) mask.active = false;
+    setNodeActive(mask, false);
   }
 }
 
@@ -1746,21 +1830,25 @@ function seatHangButton(node: Node | null, text: string, size: number): void {
       continue;
     }
     kept = true;
-    child.active = true;
-    child.setPosition(0, 0, 0);
-    child.setScale(1, 1, 1);
     const box = child.getComponent(UITransform);
     const parentSize = positiveUiSize(node.getComponent(UITransform));
     if (box && parentSize && parentSize.width > 8) {
       box.setAnchorPoint(0.5, 0.5);
       assignContentSize(box, Math.max(8, parentSize.width - 16), Math.max(8, parentSize.height - 8));
     }
-    label.string = text;
-    label.fontSize = drawn;
-    label.lineHeight = drawn + 4;
-    label.overflow = Overflow.SHRINK;
-    label.horizontalAlign = HorizontalTextAlignment.CENTER;
-    label.verticalAlign = VerticalTextAlignment.CENTER;
+    try {
+      child.active = true;
+      child.setPosition(0, 0, 0);
+      child.setScale(1, 1, 1);
+      label.string = text;
+      label.fontSize = drawn;
+      label.lineHeight = drawn + 4;
+      label.overflow = Overflow.SHRINK;
+      label.horizontalAlign = HorizontalTextAlignment.CENTER;
+      label.verticalAlign = VerticalTextAlignment.CENTER;
+    } catch (_err) {
+      /* 钮字装配读到空尺寸时这一拍留原字。 */
+    }
   }
 }
 
@@ -1769,15 +1857,19 @@ function fitButton(node: Node | null, text: string, size: number): void {
   const spriteComp = node.getComponent(Sprite);
   if (spriteComp) spriteComp.sizeMode = Sprite.SizeMode.CUSTOM;
   eachLabel(node, (label, host) => {
-    label.string = text;
-    label.fontSize = size;
-    label.lineHeight = size + 4;
-    label.overflow = Overflow.SHRINK;
     const ui = host.getComponent(UITransform);
     const parent = host.parent ? host.parent.getComponent(UITransform) : null;
     const parentSize = positiveUiSize(parent);
     if (ui && parentSize && parentSize.width > 8) {
       assignContentSize(ui, Math.max(8, parentSize.width - 8), Math.max(8, parentSize.height - 4));
+    }
+    try {
+      label.string = text;
+      label.fontSize = size;
+      label.lineHeight = size + 4;
+      label.overflow = Overflow.SHRINK;
+    } catch (_err) {
+      /* 钮字装配读到空尺寸时这一拍留原字。 */
     }
   });
 }
@@ -2471,7 +2563,11 @@ function paintFirst(node: Node, paths: string[]): void {
           loadAt(index + 1);
           return;
         }
-        image.spriteFrame = asset;
+        try {
+          image.spriteFrame = asset;
+        } catch (_err) {
+          return;
+        }
       });
     } catch (_err) {
       return;
@@ -2480,7 +2576,7 @@ function paintFirst(node: Node, paths: string[]): void {
   loadAt(0);
 }
 
-function pinSprites(node: Node): void {
+export function pinSprites(node: Node): void {
   const image = node.getComponent(Sprite);
   if (image) image.sizeMode = Sprite.SizeMode.CUSTOM;
   const kids = node.children;
