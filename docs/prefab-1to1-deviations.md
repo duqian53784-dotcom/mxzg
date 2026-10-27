@@ -295,7 +295,7 @@ Manager 裁定：一张图的 .meta 已有边距（P1/P2 改过的，或原本�
 
 | 项 | 现在怎么做 | 依据 / 还差什么 |
 |---|---|---|
-| logo 图 | 节点名仍是 `logo-scene_spr-logo`。字标大于 8×8 时按原始尺寸显示。现在这张还是 3×3，开机不显示它，改把 `logo-scene_spr-parttern-l` / `parttern-r` 拼成焰环 | 字标文件仍是 69 字节的失败抽出，没有新画字。饰纹是 logo-scene 里已经抽出的左右两张 |
+| logo 图 | 节点名仍是 `logo-scene_spr-logo`。字标大于 8×8 时按原始尺寸叠在加载底图上。现在这张还是 3×3，开机不显示它。底图是 `ui/login/bg-loading`，cover 和 LoadingLayer 一样。不再使用 `logo-scene_spr-parttern-l` / `parttern-r` | 字标文件仍是 69 字节的失败抽出，没有新画字。饰纹还在资源里，开机不用。淡出时加载层已经在下面，不闪黑 |
 | logo 时间 | 淡入 1 秒、停 1 秒、淡出 0.5 秒。点一下跳过停留和淡出 | 旧 lua 不在仓库。常量在 `logoSplash.ts` |
 | logo 音乐 | `resources/audio/bgm-logo.mp3` 从淡入循环到进 Main | |
 | 背景 | `ui/login/bg-loading.jpg` 768×1300。加载层抵消 SafeFrame 缩小后，按可见尺寸 cover：scale = max(可见宽/768, 可见高/1300)。设计 720×1280 时大约 0.9846，画出 756×1280 | 窄屏（可见宽约 590）不再因为整层缩到 0.82 而在上下留黑边。多出来的边裁掉 |

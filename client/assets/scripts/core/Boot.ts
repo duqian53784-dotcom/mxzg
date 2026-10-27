@@ -251,15 +251,22 @@ export class Boot extends Component {
     const canvas = this.resolveCanvas();
     this.canvas = canvas;
     const frame = this.mountSafeFrame(canvas);
+    // 字标仍是 3×3，不拿来开屏，也不再拼焰环。底图和 LoadingLayer 同一张，淡出时加载层已经在下面。
     this.logo = playLogoSplash(frame, canvas);
-    await this.logo.done;
-    if (!this.alive || !this.isValid) return;
-
     const chrome = new BootChrome(frame);
     this.chrome = chrome;
-    await chrome.open("loading");
-    if (!this.alive || !this.isValid) return;
     void this.bootCopy();
+    await this.logo.fadedIn;
+    if (!this.alive || !this.isValid) return;
+    await chrome.open("loading", this.logo.node);
+    if (!this.alive || !this.isValid) return;
+    await this.logo.held;
+    if (!this.alive || !this.isValid) return;
+    this.face(STAGE_VERSION);
+    this.logo.stayOnTop();
+    this.logo.dismiss();
+    await this.logo.done;
+    if (!this.alive || !this.isValid) return;
 
     const versionOk = await this.runVersionStage();
     if (!versionOk || !this.alive || !this.isValid) return;
@@ -309,7 +316,7 @@ export class Boot extends Component {
     for (;;) {
       if (!this.alive) return false;
       chrome.setRatio(0);
-      await chrome.open("loading");
+      await chrome.ensure("loading");
       this.face(STAGE_VERSION);
       try {
         const local = await readClientVersion();
@@ -433,7 +440,7 @@ export class Boot extends Component {
     if (!chrome) return;
     GameLog.shared.info("Boot", "stage=assets");
     chrome.setRatio(0);
-    await chrome.open("loading");
+    await chrome.ensure("loading");
     this.face(STAGE_ASSETS);
     const jobs: Array<Promise<void>> = [];
     for (let i = 0; i < BOOT_SPRITE_FRAMES.length; i++) {
