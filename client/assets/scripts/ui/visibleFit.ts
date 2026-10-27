@@ -4,6 +4,8 @@
  * 安全区仍可能把整层缩小。这里把主城根抵消那一层缩放，让本地像素等于屏幕像素。
  */
 import { Graphics, Node, Sprite, UITransform, view, Widget } from "cc";
+import { GameLog } from "../core/GameLog";
+import { messageOf } from "../core/errors";
 import { horizontalFillMargins, visibleBox, VisibleBox, widthSqueeze } from "./visibleChrome";
 
 type WorldPoint = { x: number; y: number; z?: number };
@@ -74,8 +76,9 @@ export function fitCityViewport(root: Node): VisibleBox {
   const bg = page ? page.getChildByName("bg") : null;
   if (bg) {
     const bgUi = bg.getComponent(UITransform) as UITransform | null;
-    if (bgUi) bgUi.setContentSize(box.width, box.height);
-    redrawGraphics(bg, box.width, bgUi ? bgUi.contentSize.height : box.height);
+    const bgSize = uiSize(bgUi);
+    if (bgUi && bgSize) bgUi.setContentSize(box.width, box.height);
+    redrawGraphics(bg, box.width, bgSize ? bgSize.height : box.height);
   }
   return box;
 }
@@ -83,28 +86,34 @@ export function fitCityViewport(root: Node): VisibleBox {
 /** 左右拉满父节点。不改垂直对齐，调用方自己钉顶或钉底。 */
 export function stretchHorizontal(node: Node, visibleW: number): void {
   const ui = node.getComponent(UITransform) as UITransform | null;
-  if (!ui) return;
+  const self = uiSize(ui);
+  if (!ui || !self) return;
   const parentUi = node.parent ? (node.parent.getComponent(UITransform) as UITransform | null) : null;
-  const parentW = parentUi && parentUi.contentSize.width > 0 ? parentUi.contentSize.width : visibleW;
+  const parentSize = uiSize(parentUi);
+  const parentW = parentSize && parentSize.width > 0 ? parentSize.width : visibleW;
   const margins = horizontalFillMargins(parentW, visibleW);
-  const widget = (node.getComponent(Widget) || node.addComponent(Widget)) as Widget;
-  widget.isAlignHorizontalCenter = false;
-  widget.isAlignVerticalCenter = false;
-  widget.isAlignTop = false;
-  widget.isAlignBottom = false;
-  widget.isAlignLeft = true;
-  widget.isAlignRight = true;
-  widget.left = margins.left;
-  widget.right = margins.right;
-  widget.alignMode = Widget.AlignMode.ON_WINDOW_RESIZE;
-  const y = node.position && typeof node.position.y === "number" ? node.position.y : 0;
-  const z = node.position && typeof node.position.z === "number" ? node.position.z : 0;
-  ui.setContentSize(margins.width, ui.contentSize.height);
+  const height = self.height > 0 ? self.height : 1;
+  ui.setContentSize(margins.width, height);
   const sprite = node.getComponent(Sprite) as Sprite | null;
   if (sprite) sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-  if (typeof widget.updateAlignment === "function") widget.updateAlignment();
+  if (alignReady(node)) {
+    const widget = (node.getComponent(Widget) || node.addComponent(Widget)) as Widget;
+    widget.isAlignHorizontalCenter = false;
+    widget.isAlignVerticalCenter = false;
+    widget.isAlignTop = false;
+    widget.isAlignBottom = false;
+    widget.isAlignLeft = true;
+    widget.isAlignRight = true;
+    widget.left = margins.left;
+    widget.right = margins.right;
+    widget.alignMode = Widget.AlignMode.ON_WINDOW_RESIZE;
+    if (typeof widget.updateAlignment === "function") widget.updateAlignment();
+  }
+  const y = node.position && typeof node.position.y === "number" ? node.position.y : 0;
+  const z = node.position && typeof node.position.z === "number" ? node.position.z : 0;
   node.setPosition(0, y, z);
-  redrawGraphics(node, margins.width, ui.contentSize.height);
+  const drawn = uiSize(ui);
+  redrawGraphics(node, margins.width, drawn ? drawn.height : height);
 }
 
 /** 顶栏或底栏：左右铺满可见宽，并贴住根节点的顶边或底边。Bg / BgPad 跟着拉宽。 */
@@ -112,9 +121,11 @@ export function stretchBar(node: Node, visibleW: number, edge: "top" | "bottom")
   stretchHorizontal(node, visibleW);
   const ui = node.getComponent(UITransform) as UITransform | null;
   const parentUi = node.parent ? (node.parent.getComponent(UITransform) as UITransform | null) : null;
-  if (ui && parentUi && parentUi.contentSize.height > 0) {
-    const barH = ui.contentSize.height;
-    const y = edge === "top" ? parentUi.contentSize.height * 0.5 - barH * 0.5 : -parentUi.contentSize.height * 0.5 + barH * 0.5;
+  const self = uiSize(ui);
+  const parentSize = uiSize(parentUi);
+  if (self && parentSize && parentSize.height > 0) {
+    const barH = self.height;
+    const y = edge === "top" ? parentSize.height * 0.5 - barH * 0.5 : -parentSize.height * 0.5 + barH * 0.5;
     node.setPosition(0, y, 0);
   }
   const kids = node.children;
@@ -129,6 +140,7 @@ export function stretchBar(node: Node, visibleW: number, edge: "top" | "bottom")
 
 /** 地图根贴住 CityMapHost 的四边。Host 已经是可见尺寸。 */
 export function stretchToParent(node: Node): void {
+  if (!alignReady(node)) return;
   const widget = (node.getComponent(Widget) || node.addComponent(Widget)) as Widget;
   widget.isAlignHorizontalCenter = false;
   widget.isAlignVerticalCenter = false;
@@ -169,12 +181,19 @@ export function squeezeWideNode(node: Node, visibleW: number): void {
 
 /** 窗口变化后再铺一次。安全区会在稍后的 tick 里改缩放，所以多补两帧。 */
 export function bindVisibleRefresh(owner: Node, apply: () => void): void {
-  apply();
+  const safe = () => {
+    try {
+      apply();
+    } catch (err) {
+      GameLog.shared.error("VisibleFit", messageOf(err));
+    }
+  };
+  safe();
   const host = view as { on?: (type: string, cb: () => void) => void; off?: (type: string, cb: () => void) => void };
-  if (host.on) host.on("canvas-resize", apply);
-  const timers = [setTimeout(apply, 0), setTimeout(apply, 80)];
+  if (host.on) host.on("canvas-resize", safe);
+  const timers = [setTimeout(safe, 0), setTimeout(safe, 80)];
   owner.once(Node.EventType.NODE_DESTROYED, () => {
-    if (host.off) host.off("canvas-resize", apply);
+    if (host.off) host.off("canvas-resize", safe);
     for (let i = 0; i < timers.length; i++) clearTimeout(timers[i]);
   });
 }
@@ -204,6 +223,31 @@ function findCanvas(node: Node): Node | null {
     cur = cur.parent;
   }
   return null;
+}
+
+/** contentSize 还没挂上时是 null。读 .width 会把主城第一帧打成预览错误层。 */
+export function uiSize(ui: UITransform | null): { width: number; height: number } | null {
+  if (!ui) return null;
+  const size = ui.contentSize;
+  if (!size || typeof size.width !== "number" || typeof size.height !== "number") return null;
+  return { width: size.width, height: size.height };
+}
+
+/**
+ * Widget 左右对齐会读节点 width。节点还没进激活树时，引擎里的 UITransform 还是 null。
+ * 这一帧先按内容尺寸摆，下一帧再对齐。
+ */
+function alignReady(node: Node): boolean {
+  if (!node.isValid || !node.active || !node.parent) return false;
+  let cur: Node | null = node.parent;
+  while (cur) {
+    if (!cur.active) return false;
+    cur = cur.parent;
+  }
+  if (!uiSize(node.getComponent(UITransform))) return false;
+  const parentUi = node.parent.getComponent(UITransform);
+  if (parentUi && !uiSize(parentUi)) return false;
+  return true;
 }
 
 function redrawGraphics(node: Node, width: number, height: number): void {

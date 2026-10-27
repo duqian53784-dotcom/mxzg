@@ -3,7 +3,7 @@
  * 看见的是 UserLoginLayer；点服务器条打开 ChooseServerLayer。
  * 进游戏仍走 Boot 原来的 onEnter。关掉本开关就回到 LoginPanel / 代码登录。
  */
-import { BlockInputEvents, Button, Color, Node, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, Label, Node, Overflow, UITransform } from "cc";
 import { findServer, MOCK_SERVERS } from "../core/servers";
 import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
@@ -37,7 +37,8 @@ export async function mountP1LoginPrefab(
   const pfField = { current: null as TextField | null };
   const statusNode = place(createLabel("", 20, { color: new Color(255, 244, 210, 255), width: 640 }), host, 0, -400);
   const detailNode = place(createLabel("", 16, { color: new Color(190, 205, 225, 255), width: 640, height: 48 }), host, 0, -448);
-  let selected = findServer(options?.serverId ?? MOCK_SERVERS[0].id);
+  const bridgeLogin = options?.mode === "ws";
+  let selected = bridgeLogin ? { id: 1, name: "本机桥" } : findServer(options?.serverId ?? MOCK_SERVERS[0].id);
   let serverLabel: Node | null = null;
   let loginButton: Node | null = null;
   let busy = false;
@@ -138,15 +139,18 @@ export async function mountP1LoginPrefab(
   async function fillServers(layer: Node, close: () => void): Promise<void> {
     const content = findDescendant(layer, "content");
     if (!content) return;
+    const tabWell = findDescendant(layer, "spr_tab_bg");
+    if (tabWell) tabWell.active = false;
+    const rows = bridgeLogin ? [{ id: 1, name: "本机桥" }] : MOCK_SERVERS;
     try {
       const cellPrefab = await loadPrefab(CHOOSE_SERVER_CELL_PATH);
       if (!content.isValid) return;
-      for (let i = 0; i < MOCK_SERVERS.length; i++) {
-        const server = MOCK_SERVERS[i];
+      for (let i = 0; i < rows.length; i++) {
+        const server = rows[i];
         const cell = spawnPrefab(cellPrefab, content);
         placeCell(content, cell, i);
         const name = findDescendant(cell, "lbl_server_name");
-        if (name) setText(name, server.name);
+        if (name) showServerName(name, server.name);
         const best = findDescendant(cell, "spr_best");
         if (best) best.active = i === 0;
         bindTap(cell, () => {
@@ -268,6 +272,14 @@ export async function mountP1LoginPrefab(
       return pfField.current ? pfField.current.getValue() : "";
     },
   };
+}
+
+function showServerName(node: Node, text: string): void {
+  const ui = node.getComponent(UITransform);
+  if (ui && ui.contentSize.width < 8) ui.setContentSize(460, 48);
+  const label = node.getComponent(Label);
+  if (label) label.overflow = Overflow.SHRINK;
+  setText(node, text);
 }
 
 function overlayField(host: Node, placeholder: string, text: string, maxLength = 16): TextField {

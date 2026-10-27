@@ -12,13 +12,14 @@
  * 主屏不再画红「活动」、蓝「更多」矩形，也不再铺调试按钮矩阵。
  * 这两颗入口在 CityChrome Prefab 上。主线从 CityHub 的 BtnMainline 进。
  */
-import { _decorator, BlockInputEvents, Color, Component, Node, UITransform } from "cc";
+import { _decorator, BlockInputEvents, Color, Component, Node, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { ConfigDb, ConfigLoader } from "../config/ConfigLoader";
 import { listOpenEntries } from "../config/gates";
 import {
   CITY_BAR,
   CITY_TAB,
   entryAccess,
+  entryLockLevel,
   findNavEntry,
   NavEntry,
   PLAY_ENTRIES,
@@ -622,10 +623,16 @@ export class MainApp extends Component {
       return;
     }
     if (id === "dungeon") {
+      if (!this.allow("daily")) return;
       this.openChild("daily");
       return;
     }
-    if (id === "bag" || id === "clan" || id === "fetter") {
+    if (id === "clan" || id === "fetter") {
+      if (!this.allow(id)) return;
+      this.openChild(id);
+      return;
+    }
+    if (id === "bag") {
       this.openChild(id);
       return;
     }
@@ -633,10 +640,13 @@ export class MainApp extends Component {
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
     if ((id === "hero" || id === "summon") && Session.source === "wire") {
-      const net = this.cityNet();
-      if (net.state !== "connected") {
-        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
-        return;
+      // 英雄名册在本地快照里。未同步由 blockWirePage 拦。打开不看 net.state。
+      if (id === "summon") {
+        const net = this.cityNet();
+        if (net.state !== "connected") {
+          this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
+          return;
+        }
       }
     } else if ((id === "hero" || id === "summon" || id === "smith") && !this.ensureNet()) return;
     this.panels?.openRoot(id);
@@ -647,7 +657,7 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
-    if (Session.source === "wire" && (id === "bag" || id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "zhuShenJiTan" || id === "midFood" || id === "qiuShangMingYue" || id === "wanShengLottery" || id === "heiWuMission" || id === "christmasGift" || id === "springOuting" || id === "christmasMission" || id === "magicTowerLevelRank" || id === "springOutingGrid" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
+    if (Session.source === "wire" && (id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "zhuShenJiTan" || id === "midFood" || id === "qiuShangMingYue" || id === "wanShengLottery" || id === "heiWuMission" || id === "christmasGift" || id === "springOuting" || id === "christmasMission" || id === "magicTowerLevelRank" || id === "springOutingGrid" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
       const net = this.cityNet();
       if (net.state !== "connected") {
         this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
@@ -1392,7 +1402,8 @@ export class MainApp extends Component {
       const tab = CITY_BAR[i];
       const access = entryAccess(tab, this.level(), this.day(), ConfigDb.current);
       const state = !access.open ? "locked" : this.barSelected(tab.id, current, root) ? "selected" : "open";
-      tabs.push({ id: tab.id, text: tab.title, state });
+      const lockLevel = access.open ? 0 : entryLockLevel(tab, ConfigDb.current);
+      tabs.push({ id: tab.id, text: tab.title, state, lockLevel });
     }
     chrome.setTabs(tabs);
     chrome.setCityExtras(this.panels?.current === CITY_TAB);
@@ -1421,14 +1432,9 @@ export class MainApp extends Component {
     this.openChild("mainline");
   }
 
-  /** 两个 idx 都没有就 Toast。有任意一个则压入只读页，不走 Mock 的 stage.enter。 */
+  /** 两个 idx 都没有就 Toast。有任意一个则压入只读页，不走 Mock 的 stage.enter。打开不看 net.state。 */
   private openWireMainline(): void {
     if (this.blockWirePage("mainline")) return;
-    const net = this.cityNet();
-    if (net.state !== "connected") {
-      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
-      return;
-    }
     this.panels?.openChild("mainline");
     this.refreshChrome();
   }
@@ -3770,11 +3776,6 @@ export class MainApp extends Component {
     }
     if (jump === "hero" && Session.source === "wire") {
       if (!this.allow("hero")) return;
-      const net = this.cityNet();
-      if (net.state !== "connected") {
-        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
-        return;
-      }
       this.panels?.openChild("hero");
       this.refreshChrome();
       return;
@@ -3928,7 +3929,7 @@ export class MainApp extends Component {
 
   /**
    * 主城和玩法都能进。opencondition 未开时只 Toast，和底栏锁一样。
-   * 没连上时不压页面。真服按 5001 是否到过，打开只读页或 Toast，不进 Mock 背包。
+   * 真服按 5001 是否到过，打开只读页或 Toast，不进 Mock 背包。已同步时不看 net.state。
    */
   private openBag(): void {
     GameLog.shared.info("MainApp", "click bag");
@@ -3943,14 +3944,9 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 未同步 Toast。已同步（含空背包）压入只读页，不走 bag.list。 */
+  /** 未同步 Toast。已同步（含空背包）压入只读页，不走 bag.list，也不看 net.state。 */
   private openWireBag(): void {
     if (this.blockWirePage("bag")) return;
-    const net = this.cityNet();
-    if (net.state !== "connected") {
-      this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
-      return;
-    }
     this.panels?.openChild("bag");
     this.refreshChrome();
   }
@@ -4052,11 +4048,6 @@ export class MainApp extends Component {
     GameLog.shared.info("MainApp", "click idle");
     if (Session.source === "wire") {
       if (this.blockWirePage("idle")) return;
-      const net = this.cityNet();
-      if (net.state !== "connected") {
-        this.shell?.showToast(errorText(ErrorCode.NET_NOT_CONNECTED), 2200);
-        return;
-      }
       this.panels?.openChild("idle");
       this.refreshChrome();
       return;
@@ -4172,7 +4163,26 @@ export class MainApp extends Component {
     const button = this.mainButton;
     if (!button || !button.isValid) return;
     const label = button.getChildByName("Label");
-    if (label) setText(label, text);
+    if (label) {
+      setText(label, text);
+      label.active = false;
+    }
+    this.paintHeroRecommend(button);
+  }
+
+  /** 左下角用已有的英雄推荐图。点击仍是原来的主线，不另发协议。 */
+  private paintHeroRecommend(button: Node): void {
+    const mark = button as Node & { mxzgRecommend?: boolean };
+    if (mark.mxzgRecommend) return;
+    const sprite = button.getComponent(Sprite);
+    if (!sprite) return;
+    mark.mxzgRecommend = true;
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    const path = "ui/city/main-city_btn-hero-recommend-1/spriteFrame";
+    resources.load(path, SpriteFrame, (err, frame) => {
+      if (err || !frame || !button.isValid || !sprite.isValid) return;
+      sprite.spriteFrame = frame;
+    });
   }
 
   private buildPopup(title: string, body: string): Node {

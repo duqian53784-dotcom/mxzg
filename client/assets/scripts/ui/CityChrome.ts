@@ -10,7 +10,7 @@ import {
   tintSprite,
 } from "./prefabLoad";
 import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
-import { bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar } from "./visibleFit";
+import { bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar, uiSize } from "./visibleFit";
 
 export type TabVisual = "selected" | "open" | "locked";
 
@@ -18,6 +18,8 @@ export interface TabState {
   id: string;
   text: string;
   state: TabVisual;
+  /** 锁着且主线门槛大于 1 时写在钮上，例如 15。0 表示不写 Lv。 */
+  lockLevel?: number;
 }
 
 export interface CityChrome {
@@ -136,7 +138,8 @@ export function mountCityChrome(parent: Node, onTab: (id: string) => void): City
         const button = buttons[tab.id];
         if (!button) continue;
         const label = button.getChildByName("Label");
-        if (label) setText(label, tab.text);
+        const level = tab.state === "locked" && tab.lockLevel && tab.lockLevel > 1 ? tab.lockLevel : 0;
+        if (label) setText(label, level > 0 ? "Lv" + level : tab.text);
         const bg = button.getChildByName("bg");
         if (bg) paintRect(bg, fillOf(tab.state));
       }
@@ -283,7 +286,11 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
         // 字图保持「副本」。不要把「锁·」写进 84px 的 Label，挤开会像「领·副本」。
         tintSprite(button, prefabTabColor(tab.state));
         const lock = button.getChildByName("Lock");
-        if (lock) lock.active = tab.state === "locked";
+        if (lock) {
+          const locked = tab.state === "locked";
+          lock.active = locked;
+          if (locked) paintLockLevel(lock, tab.lockLevel && tab.lockLevel > 1 ? tab.lockLevel : 0);
+        }
       }
     },
     setCityExtras(visible: boolean): void {
@@ -391,15 +398,36 @@ function sealBottomBg(root: Node): void {
   const bottom = bg.parent;
   if (!bottom) return;
   const barUi = bottom.getComponent(UITransform);
-  const barW = barUi && barUi.contentSize.width > BOTTOM_BG_WIDTH ? barUi.contentSize.width : BOTTOM_BG_WIDTH;
-  const barH = barUi && barUi.contentSize.height > 0 ? barUi.contentSize.height : 140;
-  const height = ui && ui.contentSize && typeof ui.contentSize.height === "number" ? ui.contentSize.height : 129;
+  const barSize = uiSize(barUi);
+  const bgSize = uiSize(ui);
+  const barW = barSize && barSize.width > BOTTOM_BG_WIDTH ? barSize.width : BOTTOM_BG_WIDTH;
+  const barH = barSize && barSize.height > 0 ? barSize.height : 140;
+  const height = bgSize && bgSize.height > 0 ? bgSize.height : 129;
   if (ui) ui.setContentSize(barW, height);
   const pad = createRect("BgPad", barW, barH, BOTTOM_PAD_COLOR);
   pad.setPosition(0, 0, 0);
   const index = bg.getSiblingIndex();
   pad.parent = bottom;
   pad.setSiblingIndex(index);
+}
+
+function paintLockLevel(lock: Node, level: number): void {
+  const text = level > 1 ? "Lv" + level : "";
+  let node = lock.getChildByName("Lv");
+  if (!text) {
+    if (node) node.active = false;
+    return;
+  }
+  if (!node) {
+    node = createLabel(text, 16, { color: new Color(255, 244, 220, 255), width: 64, height: 22 });
+    node.name = "Lv";
+    node.setPosition(0, -20, 0);
+    node.parent = lock;
+  }
+  node.active = true;
+  setText(node, text);
+  const label = node.getComponent(Label);
+  if (label) label.overflow = Overflow.SHRINK;
 }
 
 function prefabTabColor(state: TabVisual): Color {

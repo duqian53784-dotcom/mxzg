@@ -111,6 +111,9 @@ export function createField(
   place(hint, root, 0, 0);
   if (initial) hint.active = false;
 
+  seatFieldLine(text, width, height);
+  seatFieldLine(hint, width, height);
+
   const edit = root.addComponent(EditBox);
   edit.textLabel = text.getComponent(Label);
   edit.placeholderLabel = hint.getComponent(Label);
@@ -119,6 +122,9 @@ export function createField(
   edit.inputMode = EditBox.InputMode.SINGLE_LINE;
   edit.inputFlag = options?.password ? EditBox.InputFlag.PASSWORD : EditBox.InputFlag.DEFAULT;
   edit.string = initial;
+  // EditBox 按左上锚点把字摆到格子左缘。中心锚点会让「正整数，可空」只剩后半截。
+  seatFieldLine(text, width, height);
+  seatFieldLine(hint, width, height);
 
   return {
     node: root,
@@ -130,6 +136,23 @@ export function createField(
       hint.active = !value;
     },
   };
+}
+
+/** 单行输入的字从格子左缘排起，收进格子宽度。 */
+function seatFieldLine(node: Node, width: number, height: number): void {
+  const ui = node.getComponent(UITransform);
+  if (ui) {
+    ui.anchorX = 0;
+    ui.anchorY = 1;
+    ui.setContentSize(Math.max(8, width - 16), height);
+  }
+  const label = node.getComponent(Label);
+  if (label) {
+    label.overflow = Overflow.SHRINK;
+    label.horizontalAlign = HorizontalTextAlignment.LEFT;
+    label.verticalAlign = VerticalTextAlignment.CENTER;
+  }
+  node.setPosition(-width / 2 + 8, height / 2, 0);
 }
 
 export function createButton(

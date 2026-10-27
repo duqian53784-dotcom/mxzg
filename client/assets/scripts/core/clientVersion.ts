@@ -76,6 +76,16 @@ export async function readClientVersion(): Promise<ClientVersion> {
 }
 
 /**
+ * Creator / 浏览器预览不向表里的 http 地址发请求。
+ * 那些地址是 http://106.52.67.63:2011 和 http://cdn-mxzg.anyaojs.com/release/qyzh/chn/。
+ * 预览页若是 https，浏览器会把它们当成混合内容拦住。配置改读本地 resources，真服只走 ws 桥。
+ */
+export function remoteVersionUrls(version: ClientVersion, browser: boolean): string[] {
+  if (browser) return [];
+  return versionUrls(version);
+}
+
+/**
  * 读到远程整数版本就返回它。
  * 没有平台地址和下载地址，或每个地址都失败时返回 null。不抛「校验版本失败」。
  */

@@ -38,10 +38,10 @@ import {
   downloadWithProgress,
   fetchRemoteVersion,
   hotUpdateUrl,
+  remoteVersionUrls,
   isH5Client,
   readClientVersion,
   versionNeedsUpdate,
-  versionUrls,
 } from "./clientVersion";
 import { listOpenEntries } from "../config/gates";
 import { NetClient } from "../net/NetClient";
@@ -66,6 +66,7 @@ import {
   setMockRuntime,
   TransportChoice,
   WS_CLOSE_STATUS,
+  WS_DOWN_DETAIL,
   WS_DOWN_LOG,
   WS_DOWN_STATUS,
   WS_MOCK_STATUS,
@@ -286,8 +287,9 @@ export class Boot extends Component {
         const local = await readClientVersion();
         if (!this.alive) return false;
         GameLog.shared.info("Boot", "stage=version " + local.version);
-        const empty = versionUrls(local).length === 0;
-        const remote = await fetchRemoteVersion(local);
+        const browser = isH5Client();
+        const empty = remoteVersionUrls(local, browser).length === 0;
+        const remote = empty ? null : await fetchRemoteVersion(local);
         if (!this.alive) return false;
         if (remote === null) {
           this.skipUnreachableVersion(local, empty);
@@ -328,7 +330,11 @@ export class Boot extends Component {
   /** 远程版本没读到。警告后跳过热更，后面继续加载资源。 */
   private skipUnreachableVersion(local: ClientVersion, empty: boolean): void {
     const where = isH5Client() ? " h5" : "";
-    const why = empty ? "版本地址为空" : "远程版本不可达";
+    const why = isH5Client()
+      ? "Creator 预览不请求 106.52.67.63:2011 和 cdn-mxzg.anyaojs.com。配置用本地表，真服只走 ws://127.0.0.1:13111/game"
+      : empty
+        ? "版本地址为空"
+        : "远程版本不可达";
     GameLog.shared.warn("Boot", "stage=version " + why + where + "，本地已是最新 / 跳过热更 local=" + local.version);
     GameLog.shared.info(
       "Boot",
@@ -599,7 +605,7 @@ export class Boot extends Component {
     if (this.chrome) this.chrome.hide();
     if (this.pendingStatus) {
       panel.setStatus(this.pendingStatus);
-      panel.setDetail(this.devMock ? "服未启动。可点进入游戏走 Mock" : "服未启动。请先双击 scripts/start-local-all.bat");
+      panel.setDetail(this.devMock ? "服未启动。可点进入游戏走 Mock" : WS_DOWN_DETAIL);
       this.pendingStatus = null;
     }
   }
@@ -726,7 +732,7 @@ export class Boot extends Component {
       if (this.chrome) this.chrome.hide();
       if (this.loginPanel) {
         this.loginPanel.setStatus(WS_DOWN_STATUS);
-        this.loginPanel.setDetail("请先双击 scripts/start-local-all.bat");
+        this.loginPanel.setDetail(WS_DOWN_DETAIL);
         this.loginPanel.setBusy(false);
       }
       this.authBusy = false;
