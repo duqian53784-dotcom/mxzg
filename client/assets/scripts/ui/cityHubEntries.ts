@@ -2,7 +2,7 @@
  * 主城只读 / 系统入口的挂接约定。
  *
  * 主屏不再画红「活动」、蓝「更多」矩形。入口在 CityChrome Prefab 的 ActGroup 和 UtilityRow/BtnMore。
- * 点开仍是下面这两个列表。底栏七项在 CityChrome / CITY_BAR，不在这里。
+ * 这些按钮没有单独的列表预制，点击只打日志，不再手搓一整页按钮。底栏七项在 CityChrome / CITY_BAR，不在这里。
  * CityMap 上跟随拖动的建筑入口不在这里，不要改 CityMap 的拖动和建筑点。
  *
  * 后续只读协议新入口：

@@ -134,7 +134,7 @@ const TAB_ICON: { [id: string]: string } = {
  * 路径相对 assets：prefabs/ui/city/CityChrome。Prefab 不走 resources.load。
  * 七个底栏字是 resources 里的字图（副本文件名 lbl-skin，最右是 VIP）。
  * 不改 USE_CITY_CHROME_PREFAB，也不改 Boot。
- * ActGroup 打开活动列表，UtilityRow/BtnMore 打开更多列表，BtnMail 打开原来的邮件页。
+ * ActGroup / UtilityRow 仍绑预制上的按钮。没有列表预制时只打日志，不手搓按钮页。BtnMail 打开原来的邮件页。
  * BtnActivity / BtnMorePanel 保持 Prefab 里的未激活，避免再盖一层矩形。
  * 底栏七个钮仍把 id 交给 onTab。战斗进主线，副本进日常副本。
  */
