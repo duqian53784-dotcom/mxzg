@@ -1,6 +1,7 @@
 /**
  * 英雄列表、背包、挂机底栏、出阵，把已有贴图填进 P4 壳。
  * 背包格子和页签来自 BackpackItemCell / BackpackTabButton，只改字和图。
+ * 背包滚动是 BackpackLayer/spr_box/BagScroll，运行时只往 content 里放格子。
  * 英雄列表壳本身没有网格，格子仍是运行时拼的。
  * 不造假英雄、不造假道具、不发新协议。
  */
@@ -1126,12 +1127,11 @@ function fillBag(view: Node): void {
   let cellPrefab: Prefab | null = null;
   const host = uiNode("BagFill");
   place(host, view, 0, 0);
-  const box = findNamed(view, "spr_box");
-  const content = box ? gridScroll(box, "BagScroll", 0, -12, 520, 400 + fit.extra) : gridScroll(host, "BagScroll", 313, 540, 460, 400 + fit.extra);
+  const content = bagScrollContent(view, fit);
   const tabHost = bagTabHost(view) || host;
   const tabs: Node[] = [];
   const paint = () => {
-    if (!content.isValid || !cellPrefab) return;
+    if (!content || !content.isValid || !cellPrefab) return;
     clearChildren(content);
     for (let i = 0; i < tabs.length; i++) paintTab(tabs[i], BAG_TABS[i].id === tab);
     const rows = bagRows(tab);
@@ -1181,6 +1181,34 @@ function fillBag(view: Node): void {
   );
   const offBag = WireSession.onSync(() => paint());
   view.once(Node.EventType.NODE_DESTROYED, () => offBag());
+}
+
+/**
+ * spr_box/BagScroll 写在 BackpackLayer 里。这里只把视口拉到羊皮纸增高后的高度。
+ * 不另造滚动节点。格子进 content。
+ */
+function bagScrollContent(view: Node, fit: ParchmentFit): Node | null {
+  const box = findNamed(view, "spr_box");
+  const scroll = box ? box.getChildByName("BagScroll") : null;
+  const content = scroll ? scroll.getChildByName("content") : null;
+  if (!box || !scroll || !content) {
+    GameLog.shared.warn("Bag", "BackpackLayer 的 spr_box 下没有 BagScroll");
+    return null;
+  }
+  const height = 400 + fit.extra;
+  const scrollUi = scroll.getComponent(UITransform);
+  const scrollSize = positiveUiSize(scrollUi);
+  assignContentSize(scrollUi, scrollSize && scrollSize.width > 0 ? scrollSize.width : 520, height);
+  const maskView = scroll.getChildByName("view");
+  const viewUi = maskView ? maskView.getComponent(UITransform) : null;
+  if (viewUi) {
+    const viewSize = positiveUiSize(viewUi);
+    assignContentSize(viewUi, viewSize && viewSize.width > 0 ? viewSize.width : 520, height);
+  }
+  const scroller = scroll.getComponent(ScrollView);
+  if (!scroller) GameLog.shared.warn("Bag", "BagScroll 没有 ScrollView");
+  else if (scroller.content !== content) scroller.content = content;
+  return content;
 }
 
 /** 上半区店员和对话框都在 BackpackLayer 上。句子用 language 5788。 */
@@ -2744,6 +2772,7 @@ interface InfoCard {
   fallback?: string;
 }
 
+/** 英雄列表和详情还没有滚动预制，这里现造。背包不走这里。 */
 function gridScroll(parent: Node, name: string, x: number, y: number, width: number, height: number): Node {
   let view = parent.getChildByName(name);
   if (!view) {

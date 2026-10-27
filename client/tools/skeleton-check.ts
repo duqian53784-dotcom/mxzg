@@ -27368,6 +27368,22 @@ function checkCityHub(): void {
       fillSrc.indexOf("3013") < 0,
     "hero and bag shells bind the read-only boards and do not send upgrade, use, or 3013"
   );
+  const bagFillAt = fillSrc.indexOf("function fillBag");
+  const bagFillEnd = fillSrc.indexOf("function dressBagTalk");
+  const bagFill = bagFillAt >= 0 && bagFillEnd > bagFillAt ? fillSrc.slice(bagFillAt, bagFillEnd) : "";
+  const bagLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "backpack", "BackpackLayer.prefab");
+  const bagPaths = prefabChildPaths(bagLayer);
+  assert(
+    bagPaths.indexOf("spr_box/BagScroll") >= 0 &&
+      bagPaths.indexOf("spr_box/BagScroll/view") >= 0 &&
+      bagPaths.indexOf("spr_box/BagScroll/content") >= 0 &&
+      bagScrollWired(bagLayer) &&
+      bagFill.indexOf("gridScroll") < 0 &&
+      bagFill.indexOf('uiNode("BagScroll")') < 0 &&
+      bagFill.indexOf('getChildByName("BagScroll")') >= 0 &&
+      fillSrc.indexOf("function gridScroll") >= 0,
+    "bag scroll lives under spr_box and fillBag does not build BagScroll"
+  );
   assert(
     mainApp.indexOf("formatCombatPower") >= 0 &&
       mainApp.indexOf("formatAvatarIcon") >= 0 &&
@@ -27921,6 +27937,67 @@ function checkCityHub(): void {
       wireBattlePageSrc.indexOf("不另建这些挂点") >= 0,
     "presentation binds the prefab mounts and does not grow a protocol or a code stub"
   );
+}
+
+function bagScrollWired(file: string): boolean {
+  const data = JSON.parse(readFileSync(file, "utf8")) as Array<{
+    __type__?: string;
+    _name?: string;
+    _parent?: { __id__?: number } | null;
+    _children?: { __id__?: number }[];
+    _components?: { __id__?: number }[];
+    _lpos?: { y?: number };
+    node?: { __id__?: number } | null;
+    _content?: { __id__?: number } | null;
+    vertical?: boolean;
+    horizontal?: boolean;
+    _anchorPoint?: { x?: number; y?: number };
+    _contentSize?: { width?: number; height?: number };
+  }>;
+  let scrollId = -1;
+  for (let i = 0; i < data.length; i++) {
+    const node = data[i];
+    if (node.__type__ !== "cc.Node" || node._name !== "BagScroll") continue;
+    const parent = node._parent;
+    const parentNode = parent && typeof parent.__id__ === "number" ? data[parent.__id__] : null;
+    if (!parentNode || parentNode._name !== "spr_box") continue;
+    scrollId = i;
+    break;
+  }
+  if (scrollId < 0) return false;
+  const scroll = data[scrollId];
+  if (!scroll._lpos || scroll._lpos.y !== -12) return false;
+  let contentId = -1;
+  let sawView = false;
+  const kids = scroll._children || [];
+  for (let i = 0; i < kids.length; i++) {
+    const childId = kids[i].__id__;
+    if (typeof childId !== "number") continue;
+    const child = data[childId];
+    if (!child || child.__type__ !== "cc.Node") continue;
+    if (child._name === "view") sawView = true;
+    if (child._name === "content") contentId = childId;
+  }
+  if (!sawView || contentId < 0) return false;
+  const comps = scroll._components || [];
+  let anchorOk = false;
+  let scrollOk = false;
+  for (let i = 0; i < comps.length; i++) {
+    const compId = comps[i].__id__;
+    if (typeof compId !== "number") continue;
+    const comp = data[compId];
+    if (!comp) continue;
+    if (comp.__type__ === "cc.UITransform") {
+      const anchor = comp._anchorPoint;
+      const box = comp._contentSize;
+      anchorOk = !!anchor && anchor.x === 0.5 && anchor.y === 1 && !!box && box.width === 520 && box.height === 400;
+    }
+    if (comp.__type__ === "cc.ScrollView") {
+      const content = comp._content;
+      scrollOk = comp.vertical === true && comp.horizontal === false && !!content && content.__id__ === contentId;
+    }
+  }
+  return anchorOk && scrollOk;
 }
 
 function prefabChildPaths(file: string): string[] {
