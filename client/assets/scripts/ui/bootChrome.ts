@@ -15,6 +15,15 @@ import { createButton, createLabel, place, setText, uiNode } from "./UiKit";
 const BOOT_CAST_STEM = "jiemian";
 const BOOT_CAST_CLIP = "stand";
 
+/** LoadingLayer / UpdateLayer 的底图。logo 阶段用同一张，不再另铺黑底。 */
+export const LOADING_BG_FRAME = "ui/login/bg-loading";
+/**
+ * 768×1300 按设计分辨率 720×1280 做 cover 之后的绘制尺寸。
+ * 和 LoadingLayer 预制里 Bg 的 contentSize 一致。
+ */
+export const LOADING_BG_DRAW_W = 756;
+export const LOADING_BG_DRAW_H = 1280;
+
 export const LOADING_PREFAB_PATH = "prefabs/ui/login/LoadingLayer";
 export const UPDATE_PREFAB_PATH = "prefabs/ui/login/UpdateLayer";
 
@@ -101,7 +110,10 @@ export class BootChrome {
 
   constructor(private parent: Node) {}
 
-  async open(kind: BootChromeKind): Promise<void> {
+  /**
+   * keepAbove 留在最上面。logo 淡出时用，避免加载层一挂上就把底图盖住。
+   */
+  async open(kind: BootChromeKind, keepAbove?: Node | null): Promise<void> {
     if (this.destroyed || !this.parent.isValid) return;
     this.kind = kind;
     this.destroyRoot();
@@ -123,6 +135,16 @@ export class BootChrome {
     this.mountCast();
     this.bindFill();
     this.raise();
+    placeAbove(this.parent, keepAbove);
+  }
+
+  /** 已经是这一层就不拆掉重挂，避免和 logo 交接时闪一帧黑。 */
+  async ensure(kind: BootChromeKind): Promise<void> {
+    if (!this.destroyed && this.kind === kind && this.root && this.root.isValid && this.root.active) {
+      this.raise();
+      return;
+    }
+    await this.open(kind);
   }
 
   setStage(text: string): void {
@@ -268,14 +290,7 @@ export class BootChrome {
   private fitRoot(): void {
     const root = this.root;
     if (!root || !root.isValid) return;
-    const box = fitVisibleRoot(root);
-    const bg = root.getChildByName("Bg");
-    if (!bg) return;
-    const ui = bg.getComponent(UITransform);
-    const width = ui && ui.contentSize.width > 0 ? ui.contentSize.width : 756;
-    const height = ui && ui.contentSize.height > 0 ? ui.contentSize.height : 1280;
-    const cover = Math.max(box.width / width, box.height / height);
-    if (cover > 0) bg.setScale(cover, cover, 1);
+    fitLoadingBackdrop(root);
   }
 
   private bindRetry(): void {
@@ -323,7 +338,7 @@ export class BootChrome {
     const bgSprite = bg.addComponent(Sprite);
     bgSprite.sizeMode = Sprite.SizeMode.CUSTOM;
     bg.parent = root;
-    paintSprite(bg, bgSprite, "ui/login/bg-loading");
+    paintSprite(bg, bgSprite, LOADING_BG_FRAME);
 
     const message = createLabel("", 24, { color: BOOT_STAGE_COLOR, width: 660, height: 72 });
     message.name = "Message";
@@ -393,6 +408,24 @@ export class BootChrome {
     place(retry, root, 0, -280);
     return root;
   }
+}
+
+/** 和 LoadingLayer 一样：根铺满可见区域，Bg 再按 cover 放大，不留黑边。 */
+export function fitLoadingBackdrop(root: Node): void {
+  if (!root.isValid) return;
+  const box = fitVisibleRoot(root);
+  const bg = root.getChildByName("Bg");
+  if (!bg) return;
+  const ui = bg.getComponent(UITransform);
+  const width = ui && ui.contentSize.width > 0 ? ui.contentSize.width : LOADING_BG_DRAW_W;
+  const height = ui && ui.contentSize.height > 0 ? ui.contentSize.height : LOADING_BG_DRAW_H;
+  const cover = Math.max(box.width / width, box.height / height);
+  if (cover > 0) bg.setScale(cover, cover, 1);
+}
+
+function placeAbove(parent: Node, node?: Node | null): void {
+  if (!node || !node.isValid || !parent || !parent.isValid || node.parent !== parent) return;
+  node.setSiblingIndex(Math.max(0, parent.children.length - 1));
 }
 
 function tintLabel(node: Node | null, color: Color): void {

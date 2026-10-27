@@ -3124,13 +3124,32 @@ function checkCityMap(): void {
   );
   const splashSrc = readFileSync(uiSource("logoSplash.ts"), "utf8");
   const bootChromeSrc = readFileSync(uiSource("bootChrome.ts"), "utf8");
+  const bootSrc = readFileSync(bootSource(), "utf8");
   assert(splashSrc.indexOf('uiNode("logo-scene_spr-logo")') >= 0, "logo node keeps the checklist name");
   assert(
-    splashSrc.indexOf("logo-scene_spr-parttern-l") >= 0 &&
-      splashSrc.indexOf("logo-scene_spr-parttern-r") >= 0 &&
+    splashSrc.indexOf("logo-scene_spr-parttern-l") < 0 &&
+      splashSrc.indexOf("logo-scene_spr-parttern-r") < 0 &&
+      splashSrc.indexOf("LOGO_RING_") < 0 &&
+      splashSrc.indexOf("new Color(0, 0, 0, 255)") < 0,
+    "boot logo does not build the flame ring on black"
+  );
+  assert(
+    splashSrc.indexOf("bg-loading") >= 0 &&
       splashSrc.indexOf("LOGO_SPECK_MAX") >= 0 &&
-      splashSrc.indexOf("logoFrameIsSpeck") >= 0,
-    "boot logo uses the side ornaments when the wordmark is a speck"
+      splashSrc.indexOf("logoFrameIsSpeck") >= 0 &&
+      splashSrc.indexOf("fitLoadingBackdrop") >= 0,
+    "boot logo uses the loading backdrop and still rejects the speck"
+  );
+  assert(
+    bootSrc.indexOf("playLogoSplash") >= 0 &&
+      bootSrc.indexOf("fadedIn") >= 0 &&
+      bootSrc.indexOf("dismiss()") >= 0 &&
+      bootSrc.indexOf('ensure("loading")') >= 0,
+    "logo fades into the loading layer without rebuilding it"
+  );
+  assert(
+    bootChromeSrc.indexOf("fitLoadingBackdrop") >= 0 && bootChromeSrc.indexOf("LOADING_BG_FRAME") >= 0,
+    "loading backdrop cover is shared with the logo splash"
   );
   assert(
     bootChromeSrc.indexOf("BOOT_TIP_COLOR") >= 0 && bootChromeSrc.indexOf("ffeeb2") >= 0 && bootChromeSrc.indexOf("BOOT_STAGE_COLOR") >= 0,
