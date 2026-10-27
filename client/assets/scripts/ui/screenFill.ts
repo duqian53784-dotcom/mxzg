@@ -82,6 +82,11 @@ const HERO_ELEM_ROW = "node_elem";
 const HERO_ELEM_MENU = "node_elem/elem_menu";
 const HERO_ELEM_BUTTON = "node_elem/elem_menu/btn_elem";
 const HERO_ELEM_SPRITE = "ui/hero/hero-icon_elem-";
+/** HeroListLayer 上已有的页签。缺了只打日志，不 new 钮。 */
+const HERO_TAB_MENU = "UIMenu_1";
+const HERO_TAB_HERO = "UIMenu_1/btn_hero";
+const HERO_TAB_BOOK = "UIMenu_1/btn_illustrat";
+const HERO_TAB_DRAGON = "UIMenu_1/btn_dragon";
 const GEM_PLACES = [
   { id: 1, title: "攻击" },
   { id: 2, title: "生命" },
@@ -1071,7 +1076,7 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     markHeroTabs(view, tab);
     showHeroCorner(board, tab);
     markElem(board, elem);
-    const elemRow = findNamed(board, "node_elem");
+    const elemRow = findNode(board, HERO_ELEM_ROW);
     if (elemRow) elemRow.active = tab !== "dragon";
     const all = GameStore.heroes();
     const space = heroSpaceLine(all);
@@ -1105,18 +1110,11 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     paint();
     pinHeroScrollTop(board);
   };
-  bindTab(view, "btn_hero", () => {
-    tab = "hero";
+  const showTab = (next: "hero" | "book" | "dragon") => {
+    tab = next;
     paint();
-  });
-  bindTab(view, "btn_illustrat", () => {
-    tab = "book";
-    paint();
-  });
-  bindTab(view, "btn_dragon", () => {
-    tab = "dragon";
-    paint();
-  });
+    pinHeroScrollTop(board);
+  };
   void Promise.all([
     mountNested(view, HERO_LIST_BOARD, "HeroBoard"),
     loadPrefab(HERO_CELL),
@@ -1135,18 +1133,20 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
       dragons = loaded[2] as Prefab;
       catalogs = loaded[3] as Prefab;
       texts = loaded[4] as Prefab;
-      const menu = findNamed(view, "UIMenu_1");
+      const menu = findNode(view, HERO_TAB_MENU);
       if (menu && menu.parent === view) node.setSiblingIndex(menu.getSiblingIndex());
       spreadHeroBoard(node, fit);
       showHeroCorner(node, tab);
       content = heroScrollContent(node, fit);
       if (cap) cap.active = false;
-      const big = findNamed(node, "node_capacity");
+      const big = findNode(node, "node_capacity");
       const menuHit = big ? big.getChildByName("UIMenu_1") : null;
       const menuUi = menuHit ? menuHit.getComponent(UITransform) : null;
       if (menuUi) menuUi.setContentSize(0, 0);
       bindElemRow(node, pickElem);
+      bindHeroPageTabs(view, showTab);
       paint();
+      pinHeroScrollTop(board);
     },
     (err) => {
       GameLog.shared.warn("Hero", "英雄列表预制没挂上 " + messageOf(err));
@@ -1335,28 +1335,21 @@ function pinBagScroll(content: Node): void {
   content.setPosition(0, 0, 0);
 }
 
-/** spr_box/HeroScroll 写在 HeroListHeroLayer 里。这里只把视口拉到羊皮纸增高后的高度。 */
+/**
+ * spr_box/HeroScroll 写在 HeroListHeroLayer 里。
+ * 预制把 content 和空的 view 并列，遮罩在宿主上。跟背包一样收进 view，卸掉宿主上的空模板。
+ * 不另造滚动节点。
+ */
 function heroScrollContent(board: Node, fit: ParchmentFit): Node | null {
-  const box = findNamed(board, "spr_box");
+  const box = findNode(board, "spr_box");
   const scroll = box ? box.getChildByName("HeroScroll") : null;
-  const content = scroll ? scroll.getChildByName("content") : null;
-  if (!box || !scroll || !content) {
+  if (!box || !scroll) {
     GameLog.shared.warn("Hero", "HeroListHeroLayer 的 spr_box 下没有 HeroScroll");
     return null;
   }
   const height = 320 + fit.extra;
-  const scrollUi = scroll.getComponent(UITransform);
-  const scrollSize = positiveUiSize(scrollUi);
-  assignContentSize(scrollUi, scrollSize && scrollSize.width > 0 ? scrollSize.width : 540, height);
-  const maskView = scroll.getChildByName("view");
-  const viewUi = maskView ? maskView.getComponent(UITransform) : null;
-  if (viewUi) {
-    const viewSize = positiveUiSize(viewUi);
-    assignContentSize(viewUi, viewSize && viewSize.width > 0 ? viewSize.width : 540, height);
-  }
-  const scroller = scroll.getComponent(ScrollView);
-  if (!scroller) GameLog.shared.warn("Hero", "HeroScroll 没有 ScrollView");
-  else if (scroller.content !== content) scroller.content = content;
+  const content = seatPrefabScroll(scroll, 540, height, "Hero");
+  if (!content) GameLog.shared.warn("Hero", "HeroScroll 没有 content");
   return content;
 }
 
@@ -1885,6 +1878,7 @@ function rosterOf(elem: number): StoreHero[] {
   return rows;
 }
 
+/** 未获得的图鉴留在这一系里，灰头像加锁，不从筛选结果里拿掉。顺序跟 herotype。 */
 function paintHeroBook(
   view: Node,
   content: Node,
@@ -2037,13 +2031,6 @@ function heroSpaceShown(): number {
     return WireSession.heroCapacity;
   }
   return heroSpaceCap();
-}
-
-function bindTab(view: Node, name: string, fn: () => void): void {
-  const node = findNamed(view, name);
-  if (!node) return;
-  if (!node.getComponent(Button)) node.addComponent(Button);
-  node.on(Button.EventType.CLICK, fn);
 }
 
 /** 环心透明。垫在金环后面，底板黑圆不从洞里露出来。不放蓝核。 */
@@ -2674,9 +2661,60 @@ function heroSpaceLine(all: StoreHero[] | null): string {
 }
 
 function markHeroTabs(view: Node, tab: "hero" | "book" | "dragon"): void {
-  paintTab(findNamed(view, "btn_hero"), tab === "hero");
-  paintTab(findNamed(view, "btn_illustrat"), tab === "book");
-  paintTab(findNamed(view, "btn_dragon"), tab === "dragon");
+  paintTab(findNode(view, HERO_TAB_HERO), tab === "hero");
+  paintTab(findNode(view, HERO_TAB_BOOK), tab === "book");
+  paintTab(findNode(view, HERO_TAB_DRAGON), tab === "dragon");
+}
+
+/**
+ * 页签在 HeroListLayer/UIMenu_1。fillHero 早于壳进场景，只听 CLICK 时指针列表收不到这三颗。
+ * 板子挂上、页面已经在场景里之后再绑。这排是 640×960，抬到最前后收成 0，命中留给三颗钮。
+ * 图鉴留着元素条。圣龙收起元素条。缺路径只打日志。
+ */
+function bindHeroPageTabs(view: Node, pick: (tab: "hero" | "book" | "dragon") => void): void {
+  const menu = findNode(view, HERO_TAB_MENU);
+  if (!menu) {
+    GameLog.shared.warn("Hero", "HeroListLayer 没有 UIMenu_1。请在 prefabs/ui/hero/HeroListLayer 保留 UIMenu_1/btn_hero、btn_illustrat、btn_dragon");
+    return;
+  }
+  if (menu.parent === view) menu.setSiblingIndex(view.children.length - 1);
+  const menuUi = menu.getComponent(UITransform);
+  if (menuUi) menuUi.setContentSize(0, 0);
+  const paths: { id: "hero" | "book" | "dragon"; path: string }[] = [
+    { id: "hero", path: HERO_TAB_HERO },
+    { id: "book", path: HERO_TAB_BOOK },
+    { id: "dragon", path: HERO_TAB_DRAGON },
+  ];
+  for (let i = 0; i < paths.length; i++) {
+    const spec = paths[i];
+    const node = findNode(view, spec.path);
+    if (!node) {
+      GameLog.shared.warn("Hero", "HeroListLayer 没有 " + spec.path);
+      continue;
+    }
+    const mark = node as Node & { mxzgHeroTab?: boolean };
+    if (mark.mxzgHeroTab) continue;
+    mark.mxzgHeroTab = true;
+    const click = node.getComponent(Button) || node.addComponent(Button);
+    click.transition = Button.Transition.NONE;
+    let last = 0;
+    const fire = () => {
+      const now = Date.now();
+      if (now - last < 80) return;
+      last = now;
+      pick(spec.id);
+    };
+    node.on(Button.EventType.CLICK, fire);
+    node.on(Node.EventType.TOUCH_END, fire);
+    if (node.activeInHierarchy) {
+      try {
+        node.active = false;
+        node.active = true;
+      } catch (_err) {
+        if (node.isValid && !node.active) node.active = true;
+      }
+    }
+  }
 }
 
 function markElem(board: Node | null, elem: number): void {
@@ -2734,13 +2772,18 @@ function holdElemScale(button: Node, scale: number): void {
 function pinHeroScrollTop(board: Node | null): void {
   if (!board) return;
   const scroll = findNode(board, "spr_box/HeroScroll");
-  const scroller = scroll ? scroll.getComponent(ScrollView) : null;
-  if (!scroller || !scroller.content || typeof scroller.scrollToTop !== "function") return;
+  if (!scroll) return;
+  const scroller = scroll.getComponent(ScrollView);
+  const content =
+    (scroller && scroller.content) || findNode(scroll, "view/content") || scroll.getChildByName("content");
+  if (content && content.isValid) content.setPosition(0, 0, 0);
+  if (!scroller || typeof scroller.scrollToTop !== "function") return;
   try {
     scroller.scrollToTop(0);
   } catch (_err) {
-    /* 视口尺寸还是空的时候滚顶会读 width。列表已经按元素画好。 */
+    /* 视口尺寸还是空的时候滚顶会读 width。格子已经按本地坐标摆在视口顶上。 */
   }
+  if (content && content.isValid) content.setPosition(0, 0, 0);
 }
 
 function bagTabHost(view: Node): Node | null {
