@@ -1,5 +1,5 @@
 /**
- * 主线页里的动态 spine。只给 WireMainlinePage 用。
+ * 战斗和加载层的动态 spine。
  * resources.load("spine/<stem>") + sp.Skeleton。加载或挂组件失败时回调，不抛到外面。
  * 英雄槽没有请求的动作时留在 stand / idle。套里没有 hit 就不播受击。不播 bisha。
  * effect 模式给 batch2 命名特效：按名字播，没有这个动作就跳过，不拆站场。

@@ -76,78 +76,12 @@ const DIAMOND_COLOR = new Color(150, 216, 235, 255);
 /**
  * 顶栏和底栏。挂在 UIShell 的 chrome 层，不进页面栈。
  * 设计分辨率 720×1280，原点在画面中心。
- * USE_CITY_CHROME_PREFAB 为 false，或 Prefab 加载失败时，MainApp 仍调用这里。
+ * 不再手搓顶底栏。MainApp 只挂 CityChrome 预制，缺了只打日志。
  */
-export function mountCityChrome(parent: Node, onTab: (id: string) => void): CityChrome {
-  const root = uiNode("CityChrome");
-  root.parent = parent;
-
-  place(createRect("top-bg", 720, 112, new Color(18, 32, 58, 245)), root, 0, 576);
-  const nameNode = place(
-    createLabel("未登录", 26, { color: NAME_COLOR, width: 360, align: "left" }),
-    root,
-    -150,
-    598
-  );
-  const subNode = place(
-    createLabel("请从 Boot 进入", 18, { color: SUB_COLOR, width: 360, align: "left" }),
-    root,
-    -150,
-    558
-  );
-  const goldNode = place(
-    createLabel("金币 0", 22, { color: GOLD_COLOR, width: 240, align: "left" }),
-    root,
-    200,
-    598
-  );
-  const diamondNode = place(
-    createLabel("钻石 0", 22, { color: DIAMOND_COLOR, width: 240, align: "left" }),
-    root,
-    200,
-    558
-  );
-
-  place(createRect("bottom-bg", 720, 104, new Color(14, 24, 44, 245)), root, 0, -580);
-  const buttons: { [id: string]: Node } = {};
-  for (let i = 0; i < CITY_BAR.length; i++) {
-    const entry = CITY_BAR[i];
-    const slot = cityBarSlot(i);
-    const button = createButton(entry.title, () => onTab(entry.id), slot.size, slot.size, TAB_OPEN, 16);
-    button.name = "tab-" + entry.id;
-    place(button, root, slot.x, slot.y);
-    buttons[entry.id] = button;
-  }
-
-  bindCityChromeFit(root);
-  return {
-    root,
-    setIdentity(nameLine: string, subLine: string): void {
-      setText(nameNode, nameLine);
-      applySubLine(subNode, subLine);
-    },
-    setCurrencies(goldLine: string, diamondLine: string): void {
-      setText(goldNode, goldLine);
-      setText(diamondNode, diamondLine);
-    },
-    setPower(): void {},
-    setLevelBadge(): void {},
-    setAvatar(): void {},
-    setTabs(tabs: TabState[]): void {
-      for (let i = 0; i < tabs.length; i++) {
-        const tab = tabs[i];
-        const button = buttons[tab.id];
-        if (!button) continue;
-        const label = button.getChildByName("Label");
-        const level = tab.state === "locked" && tab.lockLevel && tab.lockLevel > 1 ? tab.lockLevel : 0;
-        if (label) setText(label, level > 0 ? "Lv" + level : tab.text);
-        const bg = button.getChildByName("bg");
-        if (bg) paintRect(bg, fillOf(tab.state));
-      }
-    },
-    setCityExtras(): void {},
-  };
+export function mountCityChrome(_parent: Node, _onTab: (id: string) => void): CityChrome {
+  throw new Error("预制顶底栏未挂上，不手搓一整条");
 }
+
 
 /** 「真服 · 角色 id」是调试行。正式服顶栏只留名字和等级。 */
 function applySubLine(node: Node, subLine: string): void {

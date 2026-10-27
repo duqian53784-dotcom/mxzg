@@ -2,7 +2,7 @@
  * 绑定 CityHub.prefab。中间是旧主城：map-bg-city 视差板和建筑图标。
  * 路径相对 assets：prefabs/ui/city/CityHub。底板丢图时才用 resources 补 spriteFrame。
  * 不挂脚本组件，不改 Prefab。USE_CITY_HUB_PREFAB 为 false，或加载 / 绑节点失败时，
- * MainApp 仍走 mountCityMap。顶栏底栏仍是 CityChrome。
+ * MainApp 只挂这份预制。缺了只打日志，不退回代码地图。
  * 视口宽跟 view.getVisibleSize() 走。底板仍是 map-bg-city-* 多层长图，不拉成一张。
  * 建筑点击交给原来的 onCityAtom。根上的 BtnMainline 打开原来的主线页。
  * 活动通栏不画在这张 Prefab 上，避免盖住建筑。右上活动仍是 CityChrome 的 ActGroup。

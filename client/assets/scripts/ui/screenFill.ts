@@ -262,21 +262,20 @@ function hangLootIcons(rates: HangRates): string[] {
 }
 
 /**
- * 没有角色 VIP 等级时不写字。s2c 2001 没有 vip_level，不把「未同步」画在战斗钮下面。
- * 有等级时才用 vip 表的那一行。三格仍不乘百分比。
+ * 没有角色 VIP 等级时藏起预制上的那一行。s2c 2001 没有 vip_level，不把「未同步」画在战斗钮下面。
+ * 有等级时只改预制里的 HangVip。节点不在就不另写一行。三格仍不乘百分比。
  */
 function syncVip(view: Node, plate: Node | null): void {
   const host = plate || view;
   const bonus = vipIdleBonus(null);
-  let vip = host.getChildByName("HangVip");
-  if (!bonus) {
-    if (vip) vip.active = false;
+  const vip = host.getChildByName("HangVip");
+  if (!vip) {
+    if (bonus) GameLog.shared.warn("Hang", "HangVip 不在预制上，不另写一行");
     return;
   }
-  if (!vip) {
-    vip = createLabel(vipIdleLine(bonus.level), 14, { color: INK, width: 280, height: 36 });
-    vip.name = "HangVip";
-    place(vip, host, 0, plate ? -78 : 120);
+  if (!bonus) {
+    vip.active = false;
+    return;
   }
   vip.active = true;
   setText(vip, vipIdleLine(bonus.level));
