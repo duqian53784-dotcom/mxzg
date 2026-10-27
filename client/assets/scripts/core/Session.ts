@@ -147,6 +147,16 @@ export function formatNameLine(): string {
   return name + " Lv" + level;
 }
 
+/**
+ * 日志和创角条上的服名。
+ * 服表 id 1 仍叫「本地Mock」。真桥显示「本机桥」，眼检才不会把 source=wire 看成 Mock。
+ * 不改 source，也不改服表。
+ */
+export function formatServerLabel(wire = Session.source === "wire"): string {
+  if (wire) return "本机桥";
+  return Session.serverName || "未选服";
+}
+
 /** 顶栏左侧第二行：服务器和开服自然日。真服开服天仍未同步，这里只写角色 id。 */
 export function formatSubLine(): string {
   if (!Session.account) return "请从 Boot 进入";

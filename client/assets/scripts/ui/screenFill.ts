@@ -3,7 +3,7 @@
  * 格子是运行时拼的：HeroListLayer / BackpackLayer 本身没有网格。
  * 不造假英雄、不造假道具、不发新协议。
  */
-import { BlockInputEvents, Button, Color, HorizontalTextAlignment, Label, Mask, Node, Overflow, resources, ScrollView, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
+import { BlockInputEvents, Button, Color, director, Director, HorizontalTextAlignment, Label, Mask, Node, Overflow, resources, ScrollView, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameStore, StoreBagItem, StoreHero } from "../core/GameStore";
 import { GameLog } from "../core/GameLog";
@@ -34,6 +34,7 @@ import { emptyBagToast } from "../module/bag/items";
 import { formatStoreBagLine } from "../module/bag/bagView";
 import { WIRE_BAG_UNSYNCED_TOAST } from "../net/protocol/wireBag";
 import { growAnchorDelta, listWindowSpread } from "./ccbiPlace";
+import { positiveUiSize } from "./visibleFit";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
@@ -763,20 +764,24 @@ function fitParchmentWindow(view: Node): ParchmentFit {
   const bg = view.getChildByName("spr_bg");
   const ui = view.getComponent(UITransform);
   const bgUi = bg ? bg.getComponent(UITransform) : null;
-  if (!bg || !ui || !bgUi || bgUi.contentSize.height < 1 || ui.contentSize.width < 1) {
-    mark.mxzgParchment = NO_PARCHMENT;
+  const rootSize = positiveUiSize(ui);
+  const bgSize = positiveUiSize(bgUi);
+  // 尺寸还没挂上时不记 NO_PARCHMENT。记了以后这一页永远不再铺。
+  if (!bg || !ui || !bgUi || !rootSize || !bgSize) {
+    syncParchmentPlate(view, bg);
+    watchParchment(view);
     return NO_PARCHMENT;
   }
   const spread = listWindowSpread({
-    rootW: ui.contentSize.width,
-    rootH: ui.contentSize.height,
+    rootW: rootSize.width,
+    rootH: rootSize.height,
     anchorY: ui.anchorY,
     bgY: bg.position.y,
     bgAy: bgUi.anchorY,
-    bgH: bgUi.contentSize.height * Math.abs(bg.scale.y || 1),
+    bgH: bgSize.height * Math.abs(bg.scale.y || 1),
   });
   view.setScale(spread.scale, spread.scale, 1);
-  view.setPosition(-(0.5 - ui.anchorX) * ui.contentSize.width * spread.scale, spread.rootY, 0);
+  view.setPosition(-(0.5 - ui.anchorX) * rootSize.width * spread.scale, spread.rootY, 0);
   growNode(bg, spread.extraTop, spread.extraBottom);
   const box = view.getChildByName("spr_box");
   if (box) growNode(box, spread.extraTop, spread.extraBottom);
@@ -787,16 +792,69 @@ function fitParchmentWindow(view: Node): ParchmentFit {
     extraBottom: spread.extraBottom,
     extra: spread.extraTop + spread.extraBottom,
   };
+  syncParchmentPlate(view, bg);
   mark.mxzgParchment = fit;
   return fit;
 }
 
+/** 羊皮纸尺寸晚一帧才有。等到了再铺，不等就停。不把失败结果缓存下来。 */
+function watchParchment(view: Node): void {
+  const mark = view as Node & { mxzgParchment?: ParchmentFit; mxzgParchmentWait?: boolean };
+  if (mark.mxzgParchmentWait || mark.mxzgParchment) return;
+  mark.mxzgParchmentWait = true;
+  let frames = 0;
+  const retry = () => {
+    if (!view.isValid) {
+      director.off(Director.EVENT_AFTER_UPDATE, retry);
+      return;
+    }
+    frames += 1;
+    const ui = view.getComponent(UITransform);
+    const bg = view.getChildByName("spr_bg");
+    const bgUi = bg ? bg.getComponent(UITransform) : null;
+    const ready = !!positiveUiSize(ui) && !!positiveUiSize(bgUi);
+    if (!ready && frames < 45) return;
+    director.off(Director.EVENT_AFTER_UPDATE, retry);
+    mark.mxzgParchmentWait = false;
+    if (!ready || mark.mxzgParchment) return;
+    fitParchmentWindow(view);
+  };
+  director.on(Director.EVENT_AFTER_UPDATE, retry);
+  view.once(Node.EventType.NODE_DESTROYED, () => {
+    director.off(Director.EVENT_AFTER_UPDATE, retry);
+  });
+}
+
+const PARCHMENT = new Color(244, 228, 196, 255);
+
+/**
+ * 奶油色垫在 spr_bg 后面。九宫格贴图画出来就盖住它；贴图没挂上时页签后面仍有一块纸。
+ * Graphics 绕节点原点画，所以垫片要放在底图的视觉中心，不能放在锚点上。
+ */
+function syncParchmentPlate(view: Node, bg: Node | null): void {
+  if (!view.isValid || !bg || !bg.isValid || bg.parent !== view) return;
+  const ui = bg.getComponent(UITransform);
+  const size = positiveUiSize(ui);
+  const w = size ? size.width : 640;
+  const h = size ? size.height : 672;
+  const ax = ui && typeof ui.anchorX === "number" ? ui.anchorX : 0.5;
+  const ay = ui && typeof ui.anchorY === "number" ? ui.anchorY : 0.5;
+  const old = view.getChildByName("ParchmentPlate");
+  if (old) old.destroy();
+  const plate = createRect("ParchmentPlate", w, h, PARCHMENT);
+  const index = bg.getSiblingIndex();
+  plate.parent = view;
+  plate.setPosition(bg.position.x + (0.5 - ax) * w, bg.position.y + (0.5 - ay) * h, 0);
+  plate.setSiblingIndex(index);
+}
+
 function growNode(node: Node, extraTop: number, extraBottom: number): void {
   const ui = node.getComponent(UITransform);
-  if (!ui) return;
+  const size = positiveUiSize(ui);
+  if (!ui || !size) return;
   const extra = extraTop + extraBottom;
   if (extra === 0) return;
-  ui.setContentSize(ui.contentSize.width, ui.contentSize.height + extra);
+  ui.setContentSize(size.width, size.height + extra);
   node.setPosition(node.position.x, node.position.y + growAnchorDelta(ui.anchorY, extraTop, extraBottom), node.position.z);
 }
 
@@ -829,6 +887,7 @@ function spreadHeroBoard(board: Node, fit: ParchmentFit): void {
 }
 
 function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
+  // 空名册也挂页签、羊皮纸和格子。空数组画锁定图鉴，不造账号英雄。
   silenceBigMenus(view);
   hideDebugBubble(view);
   const fit = fitParchmentWindow(view);
@@ -1022,7 +1081,8 @@ function paintFormationSlots(view: Node, selected: number[], onRemove: (heroId: 
     const slot = findNamed(view, "node_icon_" + slotNo);
     if (!slot) continue;
     const box = slot.getComponent(UITransform);
-    if (box && (box.contentSize.width < 8 || box.contentSize.height < 8)) box.setContentSize(80, 80);
+    const slotSize = positiveUiSize(box);
+    if (box && slotSize && (slotSize.width < 8 || slotSize.height < 8)) box.setContentSize(80, 80);
     const old = slot.getChildByName("SlotFace");
     if (old) old.destroy();
     const heroId = placed[slotNo];
@@ -1467,8 +1527,12 @@ function paintHeroBook(
 ): void {
   const book = bookOf(elem);
   if (book.length === 0) {
+    const shown = paddedSlots(0);
+    for (let i = 0; i < shown; i++) {
+      place(heroCell(null, false, null, false), content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+    }
     place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 36 }), content, 0, -40);
-    sizeScroll(content, 400, 400);
+    sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 400);
     return;
   }
   const shown = paddedSlots(book.length);
@@ -1612,9 +1676,9 @@ function bindTab(view: Node, name: string, fn: () => void): void {
 function maskCrystalHole(frame: Node): void {
   const parent = frame.parent;
   if (!parent || parent.getChildByName("HangCrystalFill")) return;
-  const ui = frame.getComponent(UITransform);
-  const w = ui && ui.contentSize.width > 8 ? ui.contentSize.width : 162;
-  const h = ui && ui.contentSize.height > 8 ? ui.contentSize.height : 162;
+  const size = positiveUiSize(frame.getComponent(UITransform));
+  const w = size && size.width > 8 ? size.width : 162;
+  const h = size && size.height > 8 ? size.height : 162;
   const fill = createRect("HangCrystalFill", w, h, new Color(249, 233, 211, 255));
   const index = frame.getSiblingIndex();
   fill.parent = parent;
@@ -1646,10 +1710,10 @@ function seatHangButton(node: Node | null, text: string, size: number): void {
     child.setPosition(0, 0, 0);
     child.setScale(1, 1, 1);
     const box = child.getComponent(UITransform);
-    const parentUi = node.getComponent(UITransform);
-    if (box && parentUi && parentUi.contentSize.width > 8) {
+    const parentSize = positiveUiSize(node.getComponent(UITransform));
+    if (box && parentSize && parentSize.width > 8) {
       box.setAnchorPoint(0.5, 0.5);
-      box.setContentSize(Math.max(8, parentUi.contentSize.width - 16), Math.max(8, parentUi.contentSize.height - 8));
+      box.setContentSize(Math.max(8, parentSize.width - 16), Math.max(8, parentSize.height - 8));
     }
     label.string = text;
     label.fontSize = drawn;
@@ -1671,8 +1735,9 @@ function fitButton(node: Node | null, text: string, size: number): void {
     label.overflow = Overflow.SHRINK;
     const ui = host.getComponent(UITransform);
     const parent = host.parent ? host.parent.getComponent(UITransform) : null;
-    if (ui && parent && parent.contentSize.width > 8) {
-      ui.setContentSize(Math.max(8, parent.contentSize.width - 8), Math.max(8, parent.contentSize.height - 4));
+    const parentSize = positiveUiSize(parent);
+    if (ui && parentSize && parentSize.width > 8) {
+      ui.setContentSize(Math.max(8, parentSize.width - 8), Math.max(8, parentSize.height - 4));
     }
   });
 }
@@ -1686,8 +1751,11 @@ function writeNamed(root: Node, name: string, text: string): void {
   const scaled = Math.abs(node.scale.x - 1) > 0.05 || Math.abs(node.scale.y - 1) > 0.05;
   if (scaled) {
     label.overflow = Overflow.SHRINK;
-    const ui = node.getComponent(UITransform);
-    if (ui && ui.contentSize.width < 40) ui.setContentSize(360, 64);
+    const namedSize = positiveUiSize(node.getComponent(UITransform));
+    if (namedSize && namedSize.width < 40) {
+      const namedUi = node.getComponent(UITransform);
+      if (namedUi) namedUi.setContentSize(360, 64);
+    }
     return;
   }
   if (label.fontSize > 28) {
@@ -1827,8 +1895,8 @@ function writeStageTitle(view: Node, text: string, wide: boolean): void {
   const scale = Math.abs(node.scale.x);
   const used = scale > 0.05 ? scale : 1;
   const bar = findNamed(view, "spr_title_bg");
-  const barUi = bar ? bar.getComponent(UITransform) : null;
-  const barW = barUi && barUi.contentSize.width > 8 ? barUi.contentSize.width : 184;
+  const barSize = positiveUiSize(bar ? bar.getComponent(UITransform) : null);
+  const barW = barSize && barSize.width > 8 ? barSize.width : 184;
   const visual = 22;
   if (label) {
     const font = Math.max(12, Math.round(visual / used));
@@ -1862,8 +1930,9 @@ function showSkillCard(view: Node, skillId: number, level: number | null): void 
     place(root, host, 0, 0);
     root.setSiblingIndex(Math.max(0, host.children.length - 1));
     const box = host.getComponent(UITransform);
-    const width = box && box.contentSize.width > 8 ? box.contentSize.width : 640;
-    const height = box && box.contentSize.height > 8 ? box.contentSize.height : 960;
+    const cardSize = positiveUiSize(box);
+    const width = cardSize && cardSize.width > 8 ? cardSize.width : 640;
+    const height = cardSize && cardSize.height > 8 ? cardSize.height : 960;
     const ax = box ? box.anchorPoint.x : 0;
     const ay = box ? box.anchorPoint.y : 0;
     const midX = (0.5 - ax) * width;
@@ -1921,8 +1990,9 @@ function showAttrBoard(view: Node, hero: StoreHero): void {
     place(root, host, 0, 0);
     root.setSiblingIndex(Math.max(0, host.children.length - 1));
     const box = host.getComponent(UITransform);
-    const width = box && box.contentSize.width > 8 ? box.contentSize.width : 640;
-    const height = box && box.contentSize.height > 8 ? box.contentSize.height : 960;
+    const cardSize = positiveUiSize(box);
+    const width = cardSize && cardSize.width > 8 ? cardSize.width : 640;
+    const height = cardSize && cardSize.height > 8 ? cardSize.height : 960;
     const ax = box ? box.anchorPoint.x : 0;
     const ay = box ? box.anchorPoint.y : 0;
     const midX = (0.5 - ax) * width;
@@ -1961,8 +2031,11 @@ function writeWrap(root: Node, name: string, text: string): void {
   }
   label.string = text;
   label.overflow = Overflow.RESIZE_HEIGHT;
-  const ui = node.getComponent(UITransform);
-  if (ui && ui.contentSize.width < 8) ui.setContentSize(720, 0);
+  const wrapSize = positiveUiSize(node.getComponent(UITransform));
+  if (wrapSize && wrapSize.width < 8) {
+    const wrapUi = node.getComponent(UITransform);
+    if (wrapUi) wrapUi.setContentSize(720, 0);
+  }
 }
 
 function overlayHost(view: Node): Node {
@@ -2386,8 +2459,10 @@ function silenceBigMenus(root: Node): void {
     const kids = node.children;
     for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
     if (node.name.toLowerCase().indexOf("menu") < 0) continue;
+    const menuSize = positiveUiSize(node.getComponent(UITransform));
+    if (!menuSize || menuSize.width < 500 || menuSize.height < 500) continue;
     const ui = node.getComponent(UITransform);
-    if (!ui || ui.contentSize.width < 500 || ui.contentSize.height < 500) continue;
+    if (!ui) continue;
     ui.setContentSize(0, 0);
   }
 }
@@ -2509,7 +2584,8 @@ function gridScroll(parent: Node, name: string, x: number, y: number, width: num
 
 function sizeScroll(content: Node, height: number, minHeight: number): void {
   const ui = content.getComponent(UITransform);
-  const width = ui && ui.contentSize.width > 0 ? ui.contentSize.width : 448;
+  const size = positiveUiSize(ui);
+  const width = size && size.width > 0 ? size.width : 448;
   if (ui) ui.setContentSize(width, Math.max(minHeight, height));
 }
 

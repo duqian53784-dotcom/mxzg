@@ -589,6 +589,7 @@ import {
   formatGoldLine,
   formatHubIdentity,
   formatNameLine,
+  formatServerLabel,
   formatSubLine,
   Session,
 } from "../assets/scripts/core/Session";
@@ -2634,6 +2635,17 @@ function checkLoginPrefs(): void {
   Session.serverName = "提审";
   Session.role = { roleId: 1001, name: "倩", level: 3 };
   assert(formatHubIdentity() === "倩 Lv3 · 提审", "hub shows role and server");
+  const prevLabelSource = Session.source;
+  const prevLabelName = Session.serverName;
+  Session.source = "wire";
+  Session.serverName = "本地Mock";
+  const wireLabel = formatServerLabel();
+  Session.source = "mock";
+  const mockLabel = formatServerLabel();
+  Session.source = prevLabelSource;
+  Session.serverName = prevLabelName;
+  assert(formatServerLabel(true) === "本机桥" && wireLabel === "本机桥", "wire logs say 本机桥");
+  assert(mockLabel === "本地Mock", "mock label keeps the server table name");
   const prevDay = Session.openDay;
   const prevStage = Session.stageId;
   const prevGold = Session.gold;
@@ -27021,6 +27033,22 @@ function checkCityHub(): void {
   assert(mainApp.indexOf("text: tab.title") >= 0, "city bar keeps the cn title and does not prefix 锁·");
   const shellSrc = readFileSync(uiSource("pagePrefabShell.ts"), "utf8");
   assert(shellSrc.indexOf("mountCcbiView") >= 0 && shellSrc.indexOf("sliceAnchorShift") >= 0, "page shells repair ccbi slice anchors before centering");
+  const visibleFitSrc = readFileSync(uiSource("visibleFit.ts"), "utf8");
+  const shellFillSrc = readFileSync(uiSource("screenFill.ts"), "utf8");
+  assert(visibleFitSrc.indexOf("export function positiveUiSize") >= 0, "positiveUiSize rejects null and zero contentSize");
+  assert(
+    shellSrc.indexOf("positiveUiSize") >= 0 && shellFillSrc.indexOf("positiveUiSize") >= 0,
+    "hang and list shells do not read a null width"
+  );
+  assert(
+    shellSrc.indexOf("seatListShell") >= 0 && shellSrc.indexOf("fitVisibleRoot") >= 0,
+    "hero and bag shells seat on the visible canvas"
+  );
+  assert(
+    shellFillSrc.indexOf("ParchmentPlate") >= 0 && shellFillSrc.indexOf("mxzgParchment = NO_PARCHMENT") < 0,
+    "empty parchment waits for a live size and still paints a plate"
+  );
+  assert(boot.indexOf("formatServerLabel") >= 0 && mainApp.indexOf("formatServerLabel()") >= 0, "wire logs say 本机桥");
   const loginSrc = readFileSync(uiSource("p1Login.ts"), "utf8");
   assert(loginSrc.indexOf("mountCcbiView") >= 0 && loginSrc.indexOf("2000, 2000, new Color(8, 16, 32, 255)") >= 0, "notice mask is opaque and covers the login host");
   assert(

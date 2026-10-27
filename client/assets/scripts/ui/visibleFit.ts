@@ -234,6 +234,16 @@ export function uiSize(ui: UITransform | null): { width: number; height: number 
 }
 
 /**
+ * 能拿来摆壳的尺寸。null 和 0×0 都当还没挂上。
+ * 挂机壳直接读 .width 会抛，英雄/背包壳拿 0 去居中会把羊皮纸推出画面。
+ */
+export function positiveUiSize(ui: UITransform | null): { width: number; height: number } | null {
+  const size = uiSize(ui);
+  if (!size || !(size.width > 1) || !(size.height > 1)) return null;
+  return size;
+}
+
+/**
  * Widget 左右对齐会读节点 width。节点还没进激活树时，引擎里的 UITransform 还是 null。
  * 这一帧先按内容尺寸摆，下一帧再对齐。
  */
