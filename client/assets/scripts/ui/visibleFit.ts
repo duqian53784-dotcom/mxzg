@@ -49,7 +49,7 @@ export function fitVisibleRoot(node: Node, box?: VisibleBox): VisibleBox {
   const size = box || readVisibleBox();
   const ui = (node.getComponent(UITransform) || node.addComponent(UITransform)) as UITransform;
   ui.setAnchorPoint(0.5, 0.5);
-  ui.setContentSize(size.width, size.height);
+  assignContentSize(ui, size.width, size.height);
   const parentScale = ancestorScale(node);
   node.setScale(1 / parentScale, 1 / parentScale, 1);
   centerOnCanvas(node);
@@ -67,7 +67,7 @@ export function fitCityViewport(root: Node): VisibleBox {
   if (host !== root) {
     const ui = (root.getComponent(UITransform) || root.addComponent(UITransform)) as UITransform;
     ui.setAnchorPoint(0.5, 0.5);
-    ui.setContentSize(box.width, box.height);
+    assignContentSize(ui, box.width, box.height);
     root.setScale(1, 1, 1);
     root.setPosition(0, 0, 0);
     stretchToParent(root);
@@ -77,7 +77,7 @@ export function fitCityViewport(root: Node): VisibleBox {
   if (bg) {
     const bgUi = bg.getComponent(UITransform) as UITransform | null;
     const bgSize = uiSize(bgUi);
-    if (bgUi && bgSize) bgUi.setContentSize(box.width, box.height);
+    if (bgUi && bgSize) assignContentSize(bgUi, box.width, box.height);
     redrawGraphics(bg, box.width, bgSize ? bgSize.height : box.height);
   }
   return box;
@@ -211,9 +211,13 @@ function centerOnCanvas(node: Node): void {
     node.setPosition(0, 0, 0);
     return;
   }
-  const world = canvasUi.convertToWorldSpaceAR({ x: 0, y: 0, z: 0 });
-  const local = parentUi.convertToNodeSpaceAR(world);
-  node.setPosition(local && typeof local.x === "number" ? local.x : 0, local && typeof local.y === "number" ? local.y : 0, 0);
+  try {
+    const world = canvasUi.convertToWorldSpaceAR({ x: 0, y: 0, z: 0 });
+    const local = parentUi.convertToNodeSpaceAR(world);
+    node.setPosition(local && typeof local.x === "number" ? local.x : 0, local && typeof local.y === "number" ? local.y : 0, 0);
+  } catch (_err) {
+    node.setPosition(0, 0, 0);
+  }
 }
 
 function findCanvas(node: Node): Node | null {
@@ -251,12 +255,19 @@ export function positiveUiSize(ui: UITransform | null): { width: number; height:
 }
 
 /**
- * 尺寸还是 null 时不要调用 setContentSize。
- * 引擎会读 _contentSize.width，挂机壳第一帧和稍后的遮罩布局都会抛 reading 'width'。
+ * 尺寸还是 null 时先补上 _contentSize，再交给引擎。
+ * 直接 setContentSize 会读 _contentSize.width，挂机壳和进度条都会抛 reading 'width'。
+ * 已经有尺寸时不换掉引擎自己的 Size。
  */
 export function assignContentSize(ui: UITransform | null, width: number, height: number): boolean {
-  if (!ui || !uiSize(ui)) return false;
+  if (!ui) return false;
   if (!isFinite(width) || !isFinite(height)) return false;
+  const raw = ui as UITransform & { _contentSize?: { width: number; height: number } | null };
+  try {
+    if (!raw._contentSize) raw._contentSize = { width: width, height: height };
+  } catch (_err) {
+    return false;
+  }
   try {
     ui.setContentSize(width, height);
   } catch (_err) {

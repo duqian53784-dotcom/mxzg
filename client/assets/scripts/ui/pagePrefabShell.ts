@@ -3,7 +3,7 @@
  * 关闭壳只是藏起来，下面的代码页 / 旧 Prefab / 协议探针还在。
  * 加载失败留原来的页面，不留空画面。
  */
-import { BlockInputEvents, Button, Color, director, Director, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, director, Director, instantiate, Label, Node, Overflow, Prefab, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { labelCenterInParent, sliceAnchorShift } from "./ccbiPlace";
 import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
@@ -18,7 +18,7 @@ import { hangLineupReady } from "./localLineup";
 import { wireDebugEnabled } from "../net/transportSelect";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
 import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from "./chapterMapView";
-import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption } from "./screenFill";
+import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption, pinSprites } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize, uiSize } from "./visibleFit";
@@ -231,15 +231,25 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
   try {
     const prefab = await loadPrefab(path);
     if (!page.isValid || !root.isValid) return;
-    view = spawnPrefab(prefab, root);
-    mountCcbiView(view);
-    dressHangPanel(view);
-    bindFightChrome(view, root, page);
-    dropFlatHangButtons(root);
-    mountHangMissionChip(root, page);
-    raiseHangProbe(root);
+    view = spawnHangPanel(prefab, root);
+    const panel = view;
+    hangShellStep("mountCcbiView", () => mountCcbiView(panel));
+    hangShellStep("dressHangPanel", () => dressHangPanel(panel));
+    hangShellStep("bindFightChrome", () => bindFightChrome(panel, root, page));
+    hangShellStep("dropFlatHangButtons", () => dropFlatHangButtons(root));
+    hangShellStep("mountHangMissionChip", () => mountHangMissionChip(root, page));
+    hangShellStep("raiseHangProbe", () => raiseHangProbe(root));
     GameLog.shared.info("MainApp", "hang battle shell " + path);
   } catch (err) {
+    if (isWidthRead(err) && root.isValid) {
+      noteHangShellWidth(view && view.isValid ? "afterPanel" : "spawnPanel");
+      if (!view || !view.isValid) {
+        mountCodeHangBar(root, page);
+        mountHangMissionChip(root, page);
+        raiseHangProbe(root);
+      }
+      return;
+    }
     GameLog.shared.error("MainApp", "hang battle shell " + messageOf(err) + "，站场仍在");
     if (!root.isValid) return;
     if (view && view.isValid) {
@@ -257,6 +267,51 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
     mountCodeHangBar(root, page);
     mountHangMissionChip(root, page);
     raiseHangProbe(root);
+  }
+}
+
+/**
+ * 先收成自定义尺寸再进激活树。
+ * 预览里 RAW 图在 originalSize 还是空的时候，一启用就会让引擎读 width。
+ */
+function spawnHangPanel(prefab: Prefab, parent: Node): Node {
+  const view = instantiate(prefab);
+  pinSprites(view);
+  try {
+    view.active = false;
+  } catch (err) {
+    if (!isWidthRead(err)) throw err;
+    noteHangShellWidth("hidePanel");
+  }
+  view.parent = parent;
+  try {
+    view.active = true;
+  } catch (err) {
+    if (!isWidthRead(err)) throw err;
+    noteHangShellWidth("showPanel");
+  }
+  return view;
+}
+
+const hangWidthSteps = new Set<string>();
+
+function noteHangShellWidth(step: string): void {
+  if (hangWidthSteps.has(step)) return;
+  hangWidthSteps.add(step);
+  GameLog.shared.warn("MainApp", "hang shell width " + step);
+}
+
+function isWidthRead(err: unknown): boolean {
+  const message = messageOf(err);
+  return message.indexOf("reading 'width'") >= 0 || message.indexOf('reading "width"') >= 0;
+}
+
+function hangShellStep(step: string, fn: () => void): void {
+  try {
+    fn();
+  } catch (err) {
+    if (!isWidthRead(err)) throw err;
+    noteHangShellWidth(step);
   }
 }
 
@@ -454,7 +509,11 @@ function repairLabel(node: Node): void {
   if (!wide && !tall) return;
   const ui = node.getComponent(UITransform);
   assignContentSize(ui, Math.max(8, width - 8), Math.max(8, height - 4));
-  label.overflow = Overflow.SHRINK;
+  try {
+    label.overflow = Overflow.SHRINK;
+  } catch (_err) {
+    /* 字还没尺寸时装配会读 width。下一帧尺寸活了再修。 */
+  }
 }
 
 function sizedAncestor(node: Node): { node: Node; ui: UITransform } | null {
@@ -548,11 +607,11 @@ function mountHangMissionChip(root: Node, page: Node): void {
   if (!root.isValid || root.getChildByName("HangMissionChip")) return;
   const chip = uiNode("HangMissionChip");
   const ui = chip.addComponent(UITransform);
-  ui.setContentSize(196, 64);
+  assignContentSize(ui, 196, 64);
   place(chip, root, -240, 220);
   const icon = uiNode("icon");
   const iconUi = icon.addComponent(UITransform);
-  iconUi.setContentSize(56, 56);
+  assignContentSize(iconUi, 56, 56);
   const iconSprite = icon.addComponent(Sprite);
   iconSprite.sizeMode = Sprite.SizeMode.CUSTOM;
   place(icon, chip, -64, 0);
@@ -795,7 +854,7 @@ function silenceSheetMenus(root: Node): void {
     const ui = node.getComponent(UITransform);
     const size = positiveUiSize(ui);
     if (!size || size.width < 400 || size.height < 400) continue;
-    ui.setContentSize(0, 0);
+    assignContentSize(ui, 0, 0);
   }
 }
 
@@ -882,8 +941,20 @@ function pokeButton(node: Node, again: boolean): void {
   if (mark.mxzgPoked && !again) return;
   if (!node.parent || mark.activeInHierarchy === false) return;
   mark.mxzgPoked = true;
-  node.active = false;
-  node.active = true;
+  try {
+    node.active = false;
+    node.active = true;
+  } catch (err) {
+    if (!isWidthRead(err)) throw err;
+    noteHangShellWidth("pokeButton");
+    if (node.isValid && !node.active) {
+      try {
+        node.active = true;
+      } catch (_again) {
+        /* 重新启用仍读 width。钮还在，下一帧再拨。 */
+      }
+    }
+  }
 }
 
 /**

@@ -597,7 +597,12 @@ function sizeLoop(node: Node, layer: Node, width: number): void {
 
 function copyFrame(node: Node, frame: SpriteFrame): void {
   const sprite = node.getComponent(Sprite);
-  if (sprite && sprite.spriteFrame !== frame) sprite.spriteFrame = frame;
+  if (!sprite || sprite.spriteFrame === frame) return;
+  try {
+    sprite.spriteFrame = frame;
+  } catch (_err) {
+    /* 循环底图尺寸还是空的时，引擎会读 width。下一拍再贴。 */
+  }
 }
 
 function armHangTicker(onFrame: (dt: number) => void): () => void {
