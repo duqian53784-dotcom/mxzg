@@ -2,7 +2,8 @@
  * 英雄列表、背包、挂机底栏、出阵，把已有贴图填进 P4 壳。
  * 背包格子和页签来自 BackpackItemCell / BackpackTabButton，只改字和图。
  * 背包滚动是 BackpackLayer/spr_box/BagScroll，运行时只往 content 里放格子。
- * 英雄列表壳本身没有网格，格子仍是运行时拼的。
+ * 英雄滚动是 HeroListHeroLayer/spr_box/HeroScroll，详情是 HeroInfoLayer/node_panel/DetailBody/DetailScroll。
+ * 格子、页签、羊皮纸垫、弹层底都在预制里。找不到只打日志，不新造壳。
  * 不造假英雄、不造假道具、不发新协议。
  */
 import { BlockInputEvents, Button, Color, director, Director, HorizontalTextAlignment, Label, Mask, Node, Overflow, Prefab, resources, ScrollView, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
@@ -31,7 +32,7 @@ import {
 } from "./hangChrome";
 import { paintIdleLoot, playIdleHarvest, seatHangTimer, writeHangClock } from "./idleHangView";
 import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
-import { HERO_DETAIL_SPINE_SEAT_Y, HERO_EMPTY_RING_NAMES, HERO_SKILL_BADGE_ART, HERO_SKILL_BADGE_OFFSET } from "./heroDetailPlan";
+import { HERO_DETAIL_SPINE_SEAT_Y, HERO_EMPTY_RING_NAMES, HERO_SKILL_BADGE_OFFSET } from "./heroDetailPlan";
 import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
 import { mockRuntimeEnabled } from "../net/transportSelect";
 import { emptyBagToast } from "../module/bag/items";
@@ -55,17 +56,19 @@ const HERO_ATTR_BOARD = "prefabs/ui/hero/HeroInfoAttrLayer";
 const BAG_INFO_BOARD = "prefabs/ui/backpack/BackpackInfoLayer";
 const BAG_CELL = "prefabs/ui/backpack/BackpackItemCell";
 const BAG_TAB = "prefabs/ui/backpack/BackpackTabButton";
+const HERO_CELL = "prefabs/ui/hero/HeroIconCell";
+const CATALOG_CELL = "prefabs/ui/hero/CatalogIconCell";
+const DRAGON_CARD = "prefabs/ui/hero/DragonCard";
+const TEXT_CHIP = "prefabs/ui/common/TextChip";
+const INFO_CARD = "prefabs/ui/common/InfoCard";
+const DIM_SHEET = "prefabs/ui/common/DimSheet";
 /** language 5788。店员那句，不另写文案。 */
 const BAG_SHOP_LAN = "5788";
 const BAG_SHOP_FALLBACK = "欢迎光临～";
 const BAG_PORTRAIT = "shangcheng";
 const HERO_EXP_ITEM = 900101;
-const CHECK = new Color(70, 210, 90, 255);
-const NAME_GREEN = new Color(134, 236, 149, 255);
-const DESC = new Color(255, 249, 197, 255);
 
 const COLS = 4;
-const CELL = 96;
 const HERO_PITCH_X = 108;
 const HERO_PITCH_Y = 112;
 const BAG_PITCH_X = 112;
@@ -614,9 +617,10 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
   }
   let elem = 0;
   let selected = formationIds();
+  let cellPrefab: Prefab | null = null;
   const paint = () => {
-    if (!view.isValid) return;
-    paintFormationGrid(view, elem, selected, (heroId) => {
+    if (!view.isValid || !cellPrefab) return;
+    paintFormationGrid(view, elem, selected, cellPrefab, (heroId) => {
       selected = toggleId(selected, heroId);
       paint();
     });
@@ -700,7 +704,16 @@ export function bindFormationSheet(view: Node, onConfirm: () => void): void {
       onConfirm();
     });
   }
-  paint();
+  void loadPrefab(HERO_CELL).then(
+    (loaded) => {
+      if (!view.isValid) return;
+      cellPrefab = loaded;
+      paint();
+    },
+    (err) => {
+      GameLog.shared.warn("Hero", "出阵格子预制没挂上 " + messageOf(err));
+    }
+  );
   const offForm = WireSession.onSync(() => paint());
   view.once(Node.EventType.NODE_DESTROYED, () => offForm());
 }
@@ -719,27 +732,20 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
     const badge = findNamed(view, "icon_elem");
     if (badge) paintSprite(badge, "ui/hero/hero-icon_elem-" + clamp(elem, 0, 5));
     const stars = findNamed(view, "node_star");
+    const count = hero.star ?? (profile && profile.star) ?? 0;
+    paintStarMarks(stars, count > 5 ? 5 : count);
     if (stars) {
-      clearChildren(stars);
-      const count = hero.star ?? (profile && profile.star) ?? 0;
-      const shown = count > 5 ? 5 : clamp(count, 0, 5);
-      for (let i = 0; i < shown; i++) {
-        const star = sprite("star", 22, 22, "ui/hero/hero-info_spr-star-1");
-        place(star, stars, (i - (shown - 1) / 2) * 24, 0);
-      }
-      if (count > 5) {
-        place(createLabel(String(count), 16, { color: CREAM, width: 36, height: 22 }), stars, shown * 14, 0);
+      const extra = stars.getChildByName("lbl_count");
+      if (extra) {
+        extra.active = count > 5;
+        setText(extra, count > 5 ? String(count) : "");
       }
     }
     const bat = findNamed(view, "bat_node");
     const powerText = hero.fighting === null ? "—" : String(hero.fighting);
     const powerNode = bat ? bat.getChildByName("FightValue") : null;
     if (powerNode) setText(powerNode, powerText);
-    else if (bat) {
-      const power = createLabel(powerText, 22, { color: CREAM, width: 160, height: 28 });
-      power.name = "FightValue";
-      place(power, bat, 40, 0);
-    }
+    else GameLog.shared.warn("Hero", "HeroInfoLayer 没有 FightValue");
     const oldSpine = findNamed(view, "DetailSpine");
     if (oldSpine) oldSpine.destroy();
     if (hero.heroId) {
@@ -780,56 +786,77 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
     showHead();
     refresh();
   });
-  const tabBar = findNamed(view, "scroll_view_tab") || view;
   const panel = findNamed(view, "node_panel") || view;
-  const body = uiNode("DetailBody");
-  place(body, panel, 0, 180);
-  const tabs = ["育成", "星UP", "宝石", "神装"];
+  const body = findNamed(view, "DetailBody");
+  if (!body) GameLog.shared.warn("Hero", "HeroInfoLayer 没有 DetailBody");
+  const tabNames = ["btn_tab_grow", "btn_tab_star", "btn_tab_gem", "btn_tab_gear"];
   const tabNodes: Node[] = [];
+  for (let i = 0; i < tabNames.length; i++) {
+    const button = findNamed(view, tabNames[i]);
+    if (button) tabNodes.push(button);
+  }
+  if (tabNodes.length < tabNames.length) GameLog.shared.warn("Hero", "HeroInfoLayer 的 scroll_view_tab 缺少详情页签");
   let tab = 0;
   let gemPlace = 1;
   let gearPlace = 1;
   let grow: Node | null = null;
   let starBoard: Node | null = null;
+  let catalogs: Prefab | null = null;
+  let loggedBoard = false;
   const paint = () => {
     if (!view.isValid) return;
     for (let i = 0; i < tabNodes.length; i++) paintTab(tabNodes[i], i === tab);
     if (grow) grow.active = tab === 0;
     if (starBoard) starBoard.active = tab === 1;
-    clearChildren(body);
     const profile = heroProfile(hero.heroType);
     const stats = heroBaseStats(hero.heroType, hero.star ?? (profile ? profile.star : 1));
     if (tab === 0) {
       if (grow) fillGrowBoard(view, grow, hero, profile, stats);
-      else paintGrow(body, hero, profile, stats);
+      else if (!loggedBoard) {
+        loggedBoard = true;
+        GameLog.shared.warn("Hero", "HeroInfoUpLevelLayer 没有挂上");
+      }
     } else if (tab === 1) {
       if (starBoard) fillStarBoard(view, starBoard, hero, profile);
-      else paintStarUp(view, body, hero, profile);
-    } else if (tab === 2) {
-      paintGems(view, body, gemPlace, (placeId) => {
+      else if (!loggedBoard) {
+        loggedBoard = true;
+        GameLog.shared.warn("Hero", "HeroInfoUpStarLayer 没有挂上");
+      }
+    } else if (body && tab === 2) {
+      paintGems(view, body, catalogs, gemPlace, (placeId) => {
         gemPlace = placeId;
         paint();
       });
-    } else {
-      paintGears(view, body, gearPlace, (placeId) => {
+    } else if (body) {
+      paintGears(view, body, catalogs, gearPlace, (placeId) => {
         gearPlace = placeId;
         paint();
       });
     }
   };
   refresh = paint;
-  for (let i = 0; i < tabs.length; i++) {
+  for (let i = 0; i < tabNodes.length; i++) {
     const index = i;
-    const button = sprite(tabs[i], 100, 36, "ui/common/button_btn-tab-23");
-    place(button, tabBar, -165 + i * 110, 36);
-    tabNodes.push(button);
-    place(createLabel(tabs[i], 16, { color: INK, width: 90, height: 28 }), button, 0, 0);
+    const button = tabNodes[i];
+    const mark = button as Node & { mxzgDetailTab?: boolean };
+    if (mark.mxzgDetailTab) continue;
+    mark.mxzgDetailTab = true;
     if (!button.getComponent(Button)) button.addComponent(Button);
     button.on(Button.EventType.CLICK, () => {
       tab = index;
       paint();
     });
   }
+  void loadPrefab(CATALOG_CELL).then(
+    (loaded) => {
+      if (!view.isValid) return;
+      catalogs = loaded;
+      paint();
+    },
+    (err) => {
+      GameLog.shared.warn("Hero", "图鉴格子预制没挂上 " + messageOf(err));
+    }
+  );
   holdUpgrade(findNamed(view, "btn_evolution"), "升级");
   void mountNested(view, HERO_LEVEL_BOARD, "GrowBoard").then((node) => {
     if (!node || !view.isValid) return;
@@ -956,8 +983,6 @@ function watchParchment(view: Node): void {
   });
 }
 
-const PARCHMENT = new Color(244, 228, 196, 255);
-
 /**
  * 奶油色垫在 spr_bg 后面。九宫格贴图画出来就盖住它；贴图没挂上时页签后面仍有一块纸。
  * Graphics 绕节点原点画，所以垫片要放在底图的视觉中心，不能放在锚点上。
@@ -970,13 +995,17 @@ function syncParchmentPlate(view: Node, bg: Node | null): void {
   const h = size ? size.height : 672;
   const ax = ui && typeof ui.anchorX === "number" ? ui.anchorX : 0.5;
   const ay = ui && typeof ui.anchorY === "number" ? ui.anchorY : 0.5;
-  const old = view.getChildByName("ParchmentPlate");
-  if (old) old.destroy();
-  const plate = createRect("ParchmentPlate", w, h, PARCHMENT);
+  const plate = view.getChildByName("ParchmentPlate");
+  if (!plate) {
+    GameLog.shared.warn("UI", "羊皮纸没有 ParchmentPlate");
+    return;
+  }
+  const plateUi = plate.getComponent(UITransform);
+  assignContentSize(plateUi, w, h);
+  if (plateUi) plateUi.setAnchorPoint(0.5, 0.5);
   const index = bg.getSiblingIndex();
-  plate.parent = view;
   plate.setPosition(bg.position.x + (0.5 - ax) * w, bg.position.y + (0.5 - ay) * h, 0);
-  plate.setSiblingIndex(index);
+  if (plate.getSiblingIndex() > index) plate.setSiblingIndex(index);
 }
 
 function growNode(node: Node, extraTop: number, extraBottom: number): void {
@@ -1018,7 +1047,7 @@ function spreadHeroBoard(board: Node, fit: ParchmentFit): void {
 }
 
 function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
-  // 空名册也挂页签、羊皮纸和格子。空数组画锁定图鉴，不造账号英雄。
+  // 空名册也用预制页签、羊皮纸和格子。空数组画锁定图鉴，不造账号英雄。
   silenceBigMenus(view);
   hideDebugBubble(view);
   const fit = fitParchmentWindow(view);
@@ -1030,53 +1059,49 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
   let tab: "hero" | "book" | "dragon" = "hero";
   let elem = 0;
   let board: Node | null = null;
-  const host = uiNode("HeroFill");
-  place(host, view, 0, 0);
-  let content = gridScroll(host, "HeroScroll", 270, 560, 520, 400 + fit.extra);
+  let content: Node | null = null;
+  let cells: Prefab | null = null;
+  let dragons: Prefab | null = null;
+  let catalogs: Prefab | null = null;
+  let texts: Prefab | null = null;
   const paint = () => {
-    if (!content.isValid) return;
+    if (!content || !content.isValid || !board || !cells) return;
     clearChildren(content);
     markHeroTabs(view, tab);
     showHeroCorner(board, tab);
     markElem(board, elem);
-    const elemRow = board ? findNamed(board, "node_elem") : null;
+    const elemRow = findNamed(board, "node_elem");
     if (elemRow) elemRow.active = tab !== "dragon";
     const all = GameStore.heroes();
     const space = heroSpaceLine(all);
     writeNamed(view, "lbl_capacity", space);
-    if (board) writeNamed(board, "lbl_capacity", space);
+    writeNamed(board, "lbl_capacity", space);
+    const empty = content.parent ? content.parent.getChildByName("lbl_empty") : null;
+    if (empty) empty.active = false;
     if (tab === "dragon") {
-      paintDragonBoard(view, content);
+      paintDragonBoard(view, content, dragons, catalogs, texts);
       return;
     }
     const deployed = deployedSet();
-    if (tab === "hero") {
+    if (tab === "hero" && all && all.length > 0) {
       const roster = rosterOf(elem);
-      if (all && all.length > 0) {
-        const shown = paddedSlots(roster.length);
-        for (let i = 0; i < shown; i++) {
-          const hero = i < roster.length ? roster[i] : null;
-          const cell = heroCell(hero, hero ? deployed.has(hero.heroId || 0) : false, hero ? () => openHero(hero) : null, false);
-          place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
-        }
-        sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 360 + fit.extra);
-        return;
+      const shown = paddedSlots(roster.length);
+      for (let i = 0; i < shown; i++) {
+        const hero = i < roster.length ? roster[i] : null;
+        const cell = spawnPrefab(cells, content);
+        bindHeroCell(cell, hero, hero ? deployed.has(hero.heroId || 0) : false, hero ? () => openHero(hero) : null, false);
+        place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
       }
-      paintHeroBook(view, content, elem, deployed, openHero);
+      sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 360 + fit.extra);
       return;
     }
-    paintHeroBook(view, content, elem, deployed, openHero);
+    paintHeroBook(view, content, elem, deployed, openHero, cells, texts);
   };
   const pickElem = (id: number) => {
     elem = id;
     if (tab === "dragon") tab = "hero";
     paint();
   };
-  for (let i = 0; i <= 5; i++) {
-    const button = sprite("elem" + i, 48, 48, "ui/hero/hero-icon_elem-" + i);
-    place(button, host, -210 + i * 84, 590);
-  }
-  bindElemRow(host, pickElem);
   bindTab(view, "btn_hero", () => {
     tab = "hero";
     paint();
@@ -1089,30 +1114,41 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
     tab = "dragon";
     paint();
   });
-  void mountNested(view, HERO_LIST_BOARD, "HeroBoard").then((node) => {
-    if (!node || !view.isValid) return;
-    board = node;
-    const menu = findNamed(view, "UIMenu_1");
-    if (menu && menu.parent === view) node.setSiblingIndex(menu.getSiblingIndex());
-    spreadHeroBoard(node, fit);
-    showHeroCorner(node, tab);
-    const box = findNamed(node, "spr_box");
-    if (box) {
-      const old = host.getChildByName("HeroScroll");
-      if (old) old.destroy();
-      // 元素钮在盒子顶上，格子从钮下沿再往下排。
-      content = gridScroll(box, "HeroScroll", 0, -108, 540, 320 + fit.extra);
+  void Promise.all([
+    mountNested(view, HERO_LIST_BOARD, "HeroBoard"),
+    loadPrefab(HERO_CELL),
+    loadPrefab(DRAGON_CARD),
+    loadPrefab(CATALOG_CELL),
+    loadPrefab(TEXT_CHIP),
+  ]).then(
+    (loaded) => {
+      const node = loaded[0] as Node | null;
+      if (!node || !view.isValid) {
+        GameLog.shared.warn("Hero", "HeroListHeroLayer 没有挂上");
+        return;
+      }
+      board = node;
+      cells = loaded[1] as Prefab;
+      dragons = loaded[2] as Prefab;
+      catalogs = loaded[3] as Prefab;
+      texts = loaded[4] as Prefab;
+      const menu = findNamed(view, "UIMenu_1");
+      if (menu && menu.parent === view) node.setSiblingIndex(menu.getSiblingIndex());
+      spreadHeroBoard(node, fit);
+      showHeroCorner(node, tab);
+      content = heroScrollContent(node, fit);
+      if (cap) cap.active = false;
+      const big = findNamed(node, "node_capacity");
+      const menuHit = big ? big.getChildByName("UIMenu_1") : null;
+      const menuUi = menuHit ? menuHit.getComponent(UITransform) : null;
+      if (menuUi) menuUi.setContentSize(0, 0);
+      bindElemRow(node, pickElem);
+      paint();
+    },
+    (err) => {
+      GameLog.shared.warn("Hero", "英雄列表预制没挂上 " + messageOf(err));
     }
-    if (cap) cap.active = false;
-    const big = findNamed(node, "node_capacity");
-    const menuHit = big ? big.getChildByName("UIMenu_1") : null;
-    const menuUi = menuHit ? menuHit.getComponent(UITransform) : null;
-    if (menuUi) menuUi.setContentSize(0, 0);
-    clearChildren(host);
-    bindElemRow(node, pickElem);
-    paint();
-  });
-  paint();
+  );
   const offHero = WireSession.onSync(() => paint());
   view.once(Node.EventType.NODE_DESTROYED, () => offHero());
 }
@@ -1125,10 +1161,9 @@ function fillBag(view: Node): void {
   let tab: BagTab = "item";
   let picked: StoreBagItem | null = null;
   let cellPrefab: Prefab | null = null;
-  const host = uiNode("BagFill");
-  place(host, view, 0, 0);
   const content = bagScrollContent(view, fit);
-  const tabHost = bagTabHost(view) || host;
+  const tabHost = bagTabHost(view);
+  if (!tabHost) GameLog.shared.warn("Bag", "btn_scroll_view 下没有 content，不另造页签条");
   const tabs: Node[] = [];
   const paint = () => {
     if (!content || !content.isValid || !cellPrefab) return;
@@ -1157,7 +1192,7 @@ function fillBag(view: Node): void {
   };
   void Promise.all([loadPrefab(BAG_CELL), loadPrefab(BAG_TAB)]).then(
     (loaded) => {
-      if (!view.isValid || !tabHost.isValid) return;
+      if (!view.isValid || !tabHost || !tabHost.isValid) return;
       cellPrefab = loaded[0];
       const tabPrefab = loaded[1];
       for (let i = 0; i < BAG_TABS.length; i++) {
@@ -1165,7 +1200,7 @@ function fillBag(view: Node): void {
         const button = spawnPrefab(tabPrefab, tabHost);
         const title = findNamed(button, "lbl_title");
         if (title) setText(title, spec.title);
-        place(button, tabHost, tabHost === host ? 125 + i * 118 : 64 + i * 120, tabHost === host ? 590 : -24);
+        place(button, tabHost, 64 + i * 120, -24);
         tabs.push(button);
         if (!button.getComponent(Button)) button.addComponent(Button);
         button.on(Button.EventType.CLICK, () => {
@@ -1207,6 +1242,31 @@ function bagScrollContent(view: Node, fit: ParchmentFit): Node | null {
   }
   const scroller = scroll.getComponent(ScrollView);
   if (!scroller) GameLog.shared.warn("Bag", "BagScroll 没有 ScrollView");
+  else if (scroller.content !== content) scroller.content = content;
+  return content;
+}
+
+/** spr_box/HeroScroll 写在 HeroListHeroLayer 里。这里只把视口拉到羊皮纸增高后的高度。 */
+function heroScrollContent(board: Node, fit: ParchmentFit): Node | null {
+  const box = findNamed(board, "spr_box");
+  const scroll = box ? box.getChildByName("HeroScroll") : null;
+  const content = scroll ? scroll.getChildByName("content") : null;
+  if (!box || !scroll || !content) {
+    GameLog.shared.warn("Hero", "HeroListHeroLayer 的 spr_box 下没有 HeroScroll");
+    return null;
+  }
+  const height = 320 + fit.extra;
+  const scrollUi = scroll.getComponent(UITransform);
+  const scrollSize = positiveUiSize(scrollUi);
+  assignContentSize(scrollUi, scrollSize && scrollSize.width > 0 ? scrollSize.width : 540, height);
+  const maskView = scroll.getChildByName("view");
+  const viewUi = maskView ? maskView.getComponent(UITransform) : null;
+  if (viewUi) {
+    const viewSize = positiveUiSize(viewUi);
+    assignContentSize(viewUi, viewSize && viewSize.width > 0 ? viewSize.width : 540, height);
+  }
+  const scroller = scroll.getComponent(ScrollView);
+  if (!scroller) GameLog.shared.warn("Hero", "HeroScroll 没有 ScrollView");
   else if (scroller.content !== content) scroller.content = content;
   return content;
 }
@@ -1280,27 +1340,26 @@ function bindBagCell(cell: Node, item: StoreBagItem | null, selected: boolean, o
   }
 }
 
-function paintFormationGrid(view: Node, elem: number, selected: number[], toggle: (id: number) => void): void {
+function paintFormationGrid(view: Node, elem: number, selected: number[], cells: Prefab, toggle: (id: number) => void): void {
   const scroll = findNamed(view, "scroll_view_backpack");
   const content = scroll ? scroll.getChildByName("content") : null;
-  const host = content || scroll || view;
-  const old = host.getChildByName("FormGrid");
-  if (old) old.destroy();
-  const grid = uiNode("FormGrid");
-  place(grid, host, 0, content ? 0 : scroll ? 180 : 640);
+  const host = content || scroll;
+  const grid = host ? host.getChildByName("FormGrid") : null;
+  if (!grid) {
+    GameLog.shared.warn("Hero", "出阵滚动里没有 FormGrid");
+    return;
+  }
+  clearChildren(grid);
   const roster = rosterOf(elem);
   for (let i = 0; i < roster.length; i++) {
     const hero = roster[i];
     const col = i % COLS;
     const row = Math.floor(i / COLS);
     const on = hero.heroId !== null && selected.indexOf(hero.heroId) >= 0;
-    const cell = heroCell(hero, false, () => {
+    const cell = spawnPrefab(cells, grid);
+    bindHeroCell(cell, hero, false, () => {
       if (hero.heroId) toggle(hero.heroId);
-    }, false);
-    if (on) {
-      const mark = createLabel("✓", 22, { color: CHECK, width: 28, height: 28 });
-      place(mark, cell, 30, 36);
-    }
+    }, false, on);
     const x = content ? 70 + col * 130 : -180 + col * 110;
     const y = content ? -56 - row * HERO_PITCH_Y : -row * 100;
     place(cell, grid, x, y);
@@ -1327,26 +1386,38 @@ function paintFormationSlots(view: Node, selected: number[], onRemove: (heroId: 
     const box = slot.getComponent(UITransform);
     const slotSize = positiveUiSize(box);
     if (box && slotSize && (slotSize.width < 8 || slotSize.height < 8)) box.setContentSize(80, 80);
-    const old = slot.getChildByName("SlotFace");
-    if (old) old.destroy();
     const heroId = placed[slotNo];
     const hero = heroId ? heroById(roster, heroId) : null;
     const label = findNamed(slot, "lbl_attr_add_" + slotNo);
+    const face = slot.getChildByName("spr_face");
     const front = slotNo <= 4;
     if (!hero || !hero.heroType) {
+      if (face) face.active = false;
       if (label) {
         label.active = true;
         setText(label, front ? "前" : "后");
       }
       continue;
     }
-    const face = sprite("SlotFace", 64, 64, heroFace(hero), "ui/hero/hero-icon_spr-default");
-    place(face, slot, 0, 0);
-    face.setSiblingIndex(Math.max(0, slot.children.length - 1));
-    if (hero.heroId !== null) {
-      const picked = hero.heroId;
-      if (!face.getComponent(Button)) face.addComponent(Button);
-      face.on(Button.EventType.CLICK, () => onRemove(picked));
+    if (!face) {
+      GameLog.shared.warn("Hero", "出阵 " + slot.name + " 没有 spr_face");
+    } else {
+      face.active = true;
+      paintFirst(face, [heroFace(hero), "ui/hero/hero-icon_spr-default"]);
+      face.setSiblingIndex(Math.max(0, slot.children.length - 1));
+      if (hero.heroId !== null) {
+        const picked = hero.heroId;
+        const mark = face as Node & { mxzgSlot?: boolean };
+        if (!mark.mxzgSlot) {
+          mark.mxzgSlot = true;
+          if (!face.getComponent(Button)) face.addComponent(Button);
+          face.on(Button.EventType.CLICK, () => {
+            const id = (face as Node & { mxzgHero?: number }).mxzgHero;
+            if (id) onRemove(id);
+          });
+        }
+        (face as Node & { mxzgHero?: number }).mxzgHero = picked;
+      }
     }
     if (hero.fighting !== null) {
       power += hero.fighting;
@@ -1424,239 +1495,209 @@ export function dressChapterPreview(view: Node, onFight: () => void, stageIdx?: 
 
 function paintPreviewDrops(view: Node, drops: DropFace[]): void {
   const scroll = findNamed(view, "scroll_view");
-  const host = scroll ? scroll.getChildByName("content") || scroll : view;
-  const old = host.getChildByName("PreviewDrops");
-  if (old) old.destroy();
-  const row = uiNode("PreviewDrops");
-  place(row, host, scroll ? 280 : 0, scroll ? -40 : 0);
-  if (drops.length === 0) {
-    place(createLabel("这一关没有掉落表", 18, { color: CREAM, width: 420, height: 36 }), row, 0, 0);
+  const host = scroll ? scroll.getChildByName("content") || scroll : null;
+  const row = host ? host.getChildByName("PreviewDrops") : null;
+  if (!row) {
+    GameLog.shared.warn("Mainline", "关卡预览没有 PreviewDrops");
     return;
   }
-  const n = drops.length < 6 ? drops.length : 6;
-  const every = idleDropEverySec();
-  for (let i = 0; i < n; i++) {
-    const face = drops[i];
-    const profile = itemProfile(face.itemType, null);
-    const cell = sprite("drop", 64, 64, rareFrame(profile ? profile.rare : 0));
-    place(cell, row, (i - (n - 1) / 2) * 78, 0);
-    const path = (profile && profile.icon) || itemIconResource(face.itemType, null) || "ui/bag/backpack_" + face.itemType;
-    place(sprite("icon", 52, 52, path, "ui/bag/backpack_spr-default"), cell, 0, 2);
-    if (!cell.getComponent(Button)) cell.addComponent(Button);
-    cell.on(Button.EventType.CLICK, () => showInfoCard(view, dropCard(face, every)));
+  const empty = row.getChildByName("lbl_empty");
+  const old = row.children.slice();
+  for (let i = 0; i < old.length; i++) {
+    if (old[i].name !== "lbl_empty") old[i].destroy();
   }
+  if (drops.length === 0) {
+    if (empty) {
+      empty.active = true;
+      setText(empty, "这一关没有掉落表");
+    }
+    return;
+  }
+  if (empty) empty.active = false;
+  void loadPrefab(CATALOG_CELL).then(
+    (prefab) => {
+      if (!row.isValid) return;
+      const n = drops.length < 6 ? drops.length : 6;
+      const every = idleDropEverySec();
+      for (let i = 0; i < n; i++) {
+        const face = drops[i];
+        const profile = itemProfile(face.itemType, null);
+        const cell = spawnPrefab(prefab, row);
+        const path = (profile && profile.icon) || itemIconResource(face.itemType, null) || "ui/bag/backpack_" + face.itemType;
+        bindCatalogCell(cell, path, profile ? profile.rare : 0, 1, () => showInfoCard(view, dropCard(face, every)));
+        place(cell, row, (i - (n - 1) / 2) * 78, 0);
+      }
+    },
+    (err) => {
+      GameLog.shared.warn("Mainline", "掉落格子预制没挂上 " + messageOf(err));
+    }
+  );
 }
 
-function heroCell(hero: StoreHero | null, deployed: boolean, onTap: (() => void) | null, locked: boolean): Node {
-  const root = uiNode(hero ? "HeroCell" : "HeroEmpty");
-  const ui = root.addComponent(UITransform);
-  ui.setContentSize(CELL, CELL + 8);
-  place(sprite("bg", 84, 84, "ui/hero/hero-icon_icon-bg-2"), root, 0, 6);
-  place(sprite("frame", 88, 88, "ui/hero/hero-icon_icon-frame-1"), root, 0, 6);
-  if (!hero) return root;
-  const profile = heroProfile(hero.heroType);
-  if (hero.heroType) {
-    const face = sprite("face", 72, 72, heroFace(hero), "ui/hero/hero-icon_spr-default");
-    place(face, root, 0, 6);
-    if (locked) {
-      const image = face.getComponent(Sprite);
-      if (image) image.grayscale = true;
+function bindHeroCell(
+  cell: Node,
+  hero: StoreHero | null,
+  deployed: boolean,
+  onTap: (() => void) | null,
+  locked: boolean,
+  marked = false
+): void {
+  const face = findNamed(cell, "spr_face");
+  const name = findNamed(cell, "lbl_name");
+  const elemNode = findNamed(cell, "spr_elem");
+  const lock = findNamed(cell, "spr_lock");
+  const battle = findNamed(cell, "spr_battle");
+  const level = findNamed(cell, "lbl_level");
+  const mark = findNamed(cell, "lbl_mark");
+  if (mark) mark.active = marked;
+  const profile = hero ? heroProfile(hero.heroType) : null;
+  if (face) {
+    const image = face.getComponent(Sprite);
+    if (image) image.grayscale = false;
+    if (!hero || !hero.heroType) face.active = false;
+    else {
+      face.active = true;
+      paintFirst(face, [heroFace(hero), "ui/hero/hero-icon_spr-default"]);
+      if (locked && image) image.grayscale = true;
     }
-  } else {
-    place(createLabel(shortName(hero.name), 14, { color: CREAM, width: 72, height: 36 }), root, 0, 6);
+  }
+  if (name) {
+    const showName = !!hero && !hero.heroType;
+    name.active = showName;
+    if (showName && hero) setText(name, shortName(hero.name));
   }
   const elem = profile && profile.elem !== null ? profile.elem : null;
-  if (elem !== null && elem >= 0 && elem <= 5) {
-    place(sprite("elem", 26, 26, "ui/hero/hero-icon_elem-" + elem), root, -28, 32);
+  if (elemNode) {
+    const showElem = elem !== null && elem >= 0 && elem <= 5;
+    elemNode.active = showElem;
+    if (showElem) paintSprite(elemNode, "ui/hero/hero-icon_elem-" + elem);
   }
-  const stars = hero.star ?? (profile && profile.star) ?? 0;
-  const n = clamp(stars, 0, 5);
-  for (let i = 0; i < n; i++) {
-    place(sprite("star", 14, 14, "ui/hero/hero-info_spr-star-1"), root, (i - (n - 1) / 2) * 15, -40);
+  const stars = hero ? hero.star ?? (profile && profile.star) ?? 0 : 0;
+  const n = hero ? clamp(stars, 0, 5) : 0;
+  for (let i = 0; i < 5; i++) {
+    const star = cell.getChildByName("star" + i);
+    if (!star) continue;
+    star.active = i < n;
+    if (i < n) star.setPosition((i - (n - 1) / 2) * 15, -40, 0);
   }
-  if (hero.level !== null) {
-    place(createLabel(String(hero.level), 14, { color: COUNT, width: 36, height: 18 }), root, 22, -22);
+  if (level) {
+    const showLevel = !!hero && hero.level !== null;
+    level.active = showLevel;
+    if (showLevel && hero && hero.level !== null) setText(level, String(hero.level));
   }
-  if (locked) place(sprite("lock", 28, 28, "ui/hero/hero-icon_spr-lock"), root, 28, 32);
-  else if (deployed) place(sprite("battle", 28, 28, "ui/hero/hero-icon_spr-battle"), root, 30, 32);
+  if (lock) lock.active = !!hero && locked;
+  if (battle) battle.active = !!hero && !locked && deployed;
   if (onTap) {
-    if (!root.getComponent(Button)) root.addComponent(Button);
-    root.on(Button.EventType.CLICK, onTap);
-  }
-  return root;
-}
-
-function paintGrow(
-  body: Node,
-  hero: StoreHero,
-  profile: HeroProfile | null,
-  stats: { atk: number; hp: number; def: number; spd: number } | null
-): void {
-  const level = hero.level === null ? "—" : String(hero.level);
-  const job = occupationName(profile ? profile.occupation : null);
-  place(createLabel("等级 " + level + (job ? "  " + job : ""), 18, { color: INK, width: 200, height: 28 }), body, -120, 78);
-  const power = hero.fighting === null ? "—" : String(hero.fighting);
-  place(createLabel("战力 " + power, 18, { color: INK, width: 200, height: 28 }), body, 120, 78);
-  const atk = stats ? String(stats.atk) : "—";
-  const hp = stats ? String(stats.hp) : "—";
-  const def = stats ? String(stats.def) : "—";
-  const spd = stats ? String(stats.spd) : "—";
-  place(createLabel("攻击 " + atk, 18, { color: INK, width: 180, height: 28 }), body, -120, 40);
-  place(createLabel("HP " + hp, 18, { color: INK, width: 180, height: 28 }), body, 120, 40);
-  place(createLabel("防御 " + def, 18, { color: INK, width: 180, height: 28 }), body, -120, 8);
-  place(createLabel("速度 " + spd, 18, { color: INK, width: 180, height: 28 }), body, 120, 8);
-  const skills = profile ? profile.skills : [];
-  const names: string[] = [];
-  for (let i = 0; i < skills.length && i < 4; i++) names.push(skills[i].name);
-  place(createLabel(names.length > 0 ? names.join("  ") : "无技能", 16, { color: INK, width: 460, height: 36 }), body, 0, -36);
-}
-
-function paintStarUp(view: Node, body: Node, hero: StoreHero, profile: HeroProfile | null): void {
-  const star = hero.star ?? ((profile && profile.star) || 1);
-  const cur = heroStarStep(star);
-  const nxt = heroStarStep(star + 1);
-  if (!cur && !nxt) {
-    place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 40 }), body, 0, 20);
-    return;
-  }
-  const maxed = star >= 14 || !nxt;
-  place(createLabel(star + "星" + (maxed ? "  已满星" : "  →  " + (star + 1) + "星"), 18, { color: INK, width: 280, height: 28 }), body, 0, 92);
-  const limitNow = cur ? String(cur.levelLimit) : "—";
-  const limitNext = nxt ? String(nxt.levelLimit) : "—";
-  place(createLabel("等级上限  " + limitNow + (maxed ? "" : "  →  " + limitNext), 16, { color: INK, width: 420, height: 24 }), body, 0, 64);
-  const atkNow = cur ? String(cur.attackShow) : "—";
-  const hpNow = cur ? String(cur.hpShow) : "—";
-  const atkNext = nxt ? String(nxt.attackShow) : "—";
-  const hpNext = nxt ? String(nxt.hpShow) : "—";
-  place(
-    createLabel(
-      "攻击 " + atkNow + (maxed ? "" : " → " + atkNext) + "    生命 " + hpNow + (maxed ? "" : " → " + hpNext),
-      16,
-      { color: INK, width: 440, height: 24 }
-    ),
-    body,
-    0,
-    38
-  );
-  paintStarSkills(view, body, profile, cur, nxt, maxed);
-  if (!maxed && nxt) paintStarCosts(body, hero, nxt);
-  const button = sprite("UpStar", 120, 36, "ui/common/button_btn-tab-24");
-  place(button, body, -40, -112);
-  place(createLabel(maxed ? "已满星" : "升星", 16, { color: INK, width: 100, height: 24 }), button, 0, 0);
-  if (!button.getComponent(Button)) button.addComponent(Button);
-  button.on(Button.EventType.CLICK, () => {
-    GameLog.shared.info("Hero", "升星没有服端写协议，不改星级");
-  });
-  place(createLabel("不发升星协议", 12, { color: INK, width: 160, height: 18 }), body, 140, -112);
-}
-
-function paintStarSkills(view: Node, body: Node, profile: HeroProfile | null, cur: StarStep | null, nxt: StarStep | null, maxed: boolean): void {
-  const skills = profile ? profile.skills : [];
-  const n = skills.length < 4 ? skills.length : 4;
-  if (n === 0) {
-    place(createLabel("无技能", 14, { color: INK, width: 200, height: 22 }), body, 0, 8);
-    return;
-  }
-  for (let i = 0; i < n; i++) {
-    const skill = skills[i];
-    const x = (i - (n - 1) / 2) * 108;
-    const icon = sprite("skill" + i, 36, 36, "ui/hero/skill-icon_" + skill.id, "ui/hero/hero-icon_spr-default");
-    place(icon, body, x, 4);
-    const opened = skill.id;
-    const openedLevel = cur && cur.skillLevels.length > i ? cur.skillLevels[i] : null;
-    if (!icon.getComponent(Button)) icon.addComponent(Button);
-    icon.on(Button.EventType.CLICK, () => showSkillCard(view, opened, openedLevel));
-    const from = cur && cur.skillLevels.length > i ? cur.skillLevels[i] : null;
-    const to = nxt && nxt.skillLevels.length > i ? nxt.skillLevels[i] : null;
-    const line = "Lv" + (from === null ? "—" : from) + (maxed ? "" : "→" + (to === null ? "—" : to));
-    place(createLabel(shortName(skill.name), 12, { color: INK, width: 96, height: 16 }), body, x, -22);
-    place(createLabel(line, 12, { color: INK, width: 96, height: 16 }), body, x, -38);
+    if (!cell.getComponent(Button)) cell.addComponent(Button);
+    cell.on(Button.EventType.CLICK, onTap);
   }
 }
 
-function paintStarCosts(body: Node, hero: StoreHero, nxt: StarStep): void {
-  const stacks = nxt.cost.concat(nxt.needItem);
-  const needs = heroStarNeeds(hero.heroType, nxt.star);
-  if (stacks.length === 0 && needs.length === 0) {
-    place(createLabel("升星材料 无", 14, { color: INK, width: 240, height: 22 }), body, 0, -62);
-    return;
-  }
-  const icons = stacks.length < 4 ? stacks.length : 4;
-  for (let i = 0; i < icons; i++) {
-    const stack = stacks[i];
-    const face = itemProfile(stack.itemType, null);
-    const icon = face && face.icon ? face.icon : "ui/bag/backpack_" + stack.itemType;
-    const cell = sprite("cost" + i, 32, 32, icon, "ui/bag/backpack_spr-default");
-    place(cell, body, -120 + i * 44, -58);
-    place(createLabel("×" + stack.num, 11, { color: INK, width: 40, height: 14 }), body, -120 + i * 44, -80);
-  }
-  if (needs.length > 0) {
-    const bits: string[] = [];
-    for (let i = 0; i < needs.length && bits.length < 2; i++) bits.push(sacrificeLine(needs[i]));
-    place(createLabel(bits.join("  "), 12, { color: INK, width: 220, height: 32 }), body, 120, -62);
-  }
-}
-
-function paintGems(view: Node, body: Node, placeId: number, onPick: (id: number) => void): void {
-  paintPlaces(body, GEM_PLACES, placeId, onPick);
-  const rows = listJewels(placeId);
-  if (rows.length === 0) {
-    place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 40 }), body, 0, 20);
-    return;
-  }
-  const content = gridScroll(body, "DetailScroll", 0, 36, 460, 160);
-  for (let i = 0; i < rows.length; i++) {
-    const jewel = rows[i];
+function paintGems(view: Node, body: Node, catalogs: Prefab | null, placeId: number, onPick: (id: number) => void): void {
+  paintPlaces(body, "btn_gem_", GEM_PLACES, placeId, onPick);
+  paintCatalogRows(view, body, catalogs, listJewels(placeId).map((jewel) => {
     const owned = bagCount(jewel.id);
     const face = itemProfile(jewel.id, null);
-    const icon = face && face.icon ? face.icon : "ui/bag/backpack_" + jewel.id;
-    const cell = catalogCell(icon, jewel.rare, owned, () => showInfoCard(view, jewelCard(jewel.id, placeId, jewel.rare, jewel.star, owned)));
-    place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
-  }
-  sizeScroll(content, slotRows(rows.length) * HERO_PITCH_Y + 20, 160);
+    return {
+      icon: face && face.icon ? face.icon : "ui/bag/backpack_" + jewel.id,
+      rare: jewel.rare,
+      owned,
+      onTap: () => showInfoCard(view, jewelCard(jewel.id, placeId, jewel.rare, jewel.star, owned)),
+    };
+  }));
 }
 
-function paintGears(view: Node, body: Node, placeId: number, onPick: (id: number) => void): void {
-  paintPlaces(body, GEAR_PLACES, placeId, onPick);
-  const rows = listGodGears(placeId);
-  if (rows.length === 0) {
-    place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 40 }), body, 0, 20);
-    return;
-  }
-  const content = gridScroll(body, "DetailScroll", 0, 36, 460, 160);
-  for (let i = 0; i < rows.length; i++) {
-    const gear = rows[i];
+function paintGears(view: Node, body: Node, catalogs: Prefab | null, placeId: number, onPick: (id: number) => void): void {
+  paintPlaces(body, "btn_gear_", GEAR_PLACES, placeId, onPick);
+  paintCatalogRows(view, body, catalogs, listGodGears(placeId).map((gear) => {
     const owned = bagCount(gear.id);
     const face = itemProfile(gear.id, null);
-    const icon = face && face.icon ? face.icon : "ui/bag/backpack_" + gear.id;
-    const cell = catalogCell(icon, gear.rare, owned, () => showInfoCard(view, gearCard(gear.id, gear.name, placeId, gear.rare, gear.star, owned)));
+    return {
+      icon: face && face.icon ? face.icon : "ui/bag/backpack_" + gear.id,
+      rare: gear.rare,
+      owned,
+      onTap: () => showInfoCard(view, gearCard(gear.id, gear.name, placeId, gear.rare, gear.star, owned)),
+    };
+  }));
+}
+
+function paintCatalogRows(
+  view: Node,
+  body: Node,
+  catalogs: Prefab | null,
+  rows: { icon: string; rare: number; owned: number; onTap: () => void }[]
+): void {
+  const scroll = body.getChildByName("DetailScroll");
+  const content = scroll ? scroll.getChildByName("content") : null;
+  const empty = scroll ? scroll.getChildByName("lbl_empty") : null;
+  if (!scroll || !content) {
+    GameLog.shared.warn("Hero", "DetailBody 下没有 DetailScroll");
+    return;
+  }
+  clearChildren(content);
+  if (rows.length === 0) {
+    if (empty) {
+      empty.active = true;
+      setText(empty, "这一页还没有配置");
+    }
+    return;
+  }
+  if (empty) empty.active = false;
+  if (!catalogs) return;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const cell = spawnPrefab(catalogs, content);
+    bindCatalogCell(cell, row.icon, row.rare, row.owned, row.onTap);
     place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
   }
   sizeScroll(content, slotRows(rows.length) * HERO_PITCH_Y + 20, 160);
+  if (view && !view.isValid) return;
 }
 
-function paintPlaces(body: Node, places: { id: number; title: string }[], current: number, onPick: (id: number) => void): void {
+function paintPlaces(body: Node, prefix: string, places: { id: number; title: string }[], current: number, onPick: (id: number) => void): void {
+  const other = prefix === "btn_gem_" ? "btn_gear_" : "btn_gem_";
+  for (let i = 1; i <= 4; i++) {
+    const hidden = body.getChildByName(other + i);
+    if (hidden) hidden.active = false;
+  }
   for (let i = 0; i < places.length; i++) {
     const spec = places[i];
-    const button = sprite(spec.title, 72, 32, spec.id === current ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23");
-    place(button, body, -150 + i * 86, 64);
-    place(createLabel(spec.title, 14, { color: INK, width: 68, height: 24 }), button, 0, 0);
+    const button = body.getChildByName(prefix + spec.id);
+    if (!button) {
+      GameLog.shared.warn("Hero", "DetailBody 没有 " + prefix + spec.id);
+      continue;
+    }
+    button.active = true;
+    paintTab(button, spec.id === current);
+    const mark = button as Node & { mxzgPlace?: boolean };
+    if (mark.mxzgPlace) continue;
+    mark.mxzgPlace = true;
     if (!button.getComponent(Button)) button.addComponent(Button);
     button.on(Button.EventType.CLICK, () => onPick(spec.id));
   }
 }
 
-function paintDragonBoard(view: Node, content: Node): void {
+function paintDragonBoard(view: Node, content: Node, dragonsPrefab: Prefab | null, catalogs: Prefab | null, texts: Prefab | null): void {
   const dragons = listDragons();
   const relics = listRelics();
+  if (!dragonsPrefab || !catalogs) {
+    GameLog.shared.warn("Hero", "圣龙格子预制没挂上");
+    return;
+  }
   if (dragons.length === 0 && relics.length === 0) {
-    place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 36 }), content, 0, -40);
+    placeText(texts, content, "这一页还没有配置", 0, -40, 18, INK, 360, 36);
     sizeScroll(content, 400, 400);
     return;
   }
   for (let i = 0; i < dragons.length; i++) {
     const face = dragons[i];
-    const card = dragonCard(face, () => showInfoCard(view, {
+    const card = spawnPrefab(dragonsPrefab, content);
+    const portrait = findNamed(card, "spr_face");
+    if (portrait) paintFirst(portrait, [face.portrait, "ui/dragon/dragon_btn-illustration"]);
+    const name = findNamed(card, "lbl_name");
+    if (name) setText(name, face.name);
+    if (!card.getComponent(Button)) card.addComponent(Button);
+    card.on(Button.EventType.CLICK, () => showInfoCard(view, {
       icon: face.portrait,
       title: face.name,
       typeLine: "圣龙图鉴",
@@ -1667,14 +1708,15 @@ function paintDragonBoard(view: Node, content: Node): void {
   }
   const dRows = dragons.length === 0 ? 0 : Math.ceil(dragons.length / COLS);
   let y = dragons.length === 0 ? -24 : -70 - dRows * 140 - 16;
-  place(createLabel("圣物", 18, { color: INK, width: 120, height: 28 }), content, 0, y);
+  placeText(texts, content, "圣物", 0, y, 18, INK, 120, 28);
   y -= 56;
   for (let i = 0; i < relics.length; i++) {
     const relic = relics[i];
     const col = i % COLS;
     const row = Math.floor(i / COLS);
     const owned = relicOwned(relic);
-    const cell = catalogCell(relic.icon, relic.rare, owned, () => showInfoCard(view, relicCard(relic, owned)));
+    const cell = spawnPrefab(catalogs, content);
+    bindCatalogCell(cell, relic.icon, relic.rare, owned, () => showInfoCard(view, relicCard(relic, owned)));
     place(cell, content, -162 + col * HERO_PITCH_X, y - row * HERO_PITCH_Y);
   }
   const rRows = relics.length === 0 ? 1 : Math.ceil(relics.length / COLS);
@@ -1682,37 +1724,43 @@ function paintDragonBoard(view: Node, content: Node): void {
   sizeScroll(content, height, 400);
 }
 
-function dragonCard(face: { name: string; portrait: string }, onTap: () => void): Node {
-  const root = uiNode("DragonCard");
-  const ui = root.addComponent(UITransform);
-  ui.setContentSize(100, 130);
-  const portrait = sprite("face", 64, 64, face.portrait, "ui/dragon/dragon_btn-illustration");
-  place(portrait, root, 0, 18);
-  place(sprite("lock", 32, 32, "ui/dragon/dragon_spr-lock"), root, 26, 42);
-  place(createLabel(face.name, 14, { color: INK, width: 96, height: 22 }), root, 0, -36);
-  place(createLabel("图鉴", 12, { color: INK, width: 80, height: 18 }), root, 0, -54);
-  if (!root.getComponent(Button)) root.addComponent(Button);
-  root.on(Button.EventType.CLICK, onTap);
-  return root;
+function bindCatalogCell(cell: Node, icon: string, rare: number, owned: number, onTap: () => void): void {
+  const frame = findNamed(cell, "spr_frame");
+  const face = findNamed(cell, "spr_icon");
+  const lock = findNamed(cell, "spr_lock");
+  const count = findNamed(cell, "lbl_count");
+  if (frame) paintSprite(frame, rareFrame(rare));
+  if (face) {
+    face.active = true;
+    paintFirst(face, [icon, "ui/bag/backpack_spr-default"]);
+    const image = face.getComponent(Sprite);
+    if (image) image.grayscale = owned <= 0;
+  }
+  if (lock) lock.active = owned <= 0;
+  if (count) {
+    count.active = owned > 0;
+    if (owned > 0) setText(count, String(owned));
+  }
+  if (!cell.getComponent(Button)) cell.addComponent(Button);
+  cell.on(Button.EventType.CLICK, onTap);
 }
 
-function catalogCell(icon: string, rare: number, owned: number, onTap: () => void): Node {
-  const root = uiNode("CatalogCell");
-  const ui = root.addComponent(UITransform);
-  ui.setContentSize(96, 96);
-  place(sprite("frame", 88, 88, rareFrame(rare)), root, 0, 0);
-  const face = sprite("icon", 72, 72, icon, "ui/bag/backpack_spr-default");
-  place(face, root, 0, 4);
-  if (owned <= 0) {
-    const image = face.getComponent(Sprite);
-    if (image) image.grayscale = true;
-    place(sprite("lock", 28, 28, "ui/hero/hero-icon_spr-lock"), root, 28, 28);
-  } else {
-    place(createLabel(String(owned), 16, { color: COUNT, width: 72, height: 22 }), root, 18, -30);
+function placeText(prefab: Prefab | null, parent: Node, text: string, x: number, y: number, font: number, ink: Color, width: number, height: number): void {
+  if (!prefab || !parent.isValid) {
+    GameLog.shared.warn("UI", "TextChip 没有挂上");
+    return;
   }
-  if (!root.getComponent(Button)) root.addComponent(Button);
-  root.on(Button.EventType.CLICK, onTap);
-  return root;
+  const node = spawnPrefab(prefab, parent);
+  const label = node.getComponent(Label);
+  if (label) {
+    label.string = text;
+    label.fontSize = font;
+    label.lineHeight = font + 4;
+    label.color = ink;
+    label.overflow = Overflow.CLAMP;
+  }
+  assignContentSize(node.getComponent(UITransform), width, height);
+  node.setPosition(x, y, 0);
 }
 
 function rosterOf(elem: number): StoreHero[] {
@@ -1732,27 +1780,34 @@ function paintHeroBook(
   content: Node,
   elem: number,
   deployed: Set<number>,
-  openHero: (hero: StoreHero) => void
+  openHero: (hero: StoreHero) => void,
+  cells: Prefab,
+  texts: Prefab | null
 ): void {
   const book = bookOf(elem);
   if (book.length === 0) {
     const shown = paddedSlots(0);
     for (let i = 0; i < shown; i++) {
-      place(heroCell(null, false, null, false), content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+      const cell = spawnPrefab(cells, content);
+      bindHeroCell(cell, null, false, null, false);
+      place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
     }
-    place(createLabel("这一页还没有配置", 18, { color: INK, width: 360, height: 36 }), content, 0, -40);
+    placeText(texts, content, "这一页还没有配置", 0, -40, 18, INK, 360, 36);
     sizeScroll(content, slotRows(shown) * HERO_PITCH_Y + 20, 400);
     return;
   }
   const shown = paddedSlots(book.length);
   for (let i = 0; i < shown; i++) {
     const profile = i < book.length ? book[i] : null;
+    const cell = spawnPrefab(cells, content);
     if (!profile) {
-      place(heroCell(null, false, null, false), content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
+      bindHeroCell(cell, null, false, null, false);
+      place(cell, content, gridX(i, -162, HERO_PITCH_X), gridY(i, -52, HERO_PITCH_Y));
       continue;
     }
     const owned = heroByType(profile.type);
-    const cell = heroCell(
+    bindHeroCell(
+      cell,
       owned || { heroId: null, heroType: profile.type, name: profile.name, level: null, star: profile.star, fighting: null },
       owned ? deployed.has(owned.heroId || 0) : false,
       () => {
@@ -2127,57 +2182,78 @@ function writeStageTitle(view: Node, text: string, wide: boolean): void {
 function showSkillCard(view: Node, skillId: number, level: number | null): void {
   const page = heroSkillPage(skillId, level);
   const host = overlayHost(view);
-  void mountNested(host, HERO_SKILL_BOARD, "SkillHold").then((card) => {
-    if (!host.isValid) return;
-    const old = host.getChildByName("SkillCard");
-    if (old) old.destroy();
-    if (!card || !card.isValid || !page) {
-      if (card && card.isValid) card.destroy();
-      showInfoCard(view, {
-        icon: "ui/hero/skill-icon_" + skillId,
-        fallback: "ui/hero/hero-icon_spr-default",
-        title: page ? page.name : "技能 " + skillId,
-        typeLine: page && page.name === "普攻" ? "普攻" : "技能类型",
-        body: page ? page.blurb || " " : "没有这条技能",
-      });
-      return;
+  if (!page) {
+    showInfoCard(view, {
+      icon: "ui/hero/skill-icon_" + skillId,
+      fallback: "ui/hero/hero-icon_spr-default",
+      title: "技能 " + skillId,
+      typeLine: "技能类型",
+      body: "没有这条技能",
+    });
+    return;
+  }
+  void Promise.all([loadPrefab(HERO_SKILL_BOARD), loadPrefab(DIM_SHEET)]).then(
+    (loaded) => {
+      if (!host.isValid) return;
+      const old = host.getChildByName("SkillCard");
+      if (old) old.destroy();
+      const root = spawnPrefab(loaded[1], host);
+      root.name = "SkillCard";
+      root.setSiblingIndex(Math.max(0, host.children.length - 1));
+      const mid = seatDim(root, host, 80);
+      const close = () => {
+        if (root.isValid) root.destroy();
+      };
+      bindDimClose(root, close);
+      const card = spawnPrefab(loaded[0], root);
+      card.setPosition(mid.x - 200, mid.y - 250, 0);
+      if (!card.getComponent(BlockInputEvents)) card.addComponent(BlockInputEvents);
+      silenceBigMenus(card);
+      writeKeep(card, "lbl_name", page.name);
+      writeKeep(card, "lbl_active_type", page.name === "普攻" ? "普攻" : "技能类型");
+      writeWrap(card, "lbl_info_1", page.blurb || " ");
+      const tip = findNamed(card, "node_level_tip");
+      if (tip) tip.active = page.next.length > 0;
+      if (page.next) writeWrap(card, "lbl_next_level_des", page.next);
+      const icon = findNamed(card, "spr_icon");
+      if (icon) paintFirst(icon, ["ui/hero/skill-icon_" + skillId, "ui/hero/hero-icon_spr-default"]);
+      const shut = findNamed(card, "btn_close");
+      if (shut) {
+        if (!shut.getComponent(Button)) shut.addComponent(Button);
+        shut.on(Button.EventType.CLICK, close);
+      } else GameLog.shared.warn("Hero", "HeroSkillInfoLayer 没有 btn_close");
+    },
+    (err) => {
+      GameLog.shared.warn("Hero", "技能窗没有挂上 " + messageOf(err));
     }
-    const root = uiNode("SkillCard");
-    place(root, host, 0, 0);
-    root.setSiblingIndex(Math.max(0, host.children.length - 1));
-    const box = host.getComponent(UITransform);
-    const cardSize = positiveUiSize(box);
-    const width = cardSize && cardSize.width > 8 ? cardSize.width : 640;
-    const height = cardSize && cardSize.height > 8 ? cardSize.height : 960;
-    const ax = box ? box.anchorPoint.x : 0;
-    const ay = box ? box.anchorPoint.y : 0;
-    const midX = (0.5 - ax) * width;
-    const midY = (0.5 - ay) * height;
-    const dim = createRect("dim", width + 80, height + 80, new Color(0, 0, 0, 140));
-    place(dim, root, midX, midY);
-    if (!dim.getComponent(Button)) dim.addComponent(Button);
-    const close = () => {
-      if (root.isValid) root.destroy();
-    };
-    dim.on(Button.EventType.CLICK, close);
-    card.parent = root;
-    card.setPosition(midX - 200, midY - 250, 0);
-    card.addComponent(BlockInputEvents);
-    silenceBigMenus(card);
-    writeKeep(card, "lbl_name", page.name);
-    writeKeep(card, "lbl_active_type", page.name === "普攻" ? "普攻" : "技能类型");
-    writeWrap(card, "lbl_info_1", page.blurb || " ");
-    const tip = findNamed(card, "node_level_tip");
-    if (tip) tip.active = page.next.length > 0;
-    if (page.next) writeWrap(card, "lbl_next_level_des", page.next);
-    const icon = findNamed(card, "spr_icon");
-    if (icon) paintFirst(icon, ["ui/hero/skill-icon_" + skillId, "ui/hero/hero-icon_spr-default"]);
-    const shut = findNamed(card, "btn_close");
-    if (shut) {
-      if (!shut.getComponent(Button)) shut.addComponent(Button);
-      shut.on(Button.EventType.CLICK, close);
-    }
-  });
+  );
+}
+
+/** DimSheet 自带暗底和按钮。按宿主锚点把暗底放到画面中间。 */
+function seatDim(root: Node, host: Node, pad: number): { x: number; y: number } {
+  const box = host.getComponent(UITransform);
+  const cardSize = positiveUiSize(box);
+  const width = cardSize && cardSize.width > 8 ? cardSize.width : 640;
+  const height = cardSize && cardSize.height > 8 ? cardSize.height : 960;
+  const ax = box ? box.anchorPoint.x : 0;
+  const ay = box ? box.anchorPoint.y : 0;
+  const midX = (0.5 - ax) * width;
+  const midY = (0.5 - ay) * height;
+  const dim = root.getChildByName("dim");
+  if (!dim) {
+    GameLog.shared.warn("UI", root.name + " 下没有 dim");
+    return { x: midX, y: midY };
+  }
+  assignContentSize(dim.getComponent(UITransform), width + pad, height + pad);
+  dim.setPosition(midX, midY, 0);
+  return { x: midX, y: midY };
+}
+
+function bindDimClose(root: Node, close: () => void): void {
+  const dim = root.getChildByName("dim");
+  if (!dim) return;
+  if (!dim.getComponent(Button)) dim.addComponent(Button);
+  dim.on(Button.EventType.CLICK, close);
 }
 
 /** HeroInfoAttrLayer 只有滚动区，没有关闭钮。点暗处收起。不发升级。 */
@@ -2192,49 +2268,45 @@ function showAttrBoard(view: Node, hero: StoreHero): void {
   ];
   if (hero.fighting !== null) lines.push("战力 " + String(hero.fighting));
   const host = overlayHost(view);
-  void mountNested(host, HERO_ATTR_BOARD, "AttrHold").then((card) => {
-    if (!host.isValid) return;
-    const old = host.getChildByName("AttrCard");
-    if (old) old.destroy();
-    if (!card || !card.isValid) {
-      if (card && card.isValid) card.destroy();
-      GameLog.shared.warn("Hero", "HeroInfoAttrLayer 没有挂上");
+  void Promise.all([loadPrefab(HERO_ATTR_BOARD), loadPrefab(DIM_SHEET)]).then(
+    (loaded) => {
+      if (!host.isValid) return;
+      const old = host.getChildByName("AttrCard");
+      if (old) old.destroy();
+      const root = spawnPrefab(loaded[1], host);
+      root.name = "AttrCard";
+      root.setSiblingIndex(Math.max(0, host.children.length - 1));
+      const mid = seatDim(root, host, 80);
+      const close = () => {
+        if (root.isValid) root.destroy();
+      };
+      bindDimClose(root, close);
+      const card = spawnPrefab(loaded[0], root);
+      card.setPosition(mid.x - 190, mid.y - 240, 0);
+      if (!card.getComponent(BlockInputEvents)) card.addComponent(BlockInputEvents);
+      silenceBigMenus(card);
+      const scroll = findNamed(card, "scroll_view");
+      const content = scroll ? scroll.getChildByName("content") : null;
+      if (!content) {
+        GameLog.shared.warn("Hero", "HeroInfoAttrLayer 的 scroll_view 下没有 content");
+        return;
+      }
+      for (let i = 0; i < 5; i++) {
+        const line = content.getChildByName("lbl_line" + i);
+        if (!line) {
+          if (i < lines.length) GameLog.shared.warn("Hero", "属性行没有 lbl_line" + i);
+          continue;
+        }
+        const show = i < lines.length;
+        line.active = show;
+        if (show) setText(line, lines[i]);
+      }
+    },
+    (err) => {
+      GameLog.shared.warn("Hero", "HeroInfoAttrLayer 没有挂上 " + messageOf(err));
       flashToast(view, "属性窗没有挂上");
-      return;
     }
-    const root = uiNode("AttrCard");
-    place(root, host, 0, 0);
-    root.setSiblingIndex(Math.max(0, host.children.length - 1));
-    const box = host.getComponent(UITransform);
-    const cardSize = positiveUiSize(box);
-    const width = cardSize && cardSize.width > 8 ? cardSize.width : 640;
-    const height = cardSize && cardSize.height > 8 ? cardSize.height : 960;
-    const ax = box ? box.anchorPoint.x : 0;
-    const ay = box ? box.anchorPoint.y : 0;
-    const midX = (0.5 - ax) * width;
-    const midY = (0.5 - ay) * height;
-    const dim = createRect("dim", width + 80, height + 80, new Color(0, 0, 0, 140));
-    place(dim, root, midX, midY);
-    if (!dim.getComponent(Button)) dim.addComponent(Button);
-    const close = () => {
-      if (root.isValid) root.destroy();
-    };
-    dim.on(Button.EventType.CLICK, close);
-    card.parent = root;
-    card.setPosition(midX - 190, midY - 240, 0);
-    card.addComponent(BlockInputEvents);
-    silenceBigMenus(card);
-    const scroll = findNamed(card, "scroll_view");
-    const viewNode = scroll ? scroll.getChildByName("view") : null;
-    const content = viewNode ? viewNode.getChildByName("content") : null;
-    const column = content || scroll || card;
-    const linesNode = uiNode("AttrLines");
-    const left = content ? 164 : 0;
-    place(linesNode, column, 0, 0);
-    for (let i = 0; i < lines.length; i++) {
-      place(createLabel(lines[i], 22, { color: INK, width: 280, height: 36, align: "left" }), linesNode, left, -36 - i * 48);
-    }
-  });
+  );
 }
 
 function writeWrap(root: Node, name: string, text: string): void {
@@ -2306,26 +2378,32 @@ function fillGrowBoard(
   }
   const menu = findNamed(board, "skill_menu");
   if (menu) {
-    const old = menu.children.slice();
-    for (let i = 0; i < old.length; i++) {
-      if (old[i].name.indexOf("skill") === 0) old[i].destroy();
-    }
     const skills = profile ? profile.skills : [];
     const n = skills.length < 4 ? skills.length : 4;
-    for (let i = 0; i < n; i++) {
+    if (!menu.getChildByName("skill0")) GameLog.shared.warn("Hero", "skill_menu 下没有 skill0");
+    for (let i = 0; i < 4; i++) {
+      const slot = menu.getChildByName("skill" + i);
+      if (!slot) continue;
+      const show = i < n;
+      slot.active = show;
+      if (!show) continue;
       const skill = skills[i];
-      const icon = sprite("skill" + i, 48, 48, "ui/hero/skill-icon_" + skill.id, "ui/hero/hero-icon_spr-default");
       // 技能条 CCSprite_1 锚在 (0, 86)，和 skill_menu 原点重合。图标绕这条的中心排。
-      place(icon, menu, (i - (n - 1) / 2) * 70, 0);
-      const opened = skill.id;
+      slot.setPosition((i - (n - 1) / 2) * 70, 0, 0);
+      paintFirst(slot, ["ui/hero/skill-icon_" + skill.id, "ui/hero/hero-icon_spr-default"]);
       const openedLevel = step && i < step.skillLevels.length ? step.skillLevels[i] : null;
-      if (openedLevel !== null) {
-        const badge = sprite("badge" + i, 20, 20, HERO_SKILL_BADGE_ART);
-        place(badge, icon, HERO_SKILL_BADGE_OFFSET.x, HERO_SKILL_BADGE_OFFSET.y);
-        place(createLabel(String(openedLevel), 14, { color: new Color(0, 0, 0, 255), width: 20, height: 20 }), badge, 0, 0);
+      const badge = slot.getChildByName("badge");
+      if (badge) {
+        badge.active = openedLevel !== null;
+        if (openedLevel !== null) {
+          badge.setPosition(HERO_SKILL_BADGE_OFFSET.x, HERO_SKILL_BADGE_OFFSET.y, 0);
+          const mark = badge.getChildByName("lbl");
+          if (mark) setText(mark, String(openedLevel));
+        }
+      } else if (openedLevel !== null) {
+        GameLog.shared.warn("Hero", "skill" + i + " 下没有 badge");
       }
-      if (!icon.getComponent(Button)) icon.addComponent(Button);
-      icon.on(Button.EventType.CLICK, () => showSkillCard(view, opened, openedLevel));
+      bindSkillFace(slot, view, skill.id, openedLevel);
     }
     const box = menu.getComponent(UITransform);
     if (box) box.setContentSize(0, 0);
@@ -2343,16 +2421,13 @@ function fillStarBoard(view: Node, board: Node, hero: StoreHero, profile: HeroPr
   writeKeep(board, "lbl_now_next_level", maxed ? "—" : nxt ? String(nxt.levelLimit) : "—");
   paintStarMarks(findNamed(board, "node_cur_star"), star);
   const nextStars = findNamed(board, "node_next_star");
+  const maxStar = nextStars ? nextStars.getChildByName("MaxStar") : null;
   if (maxed) {
     paintStarMarks(nextStars, 0);
-    if (nextStars && !nextStars.getChildByName("MaxStar")) {
-      const line = createLabel("已满星", 14, { color: INK, width: 80, height: 22 });
-      line.name = "MaxStar";
-      place(line, nextStars, 0, 0);
-    }
+    if (maxStar) maxStar.active = true;
+    else if (nextStars) GameLog.shared.warn("Hero", "node_next_star 下没有 MaxStar");
   } else {
-    const oldMax = nextStars ? nextStars.getChildByName("MaxStar") : null;
-    if (oldMax) oldMax.destroy();
+    if (maxStar) maxStar.active = false;
     paintStarMarks(nextStars, star + 1);
   }
   const speed = findNamed(board, "lbl_upgrade_speed");
@@ -2393,39 +2468,76 @@ function fillStarBoard(view: Node, board: Node, hero: StoreHero, profile: HeroPr
 }
 
 function paintStarCostRow(board: Node, hero: StoreHero, nxt: StarStep | null): void {
-  const scroll = findNamed(board, "scroll_view");
-  if (!scroll) return;
-  const old = scroll.getChildByName("CostRow");
-  if (old) old.destroy();
-  const row = uiNode("CostRow");
-  place(row, scroll, 24, 70);
-  if (!nxt) {
-    place(createLabel("已满星", 14, { color: INK, width: 120, height: 22 }), row, 40, 0);
+  const row = findNamed(board, "CostRow");
+  if (!row) {
+    GameLog.shared.warn("Hero", "升星没有 CostRow");
     return;
   }
+  const full = row.getChildByName("lbl_full");
+  const need = row.getChildByName("lbl_need");
+  const nums = namedChildren(row, "lbl_num");
+  if (!nxt) {
+    if (full) {
+      full.active = true;
+      setText(full, "已满星");
+    } else GameLog.shared.warn("Hero", "CostRow 下没有 lbl_full");
+    if (need) need.active = false;
+    for (let i = 0; i < 4; i++) {
+      const cell = row.getChildByName("cost" + i);
+      if (cell) cell.active = false;
+      if (nums[i]) nums[i].active = false;
+    }
+    return;
+  }
+  if (full) full.active = false;
   const stacks = nxt.cost.concat(nxt.needItem);
   const icons = stacks.length < 4 ? stacks.length : 4;
-  for (let i = 0; i < icons; i++) {
+  for (let i = 0; i < 4; i++) {
+    const cell = row.getChildByName("cost" + i);
+    const num = nums[i] || null;
+    const show = i < icons;
+    if (cell) cell.active = show;
+    if (num) num.active = show;
+    if (!show || !cell) {
+      if (show && !cell) GameLog.shared.warn("Hero", "CostRow 下没有 cost" + i);
+      continue;
+    }
     const stack = stacks[i];
     const face = itemProfile(stack.itemType, null);
     const icon = face && face.icon ? face.icon : "ui/bag/backpack_" + stack.itemType;
     const owned = knownBagCount(stack.itemType);
-    const cell = sprite("cost" + i, 48, 48, rareFrame(face ? face.rare : 0));
-    place(cell, row, i * 64, 10);
-    const image = sprite("icon", 40, 40, icon, "ui/bag/backpack_spr-default");
-    place(image, cell, 0, 0);
-    if (owned !== null && owned < stack.num) {
+    paintSprite(cell, rareFrame(face ? face.rare : 0));
+    const image = cell.getChildByName("spr_icon");
+    if (image) {
+      paintFirst(image, [icon, "ui/bag/backpack_spr-default"]);
       const gray = image.getComponent(Sprite);
-      if (gray) gray.grayscale = true;
+      if (gray) gray.grayscale = owned !== null && owned < stack.num;
+    } else GameLog.shared.warn("Hero", "cost" + i + " 下没有 spr_icon");
+    if (num) {
+      setText(num, "×" + stack.num);
+      const label = num.getComponent(Label);
+      if (label) label.color = owned !== null && owned < stack.num ? SHORT : INK;
     }
-    place(createLabel("×" + stack.num, 12, { color: owned !== null && owned < stack.num ? SHORT : INK, width: 48, height: 16 }), row, i * 64, -28);
   }
   const needs = heroStarNeeds(hero.heroType, nxt.star);
-  if (needs.length > 0) {
-    const bits: string[] = [];
-    for (let i = 0; i < needs.length && bits.length < 2; i++) bits.push(sacrificeLine(needs[i]));
-    place(createLabel(bits.join("  "), 12, { color: INK, width: 160, height: 36 }), row, 250, 0);
+  if (!need) return;
+  if (needs.length === 0) {
+    need.active = false;
+    return;
   }
+  const bits: string[] = [];
+  for (let i = 0; i < needs.length && bits.length < 2; i++) bits.push(sacrificeLine(needs[i]));
+  need.active = true;
+  setText(need, bits.join("  "));
+}
+
+function namedChildren(node: Node, name: string): Node[] {
+  const found: Node[] = [];
+  const kids = node.children;
+  for (let i = 0; i < kids.length; i++) {
+    if (kids[i].name === name) found.push(kids[i]);
+  }
+  return found;
 }
 
 function costNum(stacks: { itemType: number; num: number }[], itemType: number): number | null {
@@ -2516,15 +2628,33 @@ function flashToast(view: Node, text: string): void {
   const layer = sheet && sheet.isValid ? sheet : shell && shell.isValid ? shell : view;
   const old = layer.getChildByName("ReadToast");
   if (old) old.destroy();
-  const node = createLabel(text, 22, { color: CREAM, width: 520, height: 40 });
-  node.name = "ReadToast";
-  place(node, layer, 0, 180);
-  node.setSiblingIndex(Math.max(0, layer.children.length - 1));
-  const timer = setTimeout(() => {
-    if (node.isValid) node.destroy();
-  }, 1600);
-  const maybe = timer as { unref?: () => void };
-  if (typeof maybe.unref === "function") maybe.unref();
+  void loadPrefab(TEXT_CHIP).then(
+    (prefab) => {
+      if (!layer.isValid) return;
+      const again = layer.getChildByName("ReadToast");
+      if (again) again.destroy();
+      const node = spawnPrefab(prefab, layer);
+      node.name = "ReadToast";
+      const label = node.getComponent(Label);
+      if (label) {
+        label.string = text;
+        label.fontSize = 22;
+        label.lineHeight = 26;
+        label.color = CREAM;
+      }
+      assignContentSize(node.getComponent(UITransform), 520, 40);
+      place(node, layer, 0, 180);
+      node.setSiblingIndex(Math.max(0, layer.children.length - 1));
+      const timer = setTimeout(() => {
+        if (node.isValid) node.destroy();
+      }, 1600);
+      const maybe = timer as { unref?: () => void };
+      if (typeof maybe.unref === "function") maybe.unref();
+    },
+    (err) => {
+      GameLog.shared.warn("UI", "TextChip 没有挂上 " + messageOf(err));
+    }
+  );
 }
 
 function mountNested(parent: Node, path: string, name: string): Promise<Node | null> {
@@ -2545,74 +2675,73 @@ function mountNested(parent: Node, path: string, name: string): Promise<Node | n
 
 function showBagInfo(view: Node, item: StoreBagItem): void {
   const spec = bagCard(item);
-  void mountNested(view, BAG_INFO_BOARD, "BagInfoHold").then((card) => {
-    if (!view.isValid) return;
-    const old = view.getChildByName("InfoCard");
-    if (old) old.destroy();
-    if (!card || !card.isValid) {
-      showInfoCard(view, spec);
-      return;
-    }
-    card.removeFromParent();
-    const root = uiNode("InfoCard");
-    place(root, view, 0, 0);
-    root.setSiblingIndex(Math.max(0, view.children.length - 1));
-    const dim = createRect("dim", 720, 1100, new Color(0, 0, 0, 140));
-    place(dim, root, 320, 480);
-    if (!dim.getComponent(Button)) dim.addComponent(Button);
-    const close = () => {
-      if (root.isValid) root.destroy();
-    };
-    dim.on(Button.EventType.CLICK, close);
-    card.parent = root;
-    card.setPosition(125, 330, 0);
-    card.addComponent(BlockInputEvents);
-    silenceBigMenus(card);
-    const bg = findNamed(card, "spr_bg");
-    if (bg) bg.setPosition(195, 148, 0);
-    writeKeep(card, "lbl_prop_name", spec.title);
-    writeKeep(card, "lbl_prop_type", spec.typeLine);
-    const desc = findNamed(card, "lbl_desc");
-    if (desc) {
-      desc.active = true;
-      setText(desc, spec.body || " ");
-    }
-    const icon = findNamed(card, "spr_icon");
-    if (icon) {
-      paintFirst(icon, [spec.icon, spec.fallback || "ui/bag/backpack_spr-default"]);
-      if (icon.parent && spec.frame) {
-        const frame = sprite("RareFrame", 108, 108, spec.frame);
-        place(frame, icon.parent, icon.position.x, icon.position.y);
-        frame.setSiblingIndex(icon.getSiblingIndex());
+  void Promise.all([loadPrefab(BAG_INFO_BOARD), loadPrefab(DIM_SHEET)]).then(
+    (loaded) => {
+      if (!view.isValid) return;
+      const old = view.getChildByName("InfoCard");
+      if (old) old.destroy();
+      const root = spawnPrefab(loaded[1], view);
+      root.name = "InfoCard";
+      root.setSiblingIndex(Math.max(0, view.children.length - 1));
+      const dim = root.getChildByName("dim");
+      if (dim) {
+        assignContentSize(dim.getComponent(UITransform), 720, 1100);
+        dim.setPosition(320, 480, 0);
+      } else GameLog.shared.warn("Bag", "InfoCard 下没有 dim");
+      const close = () => {
+        if (root.isValid) root.destroy();
+      };
+      bindDimClose(root, close);
+      const card = spawnPrefab(loaded[0], root);
+      card.setPosition(125, 330, 0);
+      if (!card.getComponent(BlockInputEvents)) card.addComponent(BlockInputEvents);
+      silenceBigMenus(card);
+      const bg = findNamed(card, "spr_bg");
+      if (bg) bg.setPosition(195, 148, 0);
+      writeKeep(card, "lbl_prop_name", spec.title);
+      writeKeep(card, "lbl_prop_type", spec.typeLine);
+      const desc = findNamed(card, "lbl_desc");
+      if (desc) {
+        desc.active = true;
+        setText(desc, spec.body || " ");
       }
+      const icon = findNamed(card, "spr_icon");
+      if (icon) paintFirst(icon, [spec.icon, spec.fallback || "ui/bag/backpack_spr-default"]);
+      const rare = findNamed(card, "spr_rare");
+      if (rare && spec.frame) paintSprite(rare, spec.frame);
+      else if (spec.frame) GameLog.shared.warn("Bag", "BackpackInfoLayer 下没有 spr_rare");
+      const use = findNamed(card, "btn_enter");
+      if (use) {
+        use.active = true;
+        setGray(use, true);
+        fitButton(use, "使用", 22);
+        if (!use.getComponent(Button)) use.addComponent(Button);
+        use.on(Button.EventType.CLICK, () => {
+          GameLog.shared.info("Bag", "背包使用停用，不发 5004–5009");
+          flashToast(view, "不发使用协议");
+        });
+      }
+      const detail = findNamed(card, "btn_detail");
+      if (detail) detail.active = false;
+      const decompose = findNamed(card, "btn_decompose");
+      if (decompose) decompose.active = false;
+      const src = findNamed(card, "btn_src");
+      if (src) {
+        setGray(src, true);
+        if (!src.getComponent(Button)) src.addComponent(Button);
+        src.on(Button.EventType.CLICK, () => flashToast(view, "来源只读，不跳转"));
+      }
+      const shut = findNamed(card, "btn_close");
+      if (shut) {
+        if (!shut.getComponent(Button)) shut.addComponent(Button);
+        shut.on(Button.EventType.CLICK, close);
+      }
+    },
+    (err) => {
+      GameLog.shared.warn("Bag", "背包详情没有挂上 " + messageOf(err));
+      showInfoCard(view, spec);
     }
-    const use = findNamed(card, "btn_enter");
-    if (use) {
-      use.active = true;
-      setGray(use, true);
-      fitButton(use, "使用", 22);
-      if (!use.getComponent(Button)) use.addComponent(Button);
-      use.on(Button.EventType.CLICK, () => {
-        GameLog.shared.info("Bag", "背包使用停用，不发 5004–5009");
-        flashToast(view, "不发使用协议");
-      });
-    }
-    const detail = findNamed(card, "btn_detail");
-    if (detail) detail.active = false;
-    const decompose = findNamed(card, "btn_decompose");
-    if (decompose) decompose.active = false;
-    const src = findNamed(card, "btn_src");
-    if (src) {
-      setGray(src, true);
-      if (!src.getComponent(Button)) src.addComponent(Button);
-      src.on(Button.EventType.CLICK, () => flashToast(view, "来源只读，不跳转"));
-    }
-    const shut = findNamed(card, "btn_close");
-    if (shut) {
-      if (!shut.getComponent(Button)) shut.addComponent(Button);
-      shut.on(Button.EventType.CLICK, close);
-    }
-  });
+  );
 }
 
 function hideNamed(root: Node, name: string): void {
@@ -2691,14 +2820,16 @@ function seatOnPanel(board: Node, panel: Node, contentY: number): void {
 
 function paintStarMarks(host: Node | null, count: number): void {
   if (!host) return;
-  const old = host.children.slice();
-  for (let i = 0; i < old.length; i++) {
-    if (old[i].name !== "MaxStar") old[i].destroy();
+  if (!host.getChildByName("star0")) {
+    GameLog.shared.warn("Hero", host.name + " 下没有 star0");
+    return;
   }
   const n = count > 5 ? 5 : count < 0 ? 0 : Math.floor(count);
-  for (let i = 0; i < n; i++) {
-    const star = sprite("star", 22, 22, "ui/hero/hero-info_spr-star-1");
-    place(star, host, (i - (n - 1) / 2) * 24, 0);
+  for (let i = 0; i < 5; i++) {
+    const star = host.getChildByName("star" + i);
+    if (!star) continue;
+    star.active = i < n;
+    if (i < n) star.setPosition((i - (n - 1) / 2) * 24, 0, 0);
   }
 }
 
@@ -2770,34 +2901,6 @@ interface InfoCard {
   body: string;
   frame?: string;
   fallback?: string;
-}
-
-/** 英雄列表和详情还没有滚动预制，这里现造。背包不走这里。 */
-function gridScroll(parent: Node, name: string, x: number, y: number, width: number, height: number): Node {
-  let view = parent.getChildByName(name);
-  if (!view) {
-    view = uiNode(name);
-    const ui = view.addComponent(UITransform);
-    ui.setContentSize(width, height);
-    ui.setAnchorPoint(0.5, 1);
-    const mask = view.addComponent(Mask);
-    mask.type = Mask.Type.GRAPHICS_RECT;
-    const scroll = view.addComponent(ScrollView);
-    scroll.vertical = true;
-    scroll.horizontal = false;
-    scroll.inertia = true;
-    scroll.elastic = true;
-    scroll.cancelInnerEvents = true;
-    const content = uiNode("content");
-    const box = content.addComponent(UITransform);
-    box.setAnchorPoint(0.5, 1);
-    box.setContentSize(width, height);
-    place(content, view, 0, 0);
-    scroll.content = content;
-    place(view, parent, x, y);
-  }
-  const content = view.getChildByName("content");
-  return content || view;
 }
 
 function sizeScroll(content: Node, height: number, minHeight: number): void {
@@ -2981,37 +3084,43 @@ function bagTabTitle(tab: BagTab): string {
 }
 
 function showInfoCard(view: Node, spec: InfoCard): void {
-  const old = view.getChildByName("InfoCard");
-  if (old) old.destroy();
-  const root = uiNode("InfoCard");
-  place(root, view, 0, 0);
-  root.setSiblingIndex(Math.max(0, view.children.length - 1));
-  const dim = createRect("dim", 640, 960, new Color(0, 0, 0, 140));
-  place(dim, root, 320, 480);
-  if (!dim.getComponent(Button)) dim.addComponent(Button);
-  dim.on(Button.EventType.CLICK, () => {
-    if (root.isValid) root.destroy();
-  });
-  const card = uiNode("card");
-  const ui = card.addComponent(UITransform);
-  ui.setContentSize(390, 300);
-  card.addComponent(BlockInputEvents);
-  const bg = sprite("bg", 390, 300, "ui/common/win-bg_block-bg-24");
-  const bgImage = bg.getComponent(Sprite);
-  if (bgImage) bgImage.type = Sprite.Type.SLICED;
-  place(bg, card, 0, 0);
-  place(card, root, 320, 500);
-  place(sprite("frame", 88, 88, spec.frame || "ui/bag/backpack_item-frame-1"), card, -120, 70);
-  place(sprite("icon", 72, 72, spec.icon, spec.fallback), card, -120, 74);
-  place(createLabel(spec.title, 22, { color: NAME_GREEN, width: 220, height: 36, align: "left" }), card, 30, 96);
-  place(createLabel(spec.typeLine, 16, { color: CREAM, width: 220, height: 48, align: "left" }), card, 30, 52);
-  place(createLabel(spec.body || " ", 16, { color: DESC, width: 340, height: 140, align: "left" }), card, 0, -46);
-  const close = sprite("close", 44, 44, "ui/common/button_btn-close-1");
-  place(close, card, 165, 128);
-  if (!close.getComponent(Button)) close.addComponent(Button);
-  close.on(Button.EventType.CLICK, () => {
-    if (root.isValid) root.destroy();
-  });
+  void loadPrefab(INFO_CARD).then(
+    (prefab) => {
+      if (!view.isValid) return;
+      const old = view.getChildByName("InfoCard");
+      if (old) old.destroy();
+      const root = spawnPrefab(prefab, view);
+      root.name = "InfoCard";
+      root.setSiblingIndex(Math.max(0, view.children.length - 1));
+      const close = () => {
+        if (root.isValid) root.destroy();
+      };
+      bindDimClose(root, close);
+      const card = root.getChildByName("card");
+      if (!card) {
+        GameLog.shared.warn("UI", "InfoCard 下没有 card");
+        return;
+      }
+      const frame = card.getChildByName("spr_frame");
+      if (frame) paintSprite(frame, spec.frame || "ui/bag/backpack_item-frame-1");
+      const icon = card.getChildByName("spr_icon");
+      if (icon) paintFirst(icon, [spec.icon, spec.fallback || "ui/bag/backpack_spr-default"]);
+      const title = card.getChildByName("lbl_title");
+      if (title) setText(title, spec.title);
+      const kind = card.getChildByName("lbl_type");
+      if (kind) setText(kind, spec.typeLine);
+      const body = card.getChildByName("lbl_body");
+      if (body) setText(body, spec.body || " ");
+      const shut = card.getChildByName("btn_close");
+      if (shut) {
+        if (!shut.getComponent(Button)) shut.addComponent(Button);
+        shut.on(Button.EventType.CLICK, close);
+      } else GameLog.shared.warn("UI", "InfoCard 下没有 btn_close");
+    },
+    (err) => {
+      GameLog.shared.warn("UI", "InfoCard 没有挂上 " + messageOf(err));
+    }
+  );
 }
 
 function currentStageIdx(): number {

@@ -5,7 +5,7 @@
  * 通关奖励用已有 ChapterRewardLayer / ChapterExtraRewardCell / ChapterRewardCell。
  * 领取不发 3011。出战只放当前关，仍由调用方走原来的战斗。
  */
-import { Button, Color, Mask, Node, resources, ScrollView, Sprite, SpriteFrame, UITransform, Vec2 } from "cc";
+import { Button, Label, Node, resources, ScrollView, Sprite, SpriteFrame, UITransform, Vec2 } from "cc";
 import { chapterPlaceLabel, itemIconResource } from "../config/gameCatalog";
 import { chapterExtraRewards, chapterMapStages, chapterStageFace, ChapterExtraFace } from "../config/rosterCatalog";
 import { GameLog } from "../core/GameLog";
@@ -13,31 +13,24 @@ import { GameStore } from "../core/GameStore";
 import {
   CHAPTER_EXTRA_CELL_H,
   CHAPTER_EXTRA_CELL_W,
-  CHAPTER_MAP_H,
-  CHAPTER_MAP_W,
-  CHAPTER_REWARD_BOX_H,
   CHAPTER_REWARD_BOX_W,
-  chapterMapCloseSeat,
   chapterMapResource,
-  chapterMapRewardSeat,
-  chapterMapStageStripY,
-  chapterMapTitleY,
   extraRewardProgress,
   extraRewardTipPath,
   fillRewardTip,
   mainlineClearedCount,
 } from "./chapterBoardPlan";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
-import { createLabel, place, setText, uiNode } from "./UiKit";
+import { place, setText } from "./UiKit";
 
-const INK = new Color(122, 71, 45, 255);
-const CREAM = new Color(255, 236, 190, 255);
 const STRIP_W = 600;
-const STRIP_H = 52;
 const CHIP_W = 88;
 
 const EXTRA_CELL = "prefabs/ui/chapter/ChapterExtraRewardCell";
 const REWARD_CELL = "prefabs/ui/chapter/ChapterRewardCell";
+const CHAPTER_MAP = "prefabs/ui/chapter/ChapterMapLayer";
+const STAGE_CHIP = "prefabs/ui/chapter/ChapterStageChip";
+const TEXT_CHIP = "prefabs/ui/common/TextChip";
 export const CHAPTER_REWARD_PREFAB = "prefabs/ui/chapter/ChapterRewardLayer";
 
 export function mountChapterMap(
@@ -48,77 +41,128 @@ export function mountChapterMap(
   const known = synced();
   const face = known ? chapterStageFace(live) : null;
   const map = chapterMapResource(face ? face.map : "");
-  const art = uiNode("ChapterMap");
-  const artUi = art.addComponent(UITransform);
-  artUi.setContentSize(CHAPTER_MAP_W, CHAPTER_MAP_H);
-  const image = art.addComponent(Sprite);
-  image.sizeMode = Sprite.SizeMode.CUSTOM;
-  place(art, sheet, 0, 0);
-  if (!map) {
-    GameLog.shared.info("Mainline", "这一关没有章节地图，关卡列表仍在");
-  } else {
-    paintSprite(art, map, "章节地图 " + map + " 没有挂上，关卡列表仍在");
-  }
-  const caption = mapCaption(live, known, face ? face.name : "");
-  const title = createLabel(caption, 22, { color: CREAM, width: 420, height: 36 });
-  title.name = "ChapterMapTitle";
-  place(title, art, 0, chapterMapTitleY());
-  const closeSeat = chapterMapCloseSeat();
-  const close = spriteButton("MapClose", 55, 58, "ui/common/button_btn-close-1", actions.onClose);
-  place(close, art, closeSeat.x, closeSeat.y);
-  const rewardSeat = chapterMapRewardSeat();
-  const reward = spriteButton("MapReward", 136, 38, "ui/chapter-reward-lang/chapter-reward-lang_btn-reward-1", actions.onReward);
-  place(reward, art, rewardSeat.x, rewardSeat.y);
-  const stages = known ? chapterMapStages(live) : [];
-  const strip = hScroll(art, "StageStrip", 0, chapterMapStageStripY(), STRIP_W, STRIP_H);
-  if (stages.length === 0) {
-    place(createLabel(known ? "这一关没有同图关卡" : "主线未同步", 16, { color: CREAM, width: 280, height: 28 }), strip.content, 80, 0);
-    return;
-  }
-  const content = strip.content;
-  const box = content.getComponent(UITransform);
-  const width = stages.length * CHIP_W;
-  if (box) box.setContentSize(width, STRIP_H);
-  let current = 0;
-  for (let i = 0; i < stages.length; i++) {
-    const stage = stages[i];
-    if (stage.idx === live) current = i;
-    const on = stage.idx === live;
-    const chip = spriteButton(
-      "stage-" + stage.idx,
-      CHIP_W - 8,
-      40,
-      on ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23",
-      () => actions.onStage(stage.idx)
-    );
-    place(createLabel("第" + stage.missionId + "关", 14, { color: INK, width: CHIP_W - 12, height: 24 }), chip, 0, 0);
-    place(chip, content, i * CHIP_W + CHIP_W / 2, 0);
-  }
-  scrollStrip(strip.scroll, current, width);
+  const old = sheet.getChildByName("ChapterMap");
+  if (old) old.destroy();
+  void loadPrefab(CHAPTER_MAP).then(
+    (prefab) => {
+      if (!sheet.isValid) return;
+      const art = spawnPrefab(prefab, sheet);
+      art.name = "ChapterMap";
+      art.setPosition(0, 0, 0);
+      const image = art.getComponent(Sprite);
+      if (image) image.sizeMode = Sprite.SizeMode.CUSTOM;
+      if (!map) {
+        GameLog.shared.info("Mainline", "这一关没有章节地图，关卡列表仍在");
+      } else {
+        paintSprite(art, map, "章节地图 " + map + " 没有挂上，关卡列表仍在");
+      }
+      const caption = mapCaption(live, known, face ? face.name : "");
+      const title = art.getChildByName("ChapterMapTitle");
+      if (title) setText(title, caption);
+      else GameLog.shared.warn("Mainline", "ChapterMap 下没有 ChapterMapTitle");
+      const close = art.getChildByName("MapClose");
+      if (close) bindTap(close, actions.onClose);
+      else GameLog.shared.warn("Mainline", "ChapterMap 下没有 MapClose");
+      const reward = art.getChildByName("MapReward");
+      if (reward) bindTap(reward, actions.onReward);
+      else GameLog.shared.warn("Mainline", "ChapterMap 下没有 MapReward");
+      const stages = known ? chapterMapStages(live) : [];
+      const strip = art.getChildByName("StageStrip");
+      const content = strip ? strip.getChildByName("content") : null;
+      const empty = strip ? strip.getChildByName("lbl_empty") : null;
+      const scroll = strip ? strip.getComponent(ScrollView) : null;
+      if (!strip || !content) {
+        GameLog.shared.warn("Mainline", "ChapterMap 下没有 StageStrip/content");
+        return;
+      }
+      clearChildren(content);
+      if (stages.length === 0) {
+        if (empty) {
+          empty.active = true;
+          setText(empty, known ? "这一关没有同图关卡" : "主线未同步");
+        }
+        return;
+      }
+      if (empty) empty.active = false;
+      void loadPrefab(STAGE_CHIP).then(
+        (chipPrefab) => {
+          if (!content.isValid) return;
+          const width = stages.length * CHIP_W;
+          const box = content.getComponent(UITransform);
+          if (box) box.setContentSize(width, 52);
+          let current = 0;
+          for (let i = 0; i < stages.length; i++) {
+            const stage = stages[i];
+            if (stage.idx === live) current = i;
+            const on = stage.idx === live;
+            const chip = spawnPrefab(chipPrefab, content);
+            chip.name = "stage-" + stage.idx;
+            paintSprite(
+              chip,
+              on ? "ui/common/button_btn-tab-24" : "ui/common/button_btn-tab-23",
+              "关卡条 " + stage.idx + " 没有挂上"
+            );
+            const label = chip.getChildByName("lbl_title");
+            if (label) setText(label, "第" + stage.missionId + "关");
+            place(chip, content, i * CHIP_W + CHIP_W / 2, 0);
+            bindTap(chip, () => actions.onStage(stage.idx));
+          }
+          if (scroll) scrollStrip(scroll, current, width);
+          else GameLog.shared.warn("Mainline", "StageStrip 没有 ScrollView");
+        },
+        () => {
+          GameLog.shared.warn("Mainline", "ChapterStageChip 没有挂上");
+        }
+      );
+    },
+    (err) => {
+      GameLog.shared.warn("Mainline", "ChapterMapLayer 没有挂上 " + messageOf(err));
+    }
+  );
+}
+
+function messageOf(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  return String(err);
 }
 
 /** 通关奖励窗。按钮不发 3011。前往只打开那一关的预览。 */
 export function dressChapterRewardBoard(view: Node, onStage: (idx: number) => void): void {
   const box = findNamed(view, "spr_box") || view;
-  const old = box.getChildByName("RewardBoard");
-  if (old) old.destroy();
-  const board = uiNode("RewardBoard");
-  place(board, box, 0, 0);
+  const board = box.getChildByName("RewardBoard");
+  if (!board) {
+    GameLog.shared.warn("Mainline", "spr_box 下没有 RewardBoard");
+    return;
+  }
   const faces = chapterExtraRewards();
   const known = synced();
   const cleared = mainlineClearedCount(known ? stageIdx() : null, known);
+  const empty = board.getChildByName("lbl_empty");
+  const extra = board.getChildByName("ExtraRow");
+  const listHost = board.getChildByName("RewardList");
+  const row = extra ? extra.getChildByName("content") : null;
+  const list = listHost ? listHost.getChildByName("content") : null;
+  if (row) clearChildren(row);
+  if (list) clearChildren(list);
   if (faces.length === 0) {
-    place(createLabel("没有通关奖励表", 18, { color: INK, width: 400, height: 36 }), board, 0, 0);
+    if (empty) {
+      empty.active = true;
+      setText(empty, "没有通关奖励表");
+    }
+    if (extra) extra.active = false;
+    if (listHost) listHost.active = false;
     GameLog.shared.info("Mainline", "通关奖励没有 chapterextrareward");
     return;
   }
-  const rowY = CHAPTER_REWARD_BOX_H / 2 - CHAPTER_EXTRA_CELL_H / 2 - 12;
-  const rowScroll = hScroll(board, "ExtraRow", 0, rowY, CHAPTER_REWARD_BOX_W - 16, CHAPTER_EXTRA_CELL_H);
-  const row = rowScroll.content;
+  if (empty) empty.active = false;
+  if (extra) extra.active = true;
+  if (listHost) listHost.active = true;
+  if (!row || !list) {
+    GameLog.shared.warn("Mainline", "RewardBoard 下没有 ExtraRow/content 或 RewardList/content");
+    return;
+  }
   const rowBox = row.getComponent(UITransform);
   if (rowBox) rowBox.setContentSize(faces.length * CHAPTER_EXTRA_CELL_W, CHAPTER_EXTRA_CELL_H);
-  const listH = CHAPTER_REWARD_BOX_H - CHAPTER_EXTRA_CELL_H - 36;
-  const list = vScroll(board, "RewardList", 0, -CHAPTER_EXTRA_CELL_H / 2 - 8, CHAPTER_REWARD_BOX_W, listH);
   const listBox = list.getComponent(UITransform);
   if (listBox) listBox.setContentSize(CHAPTER_REWARD_BOX_W, faces.length * 160);
   for (let i = 0; i < faces.length; i++) {
@@ -146,13 +190,19 @@ function dressExtraCell(cell: Node, face: ChapterExtraFace, progress: string): v
   const slot = findNamed(cell, "spr_reward_bg");
   if (slot) {
     const path = itemIconResource(face.itemType, null) || "ui/bag/backpack_" + face.itemType;
-    const icon = spriteButton("RewardIcon", 72, 72, path, () => {
-      GameLog.shared.info("Mainline", "通关奖励不发 3011");
-      toast(cell, "不发领取协议");
-    });
-    place(icon, slot, 0, 0);
-    if (face.itemNum > 1) {
-      place(createLabel("×" + face.itemNum, 14, { color: CREAM, width: 48, height: 18 }), icon, 16, -24);
+    const icon = slot.getChildByName("spr_icon");
+    if (!icon) GameLog.shared.warn("Mainline", "spr_reward_bg 下没有 spr_icon");
+    else {
+      paintSprite(icon, path, "通关奖励图标 " + path + " 没有挂上");
+      bindTap(icon, () => {
+        GameLog.shared.info("Mainline", "通关奖励不发 3011");
+        toast(cell, "不发领取协议");
+      });
+    }
+    const num = slot.getChildByName("lbl_num");
+    if (num) {
+      num.active = face.itemNum > 1;
+      if (face.itemNum > 1) setText(num, "×" + face.itemNum);
     }
   }
   const button = findNamed(cell, "btn_reward");
@@ -208,48 +258,6 @@ function scrollStrip(scroll: ScrollView, index: number, contentW: number): void 
   scroll.scrollToOffset(new Vec2(shift, 0), 0);
 }
 
-function hScroll(parent: Node, name: string, x: number, y: number, width: number, height: number): { content: Node; scroll: ScrollView } {
-  const view = uiNode(name);
-  const ui = view.addComponent(UITransform);
-  ui.setContentSize(width, height);
-  ui.setAnchorPoint(0.5, 0.5);
-  const mask = view.addComponent(Mask);
-  mask.type = Mask.Type.GRAPHICS_RECT;
-  const scroll = view.addComponent(ScrollView);
-  scroll.vertical = false;
-  scroll.horizontal = true;
-  scroll.inertia = true;
-  const content = uiNode("content");
-  const box = content.addComponent(UITransform);
-  box.setAnchorPoint(0, 0.5);
-  box.setContentSize(width, height);
-  place(content, view, -width / 2, 0);
-  scroll.content = content;
-  place(view, parent, x, y);
-  return { content, scroll };
-}
-
-function vScroll(parent: Node, name: string, x: number, y: number, width: number, height: number): Node {
-  const view = uiNode(name);
-  const ui = view.addComponent(UITransform);
-  ui.setContentSize(width, height);
-  ui.setAnchorPoint(0.5, 0.5);
-  const mask = view.addComponent(Mask);
-  mask.type = Mask.Type.GRAPHICS_RECT;
-  const scroll = view.addComponent(ScrollView);
-  scroll.vertical = true;
-  scroll.horizontal = false;
-  scroll.inertia = true;
-  const content = uiNode("content");
-  const box = content.addComponent(UITransform);
-  box.setAnchorPoint(0.5, 1);
-  box.setContentSize(width, height);
-  place(content, view, 0, height / 2);
-  scroll.content = content;
-  place(view, parent, x, y);
-  return content;
-}
-
 function mountCell(parent: Node, path: string, name: string): Promise<Node | null> {
   return loadPrefab(path).then(
     (prefab) => {
@@ -279,16 +287,58 @@ function silenceMenus(root: Node): void {
   }
 }
 
-function spriteButton(name: string, width: number, height: number, path: string, onTap: () => void): Node {
-  const node = uiNode(name);
-  const ui = node.addComponent(UITransform);
-  ui.setContentSize(width, height);
-  const image = node.addComponent(Sprite);
-  image.sizeMode = Sprite.SizeMode.CUSTOM;
-  paintSprite(node, path, name + " " + path + " 没有挂上");
+function bindTap(node: Node, fn: () => void): void {
   if (!node.getComponent(Button)) node.addComponent(Button);
-  node.on(Button.EventType.CLICK, onTap);
-  return node;
+  node.on(Button.EventType.CLICK, fn);
+}
+
+function clearChildren(node: Node): void {
+  const old = node.children.slice();
+  for (let i = 0; i < old.length; i++) old[i].destroy();
+}
+
+function findNamed(root: Node, name: string): Node | null {
+  if (root.name === name) return root;
+  const kids = root.children;
+  for (let i = 0; i < kids.length; i++) {
+    const found = findNamed(kids[i], name);
+    if (found) return found;
+  }
+  return null;
+}
+
+function writeNamed(root: Node, name: string, text: string): void {
+  const node = findNamed(root, name);
+  if (node) setText(node, text);
+}
+
+function toast(host: Node, text: string): void {
+  GameLog.shared.info("Mainline", text);
+  if (!host.isValid) return;
+  void loadPrefab(TEXT_CHIP).then(
+    (prefab) => {
+      if (!host.isValid) return;
+      const old = host.getChildByName("ReadToast");
+      if (old) old.destroy();
+      const node = spawnPrefab(prefab, host);
+      node.name = "ReadToast";
+      const label = node.getComponent(Label);
+      if (label) {
+        label.string = text;
+        label.fontSize = 18;
+        label.lineHeight = 22;
+      }
+      node.setPosition(0, 40, 0);
+      const timer = setTimeout(() => {
+        if (node.isValid) node.destroy();
+      }, 1600);
+      const maybe = timer as { unref?: () => void };
+      if (typeof maybe.unref === "function") maybe.unref();
+    },
+    () => {
+      GameLog.shared.warn("Mainline", "TextChip 没有挂上");
+    }
+  );
 }
 
 function paintSprite(node: Node, path: string, miss: string): void {

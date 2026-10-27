@@ -27396,9 +27396,54 @@ function checkCityHub(): void {
       bagScrollWired(bagLayer) &&
       bagFill.indexOf("gridScroll") < 0 &&
       bagFill.indexOf('uiNode("BagScroll")') < 0 &&
+      bagFill.indexOf('uiNode("BagFill")') < 0 &&
       bagFill.indexOf('getChildByName("BagScroll")') >= 0 &&
-      fillSrc.indexOf("function gridScroll") >= 0,
+      fillSrc.indexOf("function gridScroll") < 0,
     "bag scroll lives under spr_box and fillBag does not build BagScroll"
+  );
+  const heroListLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroListHeroLayer.prefab");
+  const heroInfoLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroInfoLayer.prefab");
+  const heroLevelLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroInfoUpLevelLayer.prefab");
+  const heroStarLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroInfoUpStarLayer.prefab");
+  const heroAttrLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroInfoAttrLayer.prefab");
+  const rewardLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "chapter", "ChapterRewardLayer.prefab");
+  const mapLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "chapter", "ChapterMapLayer.prefab");
+  const heroListPaths = prefabChildPaths(heroListLayer);
+  const heroInfoPaths = prefabChildPaths(heroInfoLayer);
+  const heroLevelPaths = prefabChildPaths(heroLevelLayer);
+  const heroStarPaths = prefabChildPaths(heroStarLayer);
+  const heroAttrPaths = prefabChildPaths(heroAttrLayer);
+  const rewardPaths = prefabChildPaths(rewardLayer);
+  const mapPaths = prefabChildPaths(mapLayer);
+  const chapterMapSrc = readFileSync(uiSource("chapterMapView.ts"), "utf8");
+  assert(
+    heroListPaths.indexOf("spr_box/HeroScroll") >= 0 &&
+      heroListPaths.indexOf("spr_box/HeroScroll/view") >= 0 &&
+      heroListPaths.indexOf("spr_box/HeroScroll/content") >= 0 &&
+      heroInfoPaths.indexOf("node_panel/DetailBody/DetailScroll/content") >= 0 &&
+      heroInfoPaths.indexOf("node_panel/scroll_view_tab/btn_tab_grow") >= 0 &&
+      heroInfoPaths.indexOf("node_name/node_star/star0") >= 0 &&
+      heroLevelPaths.indexOf("node_all/skill_menu/skill0") >= 0 &&
+      heroStarPaths.indexOf("CCNode_1/node_upgrade_tip/scroll_view/CostRow") >= 0 &&
+      heroStarPaths.indexOf("CCNode_1/node_upgrade_star/node_next_star/MaxStar") >= 0 &&
+      heroAttrPaths.indexOf("scroll_view/content/lbl_line0") >= 0 &&
+      rewardPaths.indexOf("spr_box/RewardBoard/RewardList/content") >= 0 &&
+      rewardPaths.indexOf("spr_box/RewardBoard/ExtraRow/content") >= 0 &&
+      mapPaths.indexOf("StageStrip/content") >= 0 &&
+      fillSrc.indexOf('getChildByName("HeroScroll")') >= 0 &&
+      fillSrc.indexOf('uiNode("HeroScroll")') < 0 &&
+      fillSrc.indexOf('uiNode("HeroCell")') < 0 &&
+      fillSrc.indexOf('uiNode("DetailScroll")') < 0 &&
+      fillSrc.indexOf('uiNode("SkillCard")') < 0 &&
+      fillSrc.indexOf('uiNode("AttrCard")') < 0 &&
+      fillSrc.indexOf('uiNode("CostRow")') < 0 &&
+      chapterMapSrc.indexOf("function hScroll") < 0 &&
+      chapterMapSrc.indexOf("function vScroll") < 0 &&
+      shellSrc.indexOf("mountCodeHangBar") < 0 &&
+      shellSrc.indexOf('uiNode("PagePrefabShell")') < 0 &&
+      shellSrc.indexOf('uiNode("ChapterMapSheet")') < 0 &&
+      shellSrc.indexOf('uiNode("HangMissionChip")') < 0,
+    "hero, chapter, and page shells come from prefabs and are not built with gridScroll or uiNode"
   );
   assert(
     mainApp.indexOf("formatCombatPower") >= 0 &&
