@@ -27411,6 +27411,8 @@ function checkCityHub(): void {
       bagFill.indexOf('getChildByName("BagScroll")') >= 0 &&
       bagFill.indexOf("content.parent = port") >= 0 &&
       bagFill.indexOf("content.setPosition(0, 0, 0)") >= 0 &&
+      bagFill.indexOf("removeComponent(hostMask)") >= 0 &&
+      bagFill.indexOf("hostMask.enabled = false") < 0 &&
       bagFill.indexOf("GRAPHICS_RECT") >= 0 &&
       bagFill.indexOf("activeInHierarchy") >= 0 &&
       fillSrc.indexOf("other_spr-null") >= 0 &&

@@ -1218,7 +1218,9 @@ function fillBag(view: Node): void {
  * spr_box/BagScroll 写在 BackpackLayer 里。不另造滚动节点。
  * 预制把 content 和空的 view 并列，遮罩在宿主上。Creator 的 ScrollView 只裁 content 的父节点。
  * content 收进 view，本地坐标钉在 (0,0)。壳还没进场景时改 parent 会留下错误的世界坐标，格子被裁出视口。
- * 遮罩等节点进场景后再描，避免空模板把 BackpackItemCell 整块裁掉。
+ * BagScroll 上的 Mask 不能只设 enabled=false：节点这时还不在场景里，onDisable 不会跑。
+ * 进场景后 onLoad 仍会装一个空的 Graphics 模板（onEnable 才描矩形），空模板把子节点全部裁掉。
+ * 所以把宿主 Mask 组件卸掉，只留 view 上、进场景后会 onEnable 的那块矩形。
  */
 function bagScrollContent(view: Node, fit: ParchmentFit): Node | null {
   const box = findNamed(view, "spr_box");
@@ -1254,7 +1256,7 @@ function seatPrefabScroll(scroll: Node, width: number, height: number, warnTag: 
   if (port && content.parent !== port) content.parent = port;
   content.setPosition(0, 0, 0);
   const hostMask = scroll.getComponent(Mask);
-  if (hostMask && port) hostMask.enabled = false;
+  if (hostMask && port) scroll.removeComponent(hostMask);
   const scrollUi = scroll.getComponent(UITransform);
   const scrollSize = positiveUiSize(scrollUi);
   const useW = scrollSize && scrollSize.width > 0 ? scrollSize.width : width;

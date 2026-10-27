@@ -26,7 +26,11 @@
 
 格子预制是 `BackpackItemCell`。空槽把 `spr_frame` 换成 `ui/common/other_spr-null`（深色菱格），不造第二套滚动壳。滚动节点仍是预制里的 `spr_box/BagScroll`。
 
-预制原来把 `content` 和空的 `view` 并列，遮罩挂在 `BagScroll` 上。Creator 3.8 的 ScrollView 用 **content 的父节点** 当视口；宿主上的矩形遮罩在模板没画出来时会把子节点全部裁掉。运行时把 `content` 放进已有的 `view`，并把本地坐标钉在 `(0, 0)`。壳还没进场景时改 parent 会保留错误的世界坐标，格子留在层级里却被裁出视口。遮罩改画在 `view` 上，并且等节点 `activeInHierarchy` 之后再描矩形；提前描出来的模板是空的，`BackpackItemCell` 会整块看不见。视口高度仍跟 `spr_box`，空账号留 4 行。不 `uiNode` 新的 `BagScroll`。
+预制原来把 `content` 和空的 `view` 并列，遮罩挂在 `BagScroll` 上。Creator 3.8 的 ScrollView 用 **content 的父节点** 当视口。运行时把 `content` 放进已有的 `view`，本地坐标钉在 `(0, 0)`。首格本地坐标 `(-168, -56)`、96×96，落在 view 的矩形里面（view 顶锚点、高约 438），不是摆出视口。
+
+`BackpackItemCell/spr_frame` 预制上已有 `backpack_item-frame-1`（不透明圆角方框），空槽再异步换成 `ui/common/other_spr-null`。格子 `_layer` 是 UI_2D（33554432），没有 UIOpacity。画面中央仍是纯米色，是因为格子被裁掉，不是贴图没挂上。米色是 `spr_box` 的九宫（`win-bg_block-bg-5`），它在 `BagScroll` 外面，所以遮罩裁不到它。
+
+宿主 Mask 若只在进场景前 `enabled = false`，`onDisable` 不会跑。进场景后 `Mask.onLoad` 仍会 `addComponent(Graphics)` 并把 `stencilStage` 设为进入模板，矩形要等 `onEnable` 才画。组件是关的，`onEnable` 不跑，模板是空的，`BagScroll` 下的 16 个格子全部不可见。修法是 `removeComponent` 卸掉宿主 Mask，只留 `view` 上那块会在 `onEnable` 里画出的矩形遮罩。视口高度仍跟 `spr_box`，空账号留 4 行。不 `uiNode` 新的 `BagScroll`。
 
 ## 已知限制（不是本分支用代码补的画）
 
@@ -36,4 +40,4 @@
 
 ## 复验
 
-Creator 预览真桥进背包（不要用 mock）。合入后本机必须 `git pull --ff-only`，并且 **关掉再开 Creator 预览**（硬刷新隧道），否则运行时仍是旧 bundle：Scale 1.069、Pos (-342, -513)，英雄 Tab 也会在旧 `MainApp` 上抛 `CITY_HUB_MORE_ID is not defined`。看 `BackpackLayer` 的 Scale 是否为 1、Pos 是否约 (-320, -480)，中央是否有 4 列空槽菱格。英雄 Tab 应打开 `HeroListLayer`，Scale 同样为 1。本环境没有 Creator，不能代替这次复验。
+Creator 预览真桥进背包（不要用 mock）。合入后本机必须 `git pull --ff-only`，并且 **关掉再开 Creator 预览**（硬刷新隧道），否则运行时仍是旧 bundle：Scale 1.069、Pos (-342, -513)，英雄 Tab 也会在旧 `MainApp` 上抛 `CITY_HUB_MORE_ID is not defined`。看 `BackpackLayer` 的 Scale 是否仍为 1、Pos 是否约 (-320, -480)，中央 4 列空槽是否画出来（不再是纯米色）。格子仍在 `BagScroll/view/content/BackpackItemCell`。本环境没有 Creator，不能代替这次复验。
