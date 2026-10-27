@@ -13,7 +13,7 @@ import { Proto } from "../net/protocol/Proto";
 import { WireSession } from "../net/WireSession";
 import { applyIdleClaim, claimToast, IDLE_HERO_EXP_ID, IDLE_ITEM_ID, IDLE_ROLE_EXP_ID } from "../module/idle/rewards";
 import { chapterPlaceLabel, heroBaseStats, heroProfile, heroSkillPage, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles, occupationName } from "../config/gameCatalog";
-import { chapterDrops, chapterIdleMinute, chapterStageFace, DropFace, heroLevelNeed, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleBonus, vipIdleLine } from "../config/rosterCatalog";
+import { chapterDrops, chapterIdleMinute, chapterStageFace, DropFace, heroLevelNeed, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, idleDropEverySec, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleBonus, vipIdleLine } from "../config/rosterCatalog";
 import { IDLE_UNIX_FLOOR, wireIdleCapMs, wireIdleElapsedMs } from "../net/protocol/wireIdle";
 import { formationFaceSlot, WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/wireLineUpSave";
 import { mainFormationHeroes } from "../net/protocol/starterLineup";
@@ -27,6 +27,7 @@ import {
 } from "./hangChrome";
 import { paintIdleLoot, playIdleHarvest, seatHangTimer, writeHangClock } from "./idleHangView";
 import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
+import { HERO_DETAIL_SPINE_SEAT_Y, HERO_EMPTY_RING_NAMES, HERO_SKILL_BADGE_ART, HERO_SKILL_BADGE_OFFSET } from "./heroDetailPlan";
 import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
 import { mockRuntimeEnabled } from "../net/transportSelect";
 import { emptyBagToast } from "../module/bag/items";
@@ -46,6 +47,7 @@ const HERO_LIST_BOARD = "prefabs/ui/hero/HeroListHeroLayer";
 const HERO_LEVEL_BOARD = "prefabs/ui/hero/HeroInfoUpLevelLayer";
 const HERO_STAR_BOARD = "prefabs/ui/hero/HeroInfoUpStarLayer";
 const HERO_SKILL_BOARD = "prefabs/ui/hero/HeroSkillInfoLayer";
+const HERO_ATTR_BOARD = "prefabs/ui/hero/HeroInfoAttrLayer";
 const BAG_INFO_BOARD = "prefabs/ui/backpack/BackpackInfoLayer";
 const HERO_EXP_ITEM = 900101;
 const CHECK = new Color(70, 210, 90, 255);
@@ -575,6 +577,7 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
   const evolve = findNamed(view, "node_evolve");
   if (evolve) evolve.active = false;
   const showHead = () => {
+    keepEmptyRings(view);
     const profile = heroProfile(hero.heroType);
     const name = hero.name || (profile ? profile.name : "英雄");
     writeNamed(view, "lbl_hero_name", name);
@@ -617,7 +620,8 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
       }
       mountBattleSpine(spot, hangSpineStem(hero.heroId, hero.heroType), () => {
         if (spot.isValid) spot.active = false;
-      });
+      }, { seatY: HERO_DETAIL_SPINE_SEAT_Y });
+      if (ring) raiseEquipMenus(ring);
     }
   };
   showHead();
@@ -701,6 +705,13 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
     const grade = findNamed(node, "btn_up_grade");
     if (grade) grade.active = false;
     holdUpgrade(findNamed(node, "btn_up_level"), "升级");
+    const attr = findNamed(node, "btn_attr_detail");
+    const attrMark = attr as (Node & { mxzgAttr?: boolean }) | null;
+    if (attr && attrMark && !attrMark.mxzgAttr) {
+      attrMark.mxzgAttr = true;
+      if (!attr.getComponent(Button)) attr.addComponent(Button);
+      attr.on(Button.EventType.CLICK, () => showAttrBoard(view, hero));
+    }
     for (let i = 1; i <= 6; i++) {
       const mark = findNamed(node, "sp_grade" + i);
       if (mark) mark.active = false;
@@ -713,7 +724,7 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
     seatOnPanel(node, panel, 112.5);
     silenceBigMenus(node);
     const button = findNamed(node, "btn_up_star");
-    setGray(button, true);
+    setGray(button, false);
     if (button) {
       if (!button.getComponent(Button)) button.addComponent(Button);
       button.on(Button.EventType.CLICK, () => {
@@ -1065,17 +1076,21 @@ export function hangMissionCaption(): string {
   return "主线未同步";
 }
 
-/** 已有 ChapterPreviewLayer。产出用当前关 reward_base，掉落用 drop_group。出战不新发协议。 */
-export function dressChapterPreview(view: Node, onFight: () => void): void {
-  const caption = hangMissionCaption();
-  const synced = caption !== "主线未同步";
-  const idx = currentStageIdx();
-  const face = synced ? chapterStageFace(idx) : null;
+/** 已有 ChapterPreviewLayer。产出用这一关 reward_base，掉落用 drop_group。只有当前关出战，不新发协议。 */
+export function dressChapterPreview(view: Node, onFight: () => void, stageIdx?: number): void {
+  const live = currentStageIdx();
+  const idx = typeof stageIdx === "number" && isFinite(stageIdx) && stageIdx >= 1 ? Math.floor(stageIdx) : live;
+  const mock = GameStore.mockStageId();
+  const chapter = GameStore.chapter();
+  const known = (mock !== null && mock >= 1) || chapter.nowIdx !== null || chapter.maxIdx !== null;
+  const placeName = known ? chapterPlaceLabel(idx) : "";
+  const head = placeName || (known && idx >= 1 ? "第" + idx + "关" : "主线未同步");
+  const face = known ? chapterStageFace(idx) : null;
   const area = face && face.name ? face.name : "";
-  writeStageTitle(view, area ? caption + " " + area : caption, area.length > 0);
-  const minute = synced ? chapterIdleMinute(idx) : null;
+  writeStageTitle(view, area ? head + " " + area : head, area.length > 0);
+  const minute = known ? chapterIdleMinute(idx) : null;
   if (!minute) {
-    if (synced) GameLog.shared.info("Mainline", "关卡预览没有 chapterreward，产出写 —");
+    if (known) GameLog.shared.info("Mainline", "关卡预览没有 chapterreward，产出写 —");
     writeKeep(view, "lbl_res1", "—");
     writeKeep(view, "lbl_res2", "—");
     writeKeep(view, "lbl_res3", "—");
@@ -1084,15 +1099,23 @@ export function dressChapterPreview(view: Node, onFight: () => void): void {
     writeKeep(view, "lbl_res2", minute.heroExp + "/m");
     writeKeep(view, "lbl_res3", minute.roleExp + "/m");
   }
-  paintPreviewDrops(view, synced ? chapterDrops(idx) : []);
-  fitButton(findNamed(view, "btn_confirm"), "出战", 28);
+  paintPreviewDrops(view, known ? chapterDrops(idx) : []);
+  const current = known && idx === live;
+  fitButton(findNamed(view, "btn_confirm"), current ? "出战" : "查看", 28);
   const confirm = findNamed(view, "btn_confirm");
   if (!confirm) {
     GameLog.shared.warn("Mainline", "关卡预览没有 btn_confirm，不能出战");
     return;
   }
   if (!confirm.getComponent(Button)) confirm.addComponent(Button);
-  confirm.on(Button.EventType.CLICK, () => onFight());
+  confirm.on(Button.EventType.CLICK, () => {
+    if (!current) {
+      GameLog.shared.info("Mainline", "关卡 " + idx + " 不是当前关，不出战");
+      flashToast(view, "不发跳关");
+      return;
+    }
+    onFight();
+  });
 }
 
 function paintPreviewDrops(view: Node, drops: DropFace[]): void {
@@ -1107,11 +1130,16 @@ function paintPreviewDrops(view: Node, drops: DropFace[]): void {
     return;
   }
   const n = drops.length < 6 ? drops.length : 6;
+  const every = idleDropEverySec();
   for (let i = 0; i < n; i++) {
     const face = drops[i];
-    const path = itemIconResource(face.itemType, null) || "ui/bag/backpack_" + face.itemType;
-    const icon = sprite("drop", 64, 64, path, "ui/bag/backpack_item-frame-1");
-    place(icon, row, (i - (n - 1) / 2) * 78, 0);
+    const profile = itemProfile(face.itemType, null);
+    const cell = sprite("drop", 64, 64, rareFrame(profile ? profile.rare : 0));
+    place(cell, row, (i - (n - 1) / 2) * 78, 0);
+    const path = (profile && profile.icon) || itemIconResource(face.itemType, null) || "ui/bag/backpack_" + face.itemType;
+    place(sprite("icon", 52, 52, path, "ui/bag/backpack_spr-default"), cell, 0, 2);
+    if (!cell.getComponent(Button)) cell.addComponent(Button);
+    cell.on(Button.EventType.CLICK, () => showInfoCard(view, dropCard(face, every)));
   }
 }
 
@@ -1677,7 +1705,7 @@ function tintNamed(root: Node, name: string, color: Color): void {
 function holdUpgrade(node: Node | null, title: string): void {
   if (!node) return;
   fitButton(node, title, 22);
-  setGray(node, true);
+  setGray(node, false);
   if (!node.getComponent(Button)) node.addComponent(Button);
   node.on(Button.EventType.CLICK, () => {
     GameLog.shared.info("Hero", "英雄升级没有服端写协议，按钮停用，不改等级");
@@ -1690,6 +1718,7 @@ type HeroPick = { all: StoreHero[]; index: number } | null;
 
 /** 详情壳上已有的返回、左右和装备钮。只读，不发穿戴。 */
 function bindHeroChrome(view: Node, picker: () => HeroPick, onSwitch: (hero: StoreHero) => void): void {
+  keepEmptyRings(view);
   const back = findNamed(view, "btn_back");
   const backMark = back as (Node & { mxzgBack?: boolean }) | null;
   if (back && backMark && !backMark.mxzgBack) {
@@ -1711,8 +1740,8 @@ function bindHeroChrome(view: Node, picker: () => HeroPick, onSwitch: (hero: Sto
   holdNav(findNamed(view, "btn_right"), 1, picker, onSwitch);
   const slots = ["btn_equip_1", "btn_equip_2", "btn_equip_3", "btn_equip_4", "btn_runes_1", "btn_runes_2", "btn_artifact_1", "btn_artifact_2"];
   for (let i = 0; i < slots.length; i++) holdReadOnly(findNamed(view, slots[i]), view, "不发穿戴协议", false);
-  holdReadOnly(findNamed(view, "btn_wear"), view, "不发穿戴协议", true);
-  holdReadOnly(findNamed(view, "btn_disboard"), view, "不发穿戴协议", true);
+  holdReadOnly(findNamed(view, "btn_wear"), view, "不发穿戴协议", false);
+  holdReadOnly(findNamed(view, "btn_disboard"), view, "不发穿戴协议", false);
   holdReadOnly(findNamed(view, "btn_setting"), view, "不发协议", true);
   holdReadOnly(findNamed(view, "btn_unfold"), view, "不发协议", true);
   holdReadOnly(findNamed(view, "btn_only_show"), view, "不发协议", true);
@@ -1732,6 +1761,27 @@ function holdNav(node: Node | null, step: number, picker: () => HeroPick, onSwit
     const next = (pick.index + step + count) % count;
     onSwitch(pick.all[next]);
   });
+}
+
+function raiseEquipMenus(ring: Node): void {
+  const names = ["menu_hero", "menu_equip", "menu_pet", "menu_totem"];
+  for (let i = 0; i < names.length; i++) {
+    const menu = ring.getChildByName(names[i]);
+    if (menu) menu.setSiblingIndex(ring.children.length - 1);
+  }
+}
+
+function keepEmptyRings(view: Node): void {
+  for (let i = 0; i < HERO_EMPTY_RING_NAMES.length; i++) {
+    const node = findNamed(view, HERO_EMPTY_RING_NAMES[i]);
+    if (!node) continue;
+    node.active = true;
+    setGray(node, false);
+    const kids = node.children.slice();
+    for (let k = 0; k < kids.length; k++) {
+      if (kids[k].name === "EquipFill") kids[k].destroy();
+    }
+  }
 }
 
 function holdReadOnly(node: Node | null, view: Node, toast: string, gray: boolean): void {
@@ -1831,6 +1881,62 @@ function showSkillCard(view: Node, skillId: number, level: number | null): void 
   });
 }
 
+/** HeroInfoAttrLayer 只有滚动区，没有关闭钮。点暗处收起。不发升级。 */
+function showAttrBoard(view: Node, hero: StoreHero): void {
+  const profile = heroProfile(hero.heroType);
+  const stats = heroBaseStats(hero.heroType, hero.star ?? (profile ? profile.star : null));
+  const lines = [
+    "攻击 " + (stats ? String(stats.atk) : "—"),
+    "血量 " + (stats ? String(stats.hp) : "—"),
+    "防御 " + (stats ? String(stats.def) : "—"),
+    "速度 " + (stats ? String(stats.spd) : "—"),
+  ];
+  if (hero.fighting !== null) lines.push("战力 " + String(hero.fighting));
+  const host = overlayHost(view);
+  void mountNested(host, HERO_ATTR_BOARD, "AttrHold").then((card) => {
+    if (!host.isValid) return;
+    const old = host.getChildByName("AttrCard");
+    if (old) old.destroy();
+    if (!card || !card.isValid) {
+      if (card && card.isValid) card.destroy();
+      GameLog.shared.warn("Hero", "HeroInfoAttrLayer 没有挂上");
+      flashToast(view, "属性窗没有挂上");
+      return;
+    }
+    const root = uiNode("AttrCard");
+    place(root, host, 0, 0);
+    root.setSiblingIndex(Math.max(0, host.children.length - 1));
+    const box = host.getComponent(UITransform);
+    const width = box && box.contentSize.width > 8 ? box.contentSize.width : 640;
+    const height = box && box.contentSize.height > 8 ? box.contentSize.height : 960;
+    const ax = box ? box.anchorPoint.x : 0;
+    const ay = box ? box.anchorPoint.y : 0;
+    const midX = (0.5 - ax) * width;
+    const midY = (0.5 - ay) * height;
+    const dim = createRect("dim", width + 80, height + 80, new Color(0, 0, 0, 140));
+    place(dim, root, midX, midY);
+    if (!dim.getComponent(Button)) dim.addComponent(Button);
+    const close = () => {
+      if (root.isValid) root.destroy();
+    };
+    dim.on(Button.EventType.CLICK, close);
+    card.parent = root;
+    card.setPosition(midX - 190, midY - 240, 0);
+    card.addComponent(BlockInputEvents);
+    silenceBigMenus(card);
+    const scroll = findNamed(card, "scroll_view");
+    const viewNode = scroll ? scroll.getChildByName("view") : null;
+    const content = viewNode ? viewNode.getChildByName("content") : null;
+    const column = content || scroll || card;
+    const linesNode = uiNode("AttrLines");
+    const left = content ? 164 : 0;
+    place(linesNode, column, 0, 0);
+    for (let i = 0; i < lines.length; i++) {
+      place(createLabel(lines[i], 22, { color: INK, width: 280, height: 36, align: "left" }), linesNode, left, -36 - i * 48);
+    }
+  });
+}
+
 function writeWrap(root: Node, name: string, text: string): void {
   const node = findNamed(root, name);
   if (!node) return;
@@ -1898,13 +2004,6 @@ function fillGrowBoard(
     maxed.active = capped || (level !== null && !need && !heroLevelNeed(level));
     if (maxed.active) setText(maxed, capped ? "已达星级上限" : "已达最大等级");
   }
-  const note = board.getChildByName("UpgradeHold");
-  if (!note) {
-    const line = createLabel("不发升级协议", 14, { color: INK, width: 180, height: 22 });
-    line.name = "UpgradeHold";
-    const host = findNamed(board, "node_all") || board;
-    place(line, host, 40, 250);
-  }
   const menu = findNamed(board, "skill_menu");
   if (menu) {
     const old = menu.children.slice();
@@ -1920,12 +2019,19 @@ function fillGrowBoard(
       place(icon, menu, (i - (n - 1) / 2) * 70, 0);
       const opened = skill.id;
       const openedLevel = step && i < step.skillLevels.length ? step.skillLevels[i] : null;
+      if (openedLevel !== null) {
+        const badge = sprite("badge" + i, 20, 20, HERO_SKILL_BADGE_ART);
+        place(badge, icon, HERO_SKILL_BADGE_OFFSET.x, HERO_SKILL_BADGE_OFFSET.y);
+        place(createLabel(String(openedLevel), 14, { color: new Color(0, 0, 0, 255), width: 20, height: 20 }), badge, 0, 0);
+      }
       if (!icon.getComponent(Button)) icon.addComponent(Button);
       icon.on(Button.EventType.CLICK, () => showSkillCard(view, opened, openedLevel));
     }
     const box = menu.getComponent(UITransform);
     if (box) box.setContentSize(0, 0);
   }
+  const nil = findNamed(board, "node_nil_skill");
+  if (nil) nil.active = !profile || profile.skills.length === 0;
 }
 
 function fillStarBoard(view: Node, board: Node, hero: StoreHero, profile: HeroProfile | null): void {
@@ -1978,7 +2084,7 @@ function fillStarBoard(view: Node, board: Node, hero: StoreHero, profile: HeroPr
   writeKeep(board, "lbl_jump", "不发升星协议");
   const button = findNamed(board, "btn_up_star");
   fitButton(button, maxed ? "已满星" : "升星", 22);
-  setGray(button, true);
+  setGray(button, false);
   paintStarCostRow(board, hero, maxed ? null : nxt);
   const goldCost = nxt ? costNum(nxt.cost.concat(nxt.needItem), 900001) : null;
   writeKeep(board, "lbl_gold_need", goldCost === null ? "—" : String(goldCost));

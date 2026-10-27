@@ -34,6 +34,8 @@ export interface SpineMountOptions {
   face?: -1 | 1;
   /** 骨架已经挂上并且播了开场动作。加载失败不调用。 */
   onReady?: () => void;
+  /** 相对父节点的竖直座位。缺省：特效和点缀在 0，英雄在地砖 -36。 */
+  seatY?: number;
 }
 
 const OPENING: { [stem: string]: WireSpineClip } = {
@@ -116,7 +118,8 @@ export function mountBattleSpine(parent: Node, stem: string, onFail: () => void,
   const scale = effect ? (typeof namedScale === "number" ? namedScale : 0.4) : accent ? 0.16 : 0.58;
   const face = options && options.face === -1 ? -1 : 1;
   node.setScale(scale * face, scale, 1);
-  place(node, parent, 0, effect || accent ? 0 : -36);
+  const seatY = options && typeof options.seatY === "number" ? options.seatY : effect || accent ? 0 : -36;
+  place(node, parent, 0, seatY);
   let skel: sp.Skeleton | null = null;
   let dead = false;
   let pending: string | null = null;
