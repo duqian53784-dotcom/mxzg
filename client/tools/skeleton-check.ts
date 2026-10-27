@@ -3158,20 +3158,19 @@ function checkCityMap(): void {
     bootChromeSrc.indexOf("BOOT_TIP_COLOR") >= 0 && bootChromeSrc.indexOf("ffeeb2") >= 0 && bootChromeSrc.indexOf("BOOT_STAGE_COLOR") >= 0,
     "loading tips stay #ffeeb2 and the stage line has its own color"
   );
-  const mainlineFxSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
-  assert(
-    mainlineFxSrc.indexOf("VfxFallback") >= 0 && mainlineFxSrc.indexOf("vfx fallback yanwu") >= 0,
-    "missing battle frames fall back to the existing yanwu hit"
-  );
-  assert(cityMapSrc.indexOf("TOUCH_MOVE") >= 0 && cityMapSrc.indexOf("placeBuilding") >= 0, "building drag stays");
+  assert(!existsSync(uiSource("WireMainlinePage.ts")), "wire mainline page is not a code shell");
+  const battleSpineEarly = readFileSync(uiSource("battleSpine.ts"), "utf8");
+  assert(battleSpineEarly.indexOf("yanwu") >= 0 && battleSpineEarly.indexOf('uiNode("VfxFallback")') < 0, "yanwu stays a spine stem and is not a code fallback plate");
+  const hubDragSrc = readFileSync(uiSource("CityHub.ts"), "utf8");
+  assert(cityMapSrc.indexOf('uiNode("CityMap")') < 0 && cityMapSrc.indexOf("不手搓一整城") >= 0, "code city is not built");
+  assert(hubDragSrc.indexOf("TOUCH_MOVE") >= 0 && hubDragSrc.indexOf("placeBuildings") >= 0, "building drag stays on the prefab hub");
   assert(
     cityMapSrc.indexOf("loadCitySpriteFrame") >= 0 &&
       cityMapSrc.indexOf("CITY_PLATE_WAIT_MS") >= 0 &&
-      cityMapSrc.indexOf("paintCityFrames(frameJobs)") >= 0 &&
       cityMapSrc.indexOf("paintCitySpriteWhenReady") >= 0 &&
-      cityMapSrc.indexOf("startCityEffects(views, layout.effects, placeBottomLeft)") <
-        cityMapSrc.indexOf("layout.buildings.map"),
-    "city map starts effects before a plate load can stall the buildings, and a late frame still paints"
+      hubDragSrc.indexOf("ensureCityPlates(views);") <
+        hubDragSrc.indexOf("startCityEffects(views, layout.effects, placeBottomLeft)"),
+    "prefab city shows plates before effects, and a late frame still paints"
   );
 
   const gates = {
@@ -10208,26 +10207,14 @@ async function checkWs(): Promise<void> {
       formatWireLineUpProbe(lineUpProbeZero).indexOf("assistance_unlock=0") >= 0,
     "3101 probe keeps a present assistance_unlock 0"
   );
-  const lineupPageSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
+  const lineupPageSrc = readFileSync(mainAppFile(), "utf8");
   assert(
-    lineupPageSrc.indexOf("获取阵容") >= 0 &&
-      lineupPageSrc.indexOf("pullLineUpProbe") >= 0 &&
-      lineupPageSrc.indexOf("formatWireLineUpProbe") >= 0 &&
-      lineupPageSrc.indexOf("不发 3100") >= 0 &&
-      lineupPageSrc.indexOf("不接 3020") >= 0 &&
-      lineupPageSrc.indexOf("3101 不走") >= 0,
-    "mainline page probes empty 3101 beside the battle buttons and does not play it as a report"
-  );
-  assert(
-    lineupPageSrc.indexOf("查询阵法") >= 0 &&
-      lineupPageSrc.indexOf("pullFormationProbe") >= 0 &&
-      lineupPageSrc.indexOf("formatWireFormationProbe") >= 0 &&
-      lineupPageSrc.indexOf("不发 3098") >= 0 &&
-      lineupPageSrc.indexOf("不发 3100") >= 0 &&
-      lineupPageSrc.indexOf("不接 3020") >= 0 &&
-      lineupPageSrc.indexOf("3099 不走") >= 0 &&
-      lineupPageSrc.indexOf('createButton("查询阵法"') >= 0,
-    "mainline page probes empty 3099 beside 3101 and does not play it as a report"
+    !existsSync(uiSource("WireMainlinePage.ts")) &&
+      lineupPageSrc.indexOf("获取阵容") < 0 &&
+      lineupPageSrc.indexOf("pullLineUpProbe") < 0 &&
+      lineupPageSrc.indexOf('createButton("查询阵法"') < 0 &&
+      lineupPageSrc.indexOf("buildWire") < 0,
+    "mainline no longer probes 3101 or 3099 from a code page"
   );
   assert(encodeWireMessage({ cmd: "wire.3100" }) === null, "bare wire.3100 stays unencoded");
   assert(encodeWireMessage({ cmd: "wire.2015" }) === null, "bare wire.2015 stays unencoded");
@@ -10270,15 +10257,10 @@ async function checkWs(): Promise<void> {
   assert(decodeWireLineUpSave(fieldVarint(1, 1)) === null, "non-empty s2c 3100 is not a save ack");
   assert(decodeWireServerError(hexToBytes("08c58d02")).text.indexOf("34501") >= 0, "1005 field 1 is the error code");
   assert(
-    lineupPageSrc.indexOf('createButton("GM 加英雄"') >= 0 &&
-      lineupPageSrc.indexOf('createButton("GM 上 MAIN"') >= 0 &&
-      lineupPageSrc.indexOf(WIRE_GM_CLOSED_TOAST) >= 0 &&
-      lineupPageSrc.indexOf(", 0, -22)") >= 0 &&
-      lineupPageSrc.indexOf("probe-scroll") >= 0 &&
-      lineupPageSrc.indexOf("cameraPriority") >= 0 &&
-      lineupPageSrc.indexOf("UITransform") >= 0 &&
-      lineupPageSrc.indexOf("this.node.on(Node.EventType.TOUCH_START") < 0,
-    "gm buttons stay under the challenge row and gestures stay on probe-scroll"
+    lineupPageSrc.indexOf('createButton("GM 加英雄"') < 0 &&
+      lineupPageSrc.indexOf('createButton("GM 上 MAIN"') < 0 &&
+      lineupPageSrc.indexOf("probe-scroll") < 0,
+    "gm buttons and the probe scroll are not on the hang host"
   );
   assert(decodeWireLineUp(null) === null, "null 3101 body is not a snapshot");
   assert(decodeWireLineUp(new Uint8Array([0x80])) === null, "bad 3101 ignored");
@@ -10369,9 +10351,7 @@ async function checkWs(): Promise<void> {
       STARTER_LINEUP_NOTE.indexOf("2015") >= 0 &&
       STARTER_LINEUP_NOTE.indexOf("3100") >= 0 &&
       STARTER_LINEUP_NOTE.indexOf("不进 pullIdle") >= 0 &&
-      lineupPageSrc.indexOf("planStarterChallenge") >= 0 &&
-      lineupPageSrc.indexOf("STARTER_LINEUP_NOTE") >= 0 &&
-      lineupPageSrc.indexOf("不进 pullIdle") >= 0,
+      lineupPageSrc.indexOf("planStarterChallenge") < 0,
     "empty MAIN grants or saves before challenge and does not run from the login chain"
   );
   const sessionCandidates = [
@@ -16234,14 +16214,12 @@ async function checkWs(): Promise<void> {
     );
   }
   const battleSpineSrc = readFileSync(uiSource("battleSpine.ts"), "utf8");
-  const mainlineSpineSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
   assert(
     battleSpineSrc.indexOf("effect") >= 0 &&
-      mainlineSpineSrc.indexOf("mountVfx") >= 0 &&
-      mainlineSpineSrc.indexOf("3103 不走") >= 0 &&
-      mainlineSpineSrc.indexOf(".pvr") < 0 &&
-      battleSpineSrc.indexOf("bisha") >= 0,
-    "mainline mounts batch2 skeletons beside hero spines and still skips 3103"
+      battleSpineSrc.indexOf(".pvr") < 0 &&
+      battleSpineSrc.indexOf("bisha") >= 0 &&
+      !existsSync(uiSource("WireMainlinePage.ts")),
+    "batch2 skeletons stay without a wire mainline code page"
   );
   const heroPackPath = join(spineRoot, "10105008.json");
   const heroPackText = readFileSync(heroPackPath, "utf8");
@@ -27004,7 +26982,7 @@ function checkCityHub(): void {
   const body = mainApp.slice(start, end);
   assert(body.indexOf("CITY_HUB_ACTIVITY_ID") < 0 && body.indexOf("CITY_HUB_MORE_ID") < 0, "city screen no longer draws the hub rectangles");
   assert(body.indexOf("createButton") < 0, "buildCity does not create rectangular buttons");
-  assert(body.indexOf("mountCityMap") >= 0 && body.indexOf("CITY_DRAG_HINT") >= 0, "city map and drag hint stay");
+  assert(body.indexOf("mountCityHub") >= 0 && body.indexOf("mountCityMap") < 0 && body.indexOf("CITY_DRAG_HINT") < 0 && body.indexOf("createLabel") < 0, "city page does not hand-build a map or debug labels");
   assert(CITY_DRAG_HINT === "左右拖动地图，点建筑进入", "drag hint text stays");
   assert(body.indexOf('createButton("黑五"') < 0, "黑五 is not a city-screen button");
   assert(body.indexOf('createButton("查询阵法"') < 0, "查询阵法 is not a city-screen button");
@@ -27044,7 +27022,7 @@ function checkCityHub(): void {
   );
   assert(mainApp.indexOf("id !== CITY_TAB") >= 0, "city page does not take a prefab shell");
   assert(hubPaths.indexOf("BtnIdle") < 0 && hubPaths.indexOf("BtnBag") < 0 && hubPaths.indexOf("BtnLogin7") < 0, "city hub prefab is not the debug button matrix");
-  assert(mainApp.indexOf("mountCityChrome(") >= 0, "code chrome fallback stays");
+  assert(mainApp.indexOf("mountCityChrome(") < 0 && mainApp.indexOf("不手搓") >= 0, "missing city prefab only logs");
   assert(mainApp.indexOf("setCityExtras") >= 0, "activity row hides off the city page");
   const chrome = readFileSync(uiSource("CityChrome.ts"), "utf8");
   const chromePaths = [
@@ -27619,13 +27597,14 @@ function checkCityHub(): void {
       cityLayoutSrc.indexOf("不另摆位置") >= 0,
     "hang talk is one herotalk bubble, battle open plays appear frames, and city clouds stay unplaced"
   );
-  const wireMainlineSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
+  const hangFightSrc = readFileSync(uiSource("hangBattle.ts"), "utf8");
   assert(
-    wireMainlineSrc.indexOf("liftHangReplay") >= 0 &&
-      wireMainlineSrc.indexOf("dropHangReplay") >= 0 &&
-      wireMainlineSrc.indexOf('setPagePrefabShellVisible(this.node, this.phase !== "battle")') < 0 &&
-      wireMainlineSrc.indexOf("战斗代码 UI 留在壳下") >= 0,
-    "tapping fight keeps the hang shell up and lifts the prefab field instead of hiding it"
+    hangFightSrc.indexOf("liftHangReplay") >= 0 &&
+      hangFightSrc.indexOf("dropHangReplay") >= 0 &&
+      hangFightSrc.indexOf('uiNode("WireMainlinePage")') < 0 &&
+      mainApp.indexOf("buildWireMainlinePage") < 0 &&
+      mainApp.indexOf('uiNode("Wire') < 0,
+    "tapping fight lifts the prefab field on the hang shell and does not build a wire page"
   );
   const framePlaySrc = readFileSync(uiSource("battleFramePlay.ts"), "utf8");
   const castPresentSrc = readFileSync(uiSource("battlePresentation.ts"), "utf8");
@@ -27685,61 +27664,23 @@ function checkCityHub(): void {
   assert(mainlineSrc.indexOf("PAGE_SHELL_FIGHT") >= 0 && mainlineSrc.indexOf("onRow") >= 0, "mock mainline fight still enters the current stage");
   const battlePageSrc = readFileSync(uiSource("BattlePage.ts"), "utf8");
   const battleLayoutSrc = readFileSync(uiSource("battlePrefabLayout.ts"), "utf8");
-  const wireBattlePageSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
-  assert(wireBattlePageSrc.indexOf("PAGE_SHELL_FIGHT") >= 0 && wireBattlePageSrc.indexOf("this.challenge()") >= 0, "wire mainline fight still calls challenge");
+  assert(!existsSync(uiSource("WireMainlinePage.ts")), "wire battle page is not mounted");
+  const hangBattleNow = readFileSync(uiSource("hangBattle.ts"), "utf8");
+  const shellNow = readFileSync(uiSource("pagePrefabShell.ts"), "utf8");
   assert(
-    wireBattlePageSrc.indexOf("if (this.probeOn()) this.showInfo()") >= 0 &&
-      wireBattlePageSrc.indexOf("HANG_PROBE_EVENT") >= 0 &&
-      wireBattlePageSrc.indexOf("if (!this.probeOn())") >= 0,
-    "wire probe buttons stay off the default hang page"
-  );
-  assert(
-    wireBattlePageSrc.indexOf("returnToHang") >= 0 &&
-      wireBattlePageSrc.indexOf("回挂机") >= 0 &&
-      wireBattlePageSrc.indexOf("openBattleEnd") >= 0 &&
-      wireBattlePageSrc.indexOf("BattleEndLayer") >= 0,
-    "skip, retreat, and replay end overlay BattleEndLayer and close back to hang"
-  );
-  const accentAt = wireBattlePageSrc.indexOf("private mountAccent");
-  const accentSrc = accentAt >= 0 ? wireBattlePageSrc.slice(accentAt, accentAt + 500) : "";
-  assert(
-    wireBattlePageSrc.indexOf("armBattleDelay") >= 0 &&
-      accentSrc.indexOf("createLabel") < 0 &&
-      accentSrc.indexOf("root.active = false") >= 0 &&
-      accentSrc.indexOf("mountBattleSpine") >= 0 &&
-      wireBattlePageSrc.indexOf("spot.y + 78") >= 0 &&
-      wireBattlePageSrc.indexOf("playbackBeats") >= 0,
-    "replay follows the director clock, seats hp on the slot, and does not print sword or flag names"
+    shellNow.indexOf("PAGE_SHELL_FIGHT") >= 0 &&
+      shellNow.indexOf("beginHangBattle") >= 0 &&
+      hangBattleNow.indexOf("hangStandPoint") >= 0 &&
+      hangBattleNow.indexOf("hangFloatOrigin") >= 0 &&
+      hangBattleNow.indexOf("mountCodeBattle") < 0 &&
+      hangBattleNow.indexOf('uiNode("WireMainlinePage")') < 0 &&
+      hangBattleNow.indexOf(".pvr") < 0 &&
+      hangBattleNow.indexOf("encodeFrame") < 0,
+    "hang fight uses the prefab field and does not rebuild a wire battle page"
   );
   assert(battlePageSrc.indexOf("export const USE_BATTLE_PREFAB = true") >= 0, "battle prefab default stays on");
   assert(mainApp.indexOf("USE_BATTLE_PREFAB") < 0, "MainApp does not grow a battle prefab switch");
   assert(chrome.indexOf("USE_BATTLE_PREFAB") < 0 && chrome.indexOf("BattlePage") < 0, "city chrome is not part of the battle prefab switch");
-  assert(
-    wireBattlePageSrc.indexOf("USE_BATTLE_PREFAB") >= 0 &&
-      wireBattlePageSrc.indexOf("mountBattlePrefab") >= 0 &&
-      wireBattlePageSrc.indexOf("mountVfx") >= 0 &&
-      wireBattlePageSrc.indexOf("mountCodeBattle") >= 0 &&
-      wireBattlePageSrc.indexOf("VfxSkill") >= 0 &&
-      wireBattlePageSrc.indexOf("WireBattlePage 仍不挂") >= 0 &&
-      wireBattlePageSrc.indexOf("不发新 c2s") >= 0 &&
-      wireBattlePageSrc.indexOf("回放结束不拆 BattlePage") >= 0 &&
-      wireBattlePageSrc.indexOf("paintBattleScene") >= 0 &&
-      wireBattlePageSrc.indexOf("hangStandPoint") >= 0 &&
-      wireBattlePageSrc.indexOf("hangFloatOrigin") >= 0 &&
-      wireBattlePageSrc.indexOf("battleCastWait") >= 0 &&
-      wireBattlePageSrc.indexOf("battleBeatWait") >= 0 &&
-      wireBattlePageSrc.indexOf("warmBattleFrames") >= 0 &&
-      wireBattlePageSrc.indexOf("等待名册后再挑战") >= 0 &&
-      wireBattlePageSrc.indexOf("showToast(\"等待名册后再挑战\")") >= 0 &&
-      wireBattlePageSrc.indexOf("地砖点") >= 0 &&
-      wireBattlePageSrc.indexOf("mountFrameReel") >= 0 &&
-      wireBattlePageSrc.indexOf("hero-beattack") >= 0 &&
-      wireBattlePageSrc.indexOf("skill-effect") >= 0 &&
-      wireBattlePageSrc.indexOf("3103 不走") >= 0 &&
-      wireBattlePageSrc.indexOf(".pvr") < 0 &&
-      wireBattlePageSrc.indexOf("encodeFrame") < 0,
-    "wire battle mounts BattlePage on the existing replay and keeps the code page"
-  );
   assert(BATTLE_PREFAB_PATH === "prefabs/ui/battle/BattlePage", "battle prefab path");
   const enemyFront = battleSlotPage("enemy", 0);
   const allyFront = battleSlotPage("ally", 0);
@@ -27993,9 +27934,8 @@ function checkCityHub(): void {
       presentViewSrc.indexOf("BuffRow") >= 0 &&
       presentViewSrc.indexOf("uiNode") < 0 &&
       presentViewSrc.indexOf("encodeFrame") < 0 &&
-      wireBattlePageSrc.indexOf("planBattlePresentation") >= 0 &&
-      wireBattlePageSrc.indexOf("mountCodeBattle") >= 0 &&
-      wireBattlePageSrc.indexOf("不另建这些挂点") >= 0,
+      presentSrc.indexOf("planBattlePresentation") >= 0 &&
+      readFileSync(uiSource("hangBattle.ts"), "utf8").indexOf("mountCodeBattle") < 0,
     "presentation binds the prefab mounts and does not grow a protocol or a code stub"
   );
 }
@@ -28265,8 +28205,7 @@ function checkIdleSkirmish(): void {
   const bootSrc = readFileSync(uiSource("bootChrome.ts"), "utf8");
   const safeSrc = readFileSync(uiSource("SafeArea.ts"), "utf8");
   const fillSrc = readFileSync(uiSource("screenFill.ts"), "utf8");
-  const wireSrc = readFileSync(uiSource("WireMainlinePage.ts"), "utf8");
-  assert(bootSrc.indexOf("jiemian") >= 0 && bootSrc.indexOf("fitVisibleRoot") >= 0, "loading casts jiemian and fills the visible frame");
+  assert(bootSrc.indexOf("jiemian") >= 0 && bootSrc.indexOf("fitVisibleRoot") >= 0 && bootSrc.indexOf("buildFallback") < 0, "loading casts jiemian and does not build a code loading shell");
   assert(safeSrc.indexOf("wantsSafeDebug") >= 0, "resolution hud is opt-in");
   assert(
     skirmishSrc.indexOf('gesture("run")') >= 0 &&
@@ -28305,7 +28244,7 @@ function checkIdleSkirmish(): void {
     "hang crystal hole is filled, the 999 bubble is replaced, and a loaded panel does not add flat debug buttons"
   );
   assert(battleSrc.indexOf("seatHangField") >= 0 && battleSrc.indexOf('findNamed(field, "Slot_A"') >= 0, "report slots sit on the hang floor");
-  assert(wireSrc.indexOf("hangStandPoint") >= 0 && wireSrc.indexOf("hangFloatOrigin") >= 0, "report playback uses the hang floor spots");
+  assert(battleSrc.indexOf("hangStandPoint") >= 0 && battleSrc.indexOf("hangFloatOrigin") >= 0, "report playback uses the hang floor spots");
 }
 
 async function main(): Promise<void> {
