@@ -6,6 +6,8 @@ import { assignContentSize, positiveUiSize } from "../../../ui/visibleFit";
 const { ccclass, property } = _decorator;
 
 const ELEM_SPRITE = "ui/hero/hero-icon_elem-";
+/** 四行格子。原点 -52，行距 112，第四行底边约在 440。再留一点，避免切到星。 */
+const PORT_MIN_H = 448;
 
 /**
  * HeroListHeroLayer。羊皮纸、滚动、元素筛选和空间字绑在这一层上。
@@ -53,9 +55,16 @@ export class HeroListBoardView extends Component {
   }
 
   /**
-   * content 收进 view，宿主上的空遮罩卸掉。
-   * 还没进场景时不改父节点，调用方等下一帧再来。
+   * 进场景前卸掉宿主遮罩。onLoad 会装一块空模板，格子会被裁到看不见。
+   * content 仍等进了场景再收进 view。
    */
+  dropHostMask(): void {
+    const scroll = this.heroScroll;
+    if (!scroll) return;
+    const hostMask = scroll.getComponent(Mask);
+    if (hostMask) scroll.removeComponent(hostMask);
+  }
+
   prepare(): boolean {
     const scroll = this.heroScroll;
     const port = this.heroPort;
@@ -65,8 +74,8 @@ export class HeroListBoardView extends Component {
       return false;
     }
     if (!this.node.activeInHierarchy) return false;
-    const hostMask = scroll.getComponent(Mask);
-    if (hostMask) scroll.removeComponent(hostMask);
+    this.dropHostMask();
+    this.fitFourRows();
     if (content.parent !== port) content.parent = port;
     content.setPosition(0, 0, 0);
     const scrollUi = scroll.getComponent(UITransform);
@@ -137,6 +146,36 @@ export class HeroListBoardView extends Component {
     const show = text.length > 0;
     this.emptyLabel.node.active = show;
     this.emptyLabel.string = show ? text : "";
+  }
+
+  /**
+   * 日服羊皮纸里至少露出 4 行，多的再滚。
+   * CCBI 视口高 320，大约只剩 3 行。这里把视口抬到 448，羊皮纸向下长出同样的高度。
+   * 锚点在顶上，上沿和元素钮不动。空间字和进化钮跟着下沿走，避免被纸盖住。
+   */
+  private fitFourRows(): void {
+    const scroll = this.heroScroll;
+    const scrollUi = scroll ? scroll.getComponent(UITransform) : null;
+    const scrollSize = positiveUiSize(scrollUi);
+    const height = scrollSize && scrollSize.height > 0 ? scrollSize.height : 0;
+    if (!scrollUi || height >= PORT_MIN_H - 1) return;
+    const extra = PORT_MIN_H - height;
+    const width = scrollSize && scrollSize.width > 0 ? scrollSize.width : 540;
+    assignContentSize(scrollUi, width, PORT_MIN_H);
+    const portUi = this.heroPort ? this.heroPort.getComponent(UITransform) : null;
+    assignContentSize(portUi, width, PORT_MIN_H);
+    const boxUi = this.sprBox ? this.sprBox.getComponent(UITransform) : null;
+    const boxSize = positiveUiSize(boxUi);
+    if (boxUi && boxSize) assignContentSize(boxUi, boxSize.width, boxSize.height + extra);
+    const capHost = this.capacityLabel && this.capacityLabel.node ? this.capacityLabel.node.parent : null;
+    if (capHost && capHost !== this.node) this.nudgeDown(capHost, extra);
+    const evolveHost = this.evolve ? this.evolve.parent : null;
+    if (evolveHost && evolveHost !== this.node) this.nudgeDown(evolveHost, extra);
+  }
+
+  private nudgeDown(node: Node | null, extra: number): void {
+    if (!node || extra === 0) return;
+    node.setPosition(node.position.x, node.position.y - extra, node.position.z);
   }
 
   private silenceHit(): void {

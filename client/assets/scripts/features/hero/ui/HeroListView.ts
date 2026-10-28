@@ -86,6 +86,7 @@ export class HeroListView extends BaseView {
   private shownWatch: (() => void) | null = null;
 
   onOpen(): void {
+    GameLog.shared.info("Hero", "打开实现 新 HeroListView");
     if (this.opened) {
       this.refresh();
       return;
@@ -104,6 +105,7 @@ export class HeroListView extends BaseView {
   }
 
   private async start(): Promise<void> {
+    const started = Date.now();
     try {
       this.silenceHits();
       this.hideBubble();
@@ -120,12 +122,14 @@ export class HeroListView extends BaseView {
         return;
       }
       this.board.bindElem((id) => this.pickElem(id));
+      this.primeCapacity();
       this.offSync = WireSession.onSync(() => this.refresh());
       this.refresh();
       if (!this.scrollReady && this.node.activeInHierarchy) {
         this.failOpen(new Error("HeroListHeroLayer 的 spr_box 下没有 HeroScroll"));
         return;
       }
+      GameLog.shared.info("Hero", "英雄列表挂上 " + (Date.now() - started) + "ms");
       this.finishOpen();
     } catch (err) {
       GameLog.shared.warn("Hero", "英雄列表没有挂上 " + messageOf(err));
@@ -154,7 +158,17 @@ export class HeroListView extends BaseView {
     }
     if (this.tabMenu && this.tabMenu.parent === this.node) node.setSiblingIndex(this.tabMenu.getSiblingIndex());
     if (this.layerCapacity) this.layerCapacity.active = false;
+    board.dropHostMask();
     return board;
+  }
+
+  /** 预制上写着「空间：20/40」。进场景之前就换成名册，避免先闪假数。 */
+  private primeCapacity(): void {
+    const board = this.board;
+    if (!board) return;
+    const model = buildHeroList(this.tab, this.elem);
+    board.setCapacity(model.capacityLine);
+    if (!model.synced) board.setEmpty(model.emptyText);
   }
 
   private refresh(): void {
@@ -164,7 +178,10 @@ export class HeroListView extends BaseView {
       return;
     }
     if (!this.scrollReady) this.scrollReady = this.board.prepare();
-    if (!this.scrollReady) return;
+    if (!this.scrollReady) {
+      this.watchShown();
+      return;
+    }
     this.paint();
   }
 
