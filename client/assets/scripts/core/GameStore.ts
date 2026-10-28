@@ -273,9 +273,22 @@ export class GameStore {
     return this.state.battle;
   }
 
-  static idle(): { fromStore: boolean; rewardTime: number | null; maxRewardTime: number | null } {
-    if (this.state.source !== "wire") return { fromStore: false, rewardTime: null, maxRewardTime: null };
-    return { fromStore: true, rewardTime: this.state.rewardTime, maxRewardTime: this.state.maxRewardTime };
+  /**
+   * 真服起点是 s2c 3004 的 rewardTime。
+   * Mock 起点是 idleAnchorMs。0 和空不当成已经挂过，调用方再退回本页打开时刻。
+   */
+  static idle(): {
+    fromStore: boolean;
+    rewardTime: number | null;
+    maxRewardTime: number | null;
+    anchorMs: number | null;
+  } {
+    if (this.state.source === "wire") {
+      return { fromStore: true, rewardTime: this.state.rewardTime, maxRewardTime: this.state.maxRewardTime, anchorMs: null };
+    }
+    const anchor = this.state.idleAnchorMs;
+    const anchorMs = anchor !== null && isFinite(anchor) && anchor > 0 ? anchor : null;
+    return { fromStore: false, rewardTime: null, maxRewardTime: null, anchorMs };
   }
 
   /**

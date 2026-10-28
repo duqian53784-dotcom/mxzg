@@ -266,6 +266,7 @@ function makeView(): BattleHangView {
   view.worldIcon = new Node("spr_world_icon");
   view.worldIcon.parent = host;
   view.missionName = new Node("lbl_mission_name");
+  labelOn(view.missionName, "999");
   view.missionName.parent = host;
   view.hitMenu = new Node("menu");
   view.hitMenu.addComponent(UITransform).setContentSize(640, 960);
@@ -274,6 +275,13 @@ function makeView(): BattleHangView {
     makeChip(node);
   });
   return view;
+}
+
+function missionLabel(view: BattleHangView): Label {
+  const node = view.missionName;
+  const label = node ? (node.getComponent(Label) as Label | null) : null;
+  if (!label) throw new Error("lbl_mission_name 上没有 Label");
+  return label;
 }
 
 function chipOf(view: BattleHangView): HangMissionChipView {
@@ -425,10 +433,15 @@ async function checkPaint(): Promise<void> {
     assert(view.expLabel !== null && view.expLabel.string === "10/m", "角色经验是表里的每分钟");
     assert(view.bubbleLabel !== null && view.bubbleLabel.string === shown, "泡上的计时和条上一样");
     const chip = chipOf(view);
-    assert(chip.caption !== null && chip.caption.string === "第1关", "关卡标写当前关");
+    assert(chip.caption !== null && chip.caption.string === "", "关卡名不留在左侧小标上");
     assert(view.worldMap !== null && view.worldMap.active === false, "缩略图收起");
     assert(view.mapLabel !== null && view.mapLabel.active === false, "地图字收起");
-    assert(view.missionName !== null && view.missionName.active === false, "预制关卡名让给关卡标");
+    const mission = missionLabel(view);
+    assert(view.missionName !== null && view.missionName.active === true, "关卡名留在预制 lbl_mission_name");
+    assert(mission.string === "第1关", "关卡字来自当前关");
+    assert(mission.fontSize === 45, "关卡字号按 CCBI 45");
+    assert(view.missionName.scale.x === 0.8 && view.missionName.scale.y === 0.8, "关卡字缩放按 CCBI 0.8");
+    assert(mission.color.r === 254 && mission.color.g === 255 && mission.color.b === 255, "关卡字颜色按 CCBI 白");
     assert(view.battleTitle !== null && view.battleTitle.string === "战斗", "中间钮写战斗");
     assert(view.lineupTitle !== null && view.lineupTitle.string === "战力UP", "左侧钮写战力UP");
     assert(view.speedTitle !== null && view.speedTitle.string === "高速战斗", "右侧钮写高速战斗");
@@ -460,7 +473,8 @@ async function checkPaint(): Promise<void> {
     clearChapter();
     Session.source = "wire";
     const unsynced = await openView();
-    assert(chipOf(unsynced).caption !== null && chipOf(unsynced).caption!.string === "主线未同步", "未同步关卡标不编名字");
+    assert(missionLabel(unsynced).string === "主线未同步", "未同步关卡名不编名字");
+    assert(chipOf(unsynced).caption !== null && chipOf(unsynced).caption!.string === "", "未同步也不把关卡名写到左侧小标");
     assert(unsynced.clockLabel !== null && unsynced.clockLabel.string !== "999", "未同步也不留 999");
     assert(unsynced.goldLabel !== null && unsynced.goldLabel.string === "—/m", "未同步且没进 Store 时三格是破折号");
     unsynced.node.destroy();
@@ -552,7 +566,7 @@ async function checkManager(): Promise<void> {
     assert(highlights[0] === "mainline", "打开之后才通知底栏");
     assert(stack[stack.length - 1] === "mainline", "栈顶是挂机");
     assert(opened.goldLabel !== null && opened.goldLabel.string === "200/m", "UIManager 打开后写出收益");
-    assert(chipOf(opened).caption !== null && chipOf(opened).caption!.string === "第1关", "UIManager 打开后写出关卡");
+    assert(missionLabel(opened).string === "第1关", "UIManager 打开后写出关卡");
     assert(UIManager.instance.close(opened) === true, "装好的挂机页可以关");
     assert(stack[stack.length - 1] === "city", "关掉回到主城");
     assert(UIManager.instance.createPageHost("mainline") === null, "关掉之后不再交出旧壳");
