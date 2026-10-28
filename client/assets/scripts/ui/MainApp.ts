@@ -39,6 +39,9 @@ import { formatAvatarIcon, formatCombatPower } from "./hangHud";
 import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
 import { attachPagePrefabShell, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
 import { pagePrefabShell } from "./prefabShellMap";
+import { BackpackView } from "./view/BackpackView";
+import { useBackpackView } from "./view/backpackFlag";
+import { UIManager } from "./view/UIManager";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -167,6 +170,7 @@ export class MainApp extends Component {
       (id) => this.presentPage(id),
       (id) => this.noteClose(id)
     );
+    UIManager.instance.install(this.panels, shell);
     this.panels.start(this.buildCity());
     if (!ConfigDb.current) {
       try {
@@ -237,6 +241,11 @@ export class MainApp extends Component {
       return;
     }
     if (id === "bag") {
+      if (useBackpackView() && this.panels?.current === "bag") {
+        UIManager.instance.close();
+        this.refreshChrome();
+        return;
+      }
       this.openChild(id);
       return;
     }
@@ -266,12 +275,19 @@ export class MainApp extends Component {
     ) {
       return;
     }
+    if (id === "bag" && useBackpackView()) {
+      void UIManager.instance.open(BackpackView).catch((err) => {
+        GameLog.shared.error("MainApp", "背包页没有打开 " + messageOf(err));
+      });
+      this.refreshChrome();
+      return;
+    }
     this.panels?.openChild(id);
     this.refreshChrome();
   }
 
   private back(): void {
-    const closed = this.panels?.back() === true;
+    const closed = UIManager.instance.back() === true;
     if (!closed) return;
     GameLog.shared.info("MainApp", "back to " + (this.panels?.current || ""));
     this.refreshChrome();
@@ -294,6 +310,8 @@ export class MainApp extends Component {
    * ?dev=wire 才留着探针，并且不再盖挂机壳。
    */
   private presentPage(id: string): Node {
+    const viewHost = UIManager.instance.createPageHost(id);
+    if (viewHost) return viewHost;
     const page = this.buildPage(id);
     if (id === "mainline") {
       void mountHangBattleShell(page);
@@ -2087,6 +2105,7 @@ export class MainApp extends Component {
 
   private noteClose(id: string): void {
     if (id === CITY_HUB_MORE_ID) this.mainButton = null;
+    UIManager.instance.noteClosed(id);
   }
 
   private detachWire(): void {
