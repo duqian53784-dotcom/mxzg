@@ -27558,6 +27558,18 @@ function checkCityHub(): void {
       fillSrc.indexOf("const COLS = 4") >= 0,
     "bag beige sits inside the frame and one screen keeps four columns by about five rows"
   );
+  const bagBoardSrc = readFileSync(join(process.cwd(), "client", "assets", "scripts", "module", "bag", "bagBoard.ts"), "utf8");
+  assert(
+    bagBoardSrc.indexOf("export const BAG_COLS = 4") >= 0 &&
+      bagBoardSrc.indexOf("export const BAG_PITCH_X = 118") >= 0 &&
+      bagBoardSrc.indexOf("export const BAG_PITCH_Y = 118") >= 0 &&
+      bagBoardSrc.indexOf("export const BAG_MIN_ROWS = 5") >= 0 &&
+      bagBoardSrc.indexOf("export const BAG_ORIGIN_X = -177") >= 0 &&
+      bagBoardSrc.indexOf("export const BAG_ORIGIN_Y = -56") >= 0 &&
+      bagBoardSrc.indexOf("x: BAG_ORIGIN_X + (index % BAG_COLS) * BAG_PITCH_X") >= 0 &&
+      bagBoardSrc.indexOf("y: BAG_ORIGIN_Y - Math.floor(index / BAG_COLS) * BAG_PITCH_Y") >= 0,
+    "default bag board pitch matches fillBag"
+  );
   const heroListLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroListHeroLayer.prefab");
   const heroInfoLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroInfoLayer.prefab");
   const heroLevelLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroInfoUpLevelLayer.prefab");
