@@ -116,6 +116,18 @@ function idOf(value: unknown): number | null {
   return typeof id === "number" ? id : null;
 }
 
+function spriteFrameOf(data: PrefabObj[], nodeId: number): string {
+  const node = data[nodeId];
+  const comps = node._components || [];
+  for (let i = 0; i < comps.length; i++) {
+    const comp = data[comps[i].__id__];
+    if (!comp || comp.__type__ !== "cc.Sprite") continue;
+    const frame = comp._spriteFrame as { __uuid__?: string } | null;
+    return frame && frame.__uuid__ ? frame.__uuid__ : "";
+  }
+  return "";
+}
+
 function uuidOf(value: unknown): string {
   if (!value || typeof value !== "object") return "";
   const uuid = (value as { __uuid__?: string }).__uuid__;
@@ -177,6 +189,17 @@ function checkPrefabBindings(): void {
   assertNodeRef(cellData, cell.comp, "icon", 17, "spr_icon");
   assertCompRef(cellData, cell.comp, "count", 27, "cc.Label");
   assertNodeRef(cellData, cell.comp, "selectMark", 11, "spr_select");
+  const slotPlate = "5e56f13c-937b-4e86-a0d7-b8abb2aa05fb@f9941";
+  const selectFrame = "6c69245c-edfa-463d-a6a4-c897ba93ac12@f9941";
+  assert(spriteFrameOf(cellData, 5) === slotPlate, "spr_frame 底图应是 common/other_rare-0");
+  assert(spriteFrameOf(cellData, 11) === selectFrame, "spr_select 仍是选中框");
+  assert(spriteFrameOf(cellData, 5) !== spriteFrameOf(cellData, 11), "底图不能和选中框同一张");
+  assert(cellData[17]._active === false, "空槽预制不能默认亮着问号图标");
+  const portrait = layer[91];
+  assert(portrait._lscale.x === 1 && portrait._lscale.y === 1, "店员立绘是 1 倍，不再缩成一小块");
+  assert(portrait._lpos.x === 200 && portrait._lpos.y === 600, "店员立绘落在背包底图后面");
+  const order = (layer[1]._children || []).map((row) => row.__id__);
+  assert(order[0] === 91 && order.indexOf(4) > 0 && order.indexOf(117) > 0, "node_portrait 画在羊皮纸和 spr_bg 下面");
 
   const tabData = prefabAt("client/assets/prefabs/ui/backpack/BackpackTabButton.prefab");
   const tab = componentOn(tabData, TAB_TYPE);
@@ -215,6 +238,11 @@ function checkSources(): void {
     assert(text.indexOf("getChildByName") < 0, views[i] + " 不应 getChildByName");
     assert(text.indexOf("findNamed") < 0, views[i] + " 不应 findNamed");
   }
+  const cellSrc = read("client/assets/scripts/features/backpack/ui/BackpackItemCellView.ts");
+  assert(cellSrc.indexOf("ui/common/other_rare-") >= 0, "运行时格子底图走 other_rare");
+  assert(cellSrc.indexOf("backpack_item-frame-1") < 0, "运行时不再把细金框刷进 spr_frame");
+  assert(cellSrc.indexOf("backpack_spr-rare-") < 0, "运行时不再把稀有文字图刷进 spr_frame");
+  assert(cellSrc.indexOf("other_spr-null") < 0, "空槽不再换成菱形空图");
   const mount = read("client/assets/scripts/features/backpack/ui/BackpackMount.ts");
   assert(mount.indexOf("findNamed") < 0, "backpackMount 不应整树搜索");
   const fill = read("client/assets/scripts/ui/screenFill.ts");
