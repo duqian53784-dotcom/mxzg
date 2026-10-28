@@ -19,6 +19,7 @@ import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./pref
 import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from "./chapterMapView";
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption, pinSprites, seatParchmentList } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
+import { UIManager } from "../framework/ui/UIManager";
 import { cancelPageOpen, logOpenedPrefab, notePrefabReady, pageOpenToken, prefabBaseName } from "./uiOpenLog";
 import { setText } from "./UiKit";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize, uiSize } from "./visibleFit";
@@ -840,24 +841,53 @@ function paintChipIcon(node: Node): void {
   }
 }
 
-/** MAIN 空着先出阵，已经有英雄就直接开战。出阵和关卡预览的「出战」都走这里。 */
-export function startShellFight(root: Node, page: Node): void {
-  if (!page.isValid) return;
+/**
+ * MAIN 空着先出阵，已经有英雄就直接开战。出阵和关卡预览的「出战」都走这里。
+ * 壳已经不在时返回 false，调用方要打日志并 Toast。出阵预制失败同样 Toast，不再只写 warn。
+ */
+export function startShellFight(root: Node, page: Node): boolean {
+  if (!root.isValid || !page.isValid) {
+    GameLog.shared.warn("Mainline", "进入 startShellFight 时挂机壳已关");
+    return false;
+  }
+  GameLog.shared.info("Mainline", "进入 startShellFight");
   const go = () => {
     beginHangBattle(page, "我方", "敌方");
     if (page.isValid) page.emit(PAGE_SHELL_FIGHT);
   };
   if (hangLineupReady()) {
-    go();
-    return;
-  }
-  void openHangSheet(root, HANG_FORMATION_PREFAB, (sheet) => {
-    bindFormationSheet(sheet, () => {
-      const host = sheet.parent;
-      if (host && host.isValid) host.destroy();
+    try {
       go();
-    });
+      return true;
+    } catch (err) {
+      GameLog.shared.warn("Mainline", "开战没有开始 " + messageOf(err));
+      return false;
+    }
+  }
+  void openHangSheet(
+    root,
+    HANG_FORMATION_PREFAB,
+    (sheet) => {
+      bindFormationSheet(sheet, () => {
+        const host = sheet.parent;
+        if (host && host.isValid) host.destroy();
+        go();
+      });
+    },
+    true
+  ).catch((err) => {
+    GameLog.shared.warn("Mainline", "开战没有开始 " + messageOf(err));
+    toastFightFail();
   });
+  return true;
+}
+
+function toastFightFail(): void {
+  try {
+    UIManager.instance.toast("开战没有开始");
+  } catch (err) {
+    GameLog.shared.warn("Mainline", "开战提示没有弹出 " + messageOf(err));
+  }
 }
 
 /** 中间「战斗」和两侧底栏抬到壳根上。全屏 menu 不再当命中框。 */
@@ -1023,8 +1053,11 @@ function hangStageIdx(): number {
   return 1;
 }
 
-async function openHangSheet(host: Node, path: string, onReady?: (view: Node) => void): Promise<void> {
-  if (!host.isValid) return;
+async function openHangSheet(host: Node, path: string, onReady?: (view: Node) => void, surfaceFail = false): Promise<void> {
+  if (!host.isValid) {
+    if (surfaceFail) throw new Error("挂机壳已关");
+    return;
+  }
   const started = monoNow();
   const old = host.getChildByName("BattleSheet");
   if (old) old.destroy();
@@ -1053,6 +1086,7 @@ async function openHangSheet(host: Node, path: string, onReady?: (view: Node) =>
     GameLog.shared.info("Mainline", "hang sheet " + path);
   } catch (err) {
     GameLog.shared.warn("Mainline", "hang sheet " + path + " " + messageOf(err));
+    if (surfaceFail) throw err;
   }
 }
 

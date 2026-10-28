@@ -104,6 +104,12 @@ export class HeroListView extends BaseView {
     }
   }
 
+  /** 页真正露出时再铺格子。打开过程里节点还不在场景上，不能在那时把格子挂出去。 */
+  onEnable(): void {
+    if (!this.board || !this.cellPrefab) return;
+    this.refresh();
+  }
+
   private async start(): Promise<void> {
     const started = Date.now();
     try {
@@ -198,12 +204,16 @@ export class HeroListView extends BaseView {
     };
     this.shownWatch = retry;
     director.on(Director.EVENT_AFTER_UPDATE, retry);
+    const shown = (Node.EventType as { ACTIVE_IN_HIERARCHY_CHANGED?: string }).ACTIVE_IN_HIERARCHY_CHANGED;
+    if (shown) this.node.on(shown, retry);
     this.node.once(Node.EventType.NODE_DESTROYED, () => this.clearShownWatch());
   }
 
   private clearShownWatch(): void {
     if (!this.shownWatch) return;
     director.off(Director.EVENT_AFTER_UPDATE, this.shownWatch);
+    const shown = (Node.EventType as { ACTIVE_IN_HIERARCHY_CHANGED?: string }).ACTIVE_IN_HIERARCHY_CHANGED;
+    if (shown && this.node && this.node.isValid) this.node.off(shown, this.shownWatch);
     this.shownWatch = null;
   }
 

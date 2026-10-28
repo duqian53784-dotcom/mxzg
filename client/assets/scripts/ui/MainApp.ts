@@ -37,7 +37,7 @@ import { WireSession } from "../net/WireSession";
 import { barIndex, barPageId, barSlideDir, selectedBarId } from "./barSlide";
 import { CityChrome, mountCityChromePrefab, TabState } from "./CityChrome";
 import { formatAvatarIcon, formatCombatPower } from "./hangHud";
-import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
+import { CITY_CHROME_PREFAB_PATH, loadPrefab } from "./prefabLoad";
 import { installGmHotkey, openGmDebug, uninstallGmHotkey } from "../features/gm/GmHotkey";
 import { attachPagePrefabShell, HANG_PROBE_EVENT, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
 import { pagePrefabShell } from "./prefabShellMap";
@@ -201,6 +201,7 @@ export class MainApp extends Component {
       },
     });
     this.panels.start(this.buildCity());
+    this.warmBarPrefabs();
     if (!ConfigDb.current) {
       try {
         await ConfigLoader.loadAll();
@@ -664,9 +665,11 @@ export class MainApp extends Component {
   private openMainline(): void {
     GameLog.shared.info("MainApp", "click mainline");
     if (!useBattleView()) {
+      GameLog.shared.info("Mainline", "打开实现 旧 mountHangBattleShell");
       this.openChild("mainline");
       return;
     }
+    GameLog.shared.info("Mainline", "打开实现 新 BattleHangView");
     if (this.panels?.current === "mainline") return;
     this.shell?.holdBarSlide();
     void UIManager.instance.open(BattleHangView).catch((err) => {
@@ -674,6 +677,29 @@ export class MainApp extends Component {
       if (isOpenCancelled(err)) return;
       GameLog.shared.error("MainApp", "战斗页没有打开 " + messageOf(err));
     });
+  }
+
+  /**
+   * 底栏第一次切页会卡在 prefabs 包的第一次加载上，英雄格子也要等这包。
+   * 进城后就预热，不挡主城。失败只打日志，点开时还会再加载一次。
+   */
+  private warmBarPrefabs(): void {
+    const paths = [
+      "prefabs/ui/common/PagePrefabShell",
+      "prefabs/ui/common/ListBackdrop",
+      "prefabs/ui/battle/BattlePanelLayer",
+      "prefabs/ui/battle/HangMissionChip",
+      "prefabs/ui/hero/HeroListLayer",
+      "prefabs/ui/hero/HeroListHeroLayer",
+      "prefabs/ui/hero/HeroIconCell",
+      "prefabs/ui/backpack/BackpackLayer",
+    ];
+    for (let i = 0; i < paths.length; i++) {
+      const path = paths[i];
+      void loadPrefab(path).catch((err) => {
+        GameLog.shared.warn("MainApp", "预热 " + path + " " + messageOf(err));
+      });
+    }
   }
 
   /** 两个 idx 都没有就 Toast。有任意一个则压入只读页，不走 Mock 的 stage.enter。打开不看 net.state。 */

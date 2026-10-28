@@ -89,7 +89,11 @@ function clockText(nowMs: number, openedAtMs: number): string {
   if (idle.fromStore && (idle.rewardTime === null || !isFinite(idle.rewardTime) || idle.rewardTime < IDLE_UNIX_FLOOR)) {
     return "未同步";
   }
-  let elapsed = idle.fromStore ? wireIdleElapsedMs(idle.rewardTime, now) : Math.max(0, now - openedAtMs);
+  const opened = typeof openedAtMs === "number" && isFinite(openedAtMs) ? openedAtMs : now;
+  let elapsed = 0;
+  if (idle.fromStore) elapsed = wireIdleElapsedMs(idle.rewardTime, now);
+  else if (idle.anchorMs !== null && idle.anchorMs >= 1e9) elapsed = Math.max(0, now - idle.anchorMs);
+  else elapsed = Math.max(0, now - opened);
   const cap = idle.fromStore ? wireIdleCapMs(idle.maxRewardTime, idleCapMs()) : idleCapMs();
   if (cap !== null && elapsed > cap) elapsed = cap;
   return formatHangClock(elapsed);
