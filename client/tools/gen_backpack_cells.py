@@ -24,7 +24,7 @@ CELL_UUID = "c4e8a1b2-7d33-4f61-9a20-6b5e0d4c8f11"
 TAB_UUID = "d5f9b2c3-8e44-4072-ab31-7c6f1e5d9022"
 
 SPRITES = {
-    "frame": "ui/bag/backpack_item-frame-1.png",
+    "frame": "ui/common/other_rare-0.png",
     "select": "ui/bag/backpack_spr-select.png",
     "icon": "ui/bag/backpack_spr-default.png",
     "tab": "ui/common/button_btn-tab-23.png",
@@ -282,11 +282,11 @@ def write_prefab(name, objs, meta_uuid):
 def build_cell(frames):
     b = Builder("BackpackItemCell")
     root = b.node("BackpackItemCell", None, 0, 0, 96, 96)
-    frame = b.node("spr_frame", root, 0, 0, 88, 88)
+    frame = b.node("spr_frame", root, 0, 0, 96, 96)
     b.sprite(frame, frames["frame"])
     select = b.node("spr_select", root, 0, 0, 96, 96, active=False)
     b.sprite(select, frames["select"])
-    icon = b.node("spr_icon", root, 0, 6, 72, 72)
+    icon = b.node("spr_icon", root, 0, 6, 72, 72, active=False)
     b.sprite(icon, frames["icon"])
     count = b.node("lbl_count", root, 18, -30, 72, 22)
     b.label(count, "", 16, 255, 248, 220, 72)
@@ -481,8 +481,10 @@ def patch_layer():
         return node_id
 
     if "node_portrait" not in names:
-        # Feet sit just above the parchment. spine/shangcheng is the shopkeeper.
-        portrait = blank_node("node_portrait", 1, 130, 748, 200, 160, 0.5, 0, 0.36, 0.36)
+        # Large shopkeeper behind the bag plate. spine/shangcheng root sits under spr_bg.
+        portrait = blank_node("node_portrait", 1, 200, 600, 520, 420, 0.5, 0, 1, 1)
+        kids = objs[1].get("_children") or []
+        objs[1]["_children"] = [{"__id__": portrait}] + [row for row in kids if row.get("__id__") != portrait]
         print("added node_portrait", portrait)
     host = None
     for i, obj in enumerate(objs):
