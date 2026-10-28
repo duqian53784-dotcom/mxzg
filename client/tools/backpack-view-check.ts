@@ -116,6 +116,18 @@ function idOf(value: unknown): number | null {
   return typeof id === "number" ? id : null;
 }
 
+function spriteFrameOf(data: PrefabObj[], nodeId: number): string {
+  const node = data[nodeId];
+  const comps = node._components || [];
+  for (let i = 0; i < comps.length; i++) {
+    const comp = data[comps[i].__id__];
+    if (!comp || comp.__type__ !== "cc.Sprite") continue;
+    const frame = comp._spriteFrame as { __uuid__?: string } | null;
+    return frame && frame.__uuid__ ? frame.__uuid__ : "";
+  }
+  return "";
+}
+
 function uuidOf(value: unknown): string {
   if (!value || typeof value !== "object") return "";
   const uuid = (value as { __uuid__?: string }).__uuid__;
@@ -177,6 +189,17 @@ function checkPrefabBindings(): void {
   assertNodeRef(cellData, cell.comp, "icon", 17, "spr_icon");
   assertCompRef(cellData, cell.comp, "count", 27, "cc.Label");
   assertNodeRef(cellData, cell.comp, "selectMark", 11, "spr_select");
+  const slotPlate = "5e56f13c-937b-4e86-a0d7-b8abb2aa05fb@f9941";
+  const selectFrame = "6c69245c-edfa-463d-a6a4-c897ba93ac12@f9941";
+  assert(spriteFrameOf(cellData, 5) === slotPlate, "spr_frame 底图应是 common/other_rare-0");
+  assert(spriteFrameOf(cellData, 11) === selectFrame, "spr_select 仍是选中框");
+  assert(spriteFrameOf(cellData, 5) !== spriteFrameOf(cellData, 11), "底图不能和选中框同一张");
+  assert(cellData[17]._active === false, "空槽预制不能默认亮着问号图标");
+  const portrait = layer[91];
+  assert(portrait._lscale.x === 1 && portrait._lscale.y === 1, "店员立绘是 1 倍，不再缩成一小块");
+  assert(portrait._lpos.x === 200 && portrait._lpos.y === 600, "店员立绘落在背包底图后面");
+  const order = (layer[1]._children || []).map((row) => row.__id__);
+  assert(order[0] === 91 && order.indexOf(4) > 0 && order.indexOf(117) > 0, "node_portrait 画在羊皮纸和 spr_bg 下面");
 
   const tabData = prefabAt("client/assets/prefabs/ui/backpack/BackpackTabButton.prefab");
   const tab = componentOn(tabData, TAB_TYPE);
@@ -215,6 +238,11 @@ function checkSources(): void {
     assert(text.indexOf("getChildByName") < 0, views[i] + " 不应 getChildByName");
     assert(text.indexOf("findNamed") < 0, views[i] + " 不应 findNamed");
   }
+  const cellSrc = read("client/assets/scripts/features/backpack/ui/BackpackItemCellView.ts");
+  assert(cellSrc.indexOf("ui/common/other_rare-") >= 0, "运行时格子底图走 other_rare");
+  assert(cellSrc.indexOf("backpack_item-frame-1") < 0, "运行时不再把细金框刷进 spr_frame");
+  assert(cellSrc.indexOf("backpack_spr-rare-") < 0, "运行时不再把稀有文字图刷进 spr_frame");
+  assert(cellSrc.indexOf("other_spr-null") < 0, "空槽不再换成菱形空图");
   const mount = read("client/assets/scripts/features/backpack/ui/BackpackMount.ts");
   assert(mount.indexOf("findNamed") < 0, "backpackMount 不应整树搜索");
   const fill = read("client/assets/scripts/ui/screenFill.ts");
@@ -563,7 +591,11 @@ async function checkBehavior(): Promise<void> {
 
   noteBag(null);
   const unsynced = await openView();
-  assert(cells(unsynced).length === 0, "未同步不能画成空背包格子");
+  assert(cells(unsynced).length === 20, "未同步也要铺出 4×5 空槽");
+  assert(activeIcons(cells(unsynced)).length === 0, "未同步不画道具");
+  const unsyncedBefore = toasts.length;
+  cells(unsynced)[0].node.emit(Button.EventType.CLICK);
+  assert(toasts[unsyncedBefore] === "真服未同步", "未同步空槽不说背包是空的");
   assert(unsynced.talk !== null && unsynced.talk.string === "真服未同步", "未同步台词");
   const unsyncedTabs = tabs(unsynced);
   assert(unsyncedTabs.length === 4, "未同步也要有四个页签");
@@ -591,15 +623,16 @@ async function checkBehavior(): Promise<void> {
   assert(view.talk !== null && view.talk.string === "店里欢迎光临", "台词读 language 5788");
 
   const itemCells = cells(view);
-  assert(itemCells.length === 16, "道具页至少四行");
+  assert(itemCells.length === 20, "道具页是 4×5");
   const shown = activeIcons(itemCells);
   assert(shown.length === 2, "道具页只留红药和无数量药，金币和数量 0 不进格子");
   const potion = shown.filter((cell) => cell.count && cell.count.string === "3");
   const unknown = shown.filter((cell) => cell.count && cell.count.node && cell.count.node.active === false);
   assert(potion.length === 1 && unknown.length === 1, "数量 3 要写出来，没同步的数量不要写成 0");
   assert(itemCells[0].node.position.x === -168 && itemCells[0].node.position.y === -56, "第一格位置");
+  assert(itemCells[16].node.position.x === -168 && itemCells[16].node.position.y === -472, "第五行第一格");
   const contentUi = view.bagContent.getComponent(UITransform) as UITransform;
-  assert(contentUi.contentSize.height === 440, "四行内容高度");
+  assert(contentUi.contentSize.height === 544, "五行内容高度");
 
   const tabRow = tabs(view);
   assert(tabRow[1].isSelected() === true && tabRow[0].isSelected() === false, "缺省停在道具");
@@ -654,7 +687,8 @@ async function checkBehavior(): Promise<void> {
 
   noteBag(null);
   view.onOpen();
-  assert(cells(view).length === 0, "同步丢掉之后不能留着上一批格子");
+  assert(cells(view).length === 20, "未同步仍留下空槽");
+  assert(activeIcons(cells(view)).length === 0, "同步丢掉之后不能留着上一批道具");
   assert(view.node.getChildByName("InfoCard") === null, "未同步要把详情收起来");
   assert(view.talk !== null && view.talk.string === "真服未同步", "再次未同步要改台词");
   noteBag([
@@ -680,12 +714,28 @@ async function checkBehavior(): Promise<void> {
   noteBag([]);
   const empty = await openView();
   const emptyCells = cells(empty);
-  assert(emptyCells.length === 16 && activeIcons(emptyCells).length === 0, "已同步的空背包仍铺空格");
+  assert(emptyCells.length === 20 && activeIcons(emptyCells).length === 0, "已同步的空背包仍铺空格");
   assert(empty.talk !== null && empty.talk.string === "店里欢迎光临", "空背包不是未同步");
   const before = toasts.length;
   emptyCells[0].node.emit(Button.EventType.CLICK);
   assert(toasts[before] === "背包是空的", "空格提示");
   empty.node.destroy();
+
+  noteBag([{ itemId: 20, itemType: 20, num: 3 }]);
+  const hidden = makeView();
+  hidden.node.active = false;
+  hidden.onOpen();
+  await hidden.whenReady();
+  assert(cells(hidden).length === 0, "还没进场景时不把格子挂出去");
+  hidden.node.active = true;
+  pump(1);
+  const appeared = cells(hidden);
+  assert(appeared.length === 20, "进场景后铺出 4×5 格子");
+  assert(activeIcons(appeared).length === 1 && appeared[0].count !== null && appeared[0].count.string === "3", "进场景后画出背包里的药");
+  assert(appeared[0].node.position.x === -168 && appeared[0].node.position.y === -56, "进场景后第一格落在视口里");
+  assert(hidden.bagContent !== null && hidden.bagContent.parent === hidden.bagPort, "进场景后 content 在 view 里");
+  assert(hidden.bagScroll !== null && hidden.bagScroll.getComponent(Mask) === null, "进场景前就要卸掉宿主遮罩");
+  hidden.node.destroy();
 }
 
 async function checkOpenFailure(): Promise<void> {

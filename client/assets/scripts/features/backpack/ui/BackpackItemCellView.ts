@@ -27,7 +27,7 @@ export class BackpackItemCellView extends Component {
     if (!item) {
       if (this.frame) {
         this.frame.active = true;
-        paintSpritePaths(this.frame, ["ui/common/other_spr-null"]);
+        paintSpritePaths(this.frame, [SLOT_PLATE]);
       }
       if (this.icon) this.icon.active = false;
       if (this.count) {
@@ -56,7 +56,12 @@ export class BackpackItemCellView extends Component {
   }
 }
 
+/** 空槽和 0 稀有都用 common 的底图。稀有文字图和细金框不是格子底。 */
+const SLOT_PLATE = "ui/common/other_rare-0";
+
 function rareFrame(rare: number): string {
-  if (rare === 2 || rare === 3 || rare === 4) return "ui/bag/backpack_spr-rare-" + rare;
-  return "ui/bag/backpack_item-frame-1";
+  let level = Math.floor(rare);
+  if (level > 6) level = 6;
+  if (level < 1) level = 0;
+  return "ui/common/other_rare-" + level;
 }
