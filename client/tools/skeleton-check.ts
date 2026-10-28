@@ -27348,9 +27348,9 @@ function checkCityHub(): void {
     rootW: 640,
     rootH: 960,
     anchorY: 0,
-    bgY: 105.75,
+    bgY: -14.25,
     bgAy: 0,
-    bgH: 614.4,
+    bgH: 734.4,
   });
   assert(
     heroWindow.scale === 1 &&
@@ -27364,7 +27364,7 @@ function checkCityHub(): void {
       Math.abs(heroWindow.screenTop - 297.75) < 0.05 &&
       Math.abs(heroWindow.screenBottom - -374.25) < 0.05 &&
       Math.abs(bagWindow.screenTop - 240.15) < 0.05 &&
-      Math.abs(bagWindow.screenBottom - -374.25) < 0.05,
+      Math.abs(bagWindow.screenBottom - -494.25) < 0.05,
     "hero and bag ccbi windows stay at design scale 1 and are not spread to 684"
   );
   assert(
@@ -27547,6 +27547,16 @@ function checkCityHub(): void {
       fillSrc.indexOf("other_spr-null") >= 0 &&
       fillSrc.indexOf("function gridScroll") < 0,
     "bag scroll lives under spr_box and fillBag does not build BagScroll"
+  );
+  assert(
+    bagFrameFits(bagLayer) &&
+      fillSrc.indexOf("const BAG_PITCH_X = 118") >= 0 &&
+      fillSrc.indexOf("const BAG_PITCH_Y = 118") >= 0 &&
+      fillSrc.indexOf("const BAG_MIN_ROWS = 5") >= 0 &&
+      fillSrc.indexOf("paddedSlots(rows.length, BAG_MIN_ROWS)") >= 0 &&
+      fillSrc.indexOf("BAG_MIN_ROWS * BAG_PITCH_Y + 24") >= 0 &&
+      fillSrc.indexOf("const COLS = 4") >= 0,
+    "bag beige sits inside the frame and one screen keeps four columns by about five rows"
   );
   const heroListLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroListHeroLayer.prefab");
   const heroInfoLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroInfoLayer.prefab");
@@ -28157,6 +28167,66 @@ function checkCityHub(): void {
   );
 }
 
+function bagFrameFits(file: string): boolean {
+  const data = JSON.parse(readFileSync(file, "utf8")) as Array<{
+    __type__?: string;
+    _name?: string;
+    _parent?: { __id__?: number } | null;
+    _components?: { __id__?: number }[];
+    _lpos?: { x?: number; y?: number };
+    _anchorPoint?: { x?: number; y?: number };
+    _contentSize?: { width?: number; height?: number };
+  }>;
+  const near = (value: number | undefined, expected: number): boolean => typeof value === "number" && Math.abs(value - expected) < 0.02;
+  const find = (name: string, parentName: string) => {
+    for (let i = 0; i < data.length; i++) {
+      const node = data[i];
+      if (!node || node.__type__ !== "cc.Node" || node._name !== name) continue;
+      const parent = node._parent;
+      const parentId = parent && typeof parent.__id__ === "number" ? parent.__id__ : -1;
+      const parentNode = parentId >= 0 ? data[parentId] : null;
+      if (parentNode && parentNode._name === parentName) return node;
+    }
+    return null;
+  };
+  const uiOf = (node: { _components?: { __id__?: number }[] } | null) => {
+    const comps = node && node._components ? node._components : [];
+    for (let i = 0; i < comps.length; i++) {
+      const compId = comps[i].__id__;
+      if (typeof compId !== "number") continue;
+      const comp = data[compId];
+      if (comp && comp.__type__ === "cc.UITransform") return comp;
+    }
+    return null;
+  };
+  const bg = find("spr_bg", "BackpackLayer");
+  const box = find("spr_box", "BackpackLayer");
+  const plate = find("ParchmentPlate", "BackpackLayer");
+  const portrait = find("node_portrait", "BackpackLayer");
+  const bgUi = uiOf(bg);
+  const boxUi = uiOf(box);
+  const plateUi = uiOf(plate);
+  if (!bg || !box || !plate || !portrait || !bgUi || !boxUi || !plateUi) return false;
+  const bgSize = bgUi._contentSize;
+  const bgAnchor = bgUi._anchorPoint;
+  const boxSize = boxUi._contentSize;
+  const boxAnchor = boxUi._anchorPoint;
+  const plateSize = plateUi._contentSize;
+  if (!bgSize || !bgAnchor || !boxSize || !boxAnchor || !plateSize || !bg._lpos || !box._lpos || !plate._lpos || !portrait._lpos) return false;
+  const bgTop = (bg._lpos.y || 0) + (1 - bgAnchor.y) * bgSize.height;
+  if (!near(bg._lpos.y, -14.25) || !near(bgSize.width, 640) || !near(bgSize.height, 734.4) || !near(bgAnchor.y, 0) || !near(bgTop, 720.15)) return false;
+  if (!near(box._lpos.y, 615.75) || !near(box._lpos.x, 320) || !near(boxSize.width, 520) || !near(boxSize.height, 565) || !near(boxAnchor.y, 1)) return false;
+  const boxLeft = (box._lpos.x || 0) - boxAnchor.x * boxSize.width;
+  const boxRight = boxLeft + boxSize.width;
+  const boxBottom = (box._lpos.y || 0) - boxAnchor.y * boxSize.height;
+  const innerLeft = 59;
+  const innerRight = 640 - 59;
+  const innerBottom = (bg._lpos.y || 0) + 59;
+  if (boxLeft < innerLeft - 0.5 || boxRight > innerRight + 0.5 || boxBottom < innerBottom - 0.5) return false;
+  if (!near(plate._lpos.y, 352.95) || !near(plateSize.width, 640) || !near(plateSize.height, 734.4)) return false;
+  return near(portrait._lpos.y, 748);
+}
+
 function bagScrollWired(file: string): boolean {
   const data = JSON.parse(readFileSync(file, "utf8")) as Array<{
     __type__?: string;
@@ -28184,7 +28254,7 @@ function bagScrollWired(file: string): boolean {
   }
   if (scrollId < 0) return false;
   const scroll = data[scrollId];
-  if (!scroll._lpos || scroll._lpos.y !== -12) return false;
+  if (!scroll._lpos || scroll._lpos.y !== -5) return false;
   let contentId = -1;
   let sawView = false;
   const kids = scroll._children || [];
@@ -28195,6 +28265,20 @@ function bagScrollWired(file: string): boolean {
     if (!child || child.__type__ !== "cc.Node") continue;
     if (child._name === "view") sawView = true;
     if (child._name === "content") contentId = childId;
+    if (child._name === "view" || child._name === "content") {
+      const childComps = child._components || [];
+      let sized = false;
+      for (let c = 0; c < childComps.length; c++) {
+        const compId = childComps[c].__id__;
+        if (typeof compId !== "number") continue;
+        const comp = data[compId];
+        if (!comp || comp.__type__ !== "cc.UITransform") continue;
+        const anchor = comp._anchorPoint;
+        const box = comp._contentSize;
+        sized = !!anchor && anchor.x === 0.5 && anchor.y === 1 && !!box && box.width === 520 && box.height === 555;
+      }
+      if (!sized) return false;
+    }
   }
   if (!sawView || contentId < 0) return false;
   const comps = scroll._components || [];
@@ -28208,7 +28292,7 @@ function bagScrollWired(file: string): boolean {
     if (comp.__type__ === "cc.UITransform") {
       const anchor = comp._anchorPoint;
       const box = comp._contentSize;
-      anchorOk = !!anchor && anchor.x === 0.5 && anchor.y === 1 && !!box && box.width === 520 && box.height === 400;
+      anchorOk = !!anchor && anchor.x === 0.5 && anchor.y === 1 && !!box && box.width === 520 && box.height === 555;
     }
     if (comp.__type__ === "cc.ScrollView") {
       const content = comp._content;

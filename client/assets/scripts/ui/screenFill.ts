@@ -72,8 +72,12 @@ const HERO_EXP_ITEM = 900101;
 const COLS = 4;
 const HERO_PITCH_X = 108;
 const HERO_PITCH_Y = 112;
-const BAG_PITCH_X = 112;
-const BAG_PITCH_Y = 104;
+/** 格子 96。日服设计宽下 pitch ≈ rare-0 加边距再加 10（约 129×131）。118 是底栏之上仍能看见第 5 行大半的间距。 */
+const BAG_PITCH_X = 118;
+const BAG_PITCH_Y = 118;
+const BAG_MIN_ROWS = 5;
+const BAG_ORIGIN_X = -177;
+const BAG_ORIGIN_Y = -56;
 /** language 2101–2105。elem 0 是筛选里的全部。六个钮是全部、火、水、木、光、暗。 */
 const ELEM_NAME = ["", "火", "水", "木", "光", "暗"];
 const HERO_ELEM_BUTTONS = 6;
@@ -1174,7 +1178,7 @@ function fillBag(view: Node): void {
     for (let i = 0; i < tabs.length; i++) paintTab(tabs[i], BAG_TABS[i].id === tab);
     const rows = bagRows(tab);
     if (picked && !rows.some((row) => sameBag(row, picked as StoreBagItem))) picked = null;
-    const shown = paddedSlots(rows.length);
+    const shown = paddedSlots(rows.length, BAG_MIN_ROWS);
     for (let i = 0; i < shown; i++) {
       const item = i < rows.length ? rows[i] : null;
       const cell = spawnPrefab(cellPrefab, content);
@@ -1190,9 +1194,9 @@ function fillBag(view: Node): void {
           : null;
       if (content.layer) adoptLayer(cell, content.layer);
       bindBagCell(cell, item, selected, onTap);
-      place(cell, content, gridX(i, -168, BAG_PITCH_X), gridY(i, -56, BAG_PITCH_Y));
+      place(cell, content, gridX(i, BAG_ORIGIN_X, BAG_PITCH_X), gridY(i, BAG_ORIGIN_Y, BAG_PITCH_Y));
     }
-    sizeScroll(content, slotRows(shown) * BAG_PITCH_Y + 24, 400 + fit.extra);
+    sizeScroll(content, slotRows(shown, BAG_MIN_ROWS) * BAG_PITCH_Y + 24, 400 + fit.extra);
     pinBagScroll(content);
   };
   void Promise.all([loadPrefab(BAG_CELL), loadPrefab(BAG_TAB)]).then(
@@ -1243,12 +1247,12 @@ function bagScrollContent(view: Node, fit: ParchmentFit): Node | null {
   return content;
 }
 
-/** 视口高度跟 spr_box，空账号的 4 行也能落在羊皮纸里面。 */
+/** 视口高度跟 spr_box。空账号按 5 行要高，盒子不够时才收到内缘里。 */
 function bagPortHeight(box: Node, scroll: Node, fit: ParchmentFit): number {
   const boxSize = positiveUiSize(box.getComponent(UITransform));
   const topInset = scroll.position.y < 0 ? -scroll.position.y : 0;
   const room = boxSize ? boxSize.height - topInset - topInset : 0;
-  const rows = slotRows(COLS * 4) * BAG_PITCH_Y + 24;
+  const rows = BAG_MIN_ROWS * BAG_PITCH_Y + 24;
   const want = Math.max(400 + fit.extra, rows);
   if (room > 80) return Math.min(want, room);
   return want;
@@ -3115,13 +3119,13 @@ function clearChildren(node: Node): void {
   for (let i = 0; i < old.length; i++) old[i].destroy();
 }
 
-function paddedSlots(count: number): number {
-  return slotRows(Math.max(count, COLS * 4)) * COLS;
+function paddedSlots(count: number, minRows = 4): number {
+  return slotRows(Math.max(count, COLS * minRows), minRows) * COLS;
 }
 
-function slotRows(count: number): number {
-  if (count <= 0) return 4;
-  return Math.max(4, Math.ceil(count / COLS));
+function slotRows(count: number, minRows = 4): number {
+  if (count <= 0) return minRows;
+  return Math.max(minRows, Math.ceil(count / COLS));
 }
 
 function gridX(index: number, origin: number, pitch: number): number {
