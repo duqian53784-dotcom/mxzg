@@ -35,7 +35,7 @@ export class HeroIconCellView extends Component {
   @property(Label)
   mark: Label | null = null;
 
-  private tapped = false;
+  private tap: (() => void) | null = null;
 
   show(cell: HeroCellModel, onTap: (() => void) | null): void {
     const empty = cell.kind === "empty";
@@ -47,10 +47,26 @@ export class HeroIconCellView extends Component {
     if (this.lock) this.lock.active = !empty && cell.locked;
     if (this.battle) this.battle.active = !empty && cell.deployed && !cell.locked;
     if (this.mark) this.mark.node.active = false;
-    if (!onTap || empty || this.tapped) return;
-    this.tapped = true;
-    if (!this.node.getComponent(Button)) this.node.addComponent(Button);
-    this.node.on(Button.EventType.CLICK, onTap);
+    this.bindTap(empty || !onTap ? null : onTap);
+  }
+
+  /** 空槽跟日服一样不提示。有英雄或未获得才回一句。 */
+  private bindTap(onTap: (() => void) | null): void {
+    if (this.tap) {
+      this.node.off(Button.EventType.CLICK, this.tap);
+      this.tap = null;
+    }
+    let button = this.node.getComponent(Button);
+    if (!onTap) {
+      if (button) button.interactable = false;
+      return;
+    }
+    if (!button) button = this.node.addComponent(Button);
+    button.transition = Button.Transition.NONE;
+    button.interactable = true;
+    const run = () => onTap();
+    this.tap = run;
+    this.node.on(Button.EventType.CLICK, run);
   }
 
   private paintFace(cell: HeroCellModel, empty: boolean): void {

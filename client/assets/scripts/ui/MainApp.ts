@@ -321,6 +321,7 @@ export class MainApp extends Component {
       if (fromBar && !this.shell?.barSlideWaiting()) this.sealBarSlide();
       return;
     }
+    if (id === "hero") GameLog.shared.info("Hero", "打开实现 旧 fillHero");
     GameLog.shared.info("MainApp", "tab " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
@@ -387,6 +388,7 @@ export class MainApp extends Component {
       this.openHeroView(false);
       return;
     }
+    if (id === "hero") GameLog.shared.info("Hero", "打开实现 旧 fillHero");
     this.panels?.openChild(id);
     this.refreshChrome();
   }
@@ -2158,6 +2160,7 @@ export class MainApp extends Component {
         this.openHeroView(false);
         return;
       }
+      GameLog.shared.info("Hero", "打开实现 旧 fillHero");
       this.panels?.openChild("hero");
       this.refreshChrome();
       return;
@@ -2180,6 +2183,7 @@ export class MainApp extends Component {
         this.openHeroView(false);
         return;
       }
+      if (jump === "hero") GameLog.shared.info("Hero", "打开实现 旧 fillHero");
       this.panels?.openChild(jump);
       this.refreshChrome();
       return;

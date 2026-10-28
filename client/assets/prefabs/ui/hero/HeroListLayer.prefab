@@ -2309,7 +2309,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_active": true,
+    "_active": false,
     "_layer": 33554432,
     "_parent": {
       "__id__": 73
@@ -3002,7 +3002,7 @@
     "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
-    "_string": "空间：20/40",
+    "_string": "",
     "_font": {
       "__uuid__": "4ff55f31-773f-4ef9-99b6-466b5deeecb9"
     },

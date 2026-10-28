@@ -182,7 +182,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 580.0,
-      "height": 450.0
+      "height": 548.0
     },
     "_objFlags": 0,
     "__type__": "cc.UITransform",
@@ -272,7 +272,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 145.5,
+      "y": 47.5,
       "x": 320.0
     },
     "_objFlags": 0,
@@ -1806,7 +1806,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 169.889,
+      "y": 71.889,
       "x": 605.0
     },
     "_objFlags": 0,
@@ -2122,7 +2122,7 @@
     "_actualFontSize": 20,
     "_isItalic": false,
     "_spacingX": 0,
-    "_string": "空间：20/40",
+    "_string": "",
     "_font": {
       "__uuid__": "4ff55f31-773f-4ef9-99b6-466b5deeecb9"
     },
@@ -2378,7 +2378,7 @@
     "__type__": "cc.CompPrefabInfo"
   },
   {
-    "_useGrayscale": false,
+    "_useGrayscale": true,
     "_color": {
       "__type__": "cc.Color",
       "r": 255,
@@ -2540,8 +2540,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 0,
-      "height": 0
+      "width": 160,
+      "height": 40
     },
     "_objFlags": 0,
     "__type__": "cc.UITransform",
@@ -2576,10 +2576,10 @@
   },
   {
     "_underlineHeight": 2,
-    "_actualFontSize": 44,
+    "_actualFontSize": 26,
     "_isItalic": false,
     "_spacingX": 0,
-    "_string": "",
+    "_string": "永久皮膚",
     "_font": {
       "__uuid__": "4ff55f31-773f-4ef9-99b6-466b5deeecb9"
     },
@@ -2587,12 +2587,12 @@
     "__type__": "cc.Label",
     "_color": {
       "__type__": "cc.Color",
-      "r": 255,
-      "g": 255,
-      "b": 255,
+      "r": 90,
+      "g": 62,
+      "b": 40,
       "a": 255
     },
-    "_overflow": 0,
+    "_overflow": 2,
     "_horizontalAlign": 1,
     "_outlineWidth": 2,
     "_isBold": false,
@@ -2612,7 +2612,7 @@
     "__editorExtras__": {},
     "_name": "",
     "_shadowBlur": 2,
-    "_lineHeight": 44,
+    "_lineHeight": 30,
     "_enableOutline": false,
     "_outlineColor": {
       "__type__": "cc.Color",
@@ -2626,7 +2626,7 @@
     "_dstBlendFactor": 4,
     "_enabled": true,
     "_isUnderline": false,
-    "_fontSize": 44,
+    "_fontSize": 26,
     "_fontFamily": "Arial",
     "_id": "",
     "_objFlags": 0,
@@ -2657,7 +2657,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "z": 0,
-      "y": 129.6,
+      "y": 31.6,
       "x": 0.0
     },
     "_objFlags": 0,
@@ -2969,7 +2969,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 0,
-      "y": -108,
+      "y": -88,
       "z": 0
     },
     "_lrot": {
@@ -3010,7 +3010,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 540,
-      "height": 320
+      "height": 448
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -3098,7 +3098,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 540,
-      "height": 320
+      "height": 448
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -3186,7 +3186,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 540,
-      "height": 320
+      "height": 448
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
