@@ -47,6 +47,9 @@
       },
       {
         "__id__": 458
+      },
+      {
+        "__id__": 460
       }
     ],
     "_prefab": {
@@ -11444,6 +11447,119 @@
     },
     "btnMorePanel": {
       "__id__": 127
+    }
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "94f5df59ffdc4c0c922ee3"
+  },
+  {
+    "__type__": "2674fQUK0pLDKuvAtF9PysP",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 459
+    },
+    "_id": "",
+    "lblName": {
+      "__id__": 345
+    },
+    "lblSub": {
+      "__id__": 351
+    },
+    "lblLevel": {
+      "__id__": 451
+    },
+    "levelBg": {
+      "__id__": 445
+    },
+    "avatar": {
+      "__id__": 439
+    },
+    "goldValue": {
+      "__id__": 395
+    },
+    "gemValue": {
+      "__id__": 425
+    },
+    "powerValue": {
+      "__id__": 373
+    },
+    "actGroup": {
+      "__id__": 9
+    },
+    "utilityRow": {
+      "__id__": 77
+    },
+    "bottomBg": {
+      "__id__": 139
+    },
+    "tabCity": {
+      "__id__": 145
+    },
+    "tabHero": {
+      "__id__": 171
+    },
+    "tabBag": {
+      "__id__": 197
+    },
+    "tabBattle": {
+      "__id__": 223
+    },
+    "tabDungeon": {
+      "__id__": 249
+    },
+    "tabClan": {
+      "__id__": 275
+    },
+    "tabFetter": {
+      "__id__": 301
+    },
+    "activityButtons": [
+      {
+        "__id__": 13
+      },
+      {
+        "__id__": 21
+      },
+      {
+        "__id__": 29
+      },
+      {
+        "__id__": 37
+      },
+      {
+        "__id__": 45
+      },
+      {
+        "__id__": 53
+      },
+      {
+        "__id__": 61
+      },
+      {
+        "__id__": 69
+      }
+    ],
+    "btnReplay": {
+      "__id__": 81
+    },
+    "btnFriend": {
+      "__id__": 89
+    },
+    "btnMail": {
+      "__id__": 97
+    },
+    "btnRank": {
+      "__id__": 105
+    },
+    "btnMore": {
+      "__id__": 113
     }
   }
 ]

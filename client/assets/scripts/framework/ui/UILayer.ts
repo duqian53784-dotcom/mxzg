@@ -1,9 +1,10 @@
 /**
- * 和 UIShell 的页面层对齐。
- * Chrome 不进视图注册，顶栏底栏仍由主城壳挂着。
+ * Page 进页面栈。
+ * 其它层要带 hostId，调用方用 setResidentHost 给出父节点。这一层不认识具体界面。
  */
 export enum UILayer {
   Page = "page",
+  Hud = "hud",
   Popup = "popup",
   Toast = "toast",
 }

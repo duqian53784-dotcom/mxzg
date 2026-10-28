@@ -15,6 +15,11 @@ export interface ViewSpec {
   cache: boolean;
   /** 同一页面能否叠两份。不能时，进行中的打开共用一次，只压一层。 */
   allowMultiple: boolean;
+  /**
+   * 非 Page 挂到哪一个常驻宿主。
+   * 宿主由 UIManager.setResidentHost 登记，注册表只存字符串。
+   */
+  hostId?: string;
   /** 不写就直接生成在宿主下。 */
   mount?: ViewMount;
 }
@@ -32,6 +37,7 @@ export function view(spec: ViewSpec): ClassDecorator {
     layer: spec.layer,
     cache: spec.cache === true,
     allowMultiple: spec.allowMultiple === true,
+    hostId: spec.hostId,
     mount: spec.mount,
   };
   return (ctor) => {

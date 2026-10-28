@@ -43,6 +43,7 @@ export function isOpenCancelled(err: unknown): boolean {
  * 没登记的页面继续走原来的 presentPage，这里不接。
  * 预制没装上之前不进页面栈，避免留下可点的空壳。
  * 每次打开带一个意图。加载期间切走，旧意图作废，不能再压栈。
+ * 非 Page 且写了 hostId 的界面挂到常驻宿主，不进页面栈，也不改底栏。
  */
 export class UIManager {
   static readonly instance = new UIManager();
@@ -53,6 +54,10 @@ export class UIManager {
   private prepared = new Map<string, OpenPage>();
   private pages = new Map<string, OpenPage[]>();
   private cached = new Map<string, OpenPage>();
+  private residents = new Map<string, OpenPage>();
+  private residentHosts = new Map<string, () => Node | null>();
+  private residentEpoch = new Map<string, number>();
+  private pendingResident = new Map<string, Node>();
   private opening = new Map<string, Promise<BaseView<unknown>>>();
   private tokens = new Map<number, string>();
   private nextToken = 1;
@@ -70,7 +75,10 @@ export class UIManager {
   async open<T>(ctor: ViewClass<T>, args?: T): Promise<BaseView<T>> {
     const spec = viewSpecOf(ctor);
     if (!spec) throw new Error("视图未注册");
-    if (spec.layer !== UILayer.Page) throw new Error("这一阶段 UIManager 只打开 Page，收到 " + spec.layer);
+    if (spec.layer !== UILayer.Page) {
+      if (!spec.hostId) throw new Error("常驻界面缺少 hostId " + spec.id);
+      return this.openResident(ctor, spec, args);
+    }
     if (!this.nav) throw new Error("UIManager 还没接上页面栈");
     if (!spec.allowMultiple) {
       const existing = this.top(spec.id);
@@ -110,14 +118,50 @@ export class UIManager {
     return ready.host;
   }
 
-  /** 关掉当前这一页。传入视图时，它必须就是当前页。 */
-  close(view?: object): boolean {
+  /** 常驻层的父节点。Page 不看这里。 */
+  setResidentHost(id: string, provider: () => Node | null): void {
+    this.residentHosts.set(id, provider);
+  }
+
+  /** 按注册 id 打开。没登记就失败。 */
+  async openById<T = unknown>(id: string, args?: T): Promise<BaseView<T>> {
+    const ctor = viewCtorById(id);
+    if (!ctor) throw new Error("视图未注册 " + id);
+    return this.open(ctor as ViewClass<T>, args);
+  }
+
+  /** 页面栈往回退一层。已经在根上时返回 false。常驻层不跟着关。 */
+  back(): boolean {
     if (!this.nav) return false;
+    return this.nav.back();
+  }
+
+  isOpen(target: Function | string | object): boolean {
+    const id = this.idOf(target);
+    if (!id) return false;
+    const resident = this.residents.get(id);
+    if (resident && resident.host.isValid) return true;
+    return !!this.top(id);
+  }
+
+  /** 关掉常驻界面，或当前这一页。常驻界面不要求它是页面栈顶。 */
+  close(view?: object): boolean {
     if (view) {
       const spec = viewSpecOf(view.constructor);
+      if (spec && spec.layer !== UILayer.Page) return this.closeResident(spec.id);
+      if (!this.nav) return false;
       if (!spec || this.nav.current !== spec.id) return false;
     }
-    return this.nav.back();
+    return this.back();
+  }
+
+  /** 按 id 关掉。常驻界面在加载中也会作废这次打开。 */
+  closeById(id: string): boolean {
+    const ctor = viewCtorById(id);
+    const spec = ctor ? viewSpecOf(ctor) : null;
+    if (spec && spec.layer !== UILayer.Page) return this.closeResident(spec.id);
+    if (this.nav && this.nav.current === id) return this.nav.back();
+    return false;
   }
 
   toast(text: string): void {
@@ -173,6 +217,119 @@ export class UIManager {
     }
     page.view.runUnbind();
     page.view.runDispose();
+  }
+
+  private idOf(target: Function | string | object): string | null {
+    if (typeof target === "string") return target;
+    if (typeof target === "function") {
+      const spec = viewSpecOf(target);
+      return spec ? spec.id : null;
+    }
+    const spec = viewSpecOf(target.constructor);
+    return spec ? spec.id : null;
+  }
+
+  private residentParent(spec: ViewSpec): Node | null {
+    if (!spec.hostId) return null;
+    const provider = this.residentHosts.get(spec.hostId);
+    if (!provider) return null;
+    const node = provider();
+    if (!node || !node.isValid) return null;
+    return node;
+  }
+
+  private async openResident<T>(ctor: ViewClass<T>, spec: ViewSpec, args: unknown): Promise<BaseView<T>> {
+    if (!spec.allowMultiple) {
+      const existing = this.residents.get(spec.id);
+      if (existing && (!existing.host.isValid || !existing.view.node || !existing.view.node.isValid)) {
+        this.residents.delete(spec.id);
+      }
+      const alive = this.residents.get(spec.id);
+      if (alive) {
+        const started = monoNow();
+        alive.view.runOpen(args);
+        await alive.view.whenReady();
+        this.noteOpened(alive.view, spec, started);
+        return alive.view as BaseView<T>;
+      }
+      const pending = this.opening.get(spec.id);
+      if (pending) return (await pending) as BaseView<T>;
+    }
+    const job = this.openResidentNew(ctor, spec, args);
+    if (!spec.allowMultiple) this.opening.set(spec.id, job);
+    try {
+      return (await job) as BaseView<T>;
+    } finally {
+      if (this.opening.get(spec.id) === job) this.opening.delete(spec.id);
+    }
+  }
+
+  private async openResidentNew<T>(ctor: ViewClass<T>, spec: ViewSpec, args: unknown): Promise<BaseView<T>> {
+    const started = monoNow();
+    const epoch = this.residentEpoch.get(spec.id) || 0;
+    const parent = this.residentParent(spec);
+    if (!parent) throw new Error("常驻层没有宿主 " + (spec.hostId || spec.id));
+    let viewNode: Node | null = null;
+    let view: BaseView<unknown> | null = null;
+    try {
+      let prefab: Prefab;
+      try {
+        prefab = await loadPrefab(spec.prefab);
+      } catch (err) {
+        throw new Error(spec.prefab + " " + messageOf(err));
+      }
+      this.ensureResident(spec.id, epoch);
+      if (!parent.isValid) throw new Error("页面已关");
+      viewNode = spec.mount ? await spec.mount(parent, prefab) : spawnPrefab(prefab, parent);
+      if (!viewNode || !viewNode.isValid) throw new Error("页面已关");
+      this.pendingResident.set(spec.id, viewNode);
+      this.ensureResident(spec.id, epoch);
+      const found = viewNode.getComponent(ctor);
+      if (!found) throw new Error(spec.prefab + " 上没有视图组件");
+      view = found;
+      found.runOpen(args);
+      await found.whenReady();
+      this.ensureResident(spec.id, epoch);
+      if (!viewNode.isValid || !found.node || !found.node.isValid) throw new Error("页面已关");
+      this.pendingResident.delete(spec.id);
+      this.residents.set(spec.id, { id: spec.id, host: viewNode, view: found });
+      this.noteOpened(found, spec, started);
+      return found as BaseView<T>;
+    } catch (err) {
+      const cancelled = isOpenCancelled(err) || (this.residentEpoch.get(spec.id) || 0) !== epoch;
+      this.pendingResident.delete(spec.id);
+      if (view) {
+        view.runClose();
+        view.runUnbind();
+        view.runDispose();
+      }
+      if (viewNode && viewNode.isValid) viewNode.destroy();
+      this.residents.delete(spec.id);
+      if (!cancelled) this.reportOpenFailed(spec.id, err);
+      if (cancelled && !isOpenCancelled(err)) throw new OpenCancelled();
+      throw err instanceof Error ? err : new Error(messageOf(err));
+    }
+  }
+
+  private ensureResident(id: string, epoch: number): void {
+    if ((this.residentEpoch.get(id) || 0) !== epoch) throw new OpenCancelled();
+  }
+
+  private closeResident(id: string): boolean {
+    const had = this.opening.has(id) || this.pendingResident.has(id) || this.residents.has(id);
+    this.residentEpoch.set(id, (this.residentEpoch.get(id) || 0) + 1);
+    const pending = this.pendingResident.get(id) || null;
+    this.pendingResident.delete(id);
+    const page = this.residents.get(id) || null;
+    if (page) this.residents.delete(id);
+    if (page) {
+      page.view.runClose();
+      page.view.runUnbind();
+      page.view.runDispose();
+    }
+    const node = (page && page.host) || pending;
+    if (node && node.isValid) node.destroy();
+    return had;
   }
 
   private top(id: string): OpenPage | null {
