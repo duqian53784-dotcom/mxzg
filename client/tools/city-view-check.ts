@@ -1,0 +1,215 @@
+/**
+ * 主城竖切的静态检查。不启动 Creator。
+ * 核对开关、预制上的节点引用，以及框架没有写死主城。
+ */
+import { readFileSync } from "fs";
+import { join } from "path";
+import { cityViewFromSearch, setUseCityView, useCityView } from "../assets/scripts/features/city/config/CityFeatureFlag";
+
+const root = process.cwd();
+
+function assert(cond: unknown, message: string): void {
+  if (!cond) throw new Error(message);
+}
+
+function read(path: string): string {
+  return readFileSync(join(root, path), "utf8");
+}
+
+const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+function classId(uuid: string): string {
+  const hex = uuid.replace(/-/g, "").toLowerCase();
+  let out = hex.slice(0, 5);
+  for (let i = 5; i < hex.length; i += 3) {
+    const h1 = parseInt(hex[i], 16);
+    const h2 = parseInt(hex[i + 1], 16);
+    const h3 = parseInt(hex[i + 2], 16);
+    out += BASE64[(h1 << 2) | (h2 >> 2)];
+    out += BASE64[((h2 & 3) << 4) | h3];
+  }
+  return out;
+}
+
+function metaUuid(path: string): string {
+  const meta = JSON.parse(read(path)) as { uuid?: string };
+  if (!meta.uuid) throw new Error("缺少 uuid " + path);
+  return meta.uuid;
+}
+
+interface PrefabObj {
+  __type__?: string;
+  _name?: string;
+  _children?: { __id__?: number }[];
+  _components?: { __id__?: number }[];
+  node?: { __id__?: number };
+}
+
+function loadPrefab(path: string): PrefabObj[] {
+  return JSON.parse(read(path)) as PrefabObj[];
+}
+
+function component(data: PrefabObj[], typeId: string): PrefabObj {
+  for (let i = 0; i < data.length; i++) {
+    if (data[i].__type__ === typeId) return data[i];
+  }
+  throw new Error("预制上没有组件 " + typeId);
+}
+
+function nodeAt(data: PrefabObj[], ref: { __id__?: number } | null | undefined): PrefabObj {
+  if (!ref || typeof ref.__id__ !== "number") throw new Error("节点引用是空的");
+  const node = data[ref.__id__];
+  if (!node || node.__type__ !== "cc.Node" || !node._name) throw new Error("引用不是节点 " + ref.__id__);
+  return node;
+}
+
+function nodeName(data: PrefabObj[], ref: { __id__?: number } | null | undefined): string {
+  return nodeAt(data, ref)._name || "";
+}
+
+function parentName(data: PrefabObj[], ref: { __id__?: number } | null | undefined): string {
+  const node = nodeAt(data, ref) as PrefabObj & { _parent?: { __id__?: number } };
+  if (!node._parent || typeof node._parent.__id__ !== "number") return "";
+  const parent = data[node._parent.__id__];
+  return parent && parent._name ? parent._name : "";
+}
+
+function checkFlag(): void {
+  assert(cityViewFromSearch("") === true, "empty search uses the new city view");
+  assert(cityViewFromSearch("?city=old") === false, "city=old keeps the old city");
+  assert(cityViewFromSearch("?city=0") === false, "city=0 keeps the old city");
+  assert(cityViewFromSearch("?city=false") === false, "city=false keeps the old city");
+  assert(cityViewFromSearch("?city=new") === true, "other city values stay on the new view");
+  assert(cityViewFromSearch("?bag=old") === true, "bag flag does not turn the city off");
+  assert(cityViewFromSearch("?foo=1&city=old") === false, "city=old is found among other params");
+  setUseCityView(false);
+  assert(useCityView() === false, "setUseCityView(false) sticks");
+  setUseCityView(true);
+  assert(useCityView() === true, "setUseCityView(true) sticks");
+}
+
+function checkFramework(): void {
+  const files = [
+    "client/assets/scripts/framework/ui/UIManager.ts",
+    "client/assets/scripts/framework/ui/UIRegistry.ts",
+    "client/assets/scripts/framework/ui/UILayer.ts",
+    "client/assets/scripts/framework/ui/BaseView.ts",
+    "client/assets/scripts/framework/ui/ViewClose.ts",
+  ];
+  const banned = ["CityHub", "CityChrome", "features/city", "BackpackView"];
+  for (let i = 0; i < files.length; i++) {
+    const text = read(files[i]);
+    for (let j = 0; j < banned.length; j++) {
+      assert(text.indexOf(banned[j]) < 0, files[i] + " mentions " + banned[j]);
+    }
+  }
+  const manager = read("client/assets/scripts/framework/ui/UIManager.ts");
+  assert(manager.indexOf("setResidentHost") >= 0, "UIManager can host a resident view");
+  assert(manager.indexOf("openById") >= 0 && manager.indexOf("closeById") >= 0, "UIManager opens and closes by id");
+  assert(manager.indexOf("back()") >= 0, "UIManager can go back");
+  const layer = read("client/assets/scripts/framework/ui/UILayer.ts");
+  assert(layer.indexOf("Hud") >= 0, "HUD layer exists");
+}
+
+function checkSources(): void {
+  const hub = read("client/assets/scripts/features/city/ui/CityHubView.ts");
+  const chrome = read("client/assets/scripts/features/city/ui/CityChromeView.ts");
+  assert(hub.indexOf("findNode") < 0 && chrome.indexOf("findNode") < 0, "new city views do not findNode");
+  assert(hub.indexOf("indexByName") < 0 && chrome.indexOf("indexByName") < 0, "new city views do not index the tree");
+  assert(hub.indexOf('@view(') >= 0 && chrome.indexOf('@view(') >= 0, "both city views register");
+  assert(hub.indexOf('id: CITY_VIEW_ID') >= 0, "hub id is the city page id");
+  assert(chrome.indexOf("UILayer.Hud") >= 0 && hub.indexOf("UILayer.Hud") >= 0, "city stays on the HUD layer");
+  assert(hub.indexOf("onCityAtom") < 0, "hub does not reimplement routing");
+  assert(hub.indexOf("cityAtomLocked") >= 0, "hub still locks buildings from the query");
+  assert(chrome.indexOf("setCityExtras") >= 0, "chrome still hides the activity row");
+  assert(chrome.indexOf("main-scene-lang_lbl-fetters-unlock") >= 0, "chrome keeps the VIP caption");
+  const oldHub = read("client/assets/scripts/ui/CityHub.ts");
+  assert(oldHub.indexOf("export async function mountCityHubPrefab") >= 0, "old hub mount stays");
+  assert(oldHub.indexOf("export function primeCityHub") >= 0, "primeCityHub stays");
+  const main = read("client/assets/scripts/ui/MainApp.ts");
+  const start = main.indexOf("private buildCity()");
+  const end = main.indexOf("private async mountCityHub(");
+  const body = start >= 0 && end > start ? main.slice(start, end) : "";
+  assert(body.indexOf("mountCityHub") >= 0, "buildCity still mentions the old hub mount");
+  assert(body.indexOf("openMainline()") < 0, "buildCity does not place the mainline call");
+  assert(main.indexOf("mountCityHubPrefab") >= 0, "old hub prefab mount stays in MainApp");
+  assert(main.indexOf("mountCityChromePrefab") >= 0, "old chrome prefab mount stays in MainApp");
+  assert(main.indexOf("mountCityChrome(") < 0, "MainApp does not call the thrown chrome builder");
+  assert(main.indexOf("useCityView()") >= 0, "MainApp switches on the city flag");
+  assert(main.indexOf("export const USE_CITY_HUB_PREFAB = true") >= 0, "hub prefab default stays");
+  const buildAt = main.indexOf("private async build()");
+  const buildFnEnd = main.indexOf("private onTab(");
+  const buildFn = buildAt >= 0 && buildFnEnd > buildAt ? main.slice(buildAt, buildFnEnd) : "";
+  const cityPos = buildFn.indexOf("this.panels.start(this.buildCity())");
+  const chromePos = buildFn.indexOf("mountCityChromePrefab");
+  assert(cityPos >= 0 && chromePos > cityPos, "city page still starts before the chrome mount string");
+}
+
+function checkHubPrefab(): void {
+  const uuid = metaUuid("client/assets/scripts/features/city/ui/CityHubView.ts.meta");
+  const data = loadPrefab("client/assets/prefabs/ui/city/CityHub.prefab");
+  const comp = component(data, classId(uuid)) as {
+    parallax?: { __id__?: number };
+    mapNodes?: { __id__?: number }[];
+    spots?: { __id__?: number }[];
+    effects?: { __id__?: number }[];
+    btnMainline?: { __id__?: number };
+  };
+  assert(nodeName(data, comp.parallax) === "CityParallax", "parallax is bound");
+  const maps = (comp.mapNodes || []).map((ref) => nodeName(data, ref));
+  const need = ["CityParallax", "spr_map_bg1", "spr_map_bg2", "spr_map_bg1_1", "spr_map_bg1_2"];
+  for (let i = 0; i < need.length; i++) assert(maps.indexOf(need[i]) >= 0, "map node bound " + need[i]);
+  const spots = (comp.spots || []).map((ref) => nodeName(data, ref));
+  assert(spots.indexOf("spot-main_summon") >= 0, "summon building is bound");
+  assert(spots.indexOf("spot-main_smith_shop") >= 0, "smith building is bound");
+  assert(nodeName(data, comp.btnMainline) === "BtnMainline", "mainline button is bound");
+  assert((comp.effects || []).length >= 1, "city effects are bound");
+}
+
+function checkChromePrefab(): void {
+  const uuid = metaUuid("client/assets/scripts/features/city/ui/CityChromeView.ts.meta");
+  const data = loadPrefab("client/assets/prefabs/ui/city/CityChrome.prefab");
+  const comp = component(data, classId(uuid)) as { [key: string]: { __id__?: number } | { __id__?: number }[] };
+  const one = (key: string, name: string) => {
+    const ref = comp[key];
+    if (!ref || Array.isArray(ref)) throw new Error(key + " 不是单节点");
+    assert(nodeName(data, ref) === name, key + " bound to " + name);
+  };
+  one("lblName", "LblName");
+  one("goldValue", "Value");
+  one("gemValue", "Value");
+  one("powerValue", "Value");
+  const gold = comp.goldValue;
+  const gem = comp.gemValue;
+  const power = comp.powerValue;
+  const bottom = comp.bottomBg;
+  if (!gold || Array.isArray(gold) || !gem || Array.isArray(gem) || !power || Array.isArray(power) || !bottom || Array.isArray(bottom)) {
+    throw new Error("chrome value refs missing");
+  }
+  assert(parentName(data, gold) === "CurrencyGold", "gold value sits under CurrencyGold");
+  assert(parentName(data, gem) === "CurrencyGem", "gem value sits under CurrencyGem");
+  assert(parentName(data, power) === "PowerSlot", "power value sits under PowerSlot");
+  assert(parentName(data, bottom) === "BottomBar", "bottom pad targets BottomBar/Bg");
+  one("avatar", "Avatar");
+  one("actGroup", "ActGroup");
+  one("utilityRow", "UtilityRow");
+  one("bottomBg", "Bg");
+  one("tabCity", "TabCity");
+  one("tabFetter", "TabFetter");
+  one("btnMail", "BtnMail");
+  const activity = comp.activityButtons;
+  if (!Array.isArray(activity)) throw new Error("activity buttons missing");
+  assert(activity.length === 8, "eight activity buttons");
+  const names = activity.map((ref) => nodeName(data, ref));
+  assert(names.indexOf("ActRecommend") >= 0 && names.indexOf("BtnActExpand") >= 0, "activity row is bound");
+  const shell = "c4e8aHSe2NOkI8Vai2cC0fj";
+  const text = read("client/assets/prefabs/ui/city/CityChrome.prefab");
+  assert(text.split(shell).length === 2, "CityChromeShell class id stays once");
+}
+
+checkFlag();
+checkFramework();
+checkSources();
+checkHubPrefab();
+checkChromePrefab();
+console.log("city-view-check ok");

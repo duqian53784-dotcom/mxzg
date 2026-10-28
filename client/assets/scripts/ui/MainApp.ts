@@ -43,6 +43,10 @@ import { pagePrefabShell } from "./prefabShellMap";
 import { beginPageOpen } from "./uiOpenLog";
 import { BackpackView } from "../features/backpack/ui/BackpackView";
 import { useBackpackView } from "../features/backpack/config/BackpackFeatureFlag";
+import { useCityView } from "../features/city/config/CityFeatureFlag";
+import { CITY_CHROME_HOST, CITY_CHROME_VIEW_ID, CITY_MAP_HOST, CITY_VIEW_ID } from "../features/city/config/cityIds";
+import { CityChromeView } from "../features/city/ui/CityChromeView";
+import { CityHubView } from "../features/city/ui/CityHubView";
 import { isOpenCancelled, UIManager } from "../framework/ui/UIManager";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
@@ -138,6 +142,8 @@ export class MainApp extends Component {
   private shell: UIShell | null = null;
   private panels: PanelNav<Node> | null = null;
   private chrome: CityChrome | null = null;
+  private hubView: CityHubView | null = null;
+  private chromeView: CityChromeView | null = null;
   private built = false;
   private gateNode: Node | null = null;
   private mainButton: Node | null = null;
@@ -152,7 +158,14 @@ export class MainApp extends Component {
   }
 
   onDestroy() {
-    if (this.cityMap) {
+    if (useCityView()) {
+      UIManager.instance.closeById(CITY_VIEW_ID);
+      UIManager.instance.closeById(CITY_CHROME_VIEW_ID);
+      this.hubView = null;
+      this.chromeView = null;
+      this.cityMap = null;
+      this.chrome = null;
+    } else if (this.cityMap) {
       this.cityMap.dispose();
       this.cityMap = null;
     }
@@ -195,24 +208,37 @@ export class MainApp extends Component {
       if (!this.isValid || !this.shell) return;
       this.shell.showToast(text, 2200);
     });
+    const chromeActions = {
+      openActivity: () => {
+        GameLog.shared.info("MainApp", "活动按钮没有预制列表，不手搓按钮页");
+      },
+      openMore: () => {
+        GameLog.shared.info("MainApp", "更多按钮没有预制列表，不手搓按钮页");
+      },
+      openMail: () => this.openMail(),
+    };
     try {
-      this.chrome = await mountCityChromePrefab(shell.chromeLayer, onTab, {
-        openActivity: () => {
-          GameLog.shared.info("MainApp", "活动按钮没有预制列表，不手搓按钮页");
-        },
-        openMore: () => {
-          GameLog.shared.info("MainApp", "更多按钮没有预制列表，不手搓按钮页");
-        },
-        openMail: () => this.openMail(),
-      });
-      if (!this.isValid || !this.shell) {
-        if (this.chrome) this.chrome.root.destroy();
-        this.chrome = null;
-        return;
+      if (useCityView()) {
+        UIManager.instance.setResidentHost(CITY_CHROME_HOST, () => (shell.chromeLayer.isValid ? shell.chromeLayer : null));
+        const view = await UIManager.instance.open(CityChromeView, { onTab, actions: chromeActions });
+        if (!this.isValid || !this.shell) {
+          UIManager.instance.close(view);
+          return;
+        }
+        this.chromeView = view;
+        this.chrome = view;
+      } else {
+        this.chrome = await mountCityChromePrefab(shell.chromeLayer, onTab, chromeActions);
+        if (!this.isValid || !this.shell) {
+          if (this.chrome) this.chrome.root.destroy();
+          this.chrome = null;
+          return;
+        }
       }
       GameLog.shared.info("MainApp", "city chrome prefab " + CITY_CHROME_PREFAB_PATH);
     } catch (err) {
       if (!this.isValid || !this.shell) return;
+      if (isOpenCancelled(err)) return;
       GameLog.shared.warn("MainApp", "city chrome prefab " + messageOf(err) + "，不手搓顶底栏");
     }
     this.detachWire();
@@ -366,7 +392,8 @@ export class MainApp extends Component {
     hostUi.setAnchorPoint(0.5, 0.5);
     mapHost.setPosition(0, 0, 0);
     mapHost.parent = page;
-    void this.mountCityHub(mapHost);
+    if (useCityView()) void this.openCityHubView(mapHost);
+    else void this.mountCityHub(mapHost);
 
     // 活动 / 更多入口在 CityChrome Prefab（ActGroup、UtilityRow/BtnMore）。这里不再画红蓝矩形。
     // 拖动提示、门槛和网络字是调试壳，正常进城不挂。
@@ -412,6 +439,38 @@ export class MainApp extends Component {
       if (host.isValid && host.parent) host.setSiblingIndex(Math.max(0, host.parent.children.length - 1));
     } catch (err) {
       GameLog.shared.warn("MainApp", "city hub prefab " + messageOf(err) + "，不手搓地图");
+    }
+  }
+
+  /**
+   * 新主城。CityHubView 自己绑视差和建筑，点击仍进 onCityAtom。
+   * 缺预制只打日志，不手搓一整城。
+   */
+  private async openCityHubView(host: Node): Promise<void> {
+    UIManager.instance.setResidentHost(CITY_MAP_HOST, () => (host.isValid ? host : null));
+    try {
+      const view = await UIManager.instance.open(CityHubView, {
+        onAtom: (atom) => this.onCityAtom(atom),
+        onMainline: () => this.openMainline(),
+        query: {
+          level: () => this.level(),
+          openDay: () => this.day(),
+          db: () => ConfigDb.current,
+        },
+      });
+      if (!this.isValid || !host.isValid) {
+        UIManager.instance.close(view);
+        return;
+      }
+      this.hubView = view;
+      this.cityMap = view;
+      if (view.mainButton) this.mainButton = view.mainButton;
+      this.setMainButton(this.stageButtonText());
+      if (host.isValid && host.parent) host.setSiblingIndex(Math.max(0, host.parent.children.length - 1));
+    } catch (err) {
+      if (!this.isValid) return;
+      if (isOpenCancelled(err)) return;
+      GameLog.shared.warn("MainApp", "city hub view " + messageOf(err) + "，不手搓地图");
     }
   }
 
