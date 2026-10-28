@@ -2201,13 +2201,16 @@ function checkLog(): void {
     openedText.indexOf("[mxzg][info][MainApp] ") === 0 && openedText.indexOf(" 打开界面 BackpackView ui BackpackLayer 耗时 12ms") > 0,
     "open line keeps the mxzg info source and clock"
   );
+  const plainInfo = log.recent()[0];
+  assert(!plainInfo.color && consoleParts(plainInfo, { window: {} }) === null, "level logs stay plain text unless a color is passed");
   const colored = consoleParts(opened, { window: {} });
   assert(
-    colored !== null &&
+    opened.color === "#4ea1ff" &&
+      colored !== null &&
       colored.text === "%c" + openedText &&
       colored.css.length === 1 &&
-      colored.css[0] === "color:#81c995",
-    "browser console colors the whole line with the level color"
+      colored.css[0] === "color:#4ea1ff",
+    "the open-view line is full-line blue"
   );
   log.info("MainApp", "自定义色", "#ff00aa");
   const custom = log.recent()[log.recent().length - 1];
@@ -2216,6 +2219,9 @@ function checkLog(): void {
     customParts !== null && customParts.css.length === 1 && customParts.css[0] === "color:#ff00aa" && customParts.text === "%c" + log.format(custom),
     "level helper paints the entire line when a color is passed"
   );
+  log.info("UIShell", "关闭界面 bag");
+  const closed = log.recent()[log.recent().length - 1];
+  assert(!closed.color && consoleParts(closed, { window: {} }) === null, "close lines stay uncolored");
   log.log("整行绿色", "#20c128");
   const green = log.recent()[log.recent().length - 1];
   const greenParts = consoleParts(green, { window: {} });

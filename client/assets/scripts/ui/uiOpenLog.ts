@@ -123,6 +123,16 @@ export function notePrefabReady(pageId: string, view: Node | null, prefabPath: s
   markPageContent(pageId, cls, prefab || "(none)", token);
 }
 
+/**
+ * UIManager 一次打开完成。起点由调用方记在 open / runOpen。
+ * 终点是 whenReady 已兑现，也就是 finishOpen。失败和取消不打这行。
+ */
+export function logViewReady(viewName: string, prefabPath: string, started: number, tag = "UIManager"): void {
+  const prefab = prefabBaseName(prefabPath);
+  const ms = Math.max(0, Math.round(monoNow() - started));
+  GameLog.shared.openView(viewName || prefab || "(none)", prefab || "(none)", { ms, tag });
+}
+
 /** 不走页面栈的打开（挂机弹层）。调用方传入从打开到挂上的毫秒。 */
 export function logOpenedPrefab(view: Node | null, prefabPath: string, fallbackClass: string, ms = 0, tag = "Mainline"): void {
   const prefab = prefabBaseName(prefabPath);

@@ -102,6 +102,23 @@ function assert(cond: unknown, message: string): void {
   if (!cond) throw new Error(message);
 }
 
+function openLineCount(): number {
+  const recent = GameLog.shared.recent();
+  let n = 0;
+  for (let i = 0; i < recent.length; i++) {
+    if (recent[i].message.indexOf("打开界面 ") === 0) n += 1;
+  }
+  return n;
+}
+
+function assertOpenLine(viewName: string, prefab: string): void {
+  const recent = GameLog.shared.recent();
+  const line = recent[recent.length - 1];
+  const head = "打开界面 " + viewName + " ui " + prefab + " 耗时 ";
+  assert(line.tag === "UIManager" && line.level === "info" && line.message.indexOf(head) === 0, "UIManager open log " + (line ? line.tag + " " + line.message : "(none)"));
+  assert(line.message.lastIndexOf("ms") === line.message.length - 2, "open log ends with milliseconds");
+}
+
 function read(path: string): string {
   return readFileSync(path, "utf8");
 }
@@ -266,6 +283,9 @@ function checkSources(): void {
   assert(main.indexOf("useBackpackView") >= 0, "背包开关还在");
   assert(main.indexOf("UIManager.instance.open(BackpackView)") >= 0, "开关打开时走 BackpackView");
   assert(main.indexOf("UIManager.instance.createPageHost") >= 0, "presentPage 先问新视图");
+  const present = main.slice(main.indexOf("private presentPage"), main.indexOf("private battleTabIsProbe"));
+  assert(present.indexOf("createPageHost") >= 0 && present.indexOf("createPageHost") < present.indexOf("beginPageOpen"), "UIManager 页面不走预制壳计时");
+  assert(read("client/assets/scripts/framework/ui/UIManager.ts").indexOf("noteOpened(") >= 0, "UIManager 在 whenReady 之后打打开行");
   assert(main.indexOf("USE_BATTLE_PREFAB") < 0, "MainApp 不应出现 USE_BATTLE_PREFAB");
   assert(main.indexOf("buildWireMainlinePage") < 0, "MainApp 不应出现 buildWireMainlinePage");
   assert(main.indexOf('uiNode("Wire') < 0, "MainApp 不应再造 Wire 节点");
@@ -788,6 +808,7 @@ async function checkOpenFailure(): Promise<void> {
 
   const mark = createdNodes.length;
   const toastAt = toasts.length;
+  const openLinesAt = openLineCount();
   let failed = false;
   try {
     await UIManager.instance.open(BackpackView);
@@ -795,6 +816,7 @@ async function checkOpenFailure(): Promise<void> {
     failed = true;
   }
   assert(failed, "预制加载失败要拒绝打开");
+  assert(openLineCount() === openLinesAt, "预制没装上不打打开界面");
   assert(opens === 0, "预制加载失败不能压进页面栈");
   assert(backs === 0, "还没进栈就不用再 pop");
   assert(stack.length === 1 && stack[0] === "city", "失败后仍停在原来的页");
@@ -855,6 +877,7 @@ async function checkOpenFailure(): Promise<void> {
     });
   };
   const opened = await UIManager.instance.open(BackpackView);
+  assertOpenLine("BackpackView", "BackpackLayer");
   assert(opens === 1 && stack[stack.length - 1] === "bag", "装好之后才进栈");
   assert(highlights.length === 1 && highlights[0] === "bag", "进栈之后才通知底栏");
   assert(opened.node.isValid && opened.node.parent !== null, "装好的视图留在页面上");
@@ -1133,6 +1156,7 @@ async function checkOpenRaces(): Promise<void> {
   });
   gateLife.release();
   const lifeOpen = await UIManager.instance.open(LifeView);
+  assertOpenLine("LifeView", "Life");
   assert(cachedNav.opens === 1, "缓存页第一次要进栈");
   assert(LifeView.creates === 1 && LifeView.binds === 1 && LifeView.opens === 1, "第一次打开走 create/bind/open");
   assert(UIManager.instance.close(lifeOpen) === true, "缓存页可以关");

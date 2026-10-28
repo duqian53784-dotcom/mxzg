@@ -1,7 +1,8 @@
 import { Node, Prefab } from "cc";
 import { messageOf } from "../../core/errors";
-import { GameLog } from "../../core/GameLog";
+import { GameLog, monoNow } from "../../core/GameLog";
 import { loadPrefab, spawnPrefab } from "../../ui/prefabLoad";
+import { logViewReady } from "../../ui/uiOpenLog";
 import { BaseView } from "./BaseView";
 import { UILayer } from "./UILayer";
 import { ViewClass, ViewSpec, viewCtorById, viewSpecOf } from "./UIRegistry";
@@ -74,8 +75,10 @@ export class UIManager {
     if (!spec.allowMultiple) {
       const existing = this.top(spec.id);
       if (existing && this.nav.current === spec.id) {
+        const started = monoNow();
         existing.view.runOpen(args);
         await existing.view.whenReady();
+        this.noteOpened(existing.view, spec, started);
         return existing.view as BaseView<T>;
       }
       const pending = this.opening.get(spec.id);
@@ -194,12 +197,14 @@ export class UIManager {
   }
 
   private async openNew(ctor: ViewClass<unknown>, spec: ViewSpec, args: unknown): Promise<BaseView<unknown>> {
+    const started = monoNow();
     const shell = new Node("LiveShell");
     const origin = this.nav ? this.nav.current : null;
     const token = this.issue(spec.id);
     let view: BaseView<unknown> | null = null;
     try {
       view = await this.mount(shell, ctor, spec, args);
+      this.noteOpened(view, spec, started);
       this.ensureCurrent(token, spec.id, origin);
       if (!shell.isValid || !view.node || !view.node.isValid) throw new Error("页面已关");
       this.stage(spec, shell, view, token);
@@ -213,9 +218,11 @@ export class UIManager {
   private async reopen(page: OpenPage, spec: ViewSpec, args: unknown): Promise<BaseView<unknown>> {
     const origin = this.nav ? this.nav.current : null;
     const token = this.issue(spec.id);
+    const started = monoNow();
     try {
       page.view.runOpen(args);
       await page.view.whenReady();
+      this.noteOpened(page.view, spec, started);
       this.ensureCurrent(token, spec.id, origin);
       if (!page.host.isValid || !page.view.node || !page.view.node.isValid) throw new Error("页面已关");
       this.stage(spec, page.host, page.view, token);
@@ -295,6 +302,18 @@ export class UIManager {
     found.runOpen(args);
     await found.whenReady();
     return found;
+  }
+
+  /**
+   * whenReady 已经兑现（finishOpen）才打打开行。
+   * 新开从 openNew 进入，含预制加载和 runOpen。再次打开从 runOpen 量到 whenReady。
+   * 加载失败、取消、whenReady 拒绝都不打这行。
+   */
+  private noteOpened(view: BaseView<unknown>, spec: ViewSpec, started: number): void {
+    const ctor = view.constructor as { name?: string };
+    const raw = ctor && typeof ctor.name === "string" ? ctor.name : "";
+    const viewName = raw && raw.length > 2 && raw !== "Component" ? raw : spec.id;
+    logViewReady(viewName, spec.prefab, started, "UIManager");
   }
 
   /** 页面还没进栈。Toast 给玩家看，日志留给排查。取消不走这里。 */
