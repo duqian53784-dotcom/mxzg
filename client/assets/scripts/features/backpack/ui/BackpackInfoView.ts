@@ -1,8 +1,8 @@
 import { _decorator, Button, Component, Label, Node, Sprite, UITransform } from "cc";
-import { GameLog } from "../../core/GameLog";
-import { BagFace } from "../../module/bag/bagBoard";
-import { positiveUiSize } from "../visibleFit";
-import { paintSpritePaths } from "./spritePaint";
+import { GameLog } from "../../../core/GameLog";
+import { BagFace } from "../../../module/bag/bagBoard";
+import { positiveUiSize } from "../../../ui/visibleFit";
+import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
 
 const { ccclass, property } = _decorator;
 

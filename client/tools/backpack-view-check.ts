@@ -10,15 +10,15 @@ import { ConfigDb } from "../assets/scripts/config/ConfigLoader";
 import { ConfigTableFile } from "../assets/scripts/config/types";
 import { GameLog } from "../assets/scripts/core/GameLog";
 import { GameStore } from "../assets/scripts/core/GameStore";
-import { BaseView } from "../assets/scripts/ui/view/BaseView";
-import { BackpackInfoView } from "../assets/scripts/ui/view/BackpackInfoView";
-import { BackpackItemCellView } from "../assets/scripts/ui/view/BackpackItemCellView";
-import { BackpackTabButtonView } from "../assets/scripts/ui/view/BackpackTabButtonView";
-import { BackpackView } from "../assets/scripts/ui/view/BackpackView";
-import { bagViewFromSearch, setUseBackpackView, useBackpackView } from "../assets/scripts/ui/view/backpackFlag";
-import { UILayer } from "../assets/scripts/ui/view/UILayer";
-import { isOpenCancelled, UIManager } from "../assets/scripts/ui/view/UIManager";
-import { view, viewCtorById, viewSpecOf } from "../assets/scripts/ui/view/UIRegistry";
+import { BaseView } from "../assets/scripts/framework/ui/BaseView";
+import { BackpackInfoView } from "../assets/scripts/features/backpack/ui/BackpackInfoView";
+import { BackpackItemCellView } from "../assets/scripts/features/backpack/ui/BackpackItemCellView";
+import { BackpackTabButtonView } from "../assets/scripts/features/backpack/ui/BackpackTabButtonView";
+import { BackpackView } from "../assets/scripts/features/backpack/ui/BackpackView";
+import { bagViewFromSearch, setUseBackpackView, useBackpackView } from "../assets/scripts/features/backpack/config/BackpackFeatureFlag";
+import { UILayer } from "../assets/scripts/framework/ui/UILayer";
+import { isOpenCancelled, UIManager } from "../assets/scripts/framework/ui/UIManager";
+import { view, viewCtorById, viewSpecOf } from "../assets/scripts/framework/ui/UIRegistry";
 
 const { ccclass } = _decorator;
 
@@ -205,17 +205,17 @@ function checkPrefabBindings(): void {
 
 function checkSources(): void {
   const views = [
-    "client/assets/scripts/ui/view/BackpackView.ts",
-    "client/assets/scripts/ui/view/BackpackItemCellView.ts",
-    "client/assets/scripts/ui/view/BackpackTabButtonView.ts",
-    "client/assets/scripts/ui/view/BackpackInfoView.ts",
+    "client/assets/scripts/features/backpack/ui/BackpackView.ts",
+    "client/assets/scripts/features/backpack/ui/BackpackItemCellView.ts",
+    "client/assets/scripts/features/backpack/ui/BackpackTabButtonView.ts",
+    "client/assets/scripts/features/backpack/ui/BackpackInfoView.ts",
   ];
   for (let i = 0; i < views.length; i++) {
     const text = read(views[i]);
     assert(text.indexOf("getChildByName") < 0, views[i] + " 不应 getChildByName");
     assert(text.indexOf("findNamed") < 0, views[i] + " 不应 findNamed");
   }
-  const mount = read("client/assets/scripts/ui/view/backpackMount.ts");
+  const mount = read("client/assets/scripts/features/backpack/ui/BackpackMount.ts");
   assert(mount.indexOf("findNamed") < 0, "backpackMount 不应整树搜索");
   const fill = read("client/assets/scripts/ui/screenFill.ts");
   const bagStart = fill.indexOf("function fillBag");
@@ -245,23 +245,24 @@ function checkSources(): void {
   assert(backFn.indexOf("this.panels?.back()") >= 0, "旧页面返回仍走页面栈");
   assert(backFn.indexOf("UIManager") < 0, "MainApp.back 不改走 UIManager");
   const detail =
-    read("client/assets/scripts/ui/view/backpackMount.ts") + read("client/assets/scripts/ui/view/BackpackInfoView.ts");
+    read("client/assets/scripts/features/backpack/ui/BackpackMount.ts") +
+    read("client/assets/scripts/features/backpack/ui/BackpackInfoView.ts");
   assert(detail.indexOf("195, 148") < 0, "详情底不再写死 195,148");
   assert(detail.indexOf("125, 330") < 0, "详情卡不再写死 125,330");
   assert(detail.indexOf("320, 480") < 0, "遮罩不再写死 320,480");
   assert(detail.indexOf("720, 1100") < 0, "遮罩不再写死 720×1100");
-  const manager = read("client/assets/scripts/ui/view/UIManager.ts");
+  const manager = read("client/assets/scripts/framework/ui/UIManager.ts");
   assert(manager.indexOf("背包没有打开") >= 0, "加载失败要有可见提示");
   assert(manager.indexOf("shell.destroy()") >= 0, "加载失败要销毁还没进栈的壳");
   assert(manager.indexOf("mountBackpackPage") < 0 && manager.indexOf("backpackMount") < 0, "UIManager 不写死背包挂载");
   assert(manager.indexOf("keepOnly") >= 0, "打开意图可以被后来的页面取消");
   assert(manager.indexOf("onPageOpened") >= 0, "入栈成功才通知底栏");
   assert(manager.indexOf("OpenCancelled") >= 0, "取消和失败分开");
-  const base = read("client/assets/scripts/ui/view/BaseView.ts");
+  const base = read("client/assets/scripts/framework/ui/BaseView.ts");
   assert(base.indexOf("onCreate") >= 0 && base.indexOf("onBind") >= 0, "BaseView 有 onCreate/onBind");
   assert(base.indexOf("onUnbind") >= 0 && base.indexOf("dispose") >= 0, "BaseView 有 onUnbind/dispose");
   assert(base.indexOf("failOpen") >= 0, "BaseView 能拒绝 whenReady");
-  const bagView = read("client/assets/scripts/ui/view/BackpackView.ts");
+  const bagView = read("client/assets/scripts/features/backpack/ui/BackpackView.ts");
   assert(bagView.indexOf("failOpen") >= 0, "背包挂载失败要拒绝 whenReady");
   assert(bagView.indexOf("finally") < 0, "不能 catch 之后仍 finishOpen");
   assert(bagView.indexOf("mount: mountBackpackPage") >= 0, "挂载策略写在背包 ViewSpec 上");
