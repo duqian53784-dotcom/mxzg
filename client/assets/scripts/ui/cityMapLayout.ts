@@ -2,7 +2,7 @@
  * 主城地图层（方案 B）的纯布局。
  * 只排视差底板、建筑点和活动图标，不包含 Pilot 的 7 项底栏、顶栏和日文图字。
  * 坐标：配置里的 x/y 是父节点左下角空间里的锚点位置；屏幕坐标原点在画面中心。
- * 设计分辨率是 720×1280。视口宽跟当前可见宽走，可以大于或小于 720。
+ * 设计分辨率是 640×1280。视口宽跟当前可见宽走，可以大于或小于 640。
  * 底板仍是 map-bg-city-* 多层长图，逻辑宽约 1500，不把一张图拉满屏幕。
  */
 import { entryAccess, findNavEntry, GateSnapshot } from "../config/nav";
@@ -11,7 +11,7 @@ export const CITY_CFG_POS = "config/maincity/maincitypos";
 export const CITY_CFG_BTN = "config/maincity/createmaincitybtn";
 export const CITY_CFG_EFFECT = "config/maincity/maincityeffect";
 
-export const CITY_VIEW_W = 720;
+export const CITY_VIEW_W = 640;
 export const CITY_VIEW_H = 1280;
 export const CITY_MAP_W = 1500;
 export const CITY_MAP_H = 1280;
@@ -377,7 +377,7 @@ export function buildCityMapLayout(
     spriteNode(
       "spr_map_bg1_2",
       "spr_map_bg1",
-      // 贴图拼接按设计宽 720 排，不跟视口变。变的是视口和滚动范围。
+      // 贴图拼接按设计宽 640 排，不跟视口变。变的是视口和滚动范围。
       foregroundPiece2X(CITY_VIEW_W, CITY_MAP_W, speeds[0]),
       0,
       1,

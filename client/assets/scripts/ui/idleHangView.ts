@@ -26,6 +26,7 @@ import { mountIdleSkirmish } from "./idleHangSkirmish";
 import { mountHangTalk } from "./idleHangTalk";
 import { hangAllyFloorPoint, hangAllyVisibleShift, hangLinePosition, IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
 import { localLineupIds, onLocalLineup } from "./localLineup";
+import { DESIGN_HEIGHT, DESIGN_WIDTH } from "./safeAreaLayout";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, uiSize } from "./visibleFit";
 import { createRect, place, uiNode } from "./UiKit";
 
@@ -71,14 +72,14 @@ export function idleHangStems(): string[] {
 export function mountIdleHang(parent: Node): Node {
   const root = uiNode("IdleHang");
   const ui = root.addComponent(UITransform);
-  ui.setContentSize(720, 1280);
+  ui.setContentSize(DESIGN_WIDTH, DESIGN_HEIGHT);
   place(root, parent, 0, 0);
 
-  place(createRect("IdleFill", 720, 1280, new Color(186, 156, 124, 255)), root, 0, 0);
-  const sky = spriteNode("IdleSky", 720, 420);
+  place(createRect("IdleFill", DESIGN_WIDTH, DESIGN_HEIGHT, new Color(186, 156, 124, 255)), root, 0, 0);
+  const sky = spriteNode("IdleSky", DESIGN_WIDTH, 420);
   place(sky, root, 0, 430);
 
-  const floor = spriteNode("IdleFloor", 720, 1280);
+  const floor = spriteNode("IdleFloor", DESIGN_WIDTH, DESIGN_HEIGHT);
   place(floor, root, 0, 0);
   let hall = "";
   const paintHall = () => {
@@ -144,8 +145,8 @@ export function bindHangFill(shell: Node): void {
     const box = fitVisibleRoot(shell);
     const hang = shell.getChildByName("IdleHang");
     if (!hang) return;
-    const width = box.width > 720 ? box.width : 720;
-    const height = box.height > 1280 ? box.height : 1280;
+    const width = box.width > DESIGN_WIDTH ? box.width : DESIGN_WIDTH;
+    const height = box.height > DESIGN_HEIGHT ? box.height : DESIGN_HEIGHT;
     resizeNode(hang.getChildByName("IdleFill"), width, height);
     resizeNode(hang.getChildByName("IdleFloor"), width, height);
     const sky = hang.getChildByName("IdleSky");

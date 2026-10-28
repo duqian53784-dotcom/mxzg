@@ -44,7 +44,7 @@ export const CITY_BAR: NavEntry[] = [
   { id: "fetter", title: "VIP", gateId: "main_fetter", blurb: "VIP" },
 ];
 
-/** 底栏七格在 720 宽画面上的位置。下标 3 是战斗。y 是画面中心系。 */
+/** 底栏七格在 720 宽预制上的位置。设计宽是 640。下标 3 是战斗。y 是画面中心系。 */
 export function cityBarSlot(index: number): { x: number; y: number; size: number } {
   const xs = [-300, -200, -100, 0, 100, 200, 300];
   const hot = index === 3;

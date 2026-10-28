@@ -13,8 +13,8 @@
  */
 export const IDLE_FLOOR_TOP = 120;
 
-/** 日服挂机层。底左角，和挂机壳的设计分辨率同一套 720×1280。 */
-export const HANG_LAYER_W = 720;
+/** 日服挂机层。底左角，和项目设计分辨率同一套 640×1280。 */
+export const HANG_LAYER_W = 640;
 export const HANG_LAYER_H = 1280;
 
 /**
@@ -26,9 +26,9 @@ export const IDLE_HANG_DEFAULT_POSITIONS = [1, 4, 5] as const;
 
 /**
  * 左队收进金环左边。掉落堆心在 x≈0，图标大约铺到 x=-123。
- * 锚点在脚。朝右的骨架会向左伸出大约 120–180，远列停在 -260 时最左会裁出 720 的左缘。
+ * 锚点在脚。朝右的骨架会向左伸出大约 120–180，远列停在 -260 时最左会裁出 640 的左缘。
  * 近列 -120、远列 -220，4/5 号落在中间（-170）。列和行的相对关系不变，身体留在地砖里。
- * 可见宽小于 720 时再由 hangAllyVisibleShift 把整列右移，不改这张表。
+ * 可见宽小于 640 时再由 hangAllyVisibleShift 把整列右移，不改这张表。
  * 三行收在柱廊下沿和金环上沿之间，低行的脚不踩进掉落堆。
  */
 const ALLY_LANE_NEAR_X = -120;
@@ -146,8 +146,9 @@ export function hangStandPoint(side: "ally" | "enemy", index: number): HangSpot 
 }
 
 /**
- * 窄屏按 Fit Height 裁掉 720 左右两边。远列按 720 摆时会再被裁一截。
- * 返回整列要右移的距离。宽屏和正好 720 不挪，避免把左列拉到中线。
+ * 窄屏按 Fit Height 裁掉 640 左右两边。远列按 640 摆时会再被裁一截。
+ * 返回整列要右移的距离。宽屏和正好 640 不挪，避免把左列拉到中线。
+ * 9:16 的可视宽仍约 720，大于设计宽，也不挪。
  */
 export function hangAllyVisibleShift(layerWidth: number): number {
   const width = layerWidth > 0 && isFinite(layerWidth) ? layerWidth : HANG_LAYER_W;
