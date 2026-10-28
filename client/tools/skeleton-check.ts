@@ -555,6 +555,7 @@ import {
   summonToast,
 } from "../assets/scripts/module/summon/pull";
 import { consoleParts, consoleUsesCss, GameLog } from "../assets/scripts/core/GameLog";
+import { beginPageOpen, cancelPageOpen, markPageContent, markPageShown, pageOpenToken } from "../assets/scripts/ui/uiOpenLog";
 import { GameStore, saveRoleCache } from "../assets/scripts/core/GameStore";
 import {
   bindGameCatalog,
@@ -2187,26 +2188,74 @@ function checkLog(): void {
   log.warn("T", "mirrored");
   assert(log.recent()[log.recent().length - 1].message === "mirrored", "mirror still buffers");
   log.minLevel = "debug";
-  log.openView("BackpackView", "BackpackLayer", "prefabs/ui/backpack/BackpackLayer");
+  log.openView("BackpackView", "BackpackLayer", { ms: 12, tag: "MainApp" });
   const opened = log.recent()[log.recent().length - 1];
   assert(
-    opened.tag === "UI" &&
+    opened.tag === "MainApp" &&
       opened.level === "info" &&
-      opened.message.indexOf("class=BackpackView") >= 0 &&
-      opened.message.indexOf("prefab=BackpackLayer") >= 0 &&
-      opened.message.indexOf("path=prefabs/ui/backpack/BackpackLayer") >= 0,
-    "opening a view logs class and prefab"
+      opened.message === "打开界面 BackpackView ui BackpackLayer 耗时 12ms",
+    "opening a view logs name, prefab, and duration"
+  );
+  const openedText = log.format(opened);
+  assert(
+    openedText.indexOf("[mxzg][info][MainApp] ") === 0 && openedText.indexOf(" 打开界面 BackpackView ui BackpackLayer 耗时 12ms") > 0,
+    "open line keeps the mxzg info source and clock"
   );
   const colored = consoleParts(opened, { window: {} });
   assert(
     colored !== null &&
-      colored.text.indexOf("%c[mxzg]%c[info]%c[UI]%c") === 0 &&
-      colored.text.indexOf(opened.message) >= 0 &&
-      colored.css.length === 4 &&
-      colored.css[1].indexOf("#81c995") >= 0,
-    "browser console colors the level and the tag"
+      colored.text === "%c" + openedText &&
+      colored.css.length === 1 &&
+      colored.css[0] === "color:#81c995",
+    "browser console colors the whole line with the level color"
+  );
+  log.info("MainApp", "自定义色", "#ff00aa");
+  const custom = log.recent()[log.recent().length - 1];
+  const customParts = consoleParts(custom, { window: {} });
+  assert(
+    customParts !== null && customParts.css.length === 1 && customParts.css[0] === "color:#ff00aa" && customParts.text === "%c" + log.format(custom),
+    "level helper paints the entire line when a color is passed"
+  );
+  log.log("整行绿色", "#20c128");
+  const green = log.recent()[log.recent().length - 1];
+  const greenParts = consoleParts(green, { window: {} });
+  assert(green.tag === "GameLog" && green.level === "info" && green.message === "整行绿色", "GameLog.log is an info line");
+  assert(
+    greenParts !== null && greenParts.css.length === 1 && greenParts.css[0] === "color:#20c128" && greenParts.text.indexOf("%c") === 0 && greenParts.text.indexOf("%c", 2) < 0,
+    "GameLog.log paints the entire line green"
   );
   assert(consoleParts(opened, {}) === null && consoleUsesCss({}) === false, "node console stays plain text");
+  const mirror = GameLog.shared.mirrorConsole;
+  GameLog.shared.mirrorConsole = false;
+  beginPageOpen("skeleton-plain", false, "MainApp");
+  markPageShown("skeleton-plain");
+  const plain = GameLog.shared.recent()[GameLog.shared.recent().length - 1];
+  assert(plain.tag === "MainApp" && plain.message.indexOf("打开界面 skeleton-plain ui skeleton-plain 耗时 ") === 0 && plain.message.indexOf("ms") === plain.message.length - 2, "a page without a prefab logs when shown");
+  beginPageOpen("skeleton-bag", true, "MainApp");
+  markPageShown("skeleton-bag");
+  assert(GameLog.shared.recent()[GameLog.shared.recent().length - 1] === plain, "prefab page waits until the shell is mounted");
+  markPageContent("skeleton-bag", "BackpackView", "BackpackLayer");
+  const bag = GameLog.shared.recent()[GameLog.shared.recent().length - 1];
+  assert(bag.message.indexOf("打开界面 BackpackView ui BackpackLayer 耗时 ") === 0, "prefab page logs once the view is mounted");
+  beginPageOpen("skeleton-race", true, "MainApp");
+  const stale = pageOpenToken("skeleton-race");
+  beginPageOpen("skeleton-race", true, "MainApp");
+  const fresh = pageOpenToken("skeleton-race");
+  markPageShown("skeleton-race");
+  markPageContent("skeleton-race", "Old", "OldLayer", stale);
+  assert(GameLog.shared.recent()[GameLog.shared.recent().length - 1] === bag, "a stale prefab load does not finish the new open");
+  markPageContent("skeleton-race", "NewView", "NewLayer", fresh);
+  assert(GameLog.shared.recent()[GameLog.shared.recent().length - 1].message.indexOf("打开界面 NewView ui NewLayer 耗时 ") === 0, "the current prefab load finishes the open");
+  beginPageOpen("skeleton-fail", true, "MainApp");
+  const failed = pageOpenToken("skeleton-fail");
+  markPageShown("skeleton-fail");
+  cancelPageOpen("skeleton-fail", failed);
+  markPageContent("skeleton-fail", "X", "Y", failed);
+  assert(GameLog.shared.recent()[GameLog.shared.recent().length - 1].message.indexOf("NewView") >= 0, "a failed open does not log");
+  GameLog.log("静态整行", "#20c128");
+  const viaStatic = GameLog.shared.recent()[GameLog.shared.recent().length - 1];
+  assert(viaStatic.message === "静态整行" && viaStatic.color === "#20c128", "GameLog.log writes through the shared logger");
+  GameLog.shared.mirrorConsole = mirror;
 }
 
 function memoryStore(seed?: Record<string, string>): PrefStore & { data: Record<string, string> } {
@@ -27220,7 +27269,10 @@ function checkCityHub(): void {
     "hang bar fill does not read sprite frame width before the texture is live"
   );
   assert(shellSrc.indexOf("hang shell width") >= 0 && shellFillSrc.indexOf("hang shell width") >= 0, "a late width throw names the step and is not the hang battle shell error");
-  assert(shellSrc.indexOf("logOpenedPrefab(") >= 0, "page prefab open logs class and prefab");
+  assert(shellSrc.indexOf("notePrefabReady(") >= 0 && shellSrc.indexOf("logOpenedPrefab(") >= 0, "page prefab open logs class, prefab, and duration");
+  assert(mainApp.indexOf("beginPageOpen(") >= 0 && mainApp.indexOf('"open " + id') < 0, "page open starts in presentPage and does not log open id up front");
+  const uiShellSrc = readFileSync(uiSource("UIShell.ts"), "utf8");
+  assert(uiShellSrc.indexOf("markPageShown(") >= 0 && uiShellSrc.indexOf("console.log") < 0, "showing a page goes through GameLog, not [UI] console.log");
   const hangWidthMountAt = shellSrc.indexOf("export async function mountHangBattleShell");
   const hangWidthMountEnd = shellSrc.indexOf("function spawnHangPanel");
   const hangWidthMount = hangWidthMountAt >= 0 && hangWidthMountEnd > hangWidthMountAt ? shellSrc.slice(hangWidthMountAt, hangWidthMountEnd) : "";

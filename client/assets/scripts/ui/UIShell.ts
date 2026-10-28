@@ -1,4 +1,5 @@
 import { Layers, Node, UITransform } from "cc";
+import { GameLog } from "../core/GameLog";
 import { PageStack } from "./PageStack";
 import { UIManager } from "../framework/ui/UIManager";
 import { PopupQueue } from "./PopupQueue";
@@ -6,6 +7,7 @@ import { bindSafeArea, SafeAreaBinding } from "./SafeArea";
 import { StackView } from "./StackView";
 import { Toast } from "./Toast";
 import { uiNode } from "./UiKit";
+import { markPageShown } from "./uiOpenLog";
 
 /**
  * 挂在同一个 Canvas 上的四层：Page / Chrome / Popup / Toast。
@@ -47,25 +49,25 @@ export class UIShell {
 
   openPage(name: string, node: Node): void {
     this.attach(this.pageLayer, node);
-    console.log("[UI] open page=" + name);
     this.pages.open(name, toView(node));
+    markPageShown(name);
   }
 
   closePage(): string | null {
     const name = this.pages.close();
-    if (name) console.log("[UI] close page=" + name);
+    if (name) GameLog.shared.info("UIShell", "关闭界面 " + name);
     return name;
   }
 
   enqueuePopup(name: string, node: Node): void {
     this.attach(this.popupLayer, node);
     this.popups.enqueue(name, toView(node));
-    console.log("[UI] enqueue popup=" + name + " pending=" + this.popups.pending);
+    GameLog.shared.info("UIShell", "打开弹窗 " + name + " pending=" + this.popups.pending);
   }
 
   closePopup(): string | null {
     const name = this.popups.closeCurrent();
-    if (name) console.log("[UI] close popup=" + name);
+    if (name) GameLog.shared.info("UIShell", "关闭弹窗 " + name);
     return name;
   }
 
