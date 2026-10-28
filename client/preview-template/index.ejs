@@ -19,6 +19,35 @@
 
         <link rel="stylesheet" type="text/css" href="./index.css" />
         <link rel="stylesheet" href="./devtools/assets/style.css" />
+        <!-- Debug Mode "Info For Web Page" injects #logInfoDiv over the canvas. -->
+        <style>
+            #logInfoDiv {
+                display: none !important;
+            }
+        </style>
+        <script>
+            (function () {
+                function hideLogOverlay(node) {
+                    if (!node || node.nodeType !== 1) return;
+                    if (node.id === "logInfoDiv") {
+                        node.style.setProperty("display", "none", "important");
+                        return;
+                    }
+                    if (!node.querySelectorAll) return;
+                    var found = node.querySelectorAll("#logInfoDiv");
+                    for (var i = 0; i < found.length; i++) {
+                        found[i].style.setProperty("display", "none", "important");
+                    }
+                }
+                hideLogOverlay(document.documentElement);
+                new MutationObserver(function (records) {
+                    for (var i = 0; i < records.length; i++) {
+                        var added = records[i].addedNodes;
+                        for (var j = 0; j < added.length; j++) hideLogOverlay(added[j]);
+                    }
+                }).observe(document.documentElement, { childList: true, subtree: true });
+            })();
+        </script>
     </head>
     <body style="overflow: hidden;">
         <%- include(cocosToolBar, {config: config}) %>
