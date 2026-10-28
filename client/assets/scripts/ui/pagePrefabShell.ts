@@ -17,7 +17,7 @@ import { beginHangBattle } from "./hangBattle";
 import { hangLineupReady } from "./localLineup";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
 import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from "./chapterMapView";
-import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption, pinSprites } from "./screenFill";
+import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption, pinSprites, seatParchmentList } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { cancelPageOpen, logOpenedPrefab, notePrefabReady, pageOpenToken, prefabBaseName } from "./uiOpenLog";
 import { setText } from "./UiKit";
@@ -455,6 +455,7 @@ export function mountCcbiView(node: Node): void {
   repairCcbiView(node);
   centerInParent(node);
   seatAboveChrome(node);
+  seatParchmentList(node);
   watchCcbiSize(node);
 }
 
@@ -482,6 +483,7 @@ function watchCcbiSize(node: Node): void {
     repairCcbiView(node);
     centerInParent(node);
     seatAboveChrome(node);
+    seatParchmentList(node);
   };
   director.on(Director.EVENT_AFTER_UPDATE, retry);
   node.once(Node.EventType.NODE_DESTROYED, () => {

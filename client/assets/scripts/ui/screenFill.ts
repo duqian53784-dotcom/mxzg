@@ -38,8 +38,8 @@ import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
 import { mockRuntimeEnabled } from "../net/transportSelect";
 import { emptyBagToast } from "../module/bag/items";
 import { formatStoreBagLine } from "../module/bag/bagView";
-import { growAnchorDelta, listWindowSpread } from "./ccbiPlace";
-import { assignContentSize, positiveUiSize, uiSize } from "./visibleFit";
+import { growAnchorDelta, listWindowSpread, PARCHMENT_FIT_SIDE } from "./ccbiPlace";
+import { assignContentSize, bindVisibleRefresh, positiveUiSize, readVisibleBox, uiSize } from "./visibleFit";
 import { findNode, loadPrefab, spawnPrefab } from "./prefabLoad";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
@@ -928,23 +928,36 @@ function hideDebugBubble(view: Node): void {
 }
 
 /**
- * 640 宽的羊皮纸留在设计缩放 1，底左角锚点居中放进 720×1280。
- * 不再整页放大，也不把九宫格拉高去贴顶栏底栏。全屏底图由壳单独铺。
+ * 640 宽的羊皮纸按当前可视设计宽缩小，底左角锚点仍居中。
+ * 可视宽 ≥ 640 时缩放为 1。不放大，也不把九宫格拉高去贴顶栏底栏。
+ * Prefab 宽保持 640。全屏底图由壳单独铺，不跟着这层缩小。
  */
 function fitParchmentWindow(view: Node): ParchmentFit {
+  const mark = view as Node & { mxzgParchment?: ParchmentFit; mxzgParchmentBound?: boolean };
+  if (!applyParchmentFit(view)) watchParchment(view);
+  if (!mark.mxzgParchmentBound) {
+    mark.mxzgParchmentBound = true;
+    bindVisibleRefresh(view, () => {
+      if (!view.isValid) return;
+      if (!applyParchmentFit(view)) watchParchment(view);
+    });
+  }
+  return mark.mxzgParchment || NO_PARCHMENT;
+}
+
+/** 尺寸齐了才写缩放。没齐返回 false，调用方等下一帧。 */
+function applyParchmentFit(view: Node): boolean {
   const mark = view as Node & { mxzgParchment?: ParchmentFit };
-  if (mark.mxzgParchment) return mark.mxzgParchment;
   const bg = view.getChildByName("spr_bg");
   const ui = view.getComponent(UITransform);
   const bgUi = bg ? bg.getComponent(UITransform) : null;
   const rootSize = positiveUiSize(ui);
   const bgSize = positiveUiSize(bgUi);
-  // 尺寸还没挂上时不记 NO_PARCHMENT。记了以后这一页永远不再铺。
   if (!bg || !ui || !bgUi || !rootSize || !bgSize) {
     syncParchmentPlate(view, bg);
-    watchParchment(view);
-    return NO_PARCHMENT;
+    return false;
   }
+  const visible = readVisibleBox();
   const spread = listWindowSpread({
     rootW: rootSize.width,
     rootH: rootSize.height,
@@ -952,17 +965,24 @@ function fitParchmentWindow(view: Node): ParchmentFit {
     bgY: bg.position.y,
     bgAy: bgUi.anchorY,
     bgH: bgSize.height * Math.abs(bg.scale.y || 1),
+    visibleW: visible.width,
+    side: PARCHMENT_FIT_SIDE,
   });
-  // 节点只接受设计缩放 1。listWindowSpread 若仍返回 684/640，不写到 BackpackLayer / HeroListLayer。
-  if (spread.scale !== 1 || spread.extraTop !== 0 || spread.extraBottom !== 0) {
-    GameLog.shared.warn("UI", "羊皮纸铺窗忽略非设计缩放 " + spread.scale);
+  if (spread.scale > 1 || spread.extraTop !== 0 || spread.extraBottom !== 0) {
+    GameLog.shared.warn("UI", "羊皮纸铺窗忽略放大 " + spread.scale);
   }
-  view.setScale(1, 1, 1);
-  view.setPosition(-(0.5 - ui.anchorX) * rootSize.width, -(0.5 - ui.anchorY) * rootSize.height, 0);
-  const fit: ParchmentFit = { extraTop: 0, extraBottom: 0, extra: 0 };
+  const scale = spread.scale > 1 ? 1 : spread.scale;
+  view.setScale(scale, scale, 1);
+  view.setPosition(-(0.5 - ui.anchorX) * rootSize.width * scale, spread.rootY, 0);
   syncParchmentPlate(view, bg);
-  mark.mxzgParchment = fit;
-  return fit;
+  mark.mxzgParchment = { extraTop: 0, extraBottom: 0, extra: 0 };
+  return true;
+}
+
+/** BackpackView 只走 mountCcbiView，不进 fillBag。列表窗在这里用同一套缩放。 */
+export function seatParchmentList(view: Node): void {
+  if (view.name !== "BackpackLayer" && view.name !== "HeroListLayer") return;
+  fitParchmentWindow(view);
 }
 
 /** 羊皮纸尺寸晚一帧才有。等到了再铺，不等就停。不把失败结果缓存下来。 */
