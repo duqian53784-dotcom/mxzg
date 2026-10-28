@@ -1,6 +1,6 @@
 import { Layers, Node, UITransform } from "cc";
 import { PageStack } from "./PageStack";
-import { UIManager } from "./view/UIManager";
+import { UIManager } from "../framework/ui/UIManager";
 import { PopupQueue } from "./PopupQueue";
 import { bindSafeArea, SafeAreaBinding } from "./SafeArea";
 import { StackView } from "./StackView";

@@ -1,5 +1,5 @@
 import { _decorator, Component } from "cc";
-import { requestViewClose } from "./viewClose";
+import { requestViewClose } from "./ViewClose";
 
 const { ccclass } = _decorator;
 

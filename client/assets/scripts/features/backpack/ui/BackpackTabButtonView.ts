@@ -1,5 +1,5 @@
 import { _decorator, Button, Component, Label } from "cc";
-import { paintSpritePaths } from "./spritePaint";
+import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
 
 const { ccclass, property } = _decorator;
 
