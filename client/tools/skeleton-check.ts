@@ -28031,10 +28031,9 @@ function checkCityHub(): void {
   const battlePrefabText = readFileSync(battlePrefabFile, "utf8");
   const hallMeta = JSON.parse(readFileSync(join(process.cwd(), "client", "assets", "resources", "ui", "maps", "map-bg-mission-1.jpg.meta"), "utf8"));
   const hallFrame = hallMeta.subMetas.f9941.uuid;
-  const wirePrefabText = readFileSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "battle", "WireBattlePage.prefab"), "utf8");
+  assert(!existsSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "battle", "WireBattlePage.prefab")), "WireBattlePage prefab is removed");
   assert(battlePrefabText.indexOf("b117e1f3-0253-4616-95db-bed6a5007adb@f9941") < 0, "spr-bg-1 is not the BattlePage background");
-  assert(wirePrefabText.indexOf("b117e1f3-0253-4616-95db-bed6a5007adb@f9941") < 0, "spr-bg-1 is not the WireBattlePage background");
-  assert(battlePrefabText.indexOf(hallFrame) >= 0 && wirePrefabText.indexOf(hallFrame) >= 0, "battle prefab Bg is ui/maps/map-bg-mission-1");
+  assert(battlePrefabText.indexOf(hallFrame) >= 0, "battle prefab Bg is ui/maps/map-bg-mission-1");
   const speedMeta = JSON.parse(readFileSync(join(process.cwd(), "client", "assets", "resources", "ui", "battle", "battle-scene_btn-speed-1.png.meta"), "utf8"));
   const progBgMeta = JSON.parse(readFileSync(join(process.cwd(), "client", "assets", "resources", "ui", "battle", "battle-scene_prog-bg-1.png.meta"), "utf8"));
   const progFillMeta = JSON.parse(readFileSync(join(process.cwd(), "client", "assets", "resources", "ui", "battle", "battle-scene_prog-1.png.meta"), "utf8"));
