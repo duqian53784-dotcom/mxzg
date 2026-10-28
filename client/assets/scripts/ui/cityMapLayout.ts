@@ -320,11 +320,24 @@ export function frameSize(layer: number, piece: number, variant: number): FrameS
   return { w: 100, h: 100 };
 }
 
-/** 近景第二张贴在地图右缘。速度沿用视差近景。 */
-export function foregroundPiece2X(viewW: number, mapW: number, speed: number): number {
-  const p2 = viewW - mapW;
-  const pos2x = -p2 + p2 * speed + mapW;
-  return mapW + mapW - pos2x;
+/**
+ * 近景右板要比视口多探出这么多，避免贴图像素刚好卡在视口缘上，滤出后面的天空。
+ */
+export const CITY_EDGE_BLEED = 16;
+
+/**
+ * 近景第二张（树/柱）的右锚，速度沿用视差近景。
+ * 近景比内容走得快。右锚若按设计宽 640 钉在内容右缘，比 2:1 更窄的视口拖到最右时，
+ * 树会停在视口里面，树缘和视口之间露出天空和远景。
+ * 按当前视口把右缘收到视口外。近景盒子不夹，建筑仍挂在原来的父节点上。
+ */
+export function foregroundPiece2X(viewW: number, mapW: number, speed: number, scale?: number): number {
+  const s = scale !== undefined && scale > 0 ? scale : 1;
+  const contentW = Math.max(mapW * s, viewW > 0 ? viewW : 0);
+  const minScroll = Math.min(0, viewW - contentW);
+  const layerX = minScroll * (speed - 1);
+  const viewRight = -minScroll + viewW;
+  return (viewRight + CITY_EDGE_BLEED - layerX) / s;
 }
 
 export function layerAnchorX(scroll: number, ratio: number, ox: number): number {
@@ -405,8 +418,8 @@ export function buildCityMapLayout(
     spriteNode(
       "spr_map_bg1_2",
       "spr_map_bg1",
-      // 贴图拼接按设计宽 640 排，不跟视口变。变的是视口和滚动范围。
-      foregroundPiece2X(CITY_VIEW_W, CITY_MAP_W, speeds[0]),
+      // 右缘跟当前视口走。设计宽 640 只是视口的一种，窄屏不能沿用那一个锚点。
+      foregroundPiece2X(viewW, CITY_MAP_W, speeds[0], mapScale),
       0,
       1,
       0,

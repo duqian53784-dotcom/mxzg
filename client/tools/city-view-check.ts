@@ -5,7 +5,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { cityViewFromSearch, setUseCityView, useCityView } from "../assets/scripts/features/city/config/CityFeatureFlag";
-import { layerAnchorX, layerCoverX } from "../assets/scripts/ui/cityMapLayout";
+import { buildCityMapLayout, CITY_EDGE_BLEED, findCityNode, layerAnchorX, layerCoverX } from "../assets/scripts/ui/cityMapLayout";
 
 const root = process.cwd();
 
@@ -112,6 +112,20 @@ function checkFramework(): void {
   assert(layer.indexOf("Hud") >= 0, "HUD layer exists");
 }
 
+const NARROW_VIEWS = [576, 590, 640, 720, 996];
+
+/** 拖到最右时，树/柱右缘比视口右缘多出的像素。 */
+function rightTreeOverhang(viewW: number): number {
+  const layout = buildCityMapLayout(null, null, null, { viewW, viewH: 1280 });
+  const plate = findCityNode(layout, "spr_map_bg1_2");
+  const layer = findCityNode(layout, "spr_map_bg1");
+  assert(plate !== null && layer !== null && layer.parallax, "right foreground plate is on the near layer");
+  const scroll = layout.minScroll;
+  const layerX = layerAnchorX(scroll, layer.parallax.ratio, layer.parallax.ox);
+  const right = layerX + plate.x * layer.scale;
+  return right - (-scroll + viewW);
+}
+
 function checkSources(): void {
   const hub = read("client/assets/scripts/features/city/ui/CityHubView.ts");
   const chrome = read("client/assets/scripts/features/city/ui/CityChromeView.ts");
@@ -140,6 +154,13 @@ function checkSources(): void {
   assert(near === layerAnchorX(-860, 1.3, 0), "near layer is not dragged to hide its box");
   const ground = layerCoverX(0, 1, 750, 0.5, 1500, 1, 640);
   assert(ground === layerAnchorX(0, 1, 750), "ground anchor stays when it already fills the content");
+  for (let i = 0; i < NARROW_VIEWS.length; i++) {
+    const overhang = rightTreeOverhang(NARROW_VIEWS[i]);
+    assert(overhang >= CITY_EDGE_BLEED - 0.01, "right tree passes the viewport at width " + NARROW_VIEWS[i]);
+    assert(overhang < 48, "right tree stays on the cut building at width " + NARROW_VIEWS[i]);
+  }
+  const leftPlate = findCityNode(buildCityMapLayout(null, null, null, { viewW: 590, viewH: 1280 }), "spr_map_bg1_1");
+  assert(leftPlate !== null && leftPlate.x === 0 && leftPlate.ax === 0, "left foreground plate stays on the content left");
   assert(chrome.indexOf("main-scene-lang_lbl-fetters-unlock") >= 0, "chrome keeps the VIP caption");
   const oldHub = read("client/assets/scripts/ui/CityHub.ts");
   assert(oldHub.indexOf("export async function mountCityHubPrefab") >= 0, "old hub mount stays");
