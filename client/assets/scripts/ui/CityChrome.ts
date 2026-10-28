@@ -1,4 +1,4 @@
-import { Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform } from "cc";
+import { Button, Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform } from "cc";
 import { CITY_BAR, cityBarSlot } from "../config/nav";
 import { takeStagedChrome } from "./cityStage";
 import {
@@ -11,7 +11,9 @@ import {
   tintSprite,
 } from "./prefabLoad";
 import { createButton, createLabel, paintRect, place, setText, uiNode } from "./UiKit";
-import { bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar, uiSize } from "./visibleFit";
+import { TAB_REST_SIZE, tabVisualScale } from "./cityTabScale";
+import { widthSqueeze } from "./visibleChrome";
+import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar, uiSize } from "./visibleFit";
 
 export type TabVisual = "selected" | "open" | "locked";
 
@@ -171,6 +173,7 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
   for (let i = 0; i < CITY_BAR.length; i++) {
     const entry = CITY_BAR[i];
     const button = requireNode(root, tabPath[entry.id]);
+    prepareCityTab(button);
     const lock = button.getChildByName("Lock");
     if (lock) lock.active = false;
     const label = button.getChildByName("Label");
@@ -227,6 +230,7 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
         const button = buttons[tab.id];
         if (!button) continue;
         // 字图保持「副本」。不要把「锁·」写进 84px 的 Label，挤开会像「领·副本」。
+        setCityTabSelected(button, tab.state === "selected");
         tintSprite(button, prefabTabColor(tab.state));
         const lock = button.getChildByName("Lock");
         if (lock) {
@@ -278,7 +282,8 @@ function fitChromeChildren(root: Node, width: number): void {
     for (let j = 0; j < inner.length; j++) {
       const node = inner[j];
       if (node.name === "Bg" || node.name === "BgPad") continue;
-      squeezeWideNode(node, width);
+      if (isCityTab(node.name)) layoutCityTab(node, width);
+      else squeezeWideNode(node, width);
     }
   }
 }
@@ -341,6 +346,80 @@ function mountTabIcon(button: Node, path: string): void {
     if (err || !frame || !sprite.isValid) return;
     sprite.spriteFrame = frame;
   });
+}
+
+interface CityTabMark extends Node {
+  mxzgDesign?: { x: number; y: number; sx: number; sy: number };
+  mxzgTabRestY?: number;
+  mxzgTabSelected?: boolean;
+  mxzgTabWidth?: number;
+}
+
+export function isCityTab(name: string): boolean {
+  return (
+    name === "TabCity" ||
+    name === "TabHero" ||
+    name === "TabBag" ||
+    name === "TabBattle" ||
+    name === "TabDungeon" ||
+    name === "TabClan" ||
+    name === "TabFetter"
+  );
+}
+
+/** 七个键先收成同样大小。战斗格预制是 96，并且比其它格高一截。 */
+export function prepareCityTab(button: Node): void {
+  const mark = button as CityTabMark;
+  const ui = button.getComponent(UITransform);
+  const size = uiSize(ui);
+  if (ui && size && (size.width > TAB_REST_SIZE + 0.5 || size.height > TAB_REST_SIZE + 0.5)) {
+    assignContentSize(ui, TAB_REST_SIZE, TAB_REST_SIZE);
+  }
+  const icon = button.getChildByName("Icon");
+  if (icon) {
+    const iconUi = icon.getComponent(UITransform);
+    const iconSize = uiSize(iconUi);
+    if (iconUi && iconSize && (iconSize.width > 60 || iconSize.height > 60)) {
+      assignContentSize(iconUi, 56, 56);
+      const sprite = icon.getComponent(Sprite);
+      if (sprite) sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    }
+  }
+  if (mark.mxzgTabRestY === undefined) {
+    const y = button.position && typeof button.position.y === "number" ? button.position.y : 0;
+    mark.mxzgTabRestY = y > 20 ? 13 : y;
+  }
+  const press = button.getComponent(Button);
+  if (press && press.transition === Button.Transition.SCALE) press.transition = Button.Transition.NONE;
+}
+
+/** 窄屏收拢之后再乘选中倍数。Button 的缩放过渡会把 scale 弹回 1，所以先关掉。 */
+export function layoutCityTab(button: Node, visibleW: number): void {
+  const mark = button as CityTabMark;
+  prepareCityTab(button);
+  if (visibleW > 0) mark.mxzgTabWidth = visibleW;
+  const width = mark.mxzgTabWidth && mark.mxzgTabWidth > 0 ? mark.mxzgTabWidth : visibleW;
+  const restY = mark.mxzgTabRestY !== undefined ? mark.mxzgTabRestY : 0;
+  if (!mark.mxzgDesign) {
+    const pos = button.position;
+    const x = pos && typeof pos.x === "number" ? pos.x : 0;
+    const z = pos && typeof pos.z === "number" ? pos.z : 0;
+    button.setPosition(x, restY, z);
+    button.setScale(1, 1, 1);
+  } else {
+    mark.mxzgDesign.sx = 1;
+    mark.mxzgDesign.sy = 1;
+    mark.mxzgDesign.y = restY;
+  }
+  squeezeWideNode(button, width);
+  const mul = tabVisualScale(mark.mxzgTabSelected === true);
+  const squeeze = widthSqueeze(width);
+  button.setScale(mul * squeeze, mul * squeeze, 1);
+}
+
+export function setCityTabSelected(button: Node, selected: boolean): void {
+  (button as CityTabMark).mxzgTabSelected = selected;
+  layoutCityTab(button, 0);
 }
 
 /**

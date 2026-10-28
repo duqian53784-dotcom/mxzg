@@ -34,6 +34,7 @@ import { NetClient } from "../net/NetClient";
 import { wireDebugEnabled } from "../net/transportSelect";
 import { NetState } from "../net/NetTypes";
 import { WireSession } from "../net/WireSession";
+import { barIndex, barPageId, barSlideDir } from "./barSlide";
 import { CityChrome, mountCityChromePrefab, TabState } from "./CityChrome";
 import { formatAvatarIcon, formatCombatPower } from "./hangHud";
 import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
@@ -179,7 +180,7 @@ export class MainApp extends Component {
     this.shell = UIShell.mount(canvas);
     if (!this.isValid || !this.shell) return;
     const shell = this.shell;
-    const onTab = (id: string) => this.onTab(id);
+    const onTab = (id: string) => this.onTab(id, true);
     // 主城页先挂上。顶栏预制若还要等，不能挡天空和建筑。
     this.panels = new PanelNav<Node>(
       shell,
@@ -266,19 +267,31 @@ export class MainApp extends Component {
     );
   }
 
-  private onTab(id: string): void {
+  private onTab(id: string, fromBar = false): void {
+    const arm = () => {
+      if (fromBar) this.beginBarSlide(id);
+    };
+    const seal = () => {
+      if (fromBar) this.sealBarSlide();
+    };
     if (id === "battle") {
+      arm();
       this.openMainline();
+      seal();
       return;
     }
     if (id === "dungeon") {
       if (!this.allow("daily")) return;
+      arm();
       this.openChild("daily");
+      seal();
       return;
     }
     if (id === "clan" || id === "fetter") {
       if (!this.allow(id)) return;
+      arm();
       this.openChild(id);
+      seal();
       return;
     }
     if (id === "bag") {
@@ -287,15 +300,45 @@ export class MainApp extends Component {
         this.refreshChrome();
         return;
       }
+      arm();
       this.openChild(id);
+      if (fromBar && !this.shell?.barSlideWaiting()) this.sealBarSlide();
       return;
     }
     GameLog.shared.info("MainApp", "tab " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
     if (Session.source !== "wire" && (id === "hero" || id === "summon" || id === "smith") && !this.ensureNet()) return;
+    arm();
     this.panels?.openRoot(id);
     this.refreshChrome();
+    seal();
+  }
+
+  /** 只有底栏七格、而且目标格和当前高亮不是同一格，才预约横向过场。 */
+  private beginBarSlide(id: string): void {
+    const shell = this.shell;
+    if (!shell) return;
+    const dir = barSlideDir(this.barIndexNow(), barIndex(id));
+    if (dir === 0) return;
+    shell.armBarSlide(dir, barPageId(id));
+  }
+
+  private sealBarSlide(): void {
+    this.shell?.sealBarSlide();
+  }
+
+  /** 底栏高亮对应的格子。邮件这类子页没有高亮时，跟导航根走。 */
+  private barIndexNow(): number {
+    const current = this.panels?.current || "";
+    const root = this.panels?.rootTab || CITY_TAB;
+    for (let i = 0; i < CITY_BAR.length; i++) {
+      if (this.barSelected(CITY_BAR[i].id, current, root)) return i;
+    }
+    for (let i = 0; i < CITY_BAR.length; i++) {
+      if (this.barSelected(CITY_BAR[i].id, root, root)) return i;
+    }
+    return barIndex(root);
   }
 
   private openChild(id: string): void {
@@ -316,7 +359,9 @@ export class MainApp extends Component {
       return;
     }
     if (id === "bag" && useBackpackView()) {
+      this.shell?.holdBarSlide();
       void UIManager.instance.open(BackpackView).catch((err) => {
+        this.shell?.dropWaitingBarSlide("bag");
         if (isOpenCancelled(err)) return;
         GameLog.shared.error("MainApp", "背包页没有打开 " + messageOf(err));
       });
@@ -327,6 +372,7 @@ export class MainApp extends Component {
   }
 
   private back(): void {
+    this.shell?.cancelBarSlide();
     const closed = this.panels?.back() === true;
     if (!closed) return;
     GameLog.shared.info("MainApp", "back to " + (this.panels?.current || ""));
@@ -2184,6 +2230,7 @@ export class MainApp extends Component {
 
   private noteClose(id: string): void {
     if (id === CITY_HUB_MORE_ID) this.mainButton = null;
+    if (this.shell && this.shell.deferBarNote(() => UIManager.instance.noteClosed(id))) return;
     UIManager.instance.noteClosed(id);
   }
 

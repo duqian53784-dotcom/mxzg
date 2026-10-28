@@ -5,7 +5,7 @@ import { GameLog } from "../../../core/GameLog";
 import { BaseView } from "../../../framework/ui/BaseView";
 import { UILayer } from "../../../framework/ui/UILayer";
 import { view } from "../../../framework/ui/UIRegistry";
-import { CityChrome, CityChromeActions, TabState } from "../../../ui/CityChrome";
+import { CityChrome, CityChromeActions, isCityTab, layoutCityTab, prepareCityTab, setCityTabSelected, TabState } from "../../../ui/CityChrome";
 import { CITY_CHROME_PREFAB_PATH, bindClick, tintSprite } from "../../../ui/prefabLoad";
 import { createLabel, setText, uiNode } from "../../../ui/UiKit";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar, uiSize } from "../../../ui/visibleFit";
@@ -208,6 +208,7 @@ export class CityChromeView extends BaseView<CityChromeOpenArgs> implements City
       const tab = tabs[i];
       const button = this.tabs[tab.id];
       if (!button) continue;
+      setCityTabSelected(button, tab.state === "selected");
       tintSprite(button, prefabTabColor(tab.state));
       const lock = button.getChildByName("Lock");
       if (lock) {
@@ -231,6 +232,7 @@ export class CityChromeView extends BaseView<CityChromeOpenArgs> implements City
       const entry = CITY_BAR[i];
       const button = tabNodes[i];
       if (!button) throw new Error("缺少节点 " + entry.id);
+      prepareCityTab(button);
       const lock = button.getChildByName("Lock");
       if (lock) lock.active = false;
       const label = button.getChildByName("Label");
@@ -334,7 +336,8 @@ export class CityChromeView extends BaseView<CityChromeOpenArgs> implements City
       for (let j = 0; j < inner.length; j++) {
         const node = inner[j];
         if (node.name === "Bg" || node.name === "BgPad") continue;
-        squeezeWideNode(node, width);
+        if (isCityTab(node.name)) layoutCityTab(node, width);
+        else squeezeWideNode(node, width);
       }
     }
   }
