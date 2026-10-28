@@ -554,7 +554,7 @@ import {
   summonResultText,
   summonToast,
 } from "../assets/scripts/module/summon/pull";
-import { GameLog } from "../assets/scripts/core/GameLog";
+import { consoleParts, consoleUsesCss, GameLog } from "../assets/scripts/core/GameLog";
 import { GameStore, saveRoleCache } from "../assets/scripts/core/GameStore";
 import {
   bindGameCatalog,
@@ -1314,6 +1314,7 @@ import {
   WIRE_LINEUP_UNSYNCED_TOAST,
   wireLineUpNote,
 } from "../assets/scripts/net/protocol/wireLineUp";
+import { GM_ITEM_COMMAND, gmPanelOps } from "../assets/scripts/features/gm/GmCatalog";
 import {
   decodeWireHeroAdd,
   decodeWireServerError,
@@ -1698,6 +1699,7 @@ import {
   readPreviewTransport,
   resolveBootTransport,
   TransportConfig,
+  gmDebugFromSearch,
   wireDebugFromSearch,
   WS_DOWN_DETAIL,
   WS_DOWN_LOG,
@@ -2184,6 +2186,27 @@ function checkLog(): void {
   log.mirrorConsole = true;
   log.warn("T", "mirrored");
   assert(log.recent()[log.recent().length - 1].message === "mirrored", "mirror still buffers");
+  log.minLevel = "debug";
+  log.openView("BackpackView", "BackpackLayer", "prefabs/ui/backpack/BackpackLayer");
+  const opened = log.recent()[log.recent().length - 1];
+  assert(
+    opened.tag === "UI" &&
+      opened.level === "info" &&
+      opened.message.indexOf("class=BackpackView") >= 0 &&
+      opened.message.indexOf("prefab=BackpackLayer") >= 0 &&
+      opened.message.indexOf("path=prefabs/ui/backpack/BackpackLayer") >= 0,
+    "opening a view logs class and prefab"
+  );
+  const colored = consoleParts(opened, { window: {} });
+  assert(
+    colored !== null &&
+      colored.text.indexOf("%c[mxzg]%c[info]%c[UI]%c") === 0 &&
+      colored.text.indexOf(opened.message) >= 0 &&
+      colored.css.length === 4 &&
+      colored.css[1].indexOf("#81c995") >= 0,
+    "browser console colors the level and the tag"
+  );
+  assert(consoleParts(opened, {}) === null && consoleUsesCss({}) === false, "node console stays plain text");
 }
 
 function memoryStore(seed?: Record<string, string>): PrefStore & { data: Record<string, string> } {
@@ -2214,6 +2237,13 @@ function checkGameStore(): void {
   assert(
     wireDebugFromSearch("?dev=wire") === true && wireDebugFromSearch("?dev=mock") === false && wireDebugFromSearch("") === false,
     "mainline probe is only ?dev=wire"
+  );
+  assert(
+    gmDebugFromSearch("?gm=1") === true &&
+      gmDebugFromSearch("?gm=0") === false &&
+      gmDebugFromSearch("?dev=wire") === false &&
+      gmDebugFromSearch("") === false,
+    "gm panel flag is only ?gm=1"
   );
   const savedWs = resolveBootTransport(plain, "ws");
   assert(savedWs.useWs && !savedWs.autoFallback, "empty plus saved ws uses the bridge");
@@ -10224,6 +10254,44 @@ async function checkWs(): Promise<void> {
     gmAdd !== null && gmAdd.cmdId === 2015 && bytesToHex(gmAdd.bytes) === WIRE_GM_ADD_HERO_FRAME,
     "default ADD_HERO frame is command plus type and star"
   );
+  assert(
+    encodeWireMessage({ cmd: "wire.2015", data: { command: "ADD_HERO", params: ["10505010", "1"] } }) === null,
+    "ADD_HERO with another star stays unencoded"
+  );
+  const gmLevel = encodeWireMessage({ cmd: "wire.2015", data: { command: "ROLE_LV", params: ["1"] } });
+  const gmAll = encodeWireMessage({ cmd: "wire.2015", data: { command: "ALL_HERO" } });
+  const gmItem = encodeWireMessage({ cmd: "wire.2015", data: { command: "ADD_ITEM", params: ["900001", "3"] } });
+  assert(
+    gmLevel !== null &&
+      gmLevel.cmdId === 2015 &&
+      bytesToHex(gmLevel.bytes).indexOf("0a07524f4c455f4c56") >= 0 &&
+      bytesToHex(gmLevel.bytes).indexOf("120131") >= 0 &&
+      gmLevel.note.indexOf("ROLE_LV") >= 0,
+    "ROLE_LV is the same 2015 frame with command and one param"
+  );
+  assert(
+    gmAll !== null && gmAll.cmdId === 2015 && bytesToHex(gmAll.bytes).indexOf("0a08414c4c5f4845524f") >= 0,
+    "ALL_HERO encodes with an empty param list"
+  );
+  assert(
+    gmItem !== null &&
+      gmItem.cmdId === 2015 &&
+      bytesToHex(gmItem.bytes).indexOf("0a084144445f4954454d") >= 0 &&
+      gmItem.note.indexOf("900001,3") >= 0,
+    "ADD_ITEM sends item id and count on 2015"
+  );
+  assert(encodeWireMessage({ cmd: "wire.2015", data: { command: "add_item", params: ["1", "1"] } }) === null, "lowercase gm command stays unencoded");
+  const gmOps = gmPanelOps([
+    { title: "等级+1", tab_title: "角色", gm_command: "ROLE_LV", param: "[1]" },
+    { title: "所有英雄", tab_title: "角色", gm_command: "ALL_HERO" },
+    { title: "跳过", gm_command: "CLEAN_ALL_HERO" },
+    { title: "坏参数", gm_command: "ROLE_LV", param: "nope" },
+    { title: "道具", tab_title: "道具" },
+  ]);
+  assert(
+    gmOps.length === 2 && gmOps[0].params.join(",") === "1" && gmOps[1].command === "ALL_HERO" && GM_ITEM_COMMAND === "ADD_ITEM",
+    "gm panel keeps level and all-hero rows and does not invent a table command for items"
+  );
   assert(encodeWireMessage({ cmd: "wire.3100", data: { heroId: 42, position: 1 } }) === null, "formation 1 position 1 is not encoded");
   assert(encodeWireMessage({ cmd: "wire.3100", data: { heroId: 42, position: 4 } }) === null, "formation 1 position 4 is not encoded");
   const lineSave = encodeWireMessage({ cmd: "wire.3100", data: { heroId: 42, position: 2 } });
@@ -10260,8 +10328,10 @@ async function checkWs(): Promise<void> {
   assert(
     lineupPageSrc.indexOf('createButton("GM 加英雄"') < 0 &&
       lineupPageSrc.indexOf('createButton("GM 上 MAIN"') < 0 &&
-      lineupPageSrc.indexOf("probe-scroll") < 0,
-    "gm buttons and the probe scroll are not on the hang host"
+      lineupPageSrc.indexOf("probe-scroll") < 0 &&
+      lineupPageSrc.indexOf("openGmDebug()") >= 0 &&
+      lineupPageSrc.indexOf("HANG_PROBE_EVENT") >= 0,
+    "gm buttons stay off the hang host, and the empty-spot long press opens the debug panel"
   );
   assert(decodeWireLineUp(null) === null, "null 3101 body is not a snapshot");
   assert(decodeWireLineUp(new Uint8Array([0x80])) === null, "bad 3101 ignored");
@@ -27150,6 +27220,7 @@ function checkCityHub(): void {
     "hang bar fill does not read sprite frame width before the texture is live"
   );
   assert(shellSrc.indexOf("hang shell width") >= 0 && shellFillSrc.indexOf("hang shell width") >= 0, "a late width throw names the step and is not the hang battle shell error");
+  assert(shellSrc.indexOf("logOpenedPrefab(") >= 0, "page prefab open logs class and prefab");
   const hangWidthMountAt = shellSrc.indexOf("export async function mountHangBattleShell");
   const hangWidthMountEnd = shellSrc.indexOf("function spawnHangPanel");
   const hangWidthMount = hangWidthMountAt >= 0 && hangWidthMountEnd > hangWidthMountAt ? shellSrc.slice(hangWidthMountAt, hangWidthMountEnd) : "";

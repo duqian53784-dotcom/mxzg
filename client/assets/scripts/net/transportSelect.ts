@@ -36,6 +36,15 @@ export function wireDebugFromSearch(search: string): boolean {
   return queryParam(search, "dev") === "wire";
 }
 
+/** 调试 GM 面板。只认 ?gm=1。不改传输，也不改 ?dev=wire 的探针开关。 */
+export function gmDebugFromSearch(search: string): boolean {
+  return queryParam(search, "gm") === "1";
+}
+
+export function gmDebugEnabled(): boolean {
+  return gmDebugFromSearch(readPreviewSearch());
+}
+
 export function wireDebugEnabled(): boolean {
   return wireDebugFromSearch(readPreviewSearch());
 }
