@@ -2,7 +2,11 @@
   "ver": "1.2.0",
   "importer": "directory",
   "imported": true,
+<<<<<<< HEAD
   "uuid": "0906e3c7-b82e-448a-8db4-0542683dca77",
+=======
+  "uuid": "8c7eb963-71fb-44c6-8057-1f7fe47b3165",
+>>>>>>> origin/pr-295
   "files": [],
   "subMetas": {},
   "userData": {}

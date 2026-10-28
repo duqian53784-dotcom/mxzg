@@ -20,6 +20,15 @@ export class JsonAsset {
   json: object | null = null;
 }
 
+export const KeyCode = { F9: 120, BACKQUOTE: 192 };
+
+export const Input = { EventType: { KEY_DOWN: "keydown" } };
+
+export const input = {
+  on(_type: string, _callback: (event: { keyCode: number }) => void, _target?: unknown): void {},
+  off(_type: string, _callback: (event: { keyCode: number }) => void, _target?: unknown): void {},
+};
+
 export const resources = {
   load(_path: string, _type: unknown, cb: (err: Error | null, asset: unknown) => void): void {
     cb(new Error("skeleton-check 不读 resources"), null);

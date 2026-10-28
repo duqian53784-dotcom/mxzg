@@ -37,7 +37,8 @@ import { WireSession } from "../net/WireSession";
 import { CityChrome, mountCityChromePrefab, TabState } from "./CityChrome";
 import { formatAvatarIcon, formatCombatPower } from "./hangHud";
 import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
-import { attachPagePrefabShell, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
+import { installGmHotkey, openGmDebug, uninstallGmHotkey } from "../features/gm/GmHotkey";
+import { attachPagePrefabShell, HANG_PROBE_EVENT, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
 import { pagePrefabShell } from "./prefabShellMap";
 import { BackpackView } from "../features/backpack/ui/BackpackView";
 import { useBackpackView } from "../features/backpack/config/BackpackFeatureFlag";
@@ -155,6 +156,7 @@ export class MainApp extends Component {
       this.cityMap = null;
     }
     this.detachWire();
+    uninstallGmHotkey();
     this.shell?.dispose();
   }
 
@@ -188,6 +190,10 @@ export class MainApp extends Component {
       }
     }
     if (!this.isValid || !this.shell) return;
+    installGmHotkey(shell.popupLayer, (text) => {
+      if (!this.isValid || !this.shell) return;
+      this.shell.showToast(text, 2200);
+    });
     try {
       this.chrome = await mountCityChromePrefab(shell.chromeLayer, onTab, {
         openActivity: () => {
@@ -322,6 +328,10 @@ export class MainApp extends Component {
     if (viewHost) return viewHost;
     const page = this.buildPage(id);
     if (id === "mainline") {
+      page.on(HANG_PROBE_EVENT, () => {
+        GameLog.shared.info("GM", "挂机空地长按，打开 GM");
+        openGmDebug();
+      });
       void mountHangBattleShell(page);
       return page;
     }

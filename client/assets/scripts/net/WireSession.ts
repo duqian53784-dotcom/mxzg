@@ -63,6 +63,7 @@ import {
   decodeWireServerError,
   formatWireGmHero,
   readWireGmAddHero,
+  readWireGmCommand,
   WIRE_GM_CMD,
   WIRE_GM_COMMAND,
   WIRE_HERO_ADD_CMD,
@@ -2056,11 +2057,12 @@ export class WireSession {
     this.pullBackpack();
   }
 
-  /** 空的 c2s 5001。GReqBackPackList 没有包体。 */
-  static pullBackpack(): void {
+  /** 空的 c2s 5001。GReqBackPackList 没有包体。没连上返回 false，不改本地背包。 */
+  static pullBackpack(): boolean {
     const net = this.net || this.watched;
-    if (!net || net.state !== "connected") return;
+    if (!net || net.state !== "connected") return false;
     net.send(WIRE_BAG_CMD);
+    return true;
   }
 
   /** 收到过 s2c 5001（含空包体）才算同步。5002 单独到不算。 */
@@ -2315,6 +2317,26 @@ export class WireSession {
     const query = readWireGmAddHero({ command: WIRE_GM_COMMAND, typeId });
     if (!query) return false;
     net.send(WIRE_GM_CMD, query);
+    return true;
+  }
+
+  /**
+   * 调试面板的 c2s 2015。ADD_HERO 仍走 pullGmAddHero，星级保持 9。
+   * 其它命令是 gm 表里的大写名，或道具页补的 ADD_ITEM。不进 pullIdle。
+   * 不写本地背包，不写名册。没连上、还没有 3007、或命令不合法时返回 false。
+   */
+  static pullGmCommand(command: string, params: readonly string[]): boolean {
+    if (command === WIRE_GM_COMMAND) {
+      const typeId = params.length > 0 ? params[0] : "";
+      return this.pullGmAddHero(typeId);
+    }
+    const net = this.net || this.watched;
+    if (!net || net.state !== "connected") return false;
+    if (!this.hasChapter()) return false;
+    const query = readWireGmCommand({ command, params: params.slice() });
+    if (!query) return false;
+    net.send(WIRE_GM_CMD, { command: query.command, params: query.params });
+    GameLog.shared.info("GM", "c2s 2015 " + query.command + " param=" + query.params.join(",") + " 不写本地数据");
     return true;
   }
 

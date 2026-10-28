@@ -180,7 +180,13 @@ import { encodeWireChapterReportBody, readWireChapterReportQuery, WIRE_CHAPTER_R
 import { encodeWireBattleReportBody, readWireBattleReportQuery, WIRE_BATTLE_REPORT_CMD } from "./wireBattleReport";
 import { encodeWirePreComputeBody, readWirePreComputeQuery, WIRE_PRECOMPUTE_CMD } from "./wirePreComputeStrength";
 import { encodeWireStudyBody, readWireStudyQuery, WIRE_STUDY_CMD } from "./wireStudy";
-import { encodeWireGmCommandBody, readWireGmAddHero, WIRE_GM_CMD } from "./wireGmCommand";
+import {
+  encodeWireGmCommandBody,
+  encodeWireGmGenericBody,
+  readWireGmCommand,
+  WIRE_GM_CMD,
+  WIRE_GM_COMMAND,
+} from "./wireGmCommand";
 import {
   encodeWireLineUpSaveBody,
   encodeWireLineUpSaveHeroes,
@@ -536,9 +542,9 @@ export function encodeWireMessage(msg: NetMessage): WirePacket | null {
     };
   }
   if (cmd === WIRE_GM_CMD) {
-    const query = readWireGmAddHero(msg.data);
+    const query = readWireGmCommand(msg.data);
     if (!query) return null;
-    const body = encodeWireGmCommandBody(query);
+    const body = query.command === WIRE_GM_COMMAND ? encodeWireGmCommandBody(query) : encodeWireGmGenericBody(query);
     if (!body) return null;
     return {
       cmdId: WireCmd.gmCommand,

@@ -1,7 +1,8 @@
 /**
- * 主线探针 GM 加英雄。c2s 2015 是 GReqGMCommandNew。成功没有 2015 回包。
+ * c2s 2015 是 GReqGMCommandNew。成功没有 2015 回包。
  * 字段按声明顺序从 1 编号：1 command（string），2 param（repeated string）。
- * 默认 command=ADD_HERO，param=["10505010","9"]。类型号可被输入框改掉，星级仍是 "9"。
+ * 主线探针仍是 command=ADD_HERO，param=["10505010","9"]。类型号可被输入框改掉，星级仍是 "9"。
+ * 调试面板上的其它命令（ROLE_LV、ALL_HERO、ALL_EQUIP、ADD_ITEM）走同一帧，命令名必须是大写标识。
  * 2015 = 0x07DF，小端 df 07 00 00。
  * 缺 command、或类型号不是正整数时不编码。空 cmd 不编，登录链不发。
  *
@@ -36,6 +37,15 @@ export interface WireGmAddHero {
   command: string;
   params: string[];
 }
+
+/** 同一条 2015。ADD_HERO 仍只从 readWireGmAddHero 进来，星级锁在 9。 */
+export interface WireGmCommand {
+  command: string;
+  params: string[];
+}
+
+const GM_COMMAND_NAME = /^[A-Z][A-Z0-9_]{0,31}$/;
+const GM_PARAM_TEXT = /^[0-9A-Za-z_-]{1,24}$/;
 
 export interface WireHeroAddSnapshot {
   /** 字段 1 子消息里的字段 1。实例 id。不含类型号。 */
@@ -76,14 +86,50 @@ export function readWireGmAddHero(data: unknown): WireGmAddHero | null {
   return { command: WIRE_GM_COMMAND, params: [typeId, WIRE_GM_STAR_PARAM] };
 }
 
+/**
+ * 调试面板的 2015。ADD_HERO 不从这里放行，避免绕开星级 9。
+ * 没有 command、命令名不是大写标识、或 param 不是短字符串时返回 null。
+ */
+export function readWireGmCommand(data: unknown): WireGmCommand | null {
+  const hero = readWireGmAddHero(data);
+  if (hero) return { command: hero.command, params: hero.params.slice() };
+  if (!data || typeof data !== "object") return null;
+  const raw = data as { command?: unknown; params?: unknown };
+  if (typeof raw.command !== "string" || !GM_COMMAND_NAME.test(raw.command)) return null;
+  if (raw.command === WIRE_GM_COMMAND) return null;
+  if (raw.params === undefined || raw.params === null) return { command: raw.command, params: [] };
+  if (!Array.isArray(raw.params) || raw.params.length > 6) return null;
+  const params: string[] = [];
+  for (let i = 0; i < raw.params.length; i++) {
+    const text = raw.params[i];
+    if (typeof text !== "string" || !GM_PARAM_TEXT.test(text)) return null;
+    params.push(text);
+  }
+  return { command: raw.command, params };
+}
+
 /** GReqGMCommandNew。字段 1 command，字段 2 每个 param 一条 string。 */
 export function encodeWireGmCommandBody(query: WireGmAddHero): Uint8Array | null {
   if (query.command !== WIRE_GM_COMMAND) return null;
   if (!query.params || query.params.length < 2) return null;
-  const parts: number[] = [];
-  pushString(parts, 1, query.command);
+  return encodeGmBody(query.command, query.params);
+}
+
+/** 非 ADD_HERO 的 2015。命令名和 param 已经过 readWireGmCommand。 */
+export function encodeWireGmGenericBody(query: WireGmCommand): Uint8Array | null {
+  if (query.command === WIRE_GM_COMMAND) return encodeWireGmCommandBody(query);
+  if (!GM_COMMAND_NAME.test(query.command)) return null;
   for (let i = 0; i < query.params.length; i++) {
-    const text = query.params[i];
+    if (!GM_PARAM_TEXT.test(query.params[i])) return null;
+  }
+  return encodeGmBody(query.command, query.params);
+}
+
+function encodeGmBody(command: string, params: string[]): Uint8Array | null {
+  const parts: number[] = [];
+  pushString(parts, 1, command);
+  for (let i = 0; i < params.length; i++) {
+    const text = params[i];
     if (typeof text !== "string" || !text) return null;
     pushString(parts, 2, text);
   }

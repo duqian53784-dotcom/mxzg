@@ -19,6 +19,7 @@ import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./pref
 import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from "./chapterMapView";
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption, pinSprites } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
+import { logOpenedPrefab, prefabBaseName } from "./uiOpenLog";
 import { setText } from "./UiKit";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize, uiSize } from "./visibleFit";
 
@@ -84,7 +85,10 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
   const spec = pagePrefabShell(id);
   if (!spec || !page.isValid) return;
   let hold = holds.get(page);
-  if (hold && (hold.root || hold.pending)) return;
+  if (hold && (hold.root || hold.pending)) {
+    if (hold.root) logOpenedPrefab(hold.root.getChildByName(prefabBaseName(spec.path)), spec.path, id);
+    return;
+  }
   if (!hold) {
     hold = { want: true, root: null };
     holds.set(page, hold);
@@ -112,6 +116,7 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
       } else GameLog.shared.warn("MainApp", "PagePrefabShell 下没有 dim");
     }
     const view = spawnPrefab(prefab, root);
+    logOpenedPrefab(view, spec.path, id);
     mountCcbiView(view);
     fillPageShell(id, view, (hero) => {
       void openHangSheet(root, HERO_INFO_PREFAB, (sheet) => dressHeroDetail(sheet, hero));
@@ -256,6 +261,7 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
     const prefab = await loadPrefab(path);
     if (!page.isValid || !root.isValid) return;
     view = spawnHangPanel(prefab, root);
+    logOpenedPrefab(view, path, "mainline");
     const panel = view;
     hangShellStep("mountCcbiView", () => mountCcbiView(panel));
     hangShellStep("dressHangPanel", () => dressHangPanel(panel));
@@ -991,6 +997,7 @@ async function openHangSheet(host: Node, path: string, onReady?: (view: Node) =>
     sheet.name = "BattleSheet";
     if (!sheet.getChildByName("dim")) GameLog.shared.warn("Mainline", "BattleSheet 下没有 dim");
     const view = spawnPrefab(prefab, sheet);
+    logOpenedPrefab(view, path, prefabBaseName(path));
     mountCcbiView(view);
     silenceSheetMenus(view);
     const close = () => {

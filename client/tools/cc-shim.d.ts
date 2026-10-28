@@ -39,6 +39,7 @@ declare module "cc" {
     off(type: string, callback: (...args: unknown[]) => void, target?: unknown): void;
     destroy(): void;
     removeFromParent(): void;
+    components?: { constructor?: { name?: string } }[];
     static EventType: {
       TOUCH_START: string;
       TOUCH_MOVE: string;
@@ -256,6 +257,19 @@ declare module "cc" {
       load(path: string, type: unknown, cb: (err: Error | null, asset: Prefab | null) => void): void;
     }
   }
+
+  export class EventKeyboard {
+    keyCode: number;
+  }
+
+  export const KeyCode: { F9: number; BACKQUOTE: number };
+
+  export const Input: { EventType: { KEY_DOWN: string } };
+
+  export const input: {
+    on(type: string, callback: (event: EventKeyboard) => void, target?: unknown): void;
+    off(type: string, callback: (event: EventKeyboard) => void, target?: unknown): void;
+  };
 
   export const assetManager: {
     loadBundle(name: string, cb: (err: Error | null, bundle: AssetManager.Bundle | null) => void): void;
