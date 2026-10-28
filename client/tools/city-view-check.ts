@@ -5,6 +5,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { cityViewFromSearch, setUseCityView, useCityView } from "../assets/scripts/features/city/config/CityFeatureFlag";
+import { layerAnchorX, layerCoverX } from "../assets/scripts/ui/cityMapLayout";
 
 const root = process.cwd();
 
@@ -122,6 +123,23 @@ function checkSources(): void {
   assert(hub.indexOf("onCityAtom") < 0, "hub does not reimplement routing");
   assert(hub.indexOf("cityAtomLocked") >= 0, "hub still locks buildings from the query");
   assert(chrome.indexOf("setCityExtras") >= 0, "chrome still hides the activity row");
+  assert(chrome.indexOf('createRect("BgPad"') < 0, "new chrome does not paint a BgPad");
+  assert(chrome.indexOf('getChildByName("BgPad")') >= 0, "new chrome turns an existing BgPad off");
+  const oldChrome = read("client/assets/scripts/ui/CityChrome.ts");
+  assert(oldChrome.indexOf('createRect("BgPad"') < 0, "old chrome does not paint a BgPad");
+  assert(hub.indexOf("layerCoverX") >= 0, "hub keeps far layers over the viewport");
+  const skyLeft = layerCoverX(0, 0.63, 750, 0.5, 1200, 1.2, 640);
+  const skyLeftEdge = skyLeft - 0.5 * 1200 * 1.2;
+  assert(skyLeftEdge <= 0, "sky covers the left edge at scroll 0");
+  assert(skyLeftEdge + 1200 * 1.2 >= 640, "sky still covers the view when pulled left");
+  const skyMid = layerCoverX(-430, 0.63, 750, 0.5, 1200, 1.2, 640);
+  assert(Math.abs(skyMid - layerAnchorX(-430, 0.63, 750)) < 0.001, "sky stays put while the view is covered");
+  const farLeft = layerCoverX(0, 0.82, 750, 0.5, 1428, 1, 640);
+  assert(farLeft - 0.5 * 1428 <= 0, "far city covers the left edge");
+  const near = layerCoverX(-860, 1.3, 0, 0, 1500, 1, 640);
+  assert(near === layerAnchorX(-860, 1.3, 0), "near layer is not dragged to hide its box");
+  const ground = layerCoverX(0, 1, 750, 0.5, 1500, 1, 640);
+  assert(ground === layerAnchorX(0, 1, 750), "ground anchor stays when it already fills the content");
   assert(chrome.indexOf("main-scene-lang_lbl-fetters-unlock") >= 0, "chrome keeps the VIP caption");
   const oldHub = read("client/assets/scripts/ui/CityHub.ts");
   assert(oldHub.indexOf("export async function mountCityHubPrefab") >= 0, "old hub mount stays");
