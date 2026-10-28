@@ -9,3 +9,20 @@ export const TAB_SELECTED_SCALE = TAB_SELECTED_SIZE / TAB_REST_SIZE;
 export function tabVisualScale(selected: boolean): number {
   return selected ? TAB_SELECTED_SCALE : 1;
 }
+
+/**
+ * 一帧里只留最后一格 selected。其余 selected 收成 open，locked 不动。
+ * 英雄还在导航根上、当前页又是背包时，两边都会被标成 selected，两键一起放大。
+ */
+export function tabPaintState(states: string[]): string[] {
+  let chosen = -1;
+  for (let i = 0; i < states.length; i++) {
+    if (states[i] === "selected") chosen = i;
+  }
+  const out: string[] = [];
+  for (let i = 0; i < states.length; i++) {
+    if (states[i] === "selected" && i !== chosen) out.push("open");
+    else out.push(states[i]);
+  }
+  return out;
+}

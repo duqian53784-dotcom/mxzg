@@ -34,7 +34,7 @@ import { NetClient } from "../net/NetClient";
 import { wireDebugEnabled } from "../net/transportSelect";
 import { NetState } from "../net/NetTypes";
 import { WireSession } from "../net/WireSession";
-import { barIndex, barPageId, barSlideDir } from "./barSlide";
+import { barIndex, barPageId, barSlideDir, selectedBarId } from "./barSlide";
 import { CityChrome, mountCityChromePrefab, TabState } from "./CityChrome";
 import { formatAvatarIcon, formatCombatPower } from "./hangHud";
 import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
@@ -268,6 +268,7 @@ export class MainApp extends Component {
   }
 
   private onTab(id: string, fromBar = false): void {
+    if (fromBar && this.shell && this.shell.barSlideBusy()) return;
     const arm = () => {
       if (fromBar) this.beginBarSlide(id);
     };
@@ -566,16 +567,9 @@ export class MainApp extends Component {
 
 
 
-  /** 国服底栏高亮。战斗看主线页，副本看日常副本，不跟导航根的五项混。 */
+  /** 国服底栏高亮。当前页能对上七格时只亮那一格，避免英雄根和背包同时放大。 */
   private barSelected(id: string, current: string, root: string): boolean {
-    if (id === "city") return current === CITY_TAB;
-    if (id === "hero") return current === "hero" || current === "hero-detail" || root === "hero";
-    if (id === "bag") return current === "bag";
-    if (id === "battle") return current === "mainline";
-    if (id === "dungeon") return current === "daily";
-    if (id === "clan") return current === "clan";
-    if (id === "fetter") return current === "fetter" || current === "fetterData" || current === "fetterFashion";
-    return false;
+    return selectedBarId(current, root) === id;
   }
 
   private refreshChrome(): void {

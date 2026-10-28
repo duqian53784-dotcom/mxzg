@@ -6,8 +6,8 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { cityViewFromSearch, setUseCityView, useCityView } from "../assets/scripts/features/city/config/CityFeatureFlag";
 import { buildCityMapLayout, CITY_EDGE_BLEED, findCityNode, layerAnchorX, layerCoverX } from "../assets/scripts/ui/cityMapLayout";
-import { BAR_SLIDE_MS, barIndex, barPageId, barSlideDir, expoOut, slideOffset, slideTravel, SlideCapture } from "../assets/scripts/ui/barSlide";
-import { TAB_SELECTED_SCALE, tabVisualScale } from "../assets/scripts/ui/cityTabScale";
+import { BAR_SLIDE_MS, barIndex, barPageId, barSlideDir, expoOut, pageContentReady, selectedBarId, slideOffset, slideTravel, SlideCapture } from "../assets/scripts/ui/barSlide";
+import { TAB_SELECTED_SCALE, tabPaintState, tabVisualScale } from "../assets/scripts/ui/cityTabScale";
 
 const root = process.cwd();
 
@@ -143,7 +143,8 @@ function checkSources(): void {
   assert(chrome.indexOf('getChildByName("BgPad")') >= 0, "new chrome turns an existing BgPad off");
   const oldChrome = read("client/assets/scripts/ui/CityChrome.ts");
   assert(oldChrome.indexOf('createRect("BgPad"') < 0, "old chrome does not paint a BgPad");
-  assert(oldChrome.indexOf('setCityTabSelected(button, tab.state === "selected")') >= 0, "old chrome scales the selected tab");
+  assert(oldChrome.indexOf('setCityTabSelected(button, state === "selected")') >= 0, "old chrome scales the selected tab");
+  assert(oldChrome.indexOf("tabPaintState") >= 0, "old chrome keeps a single selected tab");
   assert(oldChrome.indexOf("layoutCityTab") >= 0 && oldChrome.indexOf("prepareCityTab") >= 0, "old chrome normalizes battle then scales the selection");
   assert(hub.indexOf("layerCoverX") >= 0, "hub keeps far layers over the viewport");
   const skyLeft = layerCoverX(0, 0.63, 750, 0.5, 1200, 1.2, 640);
@@ -168,7 +169,8 @@ function checkSources(): void {
   assert(chrome.indexOf("main-scene-lang_lbl-fetters-unlock") >= 0, "chrome keeps the VIP caption");
   assert(Math.abs(TAB_SELECTED_SCALE - 96 / 78) < 1e-6, "selected tab scale is 96/78");
   assert(tabVisualScale(true) > tabVisualScale(false) * 1.2 && tabVisualScale(false) === 1, "only the selected tab grows");
-  assert(chrome.indexOf('setCityTabSelected(button, tab.state === "selected")') >= 0, "new chrome scales the selected tab");
+  assert(chrome.indexOf('setCityTabSelected(button, state === "selected")') >= 0, "new chrome scales the selected tab");
+  assert(chrome.indexOf("tabPaintState") >= 0, "new chrome keeps a single selected tab");
   assert(chrome.indexOf("layoutCityTab") >= 0, "new chrome keeps the selected scale after fit");
   const oldHub = read("client/assets/scripts/ui/CityHub.ts");
   assert(oldHub.indexOf("export async function mountCityHubPrefab") >= 0, "old hub mount stays");
@@ -259,6 +261,17 @@ function checkBarSlide(): void {
   assert(barPageId("city") === null, "city slide reveals the resident page");
   assert(barPageId("battle") === "mainline" && barPageId("dungeon") === "daily", "battle and dungeon map onto their pages");
   assert(barSlideDir(0, 1) === 1 && barSlideDir(4, 1) === -1 && barSlideDir(2, 2) === 0, "higher tab enters from the right");
+  assert(selectedBarId("bag", "hero") === "bag", "bag on top of hero selects only bag");
+  assert(selectedBarId("hero", "hero") === "hero" && selectedBarId("hero-detail", "hero") === "hero", "hero list and detail select hero");
+  assert(selectedBarId("mail", "hero") === "hero", "a hero subpage still selects hero");
+  assert(selectedBarId("mail", "city") === null, "a city subpage does not light another tab");
+  assert(selectedBarId("mainline", "hero") === "battle", "mainline selects battle even if hero is the root");
+  assert(selectedBarId("city", "city") === "city" && selectedBarId("daily", "city") === "dungeon", "city and daily map to their own tabs");
+  assert(selectedBarId("fetterData", "fetter") === "fetter", "fetter subpages select fetter");
+  const paint = tabPaintState(["selected", "selected", "open", "locked"]);
+  assert(paint.join(",") === "open,selected,open,locked", "two selected states collapse to the later tab");
+  assert(pageContentReady([]) === false && pageContentReady(["ListBackdrop"]) === false, "backdrop alone is not a ready page");
+  assert(pageContentReady(["ListBackdrop", "PagePrefabShell"]) && pageContentReady(["bg"]), "shell or city content can slide");
   assert(expoOut(0) === 0 && expoOut(1) === 1 && expoOut(0.5) > 0.9, "exponential out eases ahead of linear");
   assert(BAR_SLIDE_MS === 280, "bar slide lasts 280ms");
   const travel = slideTravel(640, 720, 720);
@@ -294,7 +307,7 @@ function checkBarSlide(): void {
 
   const main = read("client/assets/scripts/ui/MainApp.ts");
   const onTab = main.slice(main.indexOf("private onTab("), main.indexOf("private beginBarSlide("));
-  assert(onTab.indexOf("fromBar") >= 0 && onTab.indexOf("beginBarSlide") >= 0 && onTab.indexOf("sealBarSlide") >= 0, "bottom bar arms the slide");
+  assert(onTab.indexOf("fromBar") >= 0 && onTab.indexOf("barSlideBusy") >= 0 && onTab.indexOf("beginBarSlide") >= 0 && onTab.indexOf("sealBarSlide") >= 0, "bottom bar arms the slide and ignores taps while it plays");
   assert(main.indexOf("this.onTab(id, true)") >= 0, "chrome callback is the bar path");
   const atom = main.slice(main.indexOf("private onCityAtom("), main.indexOf("private barSelected("));
   assert(atom.indexOf("this.onTab(route.panel)") >= 0 && atom.indexOf("onTab(route.panel, true)") < 0, "building clicks stay instant");
@@ -306,7 +319,7 @@ function checkBarSlide(): void {
   assert(backFn.indexOf("cancelBarSlide") >= 0, "back cancels a bar slide instead of animating");
   const shell = read("client/assets/scripts/ui/UIShell.ts");
   assert(shell.indexOf("markPageShown(") >= 0 && shell.indexOf("console.log") < 0, "page show still goes through GameLog");
-  assert(shell.indexOf("armBarSlide") >= 0, "the shell owns the optional slide");
+  assert(shell.indexOf("armBarSlide") >= 0 && shell.indexOf("pageContentReady") >= 0 && shell.indexOf("scheduleReady") >= 0, "the shell waits until the next page is ready");
   const manager = read("client/assets/scripts/framework/ui/UIManager.ts");
   const nav = read("client/assets/scripts/ui/PanelNav.ts");
   assert(manager.indexOf("armBarSlide") < 0 && nav.indexOf("armBarSlide") < 0, "bar slide does not rewrite UIManager or PanelNav");

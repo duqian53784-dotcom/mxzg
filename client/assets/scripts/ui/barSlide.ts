@@ -17,6 +17,48 @@ const BAR_PAGE: { [id: string]: string } = {
 };
 
 export const BAR_SLIDE_MS = 280;
+/** 预制还没挂上时继续等。超时后仍播，避免底栏一直锁住。 */
+export const BAR_SLIDE_READY_MS = 4000;
+
+const PAGE_BAR: { [page: string]: string } = {
+  city: "city",
+  hero: "hero",
+  "hero-detail": "hero",
+  bag: "bag",
+  mainline: "battle",
+  daily: "dungeon",
+  clan: "clan",
+  fetter: "fetter",
+  fetterData: "fetter",
+  fetterFashion: "fetter",
+};
+
+/** 当前页自己就是底栏目的地时，只亮这一格。英雄详情仍算英雄。 */
+export function barIdForPage(pageId: string): string | null {
+  const bar = PAGE_BAR[pageId];
+  return bar || null;
+}
+
+/**
+ * 底栏高亮。当前页能对上七格时只返回那一格。
+ * 对不上（邮件等）且导航根是英雄时，仍亮英雄。主城的子页不顺带亮主城。
+ */
+export function selectedBarId(current: string, root: string): string | null {
+  const owner = barIdForPage(current);
+  if (owner) return owner;
+  if (root === "hero") return "hero";
+  return null;
+}
+
+/**
+ * 空壳和只有岩洞底图时，页还不能播。PagePrefabShell 或主城/背包内容挂上才算就绪。
+ */
+export function pageContentReady(childNames: string[]): boolean {
+  for (let i = 0; i < childNames.length; i++) {
+    if (childNames[i] && childNames[i] !== "ListBackdrop") return true;
+  }
+  return false;
+}
 
 export function barIndex(id: string): number {
   for (let i = 0; i < CITY_BAR.length; i++) {
