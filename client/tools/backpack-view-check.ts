@@ -563,7 +563,11 @@ async function checkBehavior(): Promise<void> {
 
   noteBag(null);
   const unsynced = await openView();
-  assert(cells(unsynced).length === 0, "未同步不能画成空背包格子");
+  assert(cells(unsynced).length === 20, "未同步也要铺出 4×5 空槽");
+  assert(activeIcons(cells(unsynced)).length === 0, "未同步不画道具");
+  const unsyncedBefore = toasts.length;
+  cells(unsynced)[0].node.emit(Button.EventType.CLICK);
+  assert(toasts[unsyncedBefore] === "真服未同步", "未同步空槽不说背包是空的");
   assert(unsynced.talk !== null && unsynced.talk.string === "真服未同步", "未同步台词");
   const unsyncedTabs = tabs(unsynced);
   assert(unsyncedTabs.length === 4, "未同步也要有四个页签");
@@ -591,15 +595,16 @@ async function checkBehavior(): Promise<void> {
   assert(view.talk !== null && view.talk.string === "店里欢迎光临", "台词读 language 5788");
 
   const itemCells = cells(view);
-  assert(itemCells.length === 16, "道具页至少四行");
+  assert(itemCells.length === 20, "道具页是 4×5");
   const shown = activeIcons(itemCells);
   assert(shown.length === 2, "道具页只留红药和无数量药，金币和数量 0 不进格子");
   const potion = shown.filter((cell) => cell.count && cell.count.string === "3");
   const unknown = shown.filter((cell) => cell.count && cell.count.node && cell.count.node.active === false);
   assert(potion.length === 1 && unknown.length === 1, "数量 3 要写出来，没同步的数量不要写成 0");
   assert(itemCells[0].node.position.x === -168 && itemCells[0].node.position.y === -56, "第一格位置");
+  assert(itemCells[16].node.position.x === -168 && itemCells[16].node.position.y === -472, "第五行第一格");
   const contentUi = view.bagContent.getComponent(UITransform) as UITransform;
-  assert(contentUi.contentSize.height === 440, "四行内容高度");
+  assert(contentUi.contentSize.height === 544, "五行内容高度");
 
   const tabRow = tabs(view);
   assert(tabRow[1].isSelected() === true && tabRow[0].isSelected() === false, "缺省停在道具");
@@ -654,7 +659,8 @@ async function checkBehavior(): Promise<void> {
 
   noteBag(null);
   view.onOpen();
-  assert(cells(view).length === 0, "同步丢掉之后不能留着上一批格子");
+  assert(cells(view).length === 20, "未同步仍留下空槽");
+  assert(activeIcons(cells(view)).length === 0, "同步丢掉之后不能留着上一批道具");
   assert(view.node.getChildByName("InfoCard") === null, "未同步要把详情收起来");
   assert(view.talk !== null && view.talk.string === "真服未同步", "再次未同步要改台词");
   noteBag([
@@ -680,12 +686,28 @@ async function checkBehavior(): Promise<void> {
   noteBag([]);
   const empty = await openView();
   const emptyCells = cells(empty);
-  assert(emptyCells.length === 16 && activeIcons(emptyCells).length === 0, "已同步的空背包仍铺空格");
+  assert(emptyCells.length === 20 && activeIcons(emptyCells).length === 0, "已同步的空背包仍铺空格");
   assert(empty.talk !== null && empty.talk.string === "店里欢迎光临", "空背包不是未同步");
   const before = toasts.length;
   emptyCells[0].node.emit(Button.EventType.CLICK);
   assert(toasts[before] === "背包是空的", "空格提示");
   empty.node.destroy();
+
+  noteBag([{ itemId: 20, itemType: 20, num: 3 }]);
+  const hidden = makeView();
+  hidden.node.active = false;
+  hidden.onOpen();
+  await hidden.whenReady();
+  assert(cells(hidden).length === 0, "还没进场景时不把格子挂出去");
+  hidden.node.active = true;
+  pump(1);
+  const appeared = cells(hidden);
+  assert(appeared.length === 20, "进场景后铺出 4×5 格子");
+  assert(activeIcons(appeared).length === 1 && appeared[0].count !== null && appeared[0].count.string === "3", "进场景后画出背包里的药");
+  assert(appeared[0].node.position.x === -168 && appeared[0].node.position.y === -56, "进场景后第一格落在视口里");
+  assert(hidden.bagContent !== null && hidden.bagContent.parent === hidden.bagPort, "进场景后 content 在 view 里");
+  assert(hidden.bagScroll !== null && hidden.bagScroll.getComponent(Mask) === null, "进场景前就要卸掉宿主遮罩");
+  hidden.node.destroy();
 }
 
 async function checkOpenFailure(): Promise<void> {

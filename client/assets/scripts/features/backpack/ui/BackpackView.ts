@@ -1,10 +1,11 @@
-import { _decorator, Button, director, Director, Graphics, Label, Mask, Node, Prefab, ScrollView, UITransform } from "cc";
+import { _decorator, Button, director, Director, Graphics, Label, Layers, Mask, Node, Prefab, ScrollView, UITransform } from "cc";
 import { ConfigDb } from "../../../config/ConfigLoader";
 import { BagTabKind } from "../../../config/gameCatalog";
 import { messageOf } from "../../../core/errors";
 import { GameLog } from "../../../core/GameLog";
 import { GameStore, StoreBagItem } from "../../../core/GameStore";
 import {
+  BAG_MIN_ROWS,
   BAG_PITCH_Y,
   BAG_TABS,
   bagContentHeight,
@@ -44,6 +45,7 @@ export interface BagOpenArgs {
 /**
  * 背包页。格子、页签、滚动和店员都绑在 BackpackLayer 上。
  * 数据只读 GameStore。同步信号用来重画，不在这里解协议。
+ * 格子要等页面进了场景再挂。提前改父节点会把世界坐标留在视口外面，羊皮纸中间只剩米色。
  */
 @view({
   id: "bag",
@@ -103,14 +105,16 @@ export class BackpackView extends BaseView<BagOpenArgs> {
   private tabsBuilt = false;
   private opened = false;
   private portraitOn = false;
+  private scrollReady = false;
   private offSync: (() => void) | null = null;
   private infoSheet: Node | null = null;
+  private shownWatch: (() => void) | null = null;
 
   onOpen(args?: BagOpenArgs): void {
     this.args = args;
     if (args && args.tab) this.tab = args.tab;
     if (this.opened) {
-      this.paint();
+      this.refreshGrid();
       return;
     }
     this.opened = true;
@@ -119,6 +123,7 @@ export class BackpackView extends BaseView<BagOpenArgs> {
   }
 
   onClose(): void {
+    this.clearShownWatch();
     if (this.offSync) {
       this.offSync();
       this.offSync = null;
@@ -127,23 +132,61 @@ export class BackpackView extends BaseView<BagOpenArgs> {
 
   private async start(): Promise<void> {
     try {
-      this.prepareScroll();
+      this.dropHostMask();
       this.silenceMenu();
       this.bindClose();
       this.dressPortrait();
-      this.offSync = WireSession.onSync(() => this.paint());
+      this.offSync = WireSession.onSync(() => this.refreshGrid());
       await this.ensurePrefabs();
       if (!this.node || !this.node.isValid) {
         this.failOpen(new Error("页面已关"));
         return;
       }
-      this.buildTabs();
-      this.paint();
+      this.refreshGrid();
       this.finishOpen();
     } catch (err) {
       GameLog.shared.warn("Bag", "背包没有挂上 " + messageOf(err));
       this.failOpen(err instanceof Error ? err : new Error(messageOf(err)));
     }
+  }
+
+  /**
+   * UIManager 在页面进栈之前就 onOpen。这时壳还不在场景里。
+   * 进场景前收 content、摆格子，世界坐标会错，遮罩把格子裁没，只剩 spr_box 的米色。
+   * 已经在场景里就当场铺。否则等下一帧进了场景再铺。whenReady 不等这一步，避免和进栈互相等。
+   */
+  private refreshGrid(): void {
+    if (!this.node || !this.node.isValid || !this.cellPrefab || !this.tabPrefab) return;
+    if (!this.node.activeInHierarchy) {
+      this.watchShown();
+      return;
+    }
+    if (!this.scrollReady) this.scrollReady = this.prepareScroll();
+    if (!this.scrollReady) return;
+    this.buildTabs();
+    this.paint();
+  }
+
+  private watchShown(): void {
+    if (this.shownWatch) return;
+    const retry = () => {
+      if (!this.node || !this.node.isValid) {
+        this.clearShownWatch();
+        return;
+      }
+      if (!this.node.activeInHierarchy) return;
+      this.clearShownWatch();
+      this.refreshGrid();
+    };
+    this.shownWatch = retry;
+    director.on(Director.EVENT_AFTER_UPDATE, retry);
+    this.node.once(Node.EventType.NODE_DESTROYED, () => this.clearShownWatch());
+  }
+
+  private clearShownWatch(): void {
+    if (!this.shownWatch) return;
+    director.off(Director.EVENT_AFTER_UPDATE, this.shownWatch);
+    this.shownWatch = null;
   }
 
   private async ensurePrefabs(): Promise<void> {
@@ -170,18 +213,25 @@ export class BackpackView extends BaseView<BagOpenArgs> {
     this.btnClose.node.on(Button.EventType.CLICK, () => this.close());
   }
 
-  private prepareScroll(): void {
+  /** 宿主遮罩在进场景前就卸掉。进场景后 onLoad 会装一块空模板，把格子全部裁掉。 */
+  private dropHostMask(): void {
+    const scroll = this.bagScroll;
+    if (!scroll) return;
+    const hostMask = scroll.getComponent(Mask);
+    if (hostMask) scroll.removeComponent(hostMask);
+  }
+
+  private prepareScroll(): boolean {
     const scroll = this.bagScroll;
     const port = this.bagPort;
     const content = this.bagContent;
     if (!scroll || !port || !content) {
       GameLog.shared.warn("Bag", "BackpackLayer 的 spr_box 下没有 BagScroll");
-      return;
+      return false;
     }
+    this.dropHostMask();
     if (content.parent !== port) content.parent = port;
     content.setPosition(0, 0, 0);
-    const hostMask = scroll.getComponent(Mask);
-    if (hostMask) scroll.removeComponent(hostMask);
     const scrollUi = scroll.getComponent(UITransform);
     const scrollSize = positiveUiSize(scrollUi);
     const height = this.portHeight();
@@ -194,6 +244,7 @@ export class BackpackView extends BaseView<BagOpenArgs> {
     const scroller = scroll.getComponent(ScrollView);
     if (!scroller) GameLog.shared.warn("Bag", "BagScroll 没有 ScrollView");
     else if (scroller.content !== content) scroller.content = content;
+    return true;
   }
 
   /** 视口高度跟 spr_box。羊皮纸保持设计缩放，不再额外拉高。 */
@@ -202,7 +253,7 @@ export class BackpackView extends BaseView<BagOpenArgs> {
     const boxSize = positiveUiSize(boxUi);
     const topInset = this.bagScroll && this.bagScroll.position.y < 0 ? -this.bagScroll.position.y : 0;
     const room = boxSize ? boxSize.height - topInset - topInset : 0;
-    const rows = 4 * BAG_PITCH_Y + 24;
+    const rows = BAG_MIN_ROWS * BAG_PITCH_Y + 24;
     const want = Math.max(400, rows);
     if (room > 80) return Math.min(want, room);
     return want;
@@ -291,10 +342,10 @@ export class BackpackView extends BaseView<BagOpenArgs> {
         continue;
       }
       node.setPosition(64 + i * 120, -24, 0);
-      if (this.tabContent.layer) node.layer = this.tabContent.layer;
+      this.adoptLayer(node, this.tabContent.layer || Layers.Enum.UI_2D);
       tab.setTab(spec.title, spec.id === this.tab, () => {
         this.tab = spec.id;
-        this.paint();
+        this.refreshGrid();
       });
       this.tabs.push(tab);
     }
@@ -306,20 +357,16 @@ export class BackpackView extends BaseView<BagOpenArgs> {
       this.tabs[i].setSelected(BAG_TABS[i].id === this.tab);
     }
     const content = this.bagContent;
-    if (!content || !content.isValid) return;
+    if (!content || !content.isValid || !this.cellPrefab) return;
     this.clear(content);
-    if (!this.cellPrefab) return;
-    const rows = rowsForBagTab(GameStore.bag(), this.tab);
-    if (rows === null) {
-      this.picked = null;
-      this.dismissInfo();
-      return;
-    }
-    if (this.picked && !rows.some((row) => sameBagItem(row, this.picked as StoreBagItem))) {
+    const bag = GameStore.bag();
+    const rows = bag === null ? [] : rowsForBagTab(bag, this.tab) || [];
+    if (bag === null || (this.picked && !rows.some((row) => sameBagItem(row, this.picked as StoreBagItem)))) {
       this.picked = null;
       this.dismissInfo();
     }
     const shown = bagSlotCount(rows.length);
+    const layer = content.layer || Layers.Enum.UI_2D;
     for (let i = 0; i < shown; i++) {
       const item = i < rows.length ? rows[i] : null;
       const node = spawnPrefab(this.cellPrefab, content);
@@ -333,12 +380,12 @@ export class BackpackView extends BaseView<BagOpenArgs> {
         ? () => {
             this.picked = item;
             this.showInfo(item);
-            this.paint();
+            this.refreshGrid();
           }
         : rows.length === 0
-          ? () => this.toast(emptyBagToast())
+          ? () => this.toast(bag === null ? WIRE_BAG_UNSYNCED_TOAST : emptyBagToast())
           : null;
-      if (content.layer) node.layer = content.layer;
+      this.adoptLayer(node, layer);
       cell.show(item, selected, onTap);
       const seat = bagSlotPosition(i);
       node.setPosition(seat.x, seat.y, 0);
@@ -371,6 +418,13 @@ export class BackpackView extends BaseView<BagOpenArgs> {
   private clear(node: Node): void {
     const old = node.children.slice();
     for (let i = 0; i < old.length; i++) old[i].destroy();
+  }
+
+  /** 格子和页签的子节点也要留在 UI 层，只改根节点时图标不会画出来。 */
+  private adoptLayer(node: Node, layer: number): void {
+    node.layer = layer;
+    const kids = node.children;
+    for (let i = 0; i < kids.length; i++) this.adoptLayer(kids[i], layer);
   }
 }
 

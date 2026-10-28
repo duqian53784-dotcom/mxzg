@@ -8,6 +8,8 @@ const BAG_SHOP_LAN = "5788";
 const BAG_SHOP_FALLBACK = "欢迎光临～";
 
 export const BAG_COLS = 4;
+/** 日服内容区是 4 列 × 5 行。装不下的行留在滚动里。 */
+export const BAG_MIN_ROWS = 5;
 export const BAG_PITCH_X = 112;
 export const BAG_PITCH_Y = 104;
 
@@ -28,7 +30,7 @@ export interface BagFace {
 }
 
 /**
- * null 是背包还没同步，调用方不要画成空背包。
+ * null 是背包还没同步，不是空背包。调用方可以铺空槽，不能把这些空槽画成道具。
  * 空数组是已同步但这一页没有格子。数量小于等于 0 的不进格子。金币钻石不进格子。
  */
 export function rowsForBagTab(items: StoreBagItem[] | null, tab: BagTabKind): StoreBagItem[] | null {
@@ -48,10 +50,9 @@ export function sameBagItem(a: StoreBagItem, b: StoreBagItem): boolean {
   return a.itemId === b.itemId && a.itemType === b.itemType;
 }
 
-/** 至少 4 行。多出来的行按 4 列补满。 */
+/** 至少 4×5。多出来的行按 4 列补满。 */
 export function bagSlotCount(count: number): number {
-  const filled = Math.max(count, BAG_COLS * 4);
-  const rows = Math.max(4, Math.ceil(filled / BAG_COLS));
+  const rows = Math.max(BAG_MIN_ROWS, Math.ceil(Math.max(count, 0) / BAG_COLS));
   return rows * BAG_COLS;
 }
 
@@ -63,7 +64,7 @@ export function bagSlotPosition(index: number): { x: number; y: number } {
 }
 
 export function bagContentHeight(slots: number): number {
-  const rows = Math.max(4, Math.ceil(Math.max(slots, 1) / BAG_COLS));
+  const rows = Math.max(BAG_MIN_ROWS, Math.ceil(Math.max(slots, 1) / BAG_COLS));
   return Math.max(400, rows * BAG_PITCH_Y + 24);
 }
 
