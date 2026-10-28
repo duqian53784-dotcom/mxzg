@@ -1,9 +1,9 @@
 import { _decorator, Button, director, Director, Graphics, Label, Mask, Node, Prefab, ScrollView, UITransform } from "cc";
-import { ConfigDb } from "../../config/ConfigLoader";
-import { BagTabKind } from "../../config/gameCatalog";
-import { messageOf } from "../../core/errors";
-import { GameLog } from "../../core/GameLog";
-import { GameStore, StoreBagItem } from "../../core/GameStore";
+import { ConfigDb } from "../../../config/ConfigLoader";
+import { BagTabKind } from "../../../config/gameCatalog";
+import { messageOf } from "../../../core/errors";
+import { GameLog } from "../../../core/GameLog";
+import { GameStore, StoreBagItem } from "../../../core/GameStore";
 import {
   BAG_PITCH_Y,
   BAG_TABS,
@@ -14,20 +14,20 @@ import {
   describeBagItem,
   rowsForBagTab,
   sameBagItem,
-} from "../../module/bag/bagBoard";
-import { emptyBagToast } from "../../module/bag/items";
-import { WIRE_BAG_UNSYNCED_TOAST } from "../../net/protocol/wireBag";
-import { WireSession } from "../../net/WireSession";
-import { loadPrefab, spawnPrefab } from "../prefabLoad";
-import { mountNamedSpine } from "../battleSpine";
-import { assignContentSize, positiveUiSize } from "../visibleFit";
+} from "../../../module/bag/bagBoard";
+import { emptyBagToast } from "../../../module/bag/items";
+import { WIRE_BAG_UNSYNCED_TOAST } from "../../../net/protocol/wireBag";
+import { WireSession } from "../../../net/WireSession";
+import { loadPrefab, spawnPrefab } from "../../../ui/prefabLoad";
+import { mountNamedSpine } from "../../../ui/battleSpine";
+import { assignContentSize, positiveUiSize } from "../../../ui/visibleFit";
 import { BackpackItemCellView } from "./BackpackItemCellView";
 import { BackpackTabButtonView } from "./BackpackTabButtonView";
-import { BaseView } from "./BaseView";
-import { mountBackpackPage, openBagInfo } from "./backpackMount";
-import { UILayer } from "./UILayer";
-import { UIManager } from "./UIManager";
-import { view } from "./UIRegistry";
+import { BaseView } from "../../../framework/ui/BaseView";
+import { mountBackpackPage, openBagInfo } from "./BackpackMount";
+import { UILayer } from "../../../framework/ui/UILayer";
+import { UIManager } from "../../../framework/ui/UIManager";
+import { view } from "../../../framework/ui/UIRegistry";
 
 const { ccclass, property } = _decorator;
 

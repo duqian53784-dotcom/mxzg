@@ -1,7 +1,7 @@
 import { _decorator, Button, Component, Label, Node } from "cc";
-import { StoreBagItem } from "../../core/GameStore";
-import { itemIconResource, itemProfile } from "../../config/gameCatalog";
-import { paintSpritePaths } from "./spritePaint";
+import { StoreBagItem } from "../../../core/GameStore";
+import { itemIconResource, itemProfile } from "../../../config/gameCatalog";
+import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
 
 const { ccclass, property } = _decorator;
 

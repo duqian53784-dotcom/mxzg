@@ -1,11 +1,11 @@
 import { Node, Prefab } from "cc";
 import { messageOf } from "../../core/errors";
 import { GameLog } from "../../core/GameLog";
-import { loadPrefab, spawnPrefab } from "../prefabLoad";
+import { loadPrefab, spawnPrefab } from "../../ui/prefabLoad";
 import { BaseView } from "./BaseView";
 import { UILayer } from "./UILayer";
 import { ViewClass, ViewSpec, viewCtorById, viewSpecOf } from "./UIRegistry";
-import { bindViewCloser } from "./viewClose";
+import { bindViewCloser } from "./ViewClose";
 
 export interface PageNav {
   readonly current: string | null;

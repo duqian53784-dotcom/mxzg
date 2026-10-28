@@ -1,12 +1,12 @@
 import { Button, BlockInputEvents, Node, Prefab, Sprite, UITransform } from "cc";
-import { messageOf } from "../../core/errors";
-import { GameLog } from "../../core/GameLog";
-import { BagFace } from "../../module/bag/bagBoard";
-import { loadPrefab, spawnPrefab } from "../prefabLoad";
-import { mountCcbiView } from "../pagePrefabShell";
-import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize } from "../visibleFit";
+import { messageOf } from "../../../core/errors";
+import { GameLog } from "../../../core/GameLog";
+import { BagFace } from "../../../module/bag/bagBoard";
+import { loadPrefab, spawnPrefab } from "../../../ui/prefabLoad";
+import { mountCcbiView } from "../../../ui/pagePrefabShell";
+import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize } from "../../../ui/visibleFit";
 import { BackpackInfoView } from "./BackpackInfoView";
-import { paintSpritePaths } from "./spritePaint";
+import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
 
 const PAGE_SHELL = "prefabs/ui/common/PagePrefabShell";
 const LIST_BACKDROP = "prefabs/ui/common/ListBackdrop";
