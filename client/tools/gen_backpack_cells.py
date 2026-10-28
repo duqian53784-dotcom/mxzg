@@ -371,10 +371,10 @@ def ensure_bag_scroll(objs):
         objs.append(obj)
         return len(objs) - 1
 
-    # Box is 560×461.76, anchor top-center. The grid sits 12px under that top and 20px in from each side.
-    scroll = append_node(objs, "BagScroll", box, 0, -12, 520, 400, 0.5, 1)
-    append_node(objs, "view", scroll, 0, 0, 520, 400, 0.5, 1)
-    content = append_node(objs, "content", scroll, 0, 0, 520, 400, 0.5, 1)
+    # Box is 520×565, anchor top-center. Scroll sits 5px under that top; height is box.height - 10.
+    scroll = append_node(objs, "BagScroll", box, 0, -5, 520, 555, 0.5, 1)
+    append_node(objs, "view", scroll, 0, 0, 520, 555, 0.5, 1)
+    content = append_node(objs, "content", scroll, 0, 0, 520, 555, 0.5, 1)
     mask = add({
         "__type__": "cc.Mask",
         "_name": "",
