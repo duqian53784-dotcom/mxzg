@@ -4,7 +4,7 @@ import { GameLog } from "../../core/GameLog";
 import { BagFace } from "../../module/bag/bagBoard";
 import { loadPrefab, spawnPrefab } from "../prefabLoad";
 import { mountCcbiView } from "../pagePrefabShell";
-import { assignContentSize, bindVisibleRefresh, fitVisibleRoot } from "../visibleFit";
+import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize } from "../visibleFit";
 import { BackpackInfoView } from "./BackpackInfoView";
 import { paintSpritePaths } from "./spritePaint";
 
@@ -62,13 +62,12 @@ export function openBagInfo(host: Node, dimPrefab: Prefab, infoPrefab: Prefab, f
   if (dim) {
     if (!dim.getComponent(Button)) dim.addComponent(Button);
     dim.on(Button.EventType.CLICK, close);
-    assignContentSize(dim.getComponent(UITransform), 720, 1100);
-    dim.setPosition(320, 480, 0);
+    seatCenter(dim, host);
   } else {
     GameLog.shared.warn("Bag", "DimSheet 下没有 dim");
   }
   const card = spawnPrefab(infoPrefab, sheet);
-  card.setPosition(125, 330, 0);
+  seatCenter(card, host);
   if (!card.getComponent(BlockInputEvents)) card.addComponent(BlockInputEvents);
   const info = card.getComponent(BackpackInfoView);
   if (!info) {
@@ -77,6 +76,32 @@ export function openBagInfo(host: Node, dimPrefab: Prefab, infoPrefab: Prefab, f
   }
   info.show(face, close, toast);
   return sheet;
+}
+
+/**
+ * 把节点中心放到宿主中心。位置用两边预制上的尺寸和锚点算，不写死坐标。
+ * 尺寸还没挂上就留着预制自己的落点。
+ */
+function seatCenter(node: Node, host: Node): void {
+  const hostUi = host.getComponent(UITransform);
+  const hostSize = positiveUiSize(hostUi);
+  if (!hostUi || !hostSize) {
+    GameLog.shared.warn("Bag", "详情宿主没有尺寸，留在预制落点");
+    return;
+  }
+  const nodeUi = node.getComponent(UITransform);
+  const nodeSize = positiveUiSize(nodeUi);
+  if (!nodeUi || !nodeSize) {
+    GameLog.shared.warn("Bag", node.name + " 没有尺寸，留在预制落点");
+    return;
+  }
+  const hostAx = typeof hostUi.anchorX === "number" ? hostUi.anchorX : 0.5;
+  const hostAy = typeof hostUi.anchorY === "number" ? hostUi.anchorY : 0.5;
+  const nodeAx = typeof nodeUi.anchorX === "number" ? nodeUi.anchorX : 0.5;
+  const nodeAy = typeof nodeUi.anchorY === "number" ? nodeUi.anchorY : 0.5;
+  const midX = (0.5 - hostAx) * hostSize.width;
+  const midY = (0.5 - hostAy) * hostSize.height;
+  node.setPosition(midX - (0.5 - nodeAx) * nodeSize.width, midY - (0.5 - nodeAy) * nodeSize.height, 0);
 }
 
 function paintBackdrop(pack: Node): void {

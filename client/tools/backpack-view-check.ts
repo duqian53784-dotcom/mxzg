@@ -3,8 +3,9 @@
  * 预制绑定看 JSON。格子、页签、详情用假实例把 @property 填上，相当于反序列化之后。
  */
 import { readFileSync } from "fs";
-import { Button, director, Director, Label, Layers, Mask, Node, Prefab, ScrollView, Sprite, UITransform } from "cc";
+import { assetManager, Button, createdNodes, director, Director, Label, Layers, Mask, Node, Prefab, ScrollView, Sprite, UITransform } from "cc";
 import { bindGameCatalog } from "../assets/scripts/config/gameCatalog";
+import { clearPrefabCache } from "../assets/scripts/ui/prefabLoad";
 import { ConfigDb } from "../assets/scripts/config/ConfigLoader";
 import { ConfigTableFile } from "../assets/scripts/config/types";
 import { GameLog } from "../assets/scripts/core/GameLog";
@@ -180,6 +181,18 @@ function checkSources(): void {
   assert(main.indexOf("USE_BATTLE_PREFAB") < 0, "MainApp 不应出现 USE_BATTLE_PREFAB");
   assert(main.indexOf("buildWireMainlinePage") < 0, "MainApp 不应出现 buildWireMainlinePage");
   assert(main.indexOf('uiNode("Wire') < 0, "MainApp 不应再造 Wire 节点");
+  const backFn = main.slice(main.indexOf("private back()"), main.indexOf("private allow("));
+  assert(backFn.indexOf("this.panels?.back()") >= 0, "旧页面返回仍走页面栈");
+  assert(backFn.indexOf("UIManager") < 0, "MainApp.back 不改走 UIManager");
+  const detail =
+    read("client/assets/scripts/ui/view/backpackMount.ts") + read("client/assets/scripts/ui/view/BackpackInfoView.ts");
+  assert(detail.indexOf("195, 148") < 0, "详情底不再写死 195,148");
+  assert(detail.indexOf("125, 330") < 0, "详情卡不再写死 125,330");
+  assert(detail.indexOf("320, 480") < 0, "遮罩不再写死 320,480");
+  assert(detail.indexOf("720, 1100") < 0, "遮罩不再写死 720×1100");
+  const manager = read("client/assets/scripts/ui/view/UIManager.ts");
+  assert(manager.indexOf("背包没有打开") >= 0, "加载失败要有可见提示");
+  assert(manager.indexOf("shell.destroy()") >= 0, "加载失败要销毁还没进栈的壳");
   const boot = read("client/assets/scripts/core/Boot.ts");
   assert(boot.indexOf("USE_PAGE_PREFAB_SHELL") < 0, "Boot 不应出现页面壳开关");
 }
@@ -236,6 +249,9 @@ function makeView(): BackpackView {
   const scene = new Node("scene");
   const host = new Node("BackpackLayer");
   host.parent = scene;
+  const hostUi = host.addComponent(UITransform);
+  hostUi.setContentSize(640, 960);
+  hostUi.setAnchorPoint(0, 0);
   const view = host.addComponent(BackpackView);
   view.sprBox = sized("spr_box", 560, 520);
   view.sprBox.parent = host;
@@ -282,8 +298,12 @@ function makeView(): BackpackView {
     if (tab.button.node) tab.button.node.parent = node;
   });
   view.infoPrefab = fakePrefab((node) => {
+    const cardUi = node.addComponent(UITransform);
+    cardUi.setContentSize(390, 300);
+    cardUi.setAnchorPoint(0, 0);
     const info = node.addComponent(BackpackInfoView);
     info.bg = new Node("spr_bg");
+    info.bg.setPosition(195, 150, 0);
     info.bg.parent = node;
     info.propName = labelOn(new Node("lbl_prop_name"));
     info.propType = labelOn(new Node("lbl_prop_type"));
@@ -302,7 +322,9 @@ function makeView(): BackpackView {
     info.hitMenuClose = sized("menu_close", 640, 960);
   });
   view.dimPrefab = fakePrefab((node) => {
-    const dim = sized("dim", 20, 20);
+    const dim = sized("dim", 720, 1280);
+    const dimUi = dim.getComponent(UITransform) as UITransform;
+    dimUi.setAnchorPoint(0.5, 0.5);
     dim.parent = node;
   });
   return view;
@@ -524,12 +546,13 @@ async function checkBehavior(): Promise<void> {
   info = infoCard(view);
   assert(info.propName !== null && info.propName.string === "红药", "红药详情");
   assert(info.propType !== null && info.propType.string.indexOf("数量 3") >= 0, "数量 3");
-  assert(info.bg !== null && info.bg.position.x === 195 && info.bg.position.y === 148, "详情底位置");
+  assert(info.bg !== null && info.bg.position.x === 195 && info.bg.position.y === 150, "详情底留在预制落点");
+  assert(info.node.position.x === 125 && info.node.position.y === 330, "详情卡按预制尺寸居中到背包层");
   const sheet = view.node.getChildByName("InfoCard");
   const dim = sheet ? sheet.getChildByName("dim") : null;
   const dimUi = dim ? (dim.getComponent(UITransform) as UITransform) : null;
-  assert(dim !== null && dim.position.x === 320 && dim.position.y === 480, "遮罩位置");
-  assert(dimUi !== null && dimUi.contentSize.width === 720 && dimUi.contentSize.height === 1100, "遮罩尺寸");
+  assert(dim !== null && dim.position.x === 320 && dim.position.y === 480, "遮罩中心对齐背包层");
+  assert(dimUi !== null && dimUi.contentSize.width === 720 && dimUi.contentSize.height === 1280, "遮罩尺寸留在 DimSheet");
   const infoMenu = info.hitMenu ? (info.hitMenu.getComponent(UITransform) as UITransform) : null;
   const infoMenuClose = info.hitMenuClose ? (info.hitMenuClose.getComponent(UITransform) as UITransform) : null;
   assert(infoMenu !== null && infoMenu.contentSize.width === 0, "详情 menu 收成 0");
@@ -580,12 +603,134 @@ async function checkBehavior(): Promise<void> {
   empty.node.destroy();
 }
 
+async function checkOpenFailure(): Promise<void> {
+  const stack: string[] = ["city"];
+  let opens = 0;
+  let backs = 0;
+  const root = new Node("pageLayer");
+  UIManager.instance.install(
+    {
+      get current() {
+        return stack[stack.length - 1] || null;
+      },
+      openChild(id: string) {
+        opens += 1;
+        const host = UIManager.instance.createPageHost(id);
+        assert(host !== null && host.isValid, "进栈的壳必须已经装好");
+        host.parent = root;
+        stack.push(id);
+      },
+      back() {
+        if (stack.length <= 1) return false;
+        backs += 1;
+        const id = stack.pop() || "";
+        const host = root.getChildByName("LiveShell");
+        if (host) host.destroy();
+        if (id) UIManager.instance.noteClosed(id);
+        return true;
+      },
+    },
+    {
+      showToast(text: string) {
+        toasts.push(text);
+      },
+    }
+  );
+
+  const failBundle = (_name: string, cb: (err: Error | null, bundle: null) => void) => {
+    cb(new Error("bundle down"), null);
+  };
+  const failAny = (_request: unknown, cb: (err: Error | null, asset: null) => void) => {
+    cb(new Error("uuid down"), null);
+  };
+  assetManager.loadBundle = failBundle;
+  assetManager.loadAny = failAny;
+  clearPrefabCache();
+
+  const mark = createdNodes.length;
+  const toastAt = toasts.length;
+  let failed = false;
+  try {
+    await UIManager.instance.open(BackpackView);
+  } catch (_err) {
+    failed = true;
+  }
+  assert(failed, "预制加载失败要拒绝打开");
+  assert(opens === 0, "预制加载失败不能压进页面栈");
+  assert(backs === 0, "还没进栈就不用再 pop");
+  assert(stack.length === 1 && stack[0] === "city", "失败后仍停在原来的页");
+  assert(root.children.length === 0, "失败后页面层上没有壳");
+  assert(toasts[toastAt] === "背包没有打开", "失败要 Toast，不能只打日志");
+  const shells = createdNodes.slice(mark).filter((node) => node.name === "LiveShell");
+  assert(shells.length === 1, "失败路径会先建壳再拆掉");
+  assert(shells[0].isValid === false && shells[0].parent === null, "失败的 LiveShell 不能留在场景里挡点击");
+  assert(UIManager.instance.createPageHost("bag") === null, "失败后不能再交出空壳");
+
+  clearPrefabCache();
+  const bare = new Prefab() as Prefab & { _instantiate: () => Node };
+  bare._instantiate = () => new Node("bare");
+  assetManager.loadBundle = (_name: string, cb: (err: Error | null, bundle: object | null) => void) => {
+    cb(null, {
+      load(_path: string, _type: unknown, done: (err: Error | null, asset: Prefab | null) => void) {
+        done(null, bare);
+      },
+    });
+  };
+  const markBare = createdNodes.length;
+  const toastBare = toasts.length;
+  let missing = false;
+  try {
+    await UIManager.instance.open(BackpackView);
+  } catch (_err) {
+    missing = true;
+  }
+  assert(missing, "预制上没有视图组件要拒绝打开");
+  assert(opens === 0, "没有视图组件也不能压进页面栈");
+  assert(toasts[toastBare] === "背包没有打开", "缺组件也要 Toast");
+  const bareShells = createdNodes.slice(markBare).filter((node) => node.name === "LiveShell");
+  assert(bareShells.length === 1 && bareShells[0].isValid === false && bareShells[0].parent === null, "缺组件的壳也要销毁");
+  assert(root.children.length === 0, "缺组件时页面层仍是空的");
+
+  clearPrefabCache();
+  assetManager.loadBundle = (_name: string, cb: (err: Error | null, bundle: object | null) => void) => {
+    cb(null, {
+      load(inner: string, _type: unknown, done: (err: Error | null, asset: Prefab | null) => void) {
+        const prefab = new Prefab() as Prefab & { _instantiate: () => Node };
+        prefab._instantiate = () => {
+          const node = new Node(inner);
+          if (inner.indexOf("BackpackLayer") >= 0) {
+            const view = node.addComponent(BackpackView);
+            const piece = new Prefab() as Prefab & { _instantiate: () => Node };
+            piece._instantiate = () => new Node("piece");
+            view.cellPrefab = piece;
+            view.tabPrefab = piece;
+            view.infoPrefab = piece;
+            view.dimPrefab = piece;
+          }
+          return node;
+        };
+        done(null, prefab);
+      },
+    });
+  };
+  const opened = await UIManager.instance.open(BackpackView);
+  assert(opens === 1 && stack[stack.length - 1] === "bag", "装好之后才进栈");
+  assert(opened.node.isValid && opened.node.parent !== null, "装好的视图留在页面上");
+  const live = root.getChildByName("LiveShell");
+  assert(live !== null && live.isValid && live.parent === root, "进栈的是装好的壳");
+  assert(UIManager.instance.close(opened) === true, "装好的背包可以关");
+  assert(backs === 1 && stack[stack.length - 1] === "city", "关闭后回到原来的页");
+  assert(root.getChildByName("LiveShell") === null, "关闭后壳不留在页面层");
+  clearPrefabCache();
+}
+
 async function main(): Promise<void> {
   GameLog.shared.mirrorConsole = false;
   checkPrefabBindings();
   checkSources();
   checkRegistry();
   await checkBehavior();
+  await checkOpenFailure();
   GameStore.reset();
   ConfigDb.current = null;
   bindGameCatalog(new Map());

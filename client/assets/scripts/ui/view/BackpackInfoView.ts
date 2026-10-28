@@ -61,7 +61,6 @@ export class BackpackInfoView extends Component {
   show(face: BagFace, onClose: () => void, toast: (text: string) => void): void {
     this.onClose = onClose;
     this.toast = toast;
-    if (this.bg) this.bg.setPosition(195, 148, 0);
     if (this.propName) this.propName.string = face.title;
     if (this.propType) this.propType.string = face.typeLine;
     if (this.desc) {

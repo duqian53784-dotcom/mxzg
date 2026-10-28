@@ -287,7 +287,7 @@ export class MainApp extends Component {
   }
 
   private back(): void {
-    const closed = UIManager.instance.back() === true;
+    const closed = this.panels?.back() === true;
     if (!closed) return;
     GameLog.shared.info("MainApp", "back to " + (this.panels?.current || ""));
     this.refreshChrome();

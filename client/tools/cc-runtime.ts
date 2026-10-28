@@ -33,6 +33,9 @@ export const resources = {
 
 type Listener = (...args: unknown[]) => void;
 
+/** 检查里核对失败打开有没有留下壳。游戏包不引用这个文件。 */
+export const createdNodes: Node[] = [];
+
 export const _decorator = {
   ccclass(_name?: string): ClassDecorator {
     return (ctor) => ctor;
@@ -87,6 +90,7 @@ export class Node {
 
   constructor(name?: string) {
     this.name = name || "";
+    createdNodes.push(this);
   }
 
   get children(): Node[] {

@@ -24,9 +24,15 @@ interface OpenPage {
   ready: Promise<BaseView<unknown>>;
 }
 
+interface PreparedPage {
+  host: Node;
+  view: BaseView<unknown>;
+}
+
 /**
- * 正式界面的开关。页面仍进 PanelNav / UIShell，返回和主城页签关的是同一叠。
+ * 正式界面的开关。页面仍进 PanelNav / UIShell。
  * 没登记的页面继续走原来的 presentPage，这里不接。
+ * 预制没装上之前不进页面栈，避免留下可点的空壳。
  * 这一阶段只有背包，挂页时带店内底图。
  */
 export class UIManager {
@@ -35,8 +41,9 @@ export class UIManager {
   private nav: PageNav | null = null;
   private host: UIManagerHost | null = null;
   private armed = new Set<string>();
-  private pendingArgs = new Map<string, unknown>();
+  private prepared = new Map<string, PreparedPage>();
   private pages = new Map<string, OpenPage>();
+  private opening = new Map<string, Promise<BaseView<unknown>>>();
 
   install(nav: PageNav, host: UIManagerHost): void {
     this.nav = nav;
@@ -45,7 +52,7 @@ export class UIManager {
 
   /**
    * 打开已注册的视图。
-   * 预制还在加载时，返回的 Promise 会等到视图 onOpen 做完。
+   * 预制、脚本都装好之后才压进页面栈。失败时壳已经销毁，并 Toast。
    */
   async open<T>(ctor: ViewClass<T>, args?: T): Promise<BaseView<T>> {
     const spec = viewSpecOf(ctor);
@@ -58,19 +65,23 @@ export class UIManager {
       view.onOpen(args);
       return view;
     }
-    this.pendingArgs.set(spec.id, args);
-    this.armed.add(spec.id);
-    if (this.nav.current !== spec.id) this.nav.openChild(spec.id);
-    const page = this.pages.get(spec.id);
-    if (!page) {
-      this.armed.delete(spec.id);
-      throw new Error("页面没有挂上 " + spec.id);
+    const pending = this.opening.get(spec.id);
+    if (pending) {
+      const view = (await pending) as BaseView<T>;
+      view.onOpen(args);
+      return view;
     }
-    return (await page.ready) as BaseView<T>;
+    const job = this.openNew(ctor, spec.id, spec.prefab, args);
+    this.opening.set(spec.id, job);
+    try {
+      return (await job) as BaseView<T>;
+    } finally {
+      if (this.opening.get(spec.id) === job) this.opening.delete(spec.id);
+    }
   }
 
   /**
-   * presentPage 里调用。只有 open() 刚登记过的页面 id 才返回宿主。
+   * presentPage 里调用。只有 open() 已经装好、刚登记过的页面才返回宿主。
    * 没登记的返回 null，调用方继续走原来的壳。
    */
   createPageHost(id: string): Node | null {
@@ -78,27 +89,20 @@ export class UIManager {
     this.armed.delete(id);
     const ctor = viewCtorById(id);
     const spec = ctor ? viewSpecOf(ctor) : null;
-    if (!ctor || !spec) return null;
-    const host = new Node("LiveShell");
-    const args = this.pendingArgs.get(id);
-    this.pendingArgs.delete(id);
-    const ready = this.finish(host, ctor, spec.prefab, args);
-    this.pages.set(id, { id, host, ready });
-    return host;
+    const ready = this.prepared.get(id);
+    this.prepared.delete(id);
+    if (!ctor || !spec || !ready) return null;
+    this.pages.set(id, { id, host: ready.host, ready: Promise.resolve(ready.view) });
+    return ready.host;
   }
 
-  /** 关掉最上面一层。传入视图时，它必须就是当前页。 */
+  /** 关掉当前这一页。传入视图时，它必须就是当前页。 */
   close(view?: object): boolean {
     if (!this.nav) return false;
     if (view) {
       const spec = viewSpecOf(view.constructor);
       if (!spec || this.nav.current !== spec.id) return false;
     }
-    return this.nav.back();
-  }
-
-  back(): boolean {
-    if (!this.nav) return false;
     return this.nav.back();
   }
 
@@ -119,21 +123,48 @@ export class UIManager {
     );
   }
 
-  private async finish(host: Node, ctor: Function, prefabPath: string, args: unknown): Promise<BaseView<unknown>> {
+  private async openNew(ctor: ViewClass<unknown>, id: string, prefabPath: string, args: unknown): Promise<BaseView<unknown>> {
+    const shell = new Node("LiveShell");
+    try {
+      const view = await this.mount(shell, ctor, prefabPath, args);
+      if (!this.nav) throw new Error("UIManager 还没接上页面栈");
+      if (!shell.isValid || !view.node.isValid) throw new Error("页面已关");
+      this.prepared.set(id, { host: shell, view });
+      this.armed.add(id);
+      if (this.nav.current !== id) this.nav.openChild(id);
+      if (!this.pages.has(id)) throw new Error("页面没有挂上 " + id);
+      return view;
+    } catch (err) {
+      this.armed.delete(id);
+      this.prepared.delete(id);
+      if (shell.isValid) shell.destroy();
+      this.reportOpenFailed(id, err);
+      throw err instanceof Error ? err : new Error(messageOf(err));
+    }
+  }
+
+  private async mount(shell: Node, ctor: ViewClass<unknown>, prefabPath: string, args: unknown): Promise<BaseView<unknown>> {
     let prefab: Prefab;
     try {
       prefab = await loadPrefab(prefabPath);
     } catch (err) {
       throw new Error(prefabPath + " " + messageOf(err));
     }
-    if (!host.isValid) throw new Error("页面已关");
-    const viewNode = await mountBackpackPage(host, prefab);
-    if (!host.isValid || !viewNode.isValid) throw new Error("页面已关");
-    const found = viewNode.getComponent(ctor as new () => BaseView<unknown>);
+    if (!shell.isValid) throw new Error("页面已关");
+    const viewNode = await mountBackpackPage(shell, prefab);
+    if (!shell.isValid || !viewNode.isValid) throw new Error("页面已关");
+    const found = viewNode.getComponent(ctor);
     if (!found) throw new Error(prefabPath + " 上没有视图组件");
     found.onOpen(args);
     await found.whenReady();
     return found;
+  }
+
+  /** 页面还没进栈。Toast 给玩家看，日志留给排查。 */
+  private reportOpenFailed(id: string, err: unknown): void {
+    const text = id === "bag" ? "背包没有打开" : "页面没有打开";
+    GameLog.shared.error("UI", text + " " + messageOf(err));
+    this.toast(text);
   }
 }
 

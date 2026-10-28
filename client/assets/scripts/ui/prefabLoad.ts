@@ -88,6 +88,11 @@ const PREFAB_UUID: { [path: string]: string } = {
 
 const prefabPending = new Map<string, Promise<Prefab>>();
 
+/** 清掉路径缓存。加载失败的下次本来就会再试；检查要换掉成功结果时用这个。 */
+export function clearPrefabCache(): void {
+  prefabPending.clear();
+}
+
 /** 同一路径共用一次加载。预热和进城挂载不要各解一遍。失败删掉，下次还能再试。 */
 export function loadPrefab(assetPath: string): Promise<Prefab> {
   const cached = prefabPending.get(assetPath);
