@@ -40,6 +40,7 @@ import { CITY_CHROME_PREFAB_PATH } from "./prefabLoad";
 import { installGmHotkey, openGmDebug, uninstallGmHotkey } from "../features/gm/GmHotkey";
 import { attachPagePrefabShell, HANG_PROBE_EVENT, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
 import { pagePrefabShell } from "./prefabShellMap";
+import { beginPageOpen } from "./uiOpenLog";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -255,7 +256,6 @@ export class MainApp extends Component {
   }
 
   private openChild(id: string): void {
-    GameLog.shared.info("MainApp", "open " + id);
     if (this.blockWirePage(id)) return;
     if (!(Session.source === "wire" && (id === "arena" || id === "wish")) && !this.allow(id)) return;
     if (!pagePrefabShell(id) && Session.source === "wire" && (id === "mail" || id === "buygold" || id === "achieve" || id === "prophet" || id === "jewel" || id === "illustrat" || id === "pet" || id === "world" || id === "promotion" || id === "firstRecharge" || id === "reiki" || id === "islands" || id === "totems" || id === "astrolabe" || id === "tweakCube" || id === "dragon" || id === "dragonCollection" || id === "titleList" || id === "headPortrait" || id === "borderData" || id === "fashionList" || id === "wornFashion" || id === "heroPrayer" || id === "petIllustrate" || id === "fetterData" || id === "fetterFashion" || id === "shenBin" || id === "occupation" || id === "roleShenBin" || id === "fetterContract" || id === "formation" || id === "lineUp" || id === "runningPromotion" || id === "towerReward" || id === "heroLevelResetTimes" || id === "signInList" || id === "dailyTaskList" || id === "dailyWelfareList" || id === "mouthWelfareList" || id === "weekendGift" || id === "godRelic" || id === "heroPalace" || id === "rechargeDaysB" || id === "timeTower" || id === "spaceTimeAdventure" || id === "magicTowerRoad" || id === "qiShenQi" || id === "zhuShenJiTan" || id === "midFood" || id === "qiuShangMingYue" || id === "wanShengLottery" || id === "heiWuMission" || id === "christmasGift" || id === "springOuting" || id === "christmasMission" || id === "magicTowerLevelRank" || id === "springOutingGrid" || id === "arena" || id === "login7" || id === "goal7" || id === "wish")) {
@@ -300,6 +300,8 @@ export class MainApp extends Component {
    * ?dev=wire 才留着探针，并且不再盖挂机壳。
    */
   private presentPage(id: string): Node {
+    const expectsPrefab = id === "mainline" || (USE_PAGE_PREFAB_SHELL && id !== CITY_TAB && pagePrefabShell(id) !== null);
+    beginPageOpen(id, expectsPrefab, "MainApp");
     const page = this.buildPage(id);
     if (id === "mainline") {
       page.on(HANG_PROBE_EVENT, () => {

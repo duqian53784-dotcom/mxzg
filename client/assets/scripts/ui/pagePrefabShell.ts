@@ -7,7 +7,7 @@ import { Button, Color, director, Director, Graphics, instantiate, Label, Node, 
 import { labelCenterInParent, sliceAnchorShift } from "./ccbiPlace";
 import { CITY_BAR_BOTTOM, CITY_VIEW_H } from "./cityMapLayout";
 import { messageOf } from "../core/errors";
-import { GameLog } from "../core/GameLog";
+import { GameLog, monoNow } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
 import { chapterIdleMinute } from "../config/rosterCatalog";
 import { WireSession } from "../net/WireSession";
@@ -19,7 +19,7 @@ import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./pref
 import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from "./chapterMapView";
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption, pinSprites } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
-import { logOpenedPrefab, prefabBaseName } from "./uiOpenLog";
+import { cancelPageOpen, logOpenedPrefab, notePrefabReady, pageOpenToken, prefabBaseName } from "./uiOpenLog";
 import { setText } from "./UiKit";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize, uiSize } from "./visibleFit";
 
@@ -83,10 +83,15 @@ export function setPagePrefabShellVisible(page: Node, visible: boolean): void {
 export async function attachPagePrefabShell(page: Node, id: string): Promise<void> {
   if (!USE_PAGE_PREFAB_SHELL) return;
   const spec = pagePrefabShell(id);
-  if (!spec || !page.isValid) return;
+  if (!spec) return;
+  const token = pageOpenToken(id);
+  if (!page.isValid) {
+    cancelPageOpen(id, token);
+    return;
+  }
   let hold = holds.get(page);
   if (hold && (hold.root || hold.pending)) {
-    if (hold.root) logOpenedPrefab(hold.root.getChildByName(prefabBaseName(spec.path)), spec.path, id);
+    if (hold.root) notePrefabReady(id, hold.root.getChildByName(prefabBaseName(spec.path)), spec.path, id, token);
     return;
   }
   if (!hold) {
@@ -99,6 +104,7 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
   page.once(Node.EventType.NODE_DESTROYED, () => {
     holds.delete(page);
   });
+  let noted = false;
   try {
     if (backdrop) await mountListBackdrop(page, backdrop);
     const prefab = await loadPrefab(spec.path);
@@ -116,7 +122,6 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
       } else GameLog.shared.warn("MainApp", "PagePrefabShell 下没有 dim");
     }
     const view = spawnPrefab(prefab, root);
-    logOpenedPrefab(view, spec.path, id);
     mountCcbiView(view);
     fillPageShell(id, view, (hero) => {
       void openHangSheet(root, HERO_INFO_PREFAB, (sheet) => dressHeroDetail(sheet, hero));
@@ -133,6 +138,8 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     root.active = hold.want;
     hold.root = root;
     hold.pending = false;
+    notePrefabReady(id, view, spec.path, id, token);
+    noted = true;
     raise();
     if (spec.fight) {
       bindHangFill(root);
@@ -145,6 +152,7 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
     hold.pending = false;
     restoreVeil(page, hold);
     GameLog.shared.error("MainApp", "page prefab shell " + id + " " + messageOf(err) + "，仍用原来的页面");
+    if (!noted && page.isValid) cancelPageOpen(id, token);
   }
 }
 
@@ -216,6 +224,15 @@ function restoreVeil(page: Node, hold: ShellHold): void {
   hold.veiled = [];
 }
 
+/** 挂机底钮预制已经在壳上时，补上这一次打开的耗时。还没挂上就等正在进行的加载。 */
+function noteHangPanelReady(root: Node, token: number): void {
+  const spec = pagePrefabShell("mainline");
+  const path = spec ? spec.path : "prefabs/ui/battle/BattlePanelLayer";
+  const panel = root.getChildByName(prefabBaseName(path));
+  if (!panel) return;
+  notePrefabReady("mainline", panel, path, "mainline", token);
+}
+
 /**
  * 底栏「战斗」自己的挂机壳。大理石站场、英雄和演武在等 Prefab 之前就铺上。
  * 底钮仍是 BattlePanelLayer（战力UP / 战斗 / 高速战斗）和收益条。
@@ -224,9 +241,16 @@ function restoreVeil(page: Node, hold: ShellHold): void {
  * Prefab 失败时站场还在。不补代码按钮。中间「战斗」仍发 PAGE_SHELL_FIGHT。
  */
 export async function mountHangBattleShell(page: Node): Promise<void> {
-  if (!page.isValid) return;
+  const token = pageOpenToken("mainline");
+  if (!page.isValid) {
+    cancelPageOpen("mainline", token);
+    return;
+  }
   let hold = holds.get(page);
-  if (hold && hold.root) return;
+  if (hold && hold.root) {
+    noteHangPanelReady(hold.root, token);
+    return;
+  }
   if (!hold) {
     hold = { want: true, root: null };
     holds.set(page, hold);
@@ -236,9 +260,14 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
     shellPrefab = await loadPrefab(PAGE_SHELL_PREFAB);
   } catch (err) {
     GameLog.shared.warn("MainApp", "PagePrefabShell 没有挂上 " + messageOf(err));
+    if (page.isValid) cancelPageOpen("mainline", token);
     return;
   }
-  if (!page.isValid || hold.root) return;
+  if (!page.isValid) return;
+  if (hold.root) {
+    noteHangPanelReady(hold.root, token);
+    return;
+  }
   const root = instantiate(shellPrefab);
   root.name = "PagePrefabShell";
   mountIdleHang(root);
@@ -259,9 +288,12 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
   let view: Node | null = null;
   try {
     const prefab = await loadPrefab(path);
-    if (!page.isValid || !root.isValid) return;
+    if (!page.isValid || !root.isValid) {
+      if (page.isValid) cancelPageOpen("mainline", token);
+      return;
+    }
     view = spawnHangPanel(prefab, root);
-    logOpenedPrefab(view, path, "mainline");
+    notePrefabReady("mainline", view, path, "mainline", token);
     const panel = view;
     hangShellStep("mountCcbiView", () => mountCcbiView(panel));
     hangShellStep("dressHangPanel", () => dressHangPanel(panel));
@@ -271,6 +303,7 @@ export async function mountHangBattleShell(page: Node): Promise<void> {
     hangShellStep("raiseHangProbe", () => raiseHangProbe(root));
     GameLog.shared.info("MainApp", "hang battle shell " + path);
   } catch (err) {
+    if ((!view || !view.isValid) && page.isValid) cancelPageOpen("mainline", token);
     if (isWidthRead(err) && root.isValid) {
       noteHangShellWidth(view && view.isValid ? "afterPanel" : "spawnPanel");
       if (!view || !view.isValid) {
@@ -987,6 +1020,7 @@ function hangStageIdx(): number {
 
 async function openHangSheet(host: Node, path: string, onReady?: (view: Node) => void): Promise<void> {
   if (!host.isValid) return;
+  const started = monoNow();
   const old = host.getChildByName("BattleSheet");
   if (old) old.destroy();
   try {
@@ -997,7 +1031,6 @@ async function openHangSheet(host: Node, path: string, onReady?: (view: Node) =>
     sheet.name = "BattleSheet";
     if (!sheet.getChildByName("dim")) GameLog.shared.warn("Mainline", "BattleSheet 下没有 dim");
     const view = spawnPrefab(prefab, sheet);
-    logOpenedPrefab(view, path, prefabBaseName(path));
     mountCcbiView(view);
     silenceSheetMenus(view);
     const close = () => {
@@ -1011,6 +1044,7 @@ async function openHangSheet(host: Node, path: string, onReady?: (view: Node) =>
     if (onReady) onReady(view);
     sheet.parent = host;
     sheet.setSiblingIndex(Math.max(0, host.children.length - 1));
+    logOpenedPrefab(view, path, prefabBaseName(path), Math.max(0, Math.round(monoNow() - started)), "Mainline");
     GameLog.shared.info("Mainline", "hang sheet " + path);
   } catch (err) {
     GameLog.shared.warn("Mainline", "hang sheet " + path + " " + messageOf(err));

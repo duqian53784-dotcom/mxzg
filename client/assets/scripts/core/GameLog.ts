@@ -6,6 +6,8 @@ export interface LogLine {
   tag: string;
   message: string;
   time: number;
+  /** 整行颜色。有值时浏览器控制台用一个 %c 涂满这一行。 */
+  color?: string;
 }
 
 const RANK: Record<LogLevel, number> = {
@@ -18,7 +20,7 @@ const RANK: Record<LogLevel, number> = {
 /**
  * 进程内日志。环形缓冲留最近若干条，给主城「日志」看。
  * mirrorConsole 为 true 时同步打到 console，前缀 [mxzg]。
- * 浏览器预览用 CSS %c 给级别和标签上色。环形缓冲和 format() 仍是纯文本。
+ * 浏览器预览用一个 CSS %c 给整行上色。环形缓冲和 format() 仍是纯文本。
  * 场景切换不新建；Boot 的行进了 Main 还能看见。
  */
 export class GameLog {
@@ -35,20 +37,29 @@ export class GameLog {
     this.capacity = capacity > 0 ? capacity : 1;
   }
 
-  debug(tag: string, message: string): void {
-    this.write("debug", tag, message);
+  /** 整行一个颜色。不传颜色时用 info 的级别色。来源记为 GameLog。 */
+  static log(message: string, color?: string): void {
+    GameLog.shared.log(message, color);
   }
 
-  info(tag: string, message: string): void {
-    this.write("info", tag, message);
+  log(message: string, color?: string): void {
+    this.write("info", "GameLog", message, color);
   }
 
-  warn(tag: string, message: string): void {
-    this.write("warn", tag, message);
+  debug(tag: string, message: string, color?: string): void {
+    this.write("debug", tag, message, color);
   }
 
-  error(tag: string, message: string): void {
-    this.write("error", tag, message);
+  info(tag: string, message: string, color?: string): void {
+    this.write("info", tag, message, color);
+  }
+
+  warn(tag: string, message: string, color?: string): void {
+    this.write("warn", tag, message, color);
+  }
+
+  error(tag: string, message: string, color?: string): void {
+    this.write("error", tag, message, color);
   }
 
   recent(limit?: number): LogLine[] {
@@ -70,24 +81,27 @@ export class GameLog {
 
   /** 控制台和日志面板用同一行格式。 */
   format(line: LogLine): string {
-    return "[mxzg][" + line.level + "][" + line.tag + "] " + clock(line.time) + " " + line.message;
+    return formatText(line);
   }
 
   /**
-   * 正式界面打开。Prefab 壳和以后的 UIManager.open 都走这里。
-   * className 是视图类或预制根节点名，prefabName 是预制文件名。
+   * 正式界面打开完成。一行：打开界面 <类名> ui <预制或页面名> 耗时 <N>ms。
+   * ms 由打开方从打开调用量到界面真正出现。本分支没有 BaseView.whenReady。
    */
-  openView(className: string, prefabName: string, prefabPath = ""): void {
+  openView(className: string, prefabName: string, options?: { ms?: number; tag?: string; color?: string }): void {
     const cls = className || "(none)";
     const name = prefabName || "(none)";
-    let message = "open class=" + cls + " prefab=" + name;
-    if (prefabPath && prefabPath !== name) message += " path=" + prefabPath;
-    this.info("UI", message);
+    const raw = options && typeof options.ms === "number" ? options.ms : 0;
+    const ms = isFinite(raw) ? Math.max(0, Math.round(raw)) : 0;
+    const tag = options && options.tag ? options.tag : "UI";
+    const message = "打开界面 " + cls + " ui " + name + " 耗时 " + ms + "ms";
+    this.info(tag, message, options && options.color);
   }
 
-  private write(level: LogLevel, tag: string, message: string): void {
+  private write(level: LogLevel, tag: string, message: string, color?: string): void {
     if (RANK[level] < RANK[this.minLevel]) return;
     const line: LogLine = { level, tag, message, time: Date.now() };
+    if (color && color.trim()) line.color = color.trim();
     this.buffer.push(line);
     if (this.buffer.length > this.capacity) {
       this.buffer.splice(0, this.buffer.length - this.capacity);
@@ -110,21 +124,39 @@ const LEVEL_CSS: Record<LogLevel, string> = {
   error: "color:#f28b82;font-weight:bold",
 };
 
-const TAG_CSS = "color:#8ab4ff;font-weight:bold";
-
 /** 有 window 或 document 时控制台吃 %c。Node 检查进程保持纯文本。 */
 export function consoleUsesCss(host: object = globalThis): boolean {
   const box = host as { window?: unknown; document?: unknown };
   return box.window !== undefined || box.document !== undefined;
 }
 
-/** 浏览器控制台的一行。没有 CSS 环境时返回 null，调用方打 format()。 */
+/** 浏览器控制台的一行。整行一个 %c。没有 CSS 环境时返回 null，调用方打 format()。 */
 export function consoleParts(line: LogLine, host: object = globalThis): { text: string; css: string[] } | null {
   if (!consoleUsesCss(host)) return null;
   return {
-    text: "%c[mxzg]%c[" + line.level + "]%c[" + line.tag + "]%c " + clock(line.time) + " " + line.message,
-    css: ["color:#9aa0a6", LEVEL_CSS[line.level], TAG_CSS, "color:inherit"],
+    text: "%c" + formatText(line),
+    css: [lineCss(line)],
   };
+}
+
+/** performance.now，没有就用 Date.now。打开界面耗时用这个，避免和日志墙上的时钟混在一起。 */
+export function monoNow(): number {
+  const perf = (globalThis as { performance?: { now?: () => number } }).performance;
+  if (perf && typeof perf.now === "function") return perf.now();
+  return Date.now();
+}
+
+function formatText(line: LogLine): string {
+  return "[mxzg][" + line.level + "][" + line.tag + "] " + clock(line.time) + " " + line.message;
+}
+
+function lineCss(line: LogLine): string {
+  if (line.color) {
+    const raw = line.color.trim();
+    if (raw.indexOf("color:") === 0) return raw;
+    return "color:" + raw;
+  }
+  return LEVEL_CSS[line.level];
 }
 
 function mirror(log: GameLog, line: LogLine): void {
@@ -134,7 +166,7 @@ function mirror(log: GameLog, line: LogLine): void {
     fn(log.format(line));
     return;
   }
-  fn(parts.text, parts.css[0], parts.css[1], parts.css[2], parts.css[3]);
+  fn(parts.text, parts.css[0]);
 }
 
 function clock(time: number): string {

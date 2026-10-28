@@ -1,6 +1,6 @@
 import { Button, Color, Node } from "cc";
 import { ConfigDb } from "../../config/ConfigLoader";
-import { GameLog } from "../../core/GameLog";
+import { GameLog, monoNow } from "../../core/GameLog";
 import { WireSession } from "../../net/WireSession";
 import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "../../ui/UiKit";
 import { gmClosedDetail, GmSendResult, sendGmAddHero, sendGmAddItem, sendGmRefreshBag, sendGmTableOp } from "./GmActions";
@@ -39,6 +39,7 @@ export class GmDebugPanel {
   open(): void {
     if (!this.layer || !this.layer.isValid) return;
     if (this.root && this.root.isValid) return;
+    const started = monoNow();
     const root = uiNode("GmDebugPanel");
     const dim = createRect("dim", 2000, 2000, new Color(0, 0, 0, 150));
     const dimButton = dim.addComponent(Button);
@@ -123,7 +124,7 @@ export class GmDebugPanel {
     this.heroSerial = WireSession.gmHeroSerial;
     this.errorSerial = WireSession.wireErrorSerial;
     this.offSync = WireSession.onSync(() => this.onSync());
-    GameLog.shared.openView("GmDebugPanel", "(none)");
+    GameLog.shared.openView("GmDebugPanel", "(none)", { ms: Math.max(0, Math.round(monoNow() - started)), tag: "GM" });
     GameLog.shared.info("GM", "打开调试面板。代码面板，没有 Prefab");
   }
 
