@@ -1,7 +1,9 @@
 # mxzg 项目结构与 UI 迁移规范
 
-> 适用项目：Cocos Creator 3.8.8 / TypeScript  
-> 参考项目：`mxzg-h5-jp`（Cocos2d-x Lua + CCBI）  
+> 适用项目：Cocos Creator 3.8.8 / TypeScript
+>
+> 参考项目：`mxzg-h5-jp`（Cocos2d-x Lua + CCBI）
+>
 > 目标：在保持日服视觉和行为 1:1 的前提下，把当前迁移工程改造成开发者可以人工维护的标准工程。
 
 ## 1. 为什么要调整
