@@ -14,8 +14,6 @@ export const LOGIN_PREFAB_PATH = "prefabs/ui/login/LoginPanel";
 export const CREATE_ROLE_PREFAB_PATH = "prefabs/ui/login/CreateRolePanel";
 export const CITY_CHROME_PREFAB_PATH = "prefabs/ui/city/CityChrome";
 export const CITY_HUB_PREFAB_PATH = "prefabs/ui/city/CityHub";
-export const HERO_PREFAB_PATH = "prefabs/ui/hero/HeroPage";
-export const SUMMON_PREFAB_PATH = "prefabs/ui/summon/SummonPage";
 export { BATTLE_PREFAB_PATH };
 
 /** 与 .prefab.meta 的 uuid 一致。只给 loadAny 兜底，不拿去 resources.load。 */
@@ -26,8 +24,6 @@ const PREFAB_UUID: { [path: string]: string } = {
   "prefabs/ui/login/CreateRolePanel": "d2eb0e48-bc58-4e09-b95f-ce45350461b1",
   "prefabs/ui/city/CityChrome": "c97efb56-db67-4c93-84d5-e29436794e86",
   "prefabs/ui/city/CityHub": "118c08f7-43eb-477d-ab62-50f3ec65294f",
-  "prefabs/ui/hero/HeroPage": "1c983cf8-4cc7-4895-b30e-953df1d90eed",
-  "prefabs/ui/summon/SummonPage": "12fca329-1355-43ce-bde5-624e1cc844c1",
   [BATTLE_PREFAB_PATH]: "733c8611-a124-4c16-bb79-6b3011dfb408",
   "prefabs/ui/login/UserLoginLayer": "9a634cfd-fdca-586f-827a-0a4b3212ca49",
   "prefabs/ui/login/ChooseServerLayer": "46c73fed-68c2-5589-8720-d11645528009",

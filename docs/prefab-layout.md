@@ -164,7 +164,7 @@ Mock 关卡页和真服只读页各一份 Prefab。`MainlinePage.ts` 在同一�
 | WireBagPage | `prefabs/ui/bag/WireBagPage` | **未接** |
 | BagPage | `prefabs/ui/bag/BagPage` | **未接** |
 
-- **路径**：`client/assets/prefabs/ui/bag/WireBagPage.prefab`、`client/assets/prefabs/ui/bag/BagPage.prefab`
+- **路径**：已移除/不存在（原 `client/assets/prefabs/ui/bag/WireBagPage.prefab`、`client/assets/prefabs/ui/bag/BagPage.prefab`）。
 - **状态**：**未接** Boot、`MainApp`、`WireBagPage.ts`、`BagPage.ts`，以及任何 `USE_*_PREFAB`。运行时仍走代码 UI。验收通过后再由客户端加加载开关。
 - 设计基准 **720×1280**，坐标相对页面中心（与 `place(...)` 一致）。`ListHost`、`Rows`、`RowsHost`、`DetailHost`、`Detail` 都放在 (0, 0) 且铺满 720×1280，子节点的 y 就是代码里的页面坐标。
 - 素材只引用 `client/assets/resources/` 的 spriteFrame uuid。Prefab 目录里没有 PNG。没有背包专用图集：页面底用 `win-bg_win-bg-12` 染成代码里的深蓝 `(8, 16, 32)`；详情卡用 `win-bg_block-bg-5` 染成 `(16, 28, 48)`；返回和未选行用 `button_btn-blue-big`；已选行用 `button_btn-orange-big`；使用钮用 `button_btn-green-big`。后续可以再补 backpack 图集，本页不依赖它。
