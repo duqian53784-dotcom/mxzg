@@ -46,6 +46,9 @@
     "_components": [
       {
         "__id__": 2
+      },
+      {
+        "__id__": 192
       }
     ],
     "_prefab": {
@@ -4722,5 +4725,40 @@
     "node": {
       "__id__": 185
     }
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "755a0aBYHZIE7xa8Comp"
+  },
+  {
+    "__type__": "755a0aBYHZIE7+a8vAY/aZx",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 191
+    },
+    "_id": "",
+    "btnBattle": { "__id__": 46 },
+    "btnLineup": { "__id__": 60 },
+    "btnSpeed": { "__id__": 74 },
+    "battleTitle": { "__id__": 52 },
+    "lineupTitle": { "__id__": 66 },
+    "speedTitle": { "__id__": 80 },
+    "clockLabel": { "__id__": 156 },
+    "goldLabel": { "__id__": 162 },
+    "soulsLabel": { "__id__": 168 },
+    "expLabel": { "__id__": 174 },
+    "bubbleLabel": { "__id__": 190 },
+    "worldMap": { "__id__": 11 },
+    "mapLabel": { "__id__": 23 },
+    "worldIcon": { "__id__": 29 },
+    "missionName": { "__id__": 97 },
+    "hitMenu": { "__id__": 35 },
+    "chipPrefab": { "__uuid__": "4d270a16-c38e-45b9-f277-80e134c3b2a6", "__expectedType__": "cc.Prefab" }
   }
 ]

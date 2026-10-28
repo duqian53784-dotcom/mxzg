@@ -44,6 +44,8 @@ import { pagePrefabShell } from "./prefabShellMap";
 import { beginPageOpen } from "./uiOpenLog";
 import { BackpackView } from "../features/backpack/ui/BackpackView";
 import { useBackpackView } from "../features/backpack/config/BackpackFeatureFlag";
+import { useBattleView } from "../features/battle/config/BattleFeatureFlag";
+import { BattleHangView } from "../features/battle/ui/BattleHangView";
 import { useCityView } from "../features/city/config/CityFeatureFlag";
 import { useHeroView } from "../features/hero/config/HeroFeatureFlag";
 import { HeroListView } from "../features/hero/ui/HeroListView";
@@ -280,7 +282,7 @@ export class MainApp extends Component {
     if (id === "battle") {
       arm();
       this.openMainline();
-      seal();
+      if (!useBattleView() || !this.shell?.barSlideWaiting()) seal();
       return;
     }
     if (id === "dungeon") {
@@ -441,20 +443,28 @@ export class MainApp extends Component {
    */
   private presentPage(id: string): Node {
     const viewHost = UIManager.instance.createPageHost(id);
-    if (viewHost) return viewHost;
+    if (viewHost) {
+      if (id === "mainline") this.watchHangProbe(viewHost);
+      return viewHost;
+    }
     const expectsPrefab = id === "mainline" || (USE_PAGE_PREFAB_SHELL && id !== CITY_TAB && pagePrefabShell(id) !== null);
     beginPageOpen(id, expectsPrefab, "MainApp");
     const page = this.buildPage(id);
     if (id === "mainline") {
-      page.on(HANG_PROBE_EVENT, () => {
-        GameLog.shared.info("GM", "挂机空地长按，打开 GM");
-        openGmDebug();
-      });
+      this.watchHangProbe(page);
       void mountHangBattleShell(page);
       return page;
     }
     if (USE_PAGE_PREFAB_SHELL && id !== CITY_TAB) void attachPagePrefabShell(page, id);
     return page;
+  }
+
+  /** 挂机左侧空地长按打开 GM。新视图和旧壳都听这一下。 */
+  private watchHangProbe(page: Node): void {
+    page.on(HANG_PROBE_EVENT, () => {
+      GameLog.shared.info("GM", "挂机空地长按，打开 GM");
+      openGmDebug();
+    });
   }
 
   /** 真服且地址带 ?dev=wire。不改连接，Mock 仍只认 ?dev=mock。 */
@@ -644,10 +654,24 @@ export class MainApp extends Component {
     this.refreshChrome();
   }
 
-  /** 打开挂机站场。中间「战斗」仍发 3001。空关卡也进壳。 */
+  /**
+   * 打开挂机站场。空关卡也进壳。
+   * 开关开着时经 UIManager 挂 BattleHangView。预制还没进栈时不刷底栏。
+   * 打开失败只丢掉还没开始的过场。?battle=old 仍走原来的挂机壳。
+   */
   private openMainline(): void {
     GameLog.shared.info("MainApp", "click mainline");
-    this.openChild("mainline");
+    if (!useBattleView()) {
+      this.openChild("mainline");
+      return;
+    }
+    if (this.panels?.current === "mainline") return;
+    this.shell?.holdBarSlide();
+    void UIManager.instance.open(BattleHangView).catch((err) => {
+      this.shell?.dropWaitingBarSlide("mainline");
+      if (isOpenCancelled(err)) return;
+      GameLog.shared.error("MainApp", "战斗页没有打开 " + messageOf(err));
+    });
   }
 
   /** 两个 idx 都没有就 Toast。有任意一个则压入只读页，不走 Mock 的 stage.enter。打开不看 net.state。 */
