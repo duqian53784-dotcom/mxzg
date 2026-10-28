@@ -41,7 +41,7 @@ import { attachPagePrefabShell, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } fr
 import { pagePrefabShell } from "./prefabShellMap";
 import { BackpackView } from "./view/BackpackView";
 import { useBackpackView } from "./view/backpackFlag";
-import { UIManager } from "./view/UIManager";
+import { isOpenCancelled, UIManager } from "./view/UIManager";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -170,7 +170,15 @@ export class MainApp extends Component {
       (id) => this.presentPage(id),
       (id) => this.noteClose(id)
     );
-    UIManager.instance.install(this.panels, shell);
+    this.panels.setBeforeOpen((id) => {
+      UIManager.instance.keepOnly(id);
+    });
+    UIManager.instance.install(this.panels, {
+      showToast: (text, durationMs) => shell.showToast(text, durationMs),
+      onPageOpened: () => {
+        this.refreshChrome();
+      },
+    });
     this.panels.start(this.buildCity());
     if (!ConfigDb.current) {
       try {
@@ -277,9 +285,9 @@ export class MainApp extends Component {
     }
     if (id === "bag" && useBackpackView()) {
       void UIManager.instance.open(BackpackView).catch((err) => {
+        if (isOpenCancelled(err)) return;
         GameLog.shared.error("MainApp", "背包页没有打开 " + messageOf(err));
       });
-      this.refreshChrome();
       return;
     }
     this.panels?.openChild(id);

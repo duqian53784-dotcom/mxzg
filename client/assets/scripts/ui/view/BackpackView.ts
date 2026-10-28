@@ -24,7 +24,7 @@ import { assignContentSize, positiveUiSize } from "../visibleFit";
 import { BackpackItemCellView } from "./BackpackItemCellView";
 import { BackpackTabButtonView } from "./BackpackTabButtonView";
 import { BaseView } from "./BaseView";
-import { openBagInfo } from "./backpackMount";
+import { mountBackpackPage, openBagInfo } from "./backpackMount";
 import { UILayer } from "./UILayer";
 import { UIManager } from "./UIManager";
 import { view } from "./UIRegistry";
@@ -49,6 +49,9 @@ export interface BagOpenArgs {
   id: "bag",
   prefab: "prefabs/ui/backpack/BackpackLayer",
   layer: UILayer.Page,
+  cache: false,
+  allowMultiple: false,
+  mount: mountBackpackPage,
 })
 @ccclass("BackpackView")
 export class BackpackView extends BaseView<BagOpenArgs> {
@@ -104,7 +107,6 @@ export class BackpackView extends BaseView<BagOpenArgs> {
   private infoSheet: Node | null = null;
 
   onOpen(args?: BagOpenArgs): void {
-    this.beginOpen();
     this.args = args;
     if (args && args.tab) this.tab = args.tab;
     if (this.opened) {
@@ -112,6 +114,7 @@ export class BackpackView extends BaseView<BagOpenArgs> {
       return;
     }
     this.opened = true;
+    this.beginOpen();
     void this.start();
   }
 
@@ -129,15 +132,17 @@ export class BackpackView extends BaseView<BagOpenArgs> {
       this.bindClose();
       this.dressPortrait();
       this.offSync = WireSession.onSync(() => this.paint());
-      this.node.once(Node.EventType.NODE_DESTROYED, () => this.onClose());
       await this.ensurePrefabs();
-      if (!this.node || !this.node.isValid) return;
+      if (!this.node || !this.node.isValid) {
+        this.failOpen(new Error("页面已关"));
+        return;
+      }
       this.buildTabs();
       this.paint();
+      this.finishOpen();
     } catch (err) {
       GameLog.shared.warn("Bag", "背包没有挂上 " + messageOf(err));
-    } finally {
-      this.finishOpen();
+      this.failOpen(err instanceof Error ? err : new Error(messageOf(err)));
     }
   }
 
