@@ -35,6 +35,9 @@
     "_components": [
       {
         "__id__": 2
+      },
+      {
+        "__id__": 30
       }
     ],
     "_prefab": {
@@ -675,5 +678,35 @@
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "969KAUZGZRJHYQ22JcoZkg"
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "bp1ItemCellViewComp001"
+  },
+  {
+    "__type__": "8c25fGzTWlOIJ97oBw9Xm9y",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 29
+    },
+    "_id": "",
+    "frame": {
+      "__id__": 5
+    },
+    "icon": {
+      "__id__": 17
+    },
+    "count": {
+      "__id__": 27
+    },
+    "selectMark": {
+      "__id__": 11
+    }
   }
 ]

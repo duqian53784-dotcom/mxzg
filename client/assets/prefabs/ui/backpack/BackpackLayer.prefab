@@ -47,6 +47,9 @@
     "_components": [
       {
         "__id__": 2
+      },
+      {
+        "__id__": 124
       }
     ],
     "_prefab": {
@@ -2889,5 +2892,67 @@
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "P29FEcHZAgJuDjltXtpicg"
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "bp1BackpackViewComp001"
+  },
+  {
+    "__type__": "7b14eCiPFhNH45qnwssTV5h",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 123
+    },
+    "_id": "",
+    "sprBox": {
+      "__id__": 10
+    },
+    "bagScroll": {
+      "__id__": 101
+    },
+    "bagPort": {
+      "__id__": 105
+    },
+    "bagContent": {
+      "__id__": 109
+    },
+    "tabContent": {
+      "__id__": 41
+    },
+    "bubble": {
+      "__id__": 83
+    },
+    "talk": {
+      "__id__": 99
+    },
+    "portrait": {
+      "__id__": 91
+    },
+    "hitMenu": {
+      "__id__": 48
+    },
+    "btnClose": null,
+    "cellPrefab": {
+      "__uuid__": "c4e8a1b2-7d33-4f61-9a20-6b5e0d4c8f11",
+      "__expectedType__": "cc.Prefab"
+    },
+    "tabPrefab": {
+      "__uuid__": "d5f9b2c3-8e44-4072-ab31-7c6f1e5d9022",
+      "__expectedType__": "cc.Prefab"
+    },
+    "infoPrefab": {
+      "__uuid__": "f151a2c1-a24a-4e5d-9d67-2096089cde82",
+      "__expectedType__": "cc.Prefab"
+    },
+    "dimPrefab": {
+      "__uuid__": "2b05e8f4-a16c-4397-d055-6ecf12a19084",
+      "__expectedType__": "cc.Prefab"
+    }
   }
 ]
