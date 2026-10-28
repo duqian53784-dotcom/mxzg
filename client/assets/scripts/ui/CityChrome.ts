@@ -75,7 +75,7 @@ const DIAMOND_COLOR = new Color(150, 216, 235, 255);
 
 /**
  * 顶栏和底栏。挂在 UIShell 的 chrome 层，不进页面栈。
- * 设计分辨率 720×1280，原点在画面中心。
+ * 项目设计分辨率 640×1280，原点在画面中心。底栏预制仍按 720 宽摆，运行时再拉满可见宽。
  * 不再手搓顶底栏。MainApp 只挂 CityChrome 预制，缺了只打日志。
  */
 export function mountCityChrome(_parent: Node, _onTab: (id: string) => void): CityChrome {

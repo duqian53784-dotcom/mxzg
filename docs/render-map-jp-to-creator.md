@@ -3,22 +3,22 @@
 状态：**待复验**。本文只记录根因和改法，不宣告 ACC-BAG-001～003 或 ACC-COM-001 通过。
 
 对照：日服 H5 `https://mxzg-test.funsgamex.com/jp/`（只读，本分支不改日服仓）。  
-被测：本仓 Cocos Creator 3.8.8，设计分辨率 **720×1280、Fit Height**。
+被测：本仓 Cocos Creator 3.8.8，设计分辨率 **640×1280、只 Fit Height**。
 
 ## 设计宽
 
 | | 日服 H5 | Creator |
 | --- | --- | --- |
-| 设计分辨率 | 640×1280，`FIXED_HEIGHT` | 720×1280，`fitHeight` |
-| 整屏缩放 | `ex.s.global_scale = winW / 640` | 由分辨率策略承担，节点上不再乘这一层 |
+| 设计分辨率 | 640×1280，`FIXED_HEIGHT` | 640×1280，`fitHeight: true`，`fitWidth: false` |
+| 整屏缩放 | `ex.s.global_scale = winW / 640` | 分辨率策略只 Fit Height。可视宽 = 屏宽 × 1280 / 屏高，设计宽不参与 |
 | 背包 / 英雄 ccbi | 640×960，锚点左下，**窗本身不再乘** `(720-36)/640` | 同左。全屏店景、岩洞由 `PagePrefabShell` 底图单独铺满 |
-| 羊皮纸九宫 | 按 ccbi 尺寸，不把整页拉到顶栏和底栏之间 | 同左。`listWindowSpread` 的 `scale` 固定为 1，`extraTop` / `extraBottom` 为 0 |
+| 羊皮纸九宫 | 按 ccbi 尺寸，不把整页拉到顶栏和底栏之间 | 同左。可视宽 ≥ 640 时 `scale` 为 1；更窄时 `parchmentFitScale = visibleW / 640`。`extraTop` / `extraBottom` 为 0 |
 
 `LIST_WINDOW_TOP = 470`、`LIST_WINDOW_BOTTOM = -480`、`LIST_WINDOW_SIDE = 18` 只保留为顶栏 / 底栏设计带的记录。铺窗不再用它们改缩放或拉高九宫。
 
 以前的公式 `scale = (720 - 18×2) / 640 = 1.06875` 就是 Inspector 里 `BackpackLayer`（以及同一条路径上的 `HeroListLayer`）的 **Scale 1.069**，位置约 `(-342, -513)`。日服背包只把全屏底图拉到 `winSize`，不把 640×960 的 ccbi 窗再整页放大。放大之后再把 `spr_bg` / `spr_box` 拉高约 200+75，羊皮纸中心被撑成大块空壳，店员节点也被顶上去。
 
-改完后根节点应为 **scale 1**，底左角锚点落在 **(-320, -480)**（640×960 在 720×1280 壳里居中）。左右各约 40 设计像素露出店景或岩洞。`fitParchmentWindow` 把缩放写成 `setScale(1, 1, 1)`，不把 `listWindowSpread` 的返回值再乘到节点上。旧公式即使还在某个缓存模块里，也不会再写成 Inspector 的 Scale 1.069 / Pos (-342, -513)。
+可视宽 ≥ 640 时根节点为 **scale 1**，底左角锚点落在 **(-320, -480)**（640×960 在设计框里居中）。iPhone 14 Pro 可视宽约 590，根节点 scale 约为 590/640，否则 640 羊皮纸左右被裁。全屏店景、岩洞仍铺满可见框。旧公式 `(720-36)/640` 即使还在某个缓存模块里，也不再写成 Inspector 的 Scale 1.069 / Pos (-342, -513)。
 
 ## 背包格子
 

@@ -1,6 +1,6 @@
 /**
  * 启动加载层和热更层。两套 prefab 节点名相同，按名字绑。
- * 挂在 SafeFrame 上，根节点是设计分辨率 720×1280，不再按父节点 2000 放大。
+ * 挂在 SafeFrame 上。项目设计分辨率是 640×1280。进场景后按可见尺寸铺，不再按父节点 2000 放大。
  * Prefab 加载失败只打日志，不另造 LoadingLayer / UpdateLayer。
  */
 import { BlockInputEvents, Button, Color, Label, Mask, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
@@ -18,8 +18,8 @@ const BOOT_CAST_CLIP = "stand";
 /** LoadingLayer / UpdateLayer 的底图。logo 阶段用同一张，不再另铺黑底。 */
 export const LOADING_BG_FRAME = "ui/login/bg-loading";
 /**
- * 768×1300 按设计分辨率 720×1280 做 cover 之后的绘制尺寸。
- * 和 LoadingLayer 预制里 Bg 的 contentSize 一致。
+ * 768×1300 做 cover。高比 1280/1300 大于宽比，绘制尺寸仍是 756×1280。
+ * 设计宽改成 640 不改这张图。和 LoadingLayer 预制里 Bg 的 contentSize 一致。
  */
 export const LOADING_BG_DRAW_W = 756;
 export const LOADING_BG_DRAW_H = 1280;

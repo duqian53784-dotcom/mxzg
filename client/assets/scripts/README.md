@@ -59,7 +59,7 @@ P0 消息：`login`、`heartbeat`、`role.enter`、`role.create`、`stage.enter`
 
 ## 安全区（B8）
 
-设计分辨率保持 **720×1280**（`settings/v2/packages/project.json`）。运行时不改 Fit Width / Fit Height。
+设计分辨率是 **640×1280**、只 Fit Height（`settings/v2/packages/project.json`）。运行时不改 Fit Width / Fit Height。可视宽仍随屏幕变，iPhone 14 Pro 大约 590，9:16 大约 720。
 
 `ui/SafeArea.ts` 在 Boot 和主城 `start` 时读可见区域与 `sys.getSafeAreaRect()`，窗口变化后再算。登录面板、主城按钮和 Toast 会让开刘海；安全区比设计分辨率小时只缩小不放大。不用改 `.scene`，也不要给 Canvas 再挂引擎自带的 SafeArea。
 

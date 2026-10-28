@@ -2111,7 +2111,7 @@ function checkSafeArea(): void {
   near(overflow.offsetY, 0, "equal insets stay centered");
 
   const fallback = metricsFrom(0, 0, 0, 0, null, null);
-  near(fallback.visibleWidth, 720, "fallback width");
+  near(fallback.visibleWidth, 640, "fallback width");
   near(fallback.visibleHeight, 1280, "fallback height");
   near(layoutSafeFrame(fallback).scale, 1, "fallback scale");
 
@@ -3009,8 +3009,8 @@ function checkCityMap(): void {
   for (let i = 0; i < layout.activities.length; i++) {
     if (layout.activities[i].y < lowestAct) lowestAct = layout.activities[i].y;
   }
-  assert(lowestAct > 400, "activity strip stays above the buildings");
-  assert(layout.viewW === 720 && layout.viewH === 1280 && layout.contentW === 1500, "view stays 720x1280 and the map stays 1500");
+  assert(lowestAct > 390, "activity strip stays above the buildings");
+  assert(layout.viewW === 640 && layout.viewH === 1280 && layout.contentW === 1500, "view stays 640x1280 and the map stays 1500");
   const iconHalf = 17;
   for (let i = 0; i < layout.activities.length; i++) {
     const spot = layout.activities[i];
@@ -3019,7 +3019,7 @@ function checkCityMap(): void {
       "activity icons stay inside the view"
     );
   }
-  assert(layout.scroll === -390 && layout.minScroll === -780 && layout.maxScroll === 0, "map starts centered");
+  assert(layout.scroll === -430 && layout.minScroll === -860 && layout.maxScroll === 0, "map starts centered");
   assert(Math.abs(contentLeftX(layout.viewW, layout.maxScroll) + layout.viewW / 2) < 0.001, "design scroll left is flush");
 
   const wideMap = buildCityMapLayout(pos, btn, effect, { viewW: 996, viewH: 1280 });
@@ -3040,16 +3040,18 @@ function checkCityMap(): void {
   assert(wideFill.left === 0 && wideFill.right === 0 && wideFill.width === 996, "bar widget is flush when the parent is the visible width");
   assert(stuck.width === 996 && stuck.left === (720 - 996) / 2 && stuck.right === stuck.left, "bar still fills when the parent is stuck at 720");
   assert(Math.abs(widthSqueeze(996) - 1) < 0.001, "wide chrome does not spread the tabs");
+  assert(Math.abs(widthSqueeze(720) - 1) < 0.001, "chrome authored at 720 does not squeeze on a 9:16 phone");
+  assert(Math.abs(widthSqueeze(640) - 640 / 720) < 0.001, "640 design preview still squeezes chrome authored at 720");
   assert(Math.abs(widthSqueeze(590) - 590 / 720) < 0.001, "narrow chrome squeezes tabs onto the phone");
   const project = JSON.parse(readFileSync(join(config, "..", "..", "..", "settings", "v2", "packages", "project.json"), "utf8")) as {
     general: { designResolution: { width: number; height: number; fitWidth: boolean; fitHeight: boolean } };
   };
   assert(
-    project.general.designResolution.width === 720 &&
+    project.general.designResolution.width === 640 &&
       project.general.designResolution.height === 1280 &&
       project.general.designResolution.fitHeight === true &&
       project.general.designResolution.fitWidth === false,
-    "project stays fit height only at 720x1280"
+    "project stays fit height only at 640x1280"
   );
   const fitSrc = readFileSync(uiSource("visibleFit.ts"), "utf8");
   const chromeSrc = readFileSync(uiSource("CityChrome.ts"), "utf8");
@@ -27268,6 +27270,7 @@ function checkCityHub(): void {
   });
   assert(
     parchmentFitScale(720) === 1 &&
+      parchmentFitScale(640) === 1 &&
       parchmentFitScale(800) === 1 &&
       parchmentFitScale(0) === 1 &&
       Math.abs(parchmentFitScale(iphoneVisibleW) - iphoneVisibleW / 640) < 0.000001 &&
@@ -28352,7 +28355,8 @@ function checkIdleSkirmish(): void {
       hangAllyFloorPoint(4).x > -190 &&
       hangAllyFloorPoint(1).x > hangAllyFloorPoint(4).x &&
       hangAllyVisibleShift(720) === 0 &&
-      hangAllyVisibleShift(640) === 40 &&
+      hangAllyVisibleShift(640) === 0 &&
+      hangAllyVisibleShift(590) === 25 &&
       hangAllyVisibleShift(0) === 0,
     "hang allies follow getHangHeroPosition, stay inside the layer, and stand left of the loot pile"
   );

@@ -51,8 +51,9 @@ export function sliceAnchorShift(box: CcbiBox, frame: CcbiFrame): { x: number; y
 
 /**
  * 日服是 640 设计宽 + FIXED_HEIGHT，羊皮纸 640 就是满设计宽。
- * 国服设计分辨率 720×1280，只 Fit Height。窄机长屏的可视设计宽会小于 640
- * （iPhone 14 Pro 393×852 约为 393*1280/852 ≈ 590），640 的窗会左右被裁。
+ * 国服项目设置同样是 640×1280，只 Fit Height（fitWidth 仍是 false）。
+ * Fit Height 的可视设计宽 = 屏宽 × 1280 / 屏高，不读设计宽。
+ * iPhone 14 Pro 393×852 约为 393*1280/852 ≈ 590，仍小于 640，640 的窗会左右被裁。
  * 只按可视宽缩小：scale = min(1, (visibleW - 2*side) / 640)。可视宽 ≥ 640 时为 1。
  * 不再乘 (720 - LIST_WINDOW_SIDE*2) / 640。那一步是 684/640 ≈ 1.069，会把窗放大。
  * Prefab 的 spr_bg 保持 640，不改成 590 或 720。全屏店景、岩洞由壳底图单独铺满。
