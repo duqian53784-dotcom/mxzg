@@ -1,6 +1,6 @@
 /**
  * 把主城顶底栏和地图视口拉到 view.getVisibleSize()。
- * 设计分辨率保持 720×1280，只 Fit Height。不要再勾 Fit Width（两个一起是 SHOW_ALL）。
+ * 设计分辨率是 640×1280，只 Fit Height。不要再勾 Fit Width（两个一起是 SHOW_ALL）。
  * 安全区仍可能把整层缩小。这里把主城根抵消那一层缩放，让本地像素等于屏幕像素。
  */
 import { Graphics, Node, Sprite, UITransform, view, Widget } from "cc";
@@ -157,7 +157,7 @@ export function stretchToParent(node: Node): void {
 }
 
 /**
- * 窄屏把 720 上的按钮和挂机顶栏内容往中间收，避免裁出屏幕。
+ * 窄屏把按 720 预制摆的按钮和挂机顶栏内容往中间收，避免裁出屏幕。
  * 宽屏不把它们拉开，只拉背景。
  */
 export function squeezeWideNode(node: Node, visibleW: number): void {

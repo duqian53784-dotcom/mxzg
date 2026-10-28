@@ -8,6 +8,7 @@
  * 不造假英雄、不造假道具、不发新协议。
  */
 import { BlockInputEvents, Button, Color, director, Director, Graphics, HorizontalTextAlignment, Label, Mask, Node, Overflow, Prefab, resources, ScrollView, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
+import { DESIGN_WIDTH } from "./safeAreaLayout";
 import { ConfigDb } from "../config/ConfigLoader";
 import { ErrorCode, errorText, messageOf } from "../core/errors";
 import { GameStore, StoreBagItem, StoreHero } from "../core/GameStore";
@@ -2451,7 +2452,7 @@ function writeWrap(root: Node, name: string, text: string): void {
   label.string = text;
   label.overflow = Overflow.RESIZE_HEIGHT;
   const wrapSize = positiveUiSize(node.getComponent(UITransform));
-  if (wrapSize && wrapSize.width < 8) assignContentSize(node.getComponent(UITransform), 720, 0);
+  if (wrapSize && wrapSize.width < 8) assignContentSize(node.getComponent(UITransform), DESIGN_WIDTH, 0);
 }
 
 function overlayHost(view: Node): Node {
@@ -2906,6 +2907,7 @@ function showBagInfo(view: Node, item: StoreBagItem): void {
       root.setSiblingIndex(Math.max(0, view.children.length - 1));
       const dim = root.getChildByName("dim");
       if (dim) {
+        // 锚点在中心、位置在 640×960 的 ccbi 中心。宽仍用 720，盖住 9:16 的可视宽。
         assignContentSize(dim.getComponent(UITransform), 720, 1100);
         dim.setPosition(320, 480, 0);
       } else GameLog.shared.warn("Bag", "InfoCard 下没有 dim");

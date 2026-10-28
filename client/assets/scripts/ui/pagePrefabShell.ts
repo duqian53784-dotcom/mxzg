@@ -108,6 +108,7 @@ export async function attachPagePrefabShell(page: Node, id: string): Promise<voi
       const dim = root.getChildByName("dim");
       if (dim) {
         dim.active = true;
+        // 9:16 的可视宽仍约 720。垫图按这个盖，不收成设计宽 640，否则左右露底。
         paintShellDim(dim, 720, 1280);
       } else GameLog.shared.warn("MainApp", "PagePrefabShell 下没有 dim");
     }
@@ -176,6 +177,7 @@ async function mountListBackdrop(page: Node, paths: string[]): Promise<void> {
   pack.name = "ListBackdrop";
   const dim = pack.getChildByName("ShellBackdropDim");
   const art = pack.getChildByName("ShellBackdrop");
+  // 第一帧按 9:16 可视宽铺。列表壳随后拉到真实可见尺寸。
   if (dim) paintListDim(dim, 720, 1280);
   else GameLog.shared.warn("MainApp", "ListBackdrop 下没有 ShellBackdropDim");
   if (!art) {
@@ -407,7 +409,8 @@ function raiseHangProbe(root: Node): void {
 }
 
 /**
- * 把 ccbi 根放进 720×1280 父节点中心，并修正九宫格底左角和按钮上的字。
+ * 把 ccbi 根放进父节点中心，并修正九宫格底左角和按钮上的字。
+ * 设计分辨率是 640×1280。壳预制仍可能是 720 宽，进场景后按可见尺寸铺。
  * 根锚点是 (0,0)。不要用 Widget 的水平/垂直居中，那会把底左角钉在画面中心。
  * 底板已经铺在 0..宽 里的壳，Prefab 根位置写成同一个偏移，编辑器里打开就在设计框中间。
  * 底板中心本来就在根锚点上的壳不要写这个偏移。
@@ -509,7 +512,7 @@ function adoptListBackdrop(root: Node): void {
   }
 }
 
-/** 底图铺满壳的可见框。羊皮纸仍按 720 留边，左右露出岩壁或店景。 */
+/** 底图铺满壳的可见框。羊皮纸保持 640，窄于可视宽时再缩小，左右露出岩壁或店景。 */
 function stretchListBackdrop(root: Node, width: number, height: number): void {
   if (!(width > 1) || !(height > 1)) return;
   const pack = root.getChildByName("ListBackdrop");
@@ -664,7 +667,7 @@ export function centerInParent(node: Node): void {
   node.setPosition(-(0.5 - ui.anchorX) * size.width, -(0.5 - ui.anchorY) * size.height, 0);
 }
 
-/** 底边落到 720×1280 底栏下面时，整页上移。短弹窗本来就在安全区里则不动。 */
+/** 底边落到 640×1280 底栏下面时，整页上移。短弹窗本来就在安全区里则不动。 */
 export function seatAboveChrome(node: Node): void {
   const ui = node.getComponent(UITransform);
   const size = positiveUiSize(ui);

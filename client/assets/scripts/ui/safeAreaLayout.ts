@@ -1,10 +1,12 @@
 /**
  * 安全区计算（不依赖 cc）。
- * 设计分辨率兜底与 project.json 一致：720×1280 竖屏。
+ * 设计分辨率兜底与 project.json 一致：640×1280 竖屏，只 Fit Height。
  * 运行时若 view 已经给出设计分辨率，用引擎的数，不用这里覆盖。
+ * Fit Height 的可视设计宽 = 屏宽 × 1280 / 屏高，不读设计宽。
+ * iPhone 14 Pro（393×852）仍约 590；9:16 仍约 720，比设计宽多出左右各 40。
  */
 
-export const DESIGN_WIDTH = 720;
+export const DESIGN_WIDTH = 640;
 export const DESIGN_HEIGHT = 1280;
 
 export interface SafeInsets {

@@ -42,6 +42,7 @@ import {
   planIdleWave,
 } from "./idleHangSkirmishPlan";
 import { place, uiNode } from "./UiKit";
+import { DESIGN_WIDTH } from "./safeAreaLayout";
 import { assignContentSize, uiSize } from "./visibleFit";
 
 const FOE_LATE_MS = 2600;
@@ -566,7 +567,7 @@ function layoutLoop(layer: Node | null, elapsed: number, speed: number): void {
 function layerWidth(layer: Node): number {
   const size = uiSize(layer.getComponent(UITransform));
   const width = size ? size.width : 0;
-  return width >= 2 ? width : 720;
+  return width >= 2 ? width : DESIGN_WIDTH;
 }
 
 function ensurePair(layer: Node, width: number): { a: Node; b: Node } {
