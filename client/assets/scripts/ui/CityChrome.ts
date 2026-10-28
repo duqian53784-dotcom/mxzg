@@ -10,7 +10,7 @@ import {
   spawnPrefab,
   tintSprite,
 } from "./prefabLoad";
-import { createButton, createLabel, createRect, paintRect, place, setText, uiNode } from "./UiKit";
+import { createButton, createLabel, paintRect, place, setText, uiNode } from "./UiKit";
 import { bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar, uiSize } from "./visibleFit";
 
 export type TabVisual = "selected" | "open" | "locked";
@@ -102,11 +102,9 @@ const PREFAB_TAB_LOCKED = new Color(160, 164, 176, 255);
 
 /**
  * main-scene_spr-bottom-bg 原始 640×129，Prefab 里 CUSTOM 拉到 720×129。
- * 左右装饰没有铺满：左侧约 9–25px 全透明，外缘描边约 (52, 30, 26)。
- * 拉宽后这块透出清屏黑。垫色取这条描边，避免透缝变成另一条色带。
+ * 底栏宽度至少按 724 拉这张图。不再在它后面铺一整条运行时色块。
  */
 const BOTTOM_BG_WIDTH = 724;
-const BOTTOM_PAD_COLOR = new Color(46, 26, 22, 255);
 
 /**
  * 底栏字图。副本的文件名是 skin，字是「副本」。
@@ -346,8 +344,8 @@ function mountTabIcon(button: Node, path: string): void {
 }
 
 /**
- * BottomBar/Bg 背后垫满底栏，盖住 640→屏宽的左右透边，以及贴图底边到屏幕底的缝。
- * 不改七个 Tab 的位置。顶栏原图左缘不透明，这里不垫。
+ * 底栏只用预制上的 Bg。不再铺运行时色块，避免七个键后面多一层深色垫。
+ * 不改七个 Tab 的位置。
  */
 function sealBottomBg(root: Node): void {
   const bg = requireNode(root, "BottomBar/Bg");
@@ -358,14 +356,10 @@ function sealBottomBg(root: Node): void {
   const barSize = uiSize(barUi);
   const bgSize = uiSize(ui);
   const barW = barSize && barSize.width > BOTTOM_BG_WIDTH ? barSize.width : BOTTOM_BG_WIDTH;
-  const barH = barSize && barSize.height > 0 ? barSize.height : 140;
   const height = bgSize && bgSize.height > 0 ? bgSize.height : 129;
   if (ui) ui.setContentSize(barW, height);
-  const pad = createRect("BgPad", barW, barH, BOTTOM_PAD_COLOR);
-  pad.setPosition(0, 0, 0);
-  const index = bg.getSiblingIndex();
-  pad.parent = bottom;
-  pad.setSiblingIndex(index);
+  const pad = bottom.getChildByName("BgPad");
+  if (pad) pad.active = false;
 }
 
 function paintLockLevel(lock: Node, level: number): void {

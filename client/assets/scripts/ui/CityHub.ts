@@ -22,7 +22,7 @@ import {
   MainCityPosFile,
   buildCityMapLayout,
   cityAtomLocked,
-  layerAnchorX,
+  layerCoverX,
   mapFramePath,
 } from "./cityMapLayout";
 import { startCityEffects, CityEffectHandle } from "./cityEffectPlay";
@@ -112,7 +112,12 @@ async function bindCityHub(
       if (!desc.parallax) continue;
       const node = views.get(desc.name);
       if (!node) continue;
-      placeBottomLeft(node, parallax, layerAnchorX(scroll, desc.parallax.ratio, desc.parallax.ox), desc.parallax.oy);
+      placeBottomLeft(
+        node,
+        parallax,
+        layerCoverX(scroll, desc.parallax.ratio, desc.parallax.ox, desc.ax, desc.w, desc.scale, layout.viewW),
+        desc.parallax.oy
+      );
     }
   };
 

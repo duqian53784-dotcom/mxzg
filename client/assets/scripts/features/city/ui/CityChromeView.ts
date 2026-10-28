@@ -7,7 +7,7 @@ import { UILayer } from "../../../framework/ui/UILayer";
 import { view } from "../../../framework/ui/UIRegistry";
 import { CityChrome, CityChromeActions, TabState } from "../../../ui/CityChrome";
 import { CITY_CHROME_PREFAB_PATH, bindClick, tintSprite } from "../../../ui/prefabLoad";
-import { createLabel, createRect, setText, uiNode } from "../../../ui/UiKit";
+import { createLabel, setText, uiNode } from "../../../ui/UiKit";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar, uiSize } from "../../../ui/visibleFit";
 import { CITY_CHROME_HOST, CITY_CHROME_VIEW_ID } from "../config/cityIds";
 import { mountCityChromeView } from "./cityMount";
@@ -18,7 +18,6 @@ const PREFAB_TAB_SELECTED = new Color(255, 210, 140, 255);
 const PREFAB_TAB_OPEN = new Color(255, 255, 255, 255);
 const PREFAB_TAB_LOCKED = new Color(160, 164, 176, 255);
 const BOTTOM_BG_WIDTH = 724;
-const BOTTOM_PAD_COLOR = new Color(46, 26, 22, 255);
 
 /**
  * 底栏字图。副本的文件名是 skin，字是「副本」。
@@ -300,7 +299,7 @@ export class CityChromeView extends BaseView<CityChromeOpenArgs> implements City
   }
 
   /**
-   * 底栏背景左右透边垫色。只动已经绑上的 Bg，不改七个 Tab 的位置。
+   * 底栏只用预制上的 Bg。不再铺运行时色块，避免七个键后面多一层深色垫。
    */
   private sealBottom(): void {
     const bg = this.requireNode(this.bottomBg, "BottomBar/Bg");
@@ -311,14 +310,10 @@ export class CityChromeView extends BaseView<CityChromeOpenArgs> implements City
     const barSize = uiSize(barUi);
     const bgSize = uiSize(ui);
     const barW = barSize && barSize.width > BOTTOM_BG_WIDTH ? barSize.width : BOTTOM_BG_WIDTH;
-    const barH = barSize && barSize.height > 0 ? barSize.height : 140;
     const height = bgSize && bgSize.height > 0 ? bgSize.height : 129;
     if (ui) ui.setContentSize(barW, height);
-    const pad = createRect("BgPad", barW, barH, BOTTOM_PAD_COLOR);
-    pad.setPosition(0, 0, 0);
-    const index = bg.getSiblingIndex();
-    pad.parent = bottom;
-    pad.setSiblingIndex(index);
+    const pad = bottom.getChildByName("BgPad");
+    if (pad) pad.active = false;
   }
 
   /**

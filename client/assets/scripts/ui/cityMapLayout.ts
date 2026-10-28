@@ -331,6 +331,34 @@ export function layerAnchorX(scroll: number, ratio: number, ox: number): number 
   return scroll * (ratio - 1) + ox;
 }
 
+/**
+ * 远景贴图比内容窄，按中线摆时拖到最左会露出页面底色。
+ * 层比视口宽就把贴图缘收到视口外。近景 ratio>1 的盒子故意比两张板宽，不在这里夹。
+ */
+export function layerCoverX(
+  scroll: number,
+  ratio: number,
+  ox: number,
+  ax: number,
+  width: number,
+  scale: number,
+  viewW: number
+): number {
+  const x = layerAnchorX(scroll, ratio, ox);
+  if (ratio > 1) return x;
+  const visualW = width * (scale > 0 ? scale : 1);
+  if (!(visualW > 0) || !(viewW > 0)) return x;
+  const viewLeft = -scroll;
+  const viewRight = viewLeft + viewW;
+  const leftOf = (anchorX: number) => anchorX - ax * visualW;
+  let next = x;
+  const left = leftOf(next);
+  if (left > viewLeft) next -= left - viewLeft;
+  const right = leftOf(next) + visualW;
+  if (right < viewRight) next += viewRight - right;
+  return next;
+}
+
 /** 图层锚点在窗口左下角坐标系里的 x。滚动距离乘速度。 */
 export function layerWindowX(scroll: number, ratio: number, ox: number): number {
   return scroll * ratio + ox;

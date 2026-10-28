@@ -17,7 +17,7 @@ import {
   MainCityPosFile,
   buildCityMapLayout,
   cityAtomLocked,
-  layerAnchorX,
+  layerCoverX,
   mapFramePath,
 } from "../../../ui/cityMapLayout";
 import { CITY_HUB_PREFAB_PATH, bindClick } from "../../../ui/prefabLoad";
@@ -328,7 +328,12 @@ export class CityHubView extends BaseView<CityHubOpenArgs> {
       if (!desc.parallax) continue;
       const node = this.views.get(desc.name);
       if (!node) continue;
-      this.placeBottomLeft(node, this.parallax, layerAnchorX(this.scroll, desc.parallax.ratio, desc.parallax.ox), desc.parallax.oy);
+      this.placeBottomLeft(
+        node,
+        this.parallax,
+        layerCoverX(this.scroll, desc.parallax.ratio, desc.parallax.ox, desc.ax, desc.w, desc.scale, this.layout.viewW),
+        desc.parallax.oy
+      );
     }
   }
 
