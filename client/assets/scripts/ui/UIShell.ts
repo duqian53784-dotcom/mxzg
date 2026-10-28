@@ -1,5 +1,6 @@
 import { Layers, Node, UITransform } from "cc";
 import { PageStack } from "./PageStack";
+import { UIManager } from "./view/UIManager";
 import { PopupQueue } from "./PopupQueue";
 import { bindSafeArea, SafeAreaBinding } from "./SafeArea";
 import { StackView } from "./StackView";
@@ -99,6 +100,10 @@ function toView(node: Node): StackView {
       node.active = visible;
     },
     dispose() {
+      if (UIManager.instance.retainOnClose(node)) {
+        node.removeFromParent();
+        return;
+      }
       if (node.isValid) node.destroy();
     },
   };
