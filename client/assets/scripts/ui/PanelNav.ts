@@ -14,12 +14,19 @@ export interface PanelHost<T> {
  */
 export class PanelNav<T> {
   readonly history = new NavHistory();
+  /** 真的要切页时调用。已经在这一页上的点击不会进来。 */
+  private beforeOpen: ((id: string) => void) | null = null;
 
   constructor(
     private readonly host: PanelHost<T>,
     private readonly create: (id: string) => T,
     private readonly onClose: (id: string) => void = () => {}
   ) {}
+
+  /** 切页前丢掉别的未完成打开。MainApp 用来取消还在加载的背包。 */
+  setBeforeOpen(fn: (id: string) => void): void {
+    this.beforeOpen = fn;
+  }
 
   get current(): string | null {
     return this.history.current;
@@ -36,6 +43,7 @@ export class PanelNav<T> {
 
   openRoot(id: string): void {
     if (this.history.current === id) return;
+    if (this.beforeOpen) this.beforeOpen(id);
     this.popTo(CITY_TAB);
     if (id === CITY_TAB) return;
     this.push(id);
@@ -43,6 +51,7 @@ export class PanelNav<T> {
 
   openChild(id: string): void {
     if (this.history.current === id) return;
+    if (this.beforeOpen) this.beforeOpen(id);
     this.push(id);
   }
 

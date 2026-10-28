@@ -1,0 +1,67 @@
+import { _decorator, Button, Component, Label, Node } from "cc";
+import { StoreBagItem } from "../../../core/GameStore";
+import { itemIconResource, itemProfile } from "../../../config/gameCatalog";
+import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
+
+const { ccclass, property } = _decorator;
+
+/**
+ * BackpackItemCell 上的格子。框、图标、数量、选中都是预制里绑好的。
+ */
+@ccclass("BackpackItemCellView")
+export class BackpackItemCellView extends Component {
+  @property(Node)
+  frame: Node | null = null;
+
+  @property(Node)
+  icon: Node | null = null;
+
+  @property(Label)
+  count: Label | null = null;
+
+  @property(Node)
+  selectMark: Node | null = null;
+
+  show(item: StoreBagItem | null, selected: boolean, onTap: (() => void) | null): void {
+    if (this.selectMark) this.selectMark.active = selected;
+    if (!item) {
+      if (this.frame) {
+        this.frame.active = true;
+        paintSpritePaths(this.frame, [SLOT_PLATE]);
+      }
+      if (this.icon) this.icon.active = false;
+      if (this.count) {
+        this.count.node.active = false;
+        this.count.string = "";
+      }
+    } else {
+      const profile = itemProfile(item.itemType, item.itemId);
+      if (this.frame) paintSpritePaths(this.frame, [rareFrame(profile ? profile.rare : 0)]);
+      if (this.icon) {
+        this.icon.active = true;
+        const path = itemIconResource(item.itemType, item.itemId);
+        if (path) paintSpritePaths(this.icon, [path, "ui/bag/backpack_spr-default"]);
+        else if (item.itemId) paintSpritePaths(this.icon, ["ui/bag/backpack_" + item.itemId, "ui/bag/backpack_spr-default"]);
+        else paintSpritePaths(this.icon, ["ui/bag/backpack_spr-default"]);
+      }
+      if (this.count) {
+        const text = item.num === null ? "" : String(item.num);
+        this.count.string = text;
+        this.count.node.active = text.length > 0;
+      }
+    }
+    if (!onTap) return;
+    if (!this.node.getComponent(Button)) this.node.addComponent(Button);
+    this.node.on(Button.EventType.CLICK, onTap);
+  }
+}
+
+/** 空槽和 0 稀有都用 common 的底图。稀有文字图和细金框不是格子底。 */
+const SLOT_PLATE = "ui/common/other_rare-0";
+
+function rareFrame(rare: number): string {
+  let level = Math.floor(rare);
+  if (level > 6) level = 6;
+  if (level < 1) level = 0;
+  return "ui/common/other_rare-" + level;
+}

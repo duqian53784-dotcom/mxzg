@@ -41,6 +41,9 @@ import { installGmHotkey, openGmDebug, uninstallGmHotkey } from "../features/gm/
 import { attachPagePrefabShell, HANG_PROBE_EVENT, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
 import { pagePrefabShell } from "./prefabShellMap";
 import { beginPageOpen } from "./uiOpenLog";
+import { BackpackView } from "../features/backpack/ui/BackpackView";
+import { useBackpackView } from "../features/backpack/config/BackpackFeatureFlag";
+import { isOpenCancelled, UIManager } from "../framework/ui/UIManager";
 import { WIRE_ILLUSTRAT_UNSYNCED_TOAST } from "../net/protocol/wireIllustrat";
 import { WIRE_PET_UNSYNCED_TOAST } from "../net/protocol/wirePet";
 import { WIRE_WORLD_UNSYNCED_TOAST } from "../net/protocol/wireWorld";
@@ -170,6 +173,15 @@ export class MainApp extends Component {
       (id) => this.presentPage(id),
       (id) => this.noteClose(id)
     );
+    this.panels.setBeforeOpen((id) => {
+      UIManager.instance.keepOnly(id);
+    });
+    UIManager.instance.install(this.panels, {
+      showToast: (text, durationMs) => shell.showToast(text, durationMs),
+      onPageOpened: () => {
+        this.refreshChrome();
+      },
+    });
     this.panels.start(this.buildCity());
     if (!ConfigDb.current) {
       try {
@@ -244,6 +256,11 @@ export class MainApp extends Component {
       return;
     }
     if (id === "bag") {
+      if (useBackpackView() && this.panels?.current === "bag") {
+        UIManager.instance.close();
+        this.refreshChrome();
+        return;
+      }
       this.openChild(id);
       return;
     }
@@ -270,6 +287,13 @@ export class MainApp extends Component {
       (id === "arena" || id === "tower" || id === "daily" || id === "login7" || id === "goal7" || id === "wish" || id === "cafe" || id === "gift" || id === "limited") &&
       !this.ensureNet()
     ) {
+      return;
+    }
+    if (id === "bag" && useBackpackView()) {
+      void UIManager.instance.open(BackpackView).catch((err) => {
+        if (isOpenCancelled(err)) return;
+        GameLog.shared.error("MainApp", "背包页没有打开 " + messageOf(err));
+      });
       return;
     }
     this.panels?.openChild(id);
@@ -300,6 +324,8 @@ export class MainApp extends Component {
    * ?dev=wire 才留着探针，并且不再盖挂机壳。
    */
   private presentPage(id: string): Node {
+    const viewHost = UIManager.instance.createPageHost(id);
+    if (viewHost) return viewHost;
     const expectsPrefab = id === "mainline" || (USE_PAGE_PREFAB_SHELL && id !== CITY_TAB && pagePrefabShell(id) !== null);
     beginPageOpen(id, expectsPrefab, "MainApp");
     const page = this.buildPage(id);
@@ -2099,6 +2125,7 @@ export class MainApp extends Component {
 
   private noteClose(id: string): void {
     if (id === CITY_HUB_MORE_ID) this.mainButton = null;
+    UIManager.instance.noteClosed(id);
   }
 
   private detachWire(): void {
