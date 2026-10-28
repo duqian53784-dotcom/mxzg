@@ -50,18 +50,26 @@ export function sliceAnchorShift(box: CcbiBox, frame: CcbiFrame): { x: number; y
 }
 
 /**
- * 英雄列表 / 背包的 ccbi 窗在 720×1280 里保持设计缩放 1。
- * 日服是 640×1280 FIXED_HEIGHT，整屏 global_scale 已经是 winW/640；
- * ccbi 窗本身不再乘 (720 - LIST_WINDOW_SIDE*2) / 640。那一步是 684/640 ≈ 1.069，
- * Inspector 里 BackpackLayer / HeroListLayer 的额外缩放就是它。
- * 全屏店景、岩洞由壳底图单独铺满。上下也不把九宫格拉到顶栏和底栏，
- * 拉高会把羊皮纸撑成空壳，并把店员顶出画面。
+ * 日服是 640 设计宽 + FIXED_HEIGHT，羊皮纸 640 就是满设计宽。
+ * 国服设计分辨率 720×1280，只 Fit Height。窄机长屏的可视设计宽会小于 640
+ * （iPhone 14 Pro 393×852 约为 393*1280/852 ≈ 590），640 的窗会左右被裁。
+ * 只按可视宽缩小：scale = min(1, (visibleW - 2*side) / 640)。可视宽 ≥ 640 时为 1。
+ * 不再乘 (720 - LIST_WINDOW_SIDE*2) / 640。那一步是 684/640 ≈ 1.069，会把窗放大。
+ * Prefab 的 spr_bg 保持 640，不改成 590 或 720。全屏店景、岩洞由壳底图单独铺满。
+ * 上下也不把九宫格拉到顶栏和底栏。
  * 根锚点在底边（ccbi 列表根是 0）。bg 坐标是修复九宫格之后的锚点位置。
- * LIST_WINDOW_* 只记下顶栏底栏的设计带，铺窗时不再用它改缩放。
+ * LIST_WINDOW_* 只记下顶栏底栏的设计带，不拿它把窗放大。
  */
 export const LIST_WINDOW_TOP = 470;
 export const LIST_WINDOW_BOTTOM = -480;
 export const LIST_WINDOW_SIDE = 18;
+/** 羊皮纸设计宽。日服面板宽，Prefab spr_bg 的宽。 */
+export const PARCHMENT_PANEL_W = 640;
+/**
+ * 左右各留的设计像素。0 时缩完的外宽等于可视设计宽。
+ * iPhone 14 Pro 上眼检过：外宽等于可视宽（约 590）才不裁。再扣边会比那次更窄。
+ */
+export const PARCHMENT_FIT_SIDE = 0;
 
 export interface ListWindowInput {
   rootW: number;
@@ -70,6 +78,20 @@ export interface ListWindowInput {
   bgY: number;
   bgAy: number;
   bgH: number;
+  /** Fit Height 下的可视设计宽。不传则保持缩放 1，方便对照未缩放的设计坐标。 */
+  visibleW?: number;
+  /** 左右各留的设计像素。不传用 PARCHMENT_FIT_SIDE。 */
+  side?: number;
+}
+
+/** 窄屏把 640 羊皮纸收进可视设计宽。可视宽 ≥ 640，或宽度无效时，返回 1。 */
+export function parchmentFitScale(visibleDesignWidth: number, side = PARCHMENT_FIT_SIDE): number {
+  if (!(visibleDesignWidth > 0)) return 1;
+  const gutter = side > 0 ? side : 0;
+  const room = visibleDesignWidth - gutter * 2;
+  if (!(room > 0)) return 1;
+  const scale = room / PARCHMENT_PANEL_W;
+  return scale < 1 ? scale : 1;
 }
 
 export interface ListWindowSpread {
@@ -83,7 +105,7 @@ export interface ListWindowSpread {
 
 export function listWindowSpread(input: ListWindowInput): ListWindowSpread {
   const rootH = input.rootH > 1 ? input.rootH : 960;
-  const scale = 1;
+  const scale = typeof input.visibleW === "number" ? parchmentFitScale(input.visibleW, input.side) : 1;
   const rootY = -(0.5 - input.anchorY) * rootH * scale;
   const bgH = input.bgH > 1 ? input.bgH : 1;
   const bgBottom = input.bgY - input.bgAy * bgH;

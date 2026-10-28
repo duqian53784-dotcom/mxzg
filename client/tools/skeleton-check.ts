@@ -35,7 +35,7 @@ import {
   MainCityPosFile,
 } from "../assets/scripts/ui/cityMapLayout";
 import { horizontalFillMargins, widthSqueeze } from "../assets/scripts/ui/visibleChrome";
-import { growAnchorDelta, labelCenterInParent, listWindowSpread, sliceAnchorShift } from "../assets/scripts/ui/ccbiPlace";
+import { growAnchorDelta, labelCenterInParent, listWindowSpread, parchmentFitScale, sliceAnchorShift } from "../assets/scripts/ui/ccbiPlace";
 import { isP1ProgressStatus, pagePrefabShell } from "../assets/scripts/ui/prefabShellMap";
 import {
   attachReadonlyCityEntry,
@@ -27238,6 +27238,49 @@ function checkCityHub(): void {
       Math.abs(bagWindow.screenBottom - -494.25) < 0.05,
     "hero and bag ccbi windows stay at design scale 1 and are not spread to 684"
   );
+  const iphoneVisibleW = (393 * 1280) / 852;
+  const iphoneBag = listWindowSpread({
+    rootW: 640,
+    rootH: 960,
+    anchorY: 0,
+    bgY: -14.25,
+    bgAy: 0,
+    bgH: 734.4,
+    visibleW: iphoneVisibleW,
+  });
+  const designBag = listWindowSpread({
+    rootW: 640,
+    rootH: 960,
+    anchorY: 0,
+    bgY: -14.25,
+    bgAy: 0,
+    bgH: 734.4,
+    visibleW: 720,
+  });
+  const wideBag = listWindowSpread({
+    rootW: 640,
+    rootH: 960,
+    anchorY: 0,
+    bgY: -14.25,
+    bgAy: 0,
+    bgH: 734.4,
+    visibleW: 800,
+  });
+  assert(
+    parchmentFitScale(720) === 1 &&
+      parchmentFitScale(800) === 1 &&
+      parchmentFitScale(0) === 1 &&
+      Math.abs(parchmentFitScale(iphoneVisibleW) - iphoneVisibleW / 640) < 0.000001 &&
+      Math.abs(parchmentFitScale(590) - 590 / 640) < 0.000001 &&
+      iphoneBag.scale < 1 &&
+      Math.abs(iphoneBag.scale - iphoneVisibleW / 640) < 0.000001 &&
+      Math.abs(iphoneBag.screenBottom - -494.25 * iphoneBag.scale) < 0.05 &&
+      designBag.scale === 1 &&
+      wideBag.scale === 1 &&
+      designBag.extraTop === 0 &&
+      designBag.extraBottom === 0,
+    "narrow fit-height phones shrink the 640 parchment and wider previews stay at scale 1"
+  );
   assert(
     growAnchorDelta(0.5, 142, 75) === 33.5 && growAnchorDelta(0, 10, 20) === -20 && growAnchorDelta(1, 10, 20) === 10,
     "parchment grow keeps the top and bottom edges"
@@ -27309,12 +27352,16 @@ function checkCityHub(): void {
   const fitEnd = fillSrc.indexOf("function watchParchment");
   const fitBody = fitAt >= 0 && fitEnd > fitAt ? fillSrc.slice(fitAt, fitEnd) : "";
   assert(
-    placeSrc.indexOf("const scale = 1") >= 0 &&
+    placeSrc.indexOf("return scale < 1 ? scale : 1") >= 0 &&
+      placeSrc.indexOf("PARCHMENT_PANEL_W = 640") >= 0 &&
+      placeSrc.indexOf("PARCHMENT_FIT_SIDE = 0") >= 0 &&
       placeSrc.indexOf("targetW / rootW") < 0 &&
-      fitBody.indexOf("view.setScale(1, 1, 1)") >= 0 &&
-      fitBody.indexOf("setScale(spread.scale") < 0 &&
-      fitBody.indexOf("growNode") < 0,
-    "list window stays at design scale 1 and fit does not write 684/640 onto the layer"
+      fitBody.indexOf("view.setScale(scale, scale, 1)") >= 0 &&
+      fitBody.indexOf("view.setScale(1, 1, 1)") < 0 &&
+      fitBody.indexOf("visibleW: visible.width") >= 0 &&
+      fitBody.indexOf("growNode") < 0 &&
+      shellSrc.indexOf("seatParchmentList(node)") >= 0,
+    "parchment shrinks to the visible design width and does not enlarge to 684"
   );
   const roleFill = hangBarFillBox("ui/city/main-scene_progress-role-exp");
   const afkFill = hangBarFillBox("ui/city/main-scene_progress-AFK");
