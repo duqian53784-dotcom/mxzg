@@ -6,6 +6,7 @@ import { BaseView } from "../../../framework/ui/BaseView";
 import { UILayer } from "../../../framework/ui/UILayer";
 import { view } from "../../../framework/ui/UIRegistry";
 import { CityChrome, CityChromeActions, isCityTab, layoutCityTab, prepareCityTab, setCityTabSelected, TabState } from "../../../ui/CityChrome";
+import { tabPaintState } from "../../../ui/cityTabScale";
 import { CITY_CHROME_PREFAB_PATH, bindClick, tintSprite } from "../../../ui/prefabLoad";
 import { createLabel, setText, uiNode } from "../../../ui/UiKit";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar, uiSize } from "../../../ui/visibleFit";
@@ -204,12 +205,14 @@ export class CityChromeView extends BaseView<CityChromeOpenArgs> implements City
   }
 
   setTabs(tabs: TabState[]): void {
+    const paint = tabPaintState(tabs.map((tab) => tab.state));
     for (let i = 0; i < tabs.length; i++) {
       const tab = tabs[i];
       const button = this.tabs[tab.id];
       if (!button) continue;
-      setCityTabSelected(button, tab.state === "selected");
-      tintSprite(button, prefabTabColor(tab.state));
+      const state = paint[i] === "locked" ? "locked" : paint[i] === "selected" ? "selected" : "open";
+      setCityTabSelected(button, state === "selected");
+      tintSprite(button, prefabTabColor(state));
       const lock = button.getChildByName("Lock");
       if (lock) {
         const locked = tab.state === "locked";

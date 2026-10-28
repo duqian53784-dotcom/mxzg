@@ -11,7 +11,7 @@ import {
   tintSprite,
 } from "./prefabLoad";
 import { createButton, createLabel, paintRect, place, setText, uiNode } from "./UiKit";
-import { TAB_REST_SIZE, tabVisualScale } from "./cityTabScale";
+import { TAB_REST_SIZE, tabPaintState, tabVisualScale } from "./cityTabScale";
 import { widthSqueeze } from "./visibleChrome";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar, uiSize } from "./visibleFit";
 
@@ -225,13 +225,15 @@ function bindCityChromePrefab(root: Node, onTab: (id: string) => void, actions: 
       paintAvatar(root, icon);
     },
     setTabs(tabs: TabState[]): void {
+      const paint = tabPaintState(tabs.map((tab) => tab.state));
       for (let i = 0; i < tabs.length; i++) {
         const tab = tabs[i];
         const button = buttons[tab.id];
         if (!button) continue;
+        const state = paint[i] === "locked" ? "locked" : paint[i] === "selected" ? "selected" : "open";
         // 字图保持「副本」。不要把「锁·」写进 84px 的 Label，挤开会像「领·副本」。
-        setCityTabSelected(button, tab.state === "selected");
-        tintSprite(button, prefabTabColor(tab.state));
+        setCityTabSelected(button, state === "selected");
+        tintSprite(button, prefabTabColor(state));
         const lock = button.getChildByName("Lock");
         if (lock) {
           const locked = tab.state === "locked";

@@ -4,7 +4,7 @@ import { PageStack } from "./PageStack";
 import { UIManager } from "../framework/ui/UIManager";
 import { PopupQueue } from "./PopupQueue";
 import { bindSafeArea, SafeAreaBinding } from "./SafeArea";
-import { BAR_SLIDE_MS, SlideCapture, slideOffset, slideTravel } from "./barSlide";
+import { BAR_SLIDE_MS, BAR_SLIDE_READY_MS, pageContentReady, SlideCapture, slideOffset, slideTravel } from "./barSlide";
 import { StackView } from "./StackView";
 import { Toast } from "./Toast";
 import { uiNode } from "./UiKit";
@@ -29,6 +29,7 @@ export class UIShell {
   private safeBinding: SafeAreaBinding | null = null;
   private capture: SlideCapture<Node> | null = null;
   private playing: BarSlide | null = null;
+  private readyTimer: ReturnType<typeof setTimeout> | null = null;
 
   private constructor(canvas: Node) {
     this.pageLayer = this.makeLayer(canvas, "LayerPage");
@@ -67,6 +68,11 @@ export class UIShell {
 
   barSlideWaiting(): boolean {
     return !!this.capture && this.capture.waiting && !this.capture.sawPage;
+  }
+
+  /** 正在等页就绪，或正在滑。这段时间底栏连点直接丢掉，避免把过场收成瞬切。 */
+  barSlideBusy(): boolean {
+    return this.capture !== null || this.playing !== null;
   }
 
   /** 同步切页走完后调用。还在等背包时先留着。 */
@@ -165,6 +171,7 @@ export class UIShell {
   }
 
   dispose(): void {
+    this.stopReadyWait();
     if (this.playing) {
       if (this.playing.timer) clearTimeout(this.playing.timer);
       this.playing = null;
@@ -190,6 +197,7 @@ export class UIShell {
   }
 
   private dropCapture(): void {
+    this.stopReadyWait();
     const cap = this.capture;
     this.capture = null;
     if (!cap) return;
@@ -197,11 +205,17 @@ export class UIShell {
     for (let i = 0; i < notes.length; i++) notes[i]();
   }
 
-  private beginMotion(snap: boolean): void {
+  private beginMotion(snap: boolean, force = false): void {
     const cap = this.capture;
     if (!cap) return;
+    const incomingNow = cap.incoming();
+    if (!snap && !force && incomingNow && incomingNow.isValid && !pageContentReady(childNames(incomingNow))) {
+      this.scheduleReady(cap);
+      return;
+    }
+    this.stopReadyWait();
     this.capture = null;
-    const incoming = cap.incoming();
+    const incoming = incomingNow;
     const outgoing = cap.outgoing;
     const drops = cap.immediateDrops();
     for (let i = 0; i < drops.length; i++) releasePage(drops[i]);
@@ -245,6 +259,35 @@ export class UIShell {
     GameLog.shared.info("UIShell", play.dir > 0 ? "底栏切页 从右进" : "底栏切页 从左进");
     this.apply(play, 0);
     this.tick(play, Date.now());
+  }
+
+  /** 旧页先停在原地。下一页出现 PagePrefabShell（或主城/背包内容）后再滑。 */
+  private scheduleReady(cap: SlideCapture<Node>): void {
+    if (this.readyTimer) return;
+    const started = Date.now();
+    const step = () => {
+      this.readyTimer = null;
+      if (this.capture !== cap) return;
+      const incoming = cap.incoming();
+      if (!incoming || !incoming.isValid) {
+        this.beginMotion(true);
+        return;
+      }
+      const ready = pageContentReady(childNames(incoming));
+      if (ready || Date.now() - started >= BAR_SLIDE_READY_MS) {
+        if (!ready) GameLog.shared.info("UIShell", "底栏切页等待超时，仍开始滑");
+        this.beginMotion(false, true);
+        return;
+      }
+      this.readyTimer = later(step, 16);
+    };
+    this.readyTimer = later(step, 16);
+  }
+
+  private stopReadyWait(): void {
+    if (!this.readyTimer) return;
+    clearTimeout(this.readyTimer);
+    this.readyTimer = null;
   }
 
   private tick(play: BarSlide, started: number): void {
@@ -349,6 +392,14 @@ function spotOf(node: Node): Spot {
     y: pos && typeof pos.y === "number" ? pos.y : 0,
     z: pos && typeof pos.z === "number" ? pos.z : 0,
   };
+}
+
+function childNames(node: Node): string[] {
+  const kids = node.children;
+  if (!kids) return [];
+  const names: string[] = [];
+  for (let i = 0; i < kids.length; i++) names.push(kids[i].name);
+  return names;
 }
 
 function uiWidth(node: Node): number {
