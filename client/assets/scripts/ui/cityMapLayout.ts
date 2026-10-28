@@ -321,9 +321,10 @@ export function frameSize(layer: number, piece: number, variant: number): FrameS
 }
 
 /**
- * 近景右板要比视口多探出这么多，避免贴图像素刚好卡在视口缘上，滤出后面的天空。
+ * 近景右板要比视口多探出这么多。
+ * 树图右缘有大约 18px 的透明缺口，只贴齐视口仍会露出后面的天空和远景。
  */
-export const CITY_EDGE_BLEED = 16;
+export const CITY_EDGE_BLEED = 32;
 
 /**
  * 近景第二张（树/柱）的右锚，速度沿用视差近景。

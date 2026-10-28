@@ -6,6 +6,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { cityViewFromSearch, setUseCityView, useCityView } from "../assets/scripts/features/city/config/CityFeatureFlag";
 import { buildCityMapLayout, CITY_EDGE_BLEED, findCityNode, layerAnchorX, layerCoverX } from "../assets/scripts/ui/cityMapLayout";
+import { TAB_SELECTED_SCALE, tabVisualScale } from "../assets/scripts/ui/cityTabScale";
 
 const root = process.cwd();
 
@@ -141,6 +142,8 @@ function checkSources(): void {
   assert(chrome.indexOf('getChildByName("BgPad")') >= 0, "new chrome turns an existing BgPad off");
   const oldChrome = read("client/assets/scripts/ui/CityChrome.ts");
   assert(oldChrome.indexOf('createRect("BgPad"') < 0, "old chrome does not paint a BgPad");
+  assert(oldChrome.indexOf('setCityTabSelected(button, tab.state === "selected")') >= 0, "old chrome scales the selected tab");
+  assert(oldChrome.indexOf("layoutCityTab") >= 0 && oldChrome.indexOf("prepareCityTab") >= 0, "old chrome normalizes battle then scales the selection");
   assert(hub.indexOf("layerCoverX") >= 0, "hub keeps far layers over the viewport");
   const skyLeft = layerCoverX(0, 0.63, 750, 0.5, 1200, 1.2, 640);
   const skyLeftEdge = skyLeft - 0.5 * 1200 * 1.2;
@@ -157,11 +160,15 @@ function checkSources(): void {
   for (let i = 0; i < NARROW_VIEWS.length; i++) {
     const overhang = rightTreeOverhang(NARROW_VIEWS[i]);
     assert(overhang >= CITY_EDGE_BLEED - 0.01, "right tree passes the viewport at width " + NARROW_VIEWS[i]);
-    assert(overhang < 48, "right tree stays on the cut building at width " + NARROW_VIEWS[i]);
+    assert(overhang < 64, "right tree stays on the cut building at width " + NARROW_VIEWS[i]);
   }
   const leftPlate = findCityNode(buildCityMapLayout(null, null, null, { viewW: 590, viewH: 1280 }), "spr_map_bg1_1");
   assert(leftPlate !== null && leftPlate.x === 0 && leftPlate.ax === 0, "left foreground plate stays on the content left");
   assert(chrome.indexOf("main-scene-lang_lbl-fetters-unlock") >= 0, "chrome keeps the VIP caption");
+  assert(Math.abs(TAB_SELECTED_SCALE - 96 / 78) < 1e-6, "selected tab scale is 96/78");
+  assert(tabVisualScale(true) > tabVisualScale(false) * 1.2 && tabVisualScale(false) === 1, "only the selected tab grows");
+  assert(chrome.indexOf('setCityTabSelected(button, tab.state === "selected")') >= 0, "new chrome scales the selected tab");
+  assert(chrome.indexOf("layoutCityTab") >= 0, "new chrome keeps the selected scale after fit");
   const oldHub = read("client/assets/scripts/ui/CityHub.ts");
   assert(oldHub.indexOf("export async function mountCityHubPrefab") >= 0, "old hub mount stays");
   assert(oldHub.indexOf("export function primeCityHub") >= 0, "primeCityHub stays");
