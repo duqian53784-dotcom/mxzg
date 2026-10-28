@@ -410,7 +410,7 @@ function pinShell(root: Node, page: Node): void {
 }
 
 /** 左侧空地。不挡中间「战斗」和底栏三钮。按住约 0.7 秒才打开探针。 */
-function bindHangProbe(root: Node, page: Node): void {
+export function bindHangProbe(root: Node, page: Node): void {
   const spot = root.getChildByName("HangProbeHotspot");
   if (!spot) {
     GameLog.shared.warn("Mainline", "PagePrefabShell 下没有 HangProbeHotspot");
