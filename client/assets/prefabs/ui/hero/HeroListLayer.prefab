@@ -64,6 +64,9 @@
     "_components": [
       {
         "__id__": 2
+      },
+      {
+        "__id__": 162
       }
     ],
     "_prefab": {
@@ -4038,5 +4041,65 @@
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "h5se2R8P9MV4W1EvqLAVWQ"
+  }
+,
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "heroListViewComp001"
+  },
+  {
+    "__type__": "28f22R+vDlJL4gbPsXioi1X",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 161
+    },
+    "_id": "",
+    "btnHero": {
+      "__id__": 38
+    },
+    "btnBook": {
+      "__id__": 52
+    },
+    "btnDragon": {
+      "__id__": 66
+    },
+    "heroTitle": {
+      "__id__": 44
+    },
+    "bookTitle": {
+      "__id__": 58
+    },
+    "dragonTitle": {
+      "__id__": 72
+    },
+    "tabMenu": {
+      "__id__": 27
+    },
+    "hitLineup": {
+      "__id__": 73
+    },
+    "hitBubbleMenu": {
+      "__id__": 143
+    },
+    "bubble": {
+      "__id__": 121
+    },
+    "layerCapacity": {
+      "__id__": 105
+    },
+    "boardPrefab": {
+      "__uuid__": "d3a470c0-fa13-47fa-811e-f38c7317e9d8",
+      "__expectedType__": "cc.Prefab"
+    },
+    "cellPrefab": {
+      "__uuid__": "e7c1a4b0-6d28-4f53-9c11-2a8b7e6d5c40",
+      "__expectedType__": "cc.Prefab"
+    }
   }
 ]

@@ -68,6 +68,9 @@
       },
       {
         "__id__": 5
+      },
+      {
+        "__id__": 92
       }
     ],
     "_prefab": {
@@ -2168,5 +2171,62 @@
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "tfuBPuodQ7wibrtDVvmj4Q"
+  }
+,
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "heroIconCellComp001"
+  },
+  {
+    "__type__": "5bd8cTf57dE95mY0LNmj8Db",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 91
+    },
+    "_id": "",
+    "face": {
+      "__id__": 19
+    },
+    "nameLabel": {
+      "__id__": 29
+    },
+    "elem": {
+      "__id__": 31
+    },
+    "stars": [
+      {
+        "__id__": 37
+      },
+      {
+        "__id__": 43
+      },
+      {
+        "__id__": 49
+      },
+      {
+        "__id__": 55
+      },
+      {
+        "__id__": 61
+      }
+    ],
+    "levelLabel": {
+      "__id__": 71
+    },
+    "lock": {
+      "__id__": 73
+    },
+    "battle": {
+      "__id__": 79
+    },
+    "mark": {
+      "__id__": 89
+    }
   }
 ]

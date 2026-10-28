@@ -45,6 +45,8 @@ import { beginPageOpen } from "./uiOpenLog";
 import { BackpackView } from "../features/backpack/ui/BackpackView";
 import { useBackpackView } from "../features/backpack/config/BackpackFeatureFlag";
 import { useCityView } from "../features/city/config/CityFeatureFlag";
+import { useHeroView } from "../features/hero/config/HeroFeatureFlag";
+import { HeroListView } from "../features/hero/ui/HeroListView";
 import { CITY_CHROME_HOST, CITY_CHROME_VIEW_ID, CITY_MAP_HOST, CITY_VIEW_ID } from "../features/city/config/cityIds";
 import { CityChromeView } from "../features/city/ui/CityChromeView";
 import { CityHubView } from "../features/city/ui/CityHubView";
@@ -306,6 +308,17 @@ export class MainApp extends Component {
       if (fromBar && !this.shell?.barSlideWaiting()) this.sealBarSlide();
       return;
     }
+    if (id === "hero" && useHeroView()) {
+      if (this.panels?.current === "hero") return;
+      GameLog.shared.info("MainApp", "tab " + id);
+      if (this.blockWirePage(id)) return;
+      if (!this.allow(id)) return;
+      if (Session.source !== "wire" && !this.ensureNet()) return;
+      arm();
+      this.openHeroView(true);
+      if (fromBar && !this.shell?.barSlideWaiting()) this.sealBarSlide();
+      return;
+    }
     GameLog.shared.info("MainApp", "tab " + id);
     if (this.blockWirePage(id)) return;
     if (!this.allow(id)) return;
@@ -368,8 +381,38 @@ export class MainApp extends Component {
       });
       return;
     }
+    if (id === "hero" && useHeroView()) {
+      this.openHeroView(false);
+      return;
+    }
     this.panels?.openChild(id);
     this.refreshChrome();
+  }
+
+  /**
+   * 底栏英雄先回到主城再打开，和原来的 openRoot 一样。
+   * 从别的页跳进来时不拆掉下面那一层。
+   * 预制还没进栈时不刷底栏。打开失败只丢掉还没开始的过场。
+   */
+  private openHeroView(asRoot: boolean): void {
+    if (asRoot) this.popAboveCity();
+    this.shell?.holdBarSlide();
+    void UIManager.instance.open(HeroListView).catch((err) => {
+      this.shell?.dropWaitingBarSlide("hero");
+      if (isOpenCancelled(err)) return;
+      GameLog.shared.error("MainApp", "英雄页没有打开 " + messageOf(err));
+    });
+  }
+
+  /** 底栏切到英雄时，先关掉盖在主城上的页。不走 MainApp.back，避免把过场取消掉。 */
+  private popAboveCity(): void {
+    const panels = this.panels;
+    if (!panels) return;
+    let guard = 0;
+    while (panels.current && panels.current !== CITY_TAB && guard < 16) {
+      if (!panels.back()) break;
+      guard += 1;
+    }
   }
 
   private back(): void {
@@ -2087,6 +2130,10 @@ export class MainApp extends Component {
     }
     if (jump === "hero" && Session.source === "wire") {
       if (!this.allow("hero")) return;
+      if (useHeroView()) {
+        this.openHeroView(false);
+        return;
+      }
       this.panels?.openChild("hero");
       this.refreshChrome();
       return;
@@ -2105,6 +2152,10 @@ export class MainApp extends Component {
     if (jump === "hero" || jump === "summon") {
       if (!this.allow(jump)) return;
       if (!this.ensureNet()) return;
+      if (jump === "hero" && useHeroView()) {
+        this.openHeroView(false);
+        return;
+      }
       this.panels?.openChild(jump);
       this.refreshChrome();
       return;
