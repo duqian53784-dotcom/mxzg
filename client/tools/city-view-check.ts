@@ -6,6 +6,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { cityViewFromSearch, setUseCityView, useCityView } from "../assets/scripts/features/city/config/CityFeatureFlag";
 import { buildCityMapLayout, CITY_EDGE_BLEED, findCityNode, layerAnchorX, layerCoverX } from "../assets/scripts/ui/cityMapLayout";
+import { BAR_SLIDE_MS, barIndex, barPageId, barSlideDir, expoOut, slideOffset, slideTravel, SlideCapture } from "../assets/scripts/ui/barSlide";
 import { TAB_SELECTED_SCALE, tabVisualScale } from "../assets/scripts/ui/cityTabScale";
 
 const root = process.cwd();
@@ -253,9 +254,68 @@ function checkChromePrefab(): void {
   assert(text.split(shell).length === 2, "CityChromeShell class id stays once");
 }
 
+function checkBarSlide(): void {
+  assert(barIndex("city") === 0 && barIndex("hero") === 1 && barIndex("battle") === 3, "bar order matches the seven tabs");
+  assert(barPageId("city") === null, "city slide reveals the resident page");
+  assert(barPageId("battle") === "mainline" && barPageId("dungeon") === "daily", "battle and dungeon map onto their pages");
+  assert(barSlideDir(0, 1) === 1 && barSlideDir(4, 1) === -1 && barSlideDir(2, 2) === 0, "higher tab enters from the right");
+  assert(expoOut(0) === 0 && expoOut(1) === 1 && expoOut(0.5) > 0.9, "exponential out eases ahead of linear");
+  assert(BAR_SLIDE_MS === 280, "bar slide lasts 280ms");
+  const travel = slideTravel(640, 720, 720);
+  assert(travel === 680, "wider pages travel far enough to clear");
+  assert(travel <= (720 + 720) / 2, "two full pages do not leave a gap");
+  assert(slideTravel(640, 0, 0) === 640, "unknown page size slides one viewport");
+  const fromRight = slideOffset(1, 680, 0);
+  const landed = slideOffset(1, 680, 1);
+  assert(fromRight.outX === 0 && fromRight.inX === 680, "incoming starts on the right");
+  assert(landed.outX === -680 && landed.inX === 0, "outgoing leaves to the left");
+  assert(slideOffset(-1, 680, 1).outX === 680, "lower tab leaves to the right");
+
+  const open = new SlideCapture<string>(1, "hero");
+  open.hide("city");
+  open.show("hero");
+  assert(open.outgoing === "city" && open.incoming() === "hero", "city to hero slides those two pages");
+
+  const back = new SlideCapture<string>(-1, null);
+  back.drop("hero");
+  back.show("city");
+  assert(back.outgoing === "hero" && back.incoming() === "city" && !back.wasDropped("city"), "back to city reveals the resident page");
+
+  const stacked = new SlideCapture<string>(1, "hero");
+  stacked.drop("bag");
+  stacked.show("old-hero");
+  stacked.drop("old-hero");
+  stacked.show("city");
+  stacked.hide("city");
+  stacked.show("hero");
+  assert(stacked.outgoing === "bag" && stacked.incoming() === "hero", "stacked switch slides the visible top, not the pages under it");
+  assert(stacked.immediateDrops().indexOf("old-hero") >= 0, "covered pages are dropped without a slide");
+  assert(stacked.nodesToHide("hero").indexOf("city") >= 0, "city stays hidden when a new tab covers it");
+
+  const main = read("client/assets/scripts/ui/MainApp.ts");
+  const onTab = main.slice(main.indexOf("private onTab("), main.indexOf("private beginBarSlide("));
+  assert(onTab.indexOf("fromBar") >= 0 && onTab.indexOf("beginBarSlide") >= 0 && onTab.indexOf("sealBarSlide") >= 0, "bottom bar arms the slide");
+  assert(main.indexOf("this.onTab(id, true)") >= 0, "chrome callback is the bar path");
+  const atom = main.slice(main.indexOf("private onCityAtom("), main.indexOf("private barSelected("));
+  assert(atom.indexOf("this.onTab(route.panel)") >= 0 && atom.indexOf("onTab(route.panel, true)") < 0, "building clicks stay instant");
+  const openMail = main.slice(main.indexOf("private openMail("), main.indexOf("private openIdle("));
+  const openBag = main.slice(main.indexOf("private openBag("), main.indexOf("private openMail("));
+  assert(openMail.indexOf("armBarSlide") < 0 && openBag.indexOf("armBarSlide") < 0, "mail and the bag button do not arm a bar slide");
+  const backFn = main.slice(main.indexOf("private back("), main.indexOf("private allow("));
+  assert(backFn.indexOf("this.panels?.back()") >= 0 && backFn.indexOf("UIManager") < 0, "back stays on the page stack");
+  assert(backFn.indexOf("cancelBarSlide") >= 0, "back cancels a bar slide instead of animating");
+  const shell = read("client/assets/scripts/ui/UIShell.ts");
+  assert(shell.indexOf("markPageShown(") >= 0 && shell.indexOf("console.log") < 0, "page show still goes through GameLog");
+  assert(shell.indexOf("armBarSlide") >= 0, "the shell owns the optional slide");
+  const manager = read("client/assets/scripts/framework/ui/UIManager.ts");
+  const nav = read("client/assets/scripts/ui/PanelNav.ts");
+  assert(manager.indexOf("armBarSlide") < 0 && nav.indexOf("armBarSlide") < 0, "bar slide does not rewrite UIManager or PanelNav");
+}
+
 checkFlag();
 checkFramework();
 checkSources();
 checkHubPrefab();
 checkChromePrefab();
+checkBarSlide();
 console.log("city-view-check ok");
