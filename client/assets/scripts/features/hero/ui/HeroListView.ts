@@ -1,6 +1,7 @@
-import { _decorator, Button, director, Director, Label, Layers, Node, Overflow, Prefab, UITransform } from "cc";
+import { _decorator, Button, director, Director, HorizontalTextAlignment, Label, Layers, Node, Overflow, Prefab, UITransform, VerticalTextAlignment } from "cc";
 import { messageOf } from "../../../core/errors";
 import { GameLog } from "../../../core/GameLog";
+import { StoreHero } from "../../../core/GameStore";
 import { BaseView } from "../../../framework/ui/BaseView";
 import { UILayer } from "../../../framework/ui/UILayer";
 import { UIManager } from "../../../framework/ui/UIManager";
@@ -12,7 +13,8 @@ import { loadPrefab, spawnPrefab } from "../../../ui/prefabLoad";
 import { assignContentSize, positiveUiSize } from "../../../ui/visibleFit";
 import { HeroIconCellView } from "./HeroIconCellView";
 import { HeroListBoardView } from "./HeroListBoardView";
-import { mountHeroListPage } from "./heroMount";
+import { HERO_TAB_BOOK, HERO_TAB_DRAGON, HERO_TAB_HERO, seatHeroParchment } from "./heroChrome";
+import { mountHeroListPage, openHeroDetail } from "./heroMount";
 
 const { ccclass, property } = _decorator;
 
@@ -25,7 +27,7 @@ const DRAGON_LATER = "圣龙仍走旧英雄页";
 /**
  * 英雄列表。页签、羊皮纸和筛选都绑在 HeroListLayer / HeroListHeroLayer 上。
  * 格子数据来自 GameStore 和 herotype。这里不解协议。
- * 详情和圣龙不在这一刀。圣龙钮只提示仍走旧页。
+ * 详情在 infoPrefab 绑上时打开。没绑时仍只提示格子文案。圣龙钮只提示仍走旧页。
  */
 @view({
   id: "hero",
@@ -76,6 +78,18 @@ export class HeroListView extends BaseView {
   @property(Prefab)
   cellPrefab: Prefab | null = null;
 
+  @property(Node)
+  sprBg: Node | null = null;
+
+  @property(Node)
+  parchment: Node | null = null;
+
+  @property(Node)
+  titleRoot: Node | null = null;
+
+  @property(Prefab)
+  infoPrefab: Prefab | null = null;
+
   private tab: HeroListTab = "hero";
   private elem = 0;
   private board: HeroListBoardView | null = null;
@@ -84,6 +98,7 @@ export class HeroListView extends BaseView {
   private boardOpening = false;
   private scrollReady = false;
   private tabsBound = false;
+  private cityFit = false;
   private offSync: (() => void) | null = null;
   private shownWatch: (() => void) | null = null;
 
@@ -132,6 +147,7 @@ export class HeroListView extends BaseView {
         return;
       }
       this.board.bindElem((id) => this.pickElem(id));
+      this.fitCityMiddle();
       this.primeCapacity();
       this.offSync = WireSession.onSync(() => this.refresh());
       this.refresh();
@@ -201,6 +217,39 @@ export class HeroListView extends BaseView {
       return null;
     }
     return board;
+  }
+
+  /**
+   * 羊皮纸占满顶栏和底栏之间。页签和板子跟着纸的上沿抬。
+   * 滚动视口仍只露大约 3.5 行。
+   * 没绑 spr_bg 时不动，检查里的板子留在底左。
+   */
+  private fitCityMiddle(): void {
+    if (this.cityFit || !this.sprBg || !this.board) return;
+    const bgUi = this.sprBg.getComponent(UITransform);
+    const size = positiveUiSize(bgUi);
+    if (!bgUi || !size) return;
+    const scale = Math.abs(this.node.scale.x);
+    const seat = seatHeroParchment(this.sprBg.position.y, size.height, this.node.position.y, scale);
+    assignContentSize(bgUi, size.width, seat.height);
+    this.sprBg.setPosition(this.sprBg.position.x, seat.centerY, this.sprBg.position.z);
+    if (this.parchment) {
+      const plate = this.parchment.getComponent(UITransform);
+      const plateSize = positiveUiSize(plate);
+      const width = plateSize && plateSize.width > 1 ? plateSize.width : size.width;
+      assignContentSize(plate, width, seat.height);
+      this.parchment.setPosition(this.parchment.position.x, seat.centerY, this.parchment.position.z);
+    }
+    this.lift(this.titleRoot, seat.extraTop);
+    this.lift(this.tabMenu, seat.extraTop);
+    this.lift(this.board.node, seat.extraTop);
+    this.board.pinLower(seat.bottom);
+    this.cityFit = true;
+  }
+
+  private lift(node: Node | null, extra: number): void {
+    if (!node || extra === 0) return;
+    node.setPosition(node.position.x, node.position.y + extra, node.position.z);
   }
 
   /** 和 HeroListLayer 同一套底左坐标。羊皮纸、筛选、格子都留在这一层里面，不压底栏。 */
@@ -286,7 +335,7 @@ export class HeroListView extends BaseView {
       }
       this.adoptLayer(node, layer);
       const line = heroCellLine(face);
-      cell.show(face, line ? () => this.toast(line) : null);
+      cell.show(face, line ? () => this.onCell(face.hero, line) : null);
       const seat = heroCellSeat(i);
       node.setPosition(seat.x, seat.y, 0);
     }
@@ -346,16 +395,36 @@ export class HeroListView extends BaseView {
   }
 
   private fitTitles(): void {
-    this.fitTitle(this.heroTitle);
-    this.fitTitle(this.bookTitle);
-    this.fitTitle(this.dragonTitle);
+    this.fitTitle(this.heroTitle, HERO_TAB_HERO);
+    this.fitTitle(this.bookTitle, HERO_TAB_BOOK);
+    this.fitTitle(this.dragonTitle, HERO_TAB_DRAGON);
   }
 
-  private fitTitle(label: Label | null): void {
-    if (!label) return;
+  /** 先给字一块能画的尺寸，再 SHRINK。0×0 再收缩会把页签字裁没。 */
+  private fitTitle(label: Label | null, text: string): void {
+    if (!label || !label.node) return;
+    label.string = text;
     label.fontSize = 20;
     label.lineHeight = 24;
+    label.horizontalAlign = HorizontalTextAlignment.CENTER;
+    label.verticalAlign = VerticalTextAlignment.CENTER;
+    let ui = label.node.getComponent(UITransform);
+    if (!ui) ui = label.node.addComponent(UITransform);
+    const parent = label.node.parent ? label.node.parent.getComponent(UITransform) : null;
+    const parentSize = positiveUiSize(parent);
+    const width = parentSize && parentSize.width > 8 ? Math.max(8, parentSize.width - 8) : 104;
+    const height = parentSize && parentSize.height > 8 ? Math.max(8, Math.min(32, parentSize.height - 4)) : 32;
+    assignContentSize(ui, width, height);
     label.overflow = Overflow.SHRINK;
+  }
+
+  /** 绑了详情预制才打开。否则仍提示格子上的名字和等级。 */
+  private onCell(hero: StoreHero | null, line: string): void {
+    if (hero && this.infoPrefab) {
+      const sheet = openHeroDetail(this.node.parent, this.infoPrefab, hero);
+      if (sheet) return;
+    }
+    this.toast(line);
   }
 
   private hideBubble(): void {
