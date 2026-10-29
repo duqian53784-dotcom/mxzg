@@ -4,11 +4,16 @@
 
 ## 当前开发基线
 
+- [从 0 到 1 实施路线与验收清单](docs/restructuring-plan.md)：P0–P9 的细化任务、依赖、状态与阶段出口，作为主计划。
 - [核心产品需求](docs/product-requirements.md)：三端范围、真实玩法闭环与完成标准。
 - [架构与维护指南](docs/architecture.md)：轻量 MVC、UIManager 职责、后端取舍与人工修改入口。
+- [资源加载与依赖审计](docs/resource-loading.md)：资源登记、作用域、主城按需 Bundle、检查命令与实测边界。
+- [配置分组加载](docs/config-loading.md)：登录前 2 张表、主城另 5 份配置、原子提交及旧全量路径隔离。
+- [英雄与阵容接口](docs/hero-lineup-contract.md)：新后端查询/保存契约、版本冲突、站位依据与客户端接入边界。
+- [Prefab 清理结果](docs/prefab-cleanup.md)：90 项保留范围、517 项删除清单、备份和防回流检查。
+- [登录入口职责](docs/login-entries.md)：account 当前入口、login 共用组件和 legacy-login 旧版对照。
 - [实际开发进度](docs/development-progress.md)：新样板运行方式、已验证内容与下一批工作。
 - [当前工程问题](docs/project-audit.md)：源码证据、平台缺口和保留/删除边界。
-- [工程重整路线](docs/restructuring-plan.md)：阶段、代码归属与统一检查。
 
 后续开发先读上述基线，优先保证人能阅读、修改和排错；其他批次与迁移文档保留历史参考，运行说明以当前代码核对。当前检查仍有背包布局失败，详见问题清单。
 

@@ -13,6 +13,11 @@ const suites = [
   ["login-presentation", "ts", "client/tools/login-presentation-check.ts"],
   ["home-presentation", "ts", "client/tools/home-presentation-check.ts"],
   ["startup", "ts", "client/tools/startup-check.ts"],
+  ["resources", "ts", "client/tools/resource-pool-check.ts"],
+  ["home-bundle", "ts", "client/tools/home-bundle-check.ts"],
+  ["resource-audit", "python", "tools/test_resource_audit.py"],
+  ["config-groups", "ts", "client/tools/config-groups-check.ts"],
+  ["prefab-plan", "python", "tools/check_prefab_plan.py"],
   ["architecture", "python", "tools/project_audit.py"],
   ["bindings", "python", "client/tools/check_script_type_ids.py"],
   ["backpack", "ts", "client/tools/backpack-view-check.ts"],
@@ -23,7 +28,7 @@ const suites = [
 ];
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
-  console.log("node client/tools/check-project.mjs [--suite account|remake-navigation|login-presentation|home-presentation|startup|architecture|bindings|backpack|hero|city|battle|legacy]");
+  console.log("node client/tools/check-project.mjs [--suite account|remake-navigation|login-presentation|home-presentation|startup|resources|home-bundle|resource-audit|config-groups|prefab-plan|architecture|bindings|backpack|hero|city|battle|legacy]");
   process.exit(0);
 }
 if (args.length && (args.length !== 2 || args[0] !== "--suite" || !suites.some(([id]) => id === args[1]))) {

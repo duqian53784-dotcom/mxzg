@@ -104,12 +104,12 @@ async function main() {
   assert.equal(actions, null);
 
   const assets = join(process.cwd(), "client/assets");
-  const prefab = JSON.parse(readFileSync(join(assets, "prefabs/ui/remake-home/RemakeHome.prefab"), "utf8"));
+  const prefab = JSON.parse(readFileSync(join(assets, "bundles/remake-home/RemakeHome.prefab"), "utf8"));
   const view = prefab.find((row: Record<string, unknown>) => row.logoutButton && row.profileLabel);
   assert.equal(prefab[view.profileLabel.__id__].__type__, "cc.Label");
   assert.equal(prefab[view.logoutButton.__id__].__type__, "cc.Button");
   const scene = JSON.parse(readFileSync(join(assets, "scenes/Remake.scene"), "utf8"));
-  assert(scene.some((row: Record<string, unknown>) => row.loginPrefab && row.homePrefab));
+  assert(scene.some((row: Record<string, unknown>) => row.loginPrefab && row.apiBaseUrl));
   console.log("remake-navigation-check passed: explicit registration, shared UIManager, controller cleanup, replacement, failure/cancellation, logout and Prefab bindings");
 }
 void main().catch(error => { console.error(error); process.exitCode = 1; });

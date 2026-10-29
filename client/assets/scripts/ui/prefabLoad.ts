@@ -1,16 +1,18 @@
 import { assetManager, Button, Color, EditBox, instantiate, Node, Prefab, Sprite } from "cc";
 import { BATTLE_PREFAB_PATH } from "./battlePrefabLayout";
+import { prefabInPlan } from "../config/PrefabPlan";
 
 /**
- * 界面 Prefab 在 assets/prefabs，不在 resources。
+ * 保留旧 UI 的 Prefab 在 assets/prefabs，不在 resources。
+ * 先检查当前计划清单；新主城 Bundle 入口由 HomeResources 单独加载。
  * assets/prefabs 是名为 prefabs 的 Asset Bundle。
- * 路径相对 assets，例如 prefabs/ui/login/LoginPanel。
+ * 路径相对 assets，例如 prefabs/ui/legacy-login/LoginPanel。
  * 先 loadBundle，再用 bundle.load。编辑器还没刷出 bundle 时，用 .meta uuid 走 assetManager.loadAny。
  * 不要 resources.load。
  */
 
 /** 相对 assets，不是 resources 路径。 */
-export const LOGIN_PREFAB_PATH = "prefabs/ui/login/LoginPanel";
+export const LOGIN_PREFAB_PATH = "prefabs/ui/legacy-login/LoginPanel";
 export const CREATE_ROLE_PREFAB_PATH = "prefabs/ui/login/CreateRolePanel";
 export const CITY_CHROME_PREFAB_PATH = "prefabs/ui/city/CityChrome";
 export const CITY_HUB_PREFAB_PATH = "prefabs/ui/city/CityHub";
@@ -20,18 +22,16 @@ export { BATTLE_PREFAB_PATH };
 const PREFAB_UUID: { [path: string]: string } = {
   "prefabs/ui/login/LoadingLayer": "ed70957c-0e46-44db-a4a2-aacd73196fd1",
   "prefabs/ui/login/UpdateLayer": "4371fa6e-a0d2-4932-ab57-bb085d572a06",
-  "prefabs/ui/login/LoginPanel": "196fd024-dd83-4ee7-9783-1617ce3279a8",
+  "prefabs/ui/legacy-login/LoginPanel": "196fd024-dd83-4ee7-9783-1617ce3279a8",
   "prefabs/ui/login/CreateRolePanel": "d2eb0e48-bc58-4e09-b95f-ce45350461b1",
   "prefabs/ui/city/CityChrome": "c97efb56-db67-4c93-84d5-e29436794e86",
   "prefabs/ui/city/CityHub": "118c08f7-43eb-477d-ab62-50f3ec65294f",
   [BATTLE_PREFAB_PATH]: "733c8611-a124-4c16-bb79-6b3011dfb408",
-  "prefabs/ui/login/UserLoginLayer": "9a634cfd-fdca-586f-827a-0a4b3212ca49",
+  "prefabs/ui/legacy-login/UserLoginLayer": "9a634cfd-fdca-586f-827a-0a4b3212ca49",
   "prefabs/ui/login/ChooseServerLayer": "46c73fed-68c2-5589-8720-d11645528009",
   "prefabs/ui/login/ChooseServerCell": "da7f5fcb-b7ea-5f0d-9d9e-bf5186dbfa68",
   "prefabs/ui/login/NoticeLayer": "2140fe91-ad3d-514a-96f1-265cf2b063bc",
-  "prefabs/ui/login/LanguageSelectLayer": "407e882e-679d-56c4-ab3c-ef62fae4f686",
   "prefabs/ui/login/ErrorLayer": "3e52626e-44c3-5af9-9627-63a243e2f0ad",
-  "prefabs/ui/login/CreateNickRewardLayer": "b426d636-083f-58c1-b9ed-c4aa1986cf02",
   "prefabs/ui/battle/BattlePanelLayer": "ac146bb3-359f-4506-8fcf-32f8c56ef4d3",
   "prefabs/ui/battle/BattleEndLayer": "20fbcf65-e7c1-4d82-8b20-59a1c93372bc",
   "prefabs/ui/chapter/ChapterPreviewLayer": "9b27aa5f-aed6-4237-be28-f887c7269fd8",
@@ -48,16 +48,11 @@ const PREFAB_UUID: { [path: string]: string } = {
   "prefabs/ui/hero/HeroInfoAttrLayer": "65f0e985-d8ec-4f76-92bb-57b980e4b132",
   "prefabs/ui/backpack/BackpackInfoLayer": "f151a2c1-a24a-4e5d-9d67-2096089cde82",
   "prefabs/ui/hero/HeroSelectLayer": "c75bff2b-0944-4809-9b5f-1eb8c09107f8",
-  "prefabs/ui/hero/HeroPalaceLayer": "f585a6a0-f33b-5bcf-8d0c-0ffb96a65397",
-  "prefabs/ui/hero/HeroPernuteLayer": "a329e2f3-32d1-58bf-b777-044a6fbb4f8e",
   "prefabs/ui/summon/SummonLayer": "c046c79b-a2a4-4bf1-b93a-966094c105b8",
-  "prefabs/ui/smith/SmithLayer": "d3530a27-d51a-478c-870a-21203cd26e70",
   "prefabs/ui/backpack/BackpackLayer": "6bfdfd78-65e9-403c-b7c8-7e6cd94ffebb",
   "prefabs/ui/backpack/BackpackItemCell": "c4e8a1b2-7d33-4f61-9a20-6b5e0d4c8f11",
   "prefabs/ui/backpack/BackpackTabButton": "d5f9b2c3-8e44-4072-ab31-7c6f1e5d9022",
   "prefabs/ui/hero/HeroIconCell": "e7c1a4b0-6d28-4f53-9c11-2a8b7e6d5c40",
-  "prefabs/ui/hero/CatalogIconCell": "f8d2b5c1-7e39-4064-ad22-3b9c8f7e6d51",
-  "prefabs/ui/hero/DragonCard": "09e3c6d2-8f4a-4175-be33-4cad908f7e62",
   "prefabs/ui/common/TextChip": "1af4d7e3-905b-4286-cf44-5dbe01908f73",
   "prefabs/ui/common/InfoCard": "3c16f905-b27d-44a8-e166-7fd023b2a195",
   "prefabs/ui/common/DimSheet": "2b05e8f4-a16c-4397-d055-6ecf12a19084",
@@ -67,19 +62,7 @@ const PREFAB_UUID: { [path: string]: string } = {
   "prefabs/ui/chapter/ChapterStageChip": "6f492c38-e5a0-47db-b499-a20356e5d4c8",
   "prefabs/ui/chapter/ChapterMapLayer": "8a6b4e50-17c2-49fd-96bb-c42578a7f6ea",
   "prefabs/ui/mail/MailLayer": "42a4160b-5cca-41b5-beb4-520375f560e0",
-  "prefabs/ui/pvp/PvpLayer": "f7e674a7-9365-432d-834c-641d10fb5db4",
-  "prefabs/ui/fantasy-tower/FantasyTowerLayer": "8fd8261a-b435-492c-8fce-2e5dcad41158",
   "prefabs/ui/quick-battle/QuickBattleLayer": "9a050b3e-fbe8-4ee8-827c-5eba14ceb8ae",
-  "prefabs/ui/achievement/AchievementLayer": "95f86f81-7fdd-41ae-8060-894905f206eb",
-  "prefabs/ui/role/WorldLevelLayer": "3312d311-bdfc-5447-a2ce-bd40f2db35ba",
-  "prefabs/ui/pet/PetInfoLayer": "b4734b1c-9cc9-476b-9159-f305f3b5a210",
-  "prefabs/ui/main-task/MainTaskLayer": "ddaf9e44-1224-45b3-ba15-b20b7a86c4a1",
-  "prefabs/ui/ancient/AncientLayer": "29abbd37-1006-4af2-a47d-6f27adcc6edb",
-  "prefabs/ui/hero-creat/HeroCreatLayer": "71c1f16b-6910-41c5-b8d7-2d9a8ebf4215",
-  "prefabs/ui/altar/AltarLayer": "36f1b5b0-7c62-49b3-bbba-a4ba845718ea",
-  "prefabs/ui/fantasy-land/FantasyLandMainLayer": "226aa99c-7912-4df2-a0e9-45b54eac7afb",
-  "prefabs/ui/exotic-adventure/ExoticAdventureLayer": "a6d7e1a6-3090-4e03-9cc3-7b669e9b4f18",
-  "prefabs/ui/magic-cube/MagicCubeLayer": "f99b58f3-39fc-4096-bad0-ecd9dbeb8b9b",
 };
 
 const prefabPending = new Map<string, Promise<Prefab>>();
@@ -91,6 +74,7 @@ export function clearPrefabCache(): void {
 
 /** 同一路径共用一次加载。预热和进城挂载不要各解一遍。失败删掉，下次还能再试。 */
 export function loadPrefab(assetPath: string): Promise<Prefab> {
+  if (!prefabInPlan(assetPath)) return Promise.reject(new Error("该界面不在当前重做计划内：" + assetPath));
   const cached = prefabPending.get(assetPath);
   if (cached) return cached;
   const pending = loadPrefabOnce(assetPath);
@@ -167,7 +151,7 @@ export function tintSprite(node: Node, color: Color): void {
 function splitAssetPath(assetPath: string): { bundle: string; inner: string } {
   const slash = assetPath.indexOf("/");
   if (slash <= 0 || slash >= assetPath.length - 1) {
-    throw new Error("Prefab 路径要相对 assets，例如 prefabs/ui/login/LoginPanel");
+    throw new Error("Prefab 路径要相对 assets，例如 prefabs/ui/legacy-login/LoginPanel");
   }
   return { bundle: assetPath.slice(0, slash), inner: assetPath.slice(slash + 1) };
 }

@@ -6,11 +6,15 @@
 
 - Canvas 挂载 RemakeApp，装配账号服务、统一 UIManager 和页面导航。
 - PageHost 承载页面，位于其上方的 StartupHost 承载既有 LoadingLayer 与启动过渡。启动依次加载配置、界面资源、准备账号信息、等待登录页就绪，再淡出加载层；恢复会话也停留登录页，必须点击“开始游戏”才进入主城。
+- 场景不再直接引用主城 Prefab；主城组合入口位于 assets/bundles/remake-home，点击开始后通过 HomeResources 按需加载。修改后须重新打开 Remake.scene，避免使用旧场景内存中的引用。
 - 使用 backend 下的新 Java 服务，双击 scripts/start-remake-backend.bat 启动，默认地址 http://127.0.0.1:18080。
 - 登录与角色资料页面使用 Prefab 切换，均在同一场景中；新增 UI 页面不需要新增场景。
 - 默认账号 player_1，右上角“开发账号”可修改。登录后复用已有 CityHub 地图与 CityChrome 顶底栏，显示新后端真实角色资料；右上侧“账号”可查看角色 ID 并退出。英雄、主线等业务尚未接入新后端，点击提示暂未开放。
+- 当前登录页是 prefabs/ui/account/AccountLogin；prefabs/ui/login 是共用启动/选服组件，两个旧登录入口已隔离到 prefabs/ui/legacy-login，只给旧 Boot 对照使用。
 
 ## legacy/Boot.scene：旧游戏启动入口
+
+计划外 Prefab 已按用户要求清理；该入口只保留核心页面的对照用途，不再承诺完整旧服的所有系统 UI。范围见 docs/prefab-cleanup.md。
 
 - Canvas 挂载 Boot，负责旧资源加载、登录、角色同步与主城预加载。
 - 使用旧服务器和 WebSocket 桥，对应 scripts/start-local-all 启服脚本。

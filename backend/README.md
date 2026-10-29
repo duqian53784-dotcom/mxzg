@@ -31,6 +31,10 @@ dev.ps1 优先使用工程隔离 JDK，未找到时使用已有 JAVA_HOME/Java�
 
 ## 从哪里修改
 
+新增英雄查询与主阵容版本保存：`GET /api/v1/heroes`、`GET /api/v1/heroes/{heroId}`、`GET/PUT /api/v1/lineups/main`，都使用同一 Bearer 会话。新角色目前没有英雄；测试不向本地用户库种入数据。请求、错误、站位及未完成范围见 [英雄与阵容契约](../docs/hero-lineup-contract.md)。
+
+V2 迁移新增英雄/阵容表与角色阵容版本。按正常方式重启新后端后由 Flyway 执行，不需要删除已有 `.local` 数据库；旧服数据库不受影响。MySQL 真实验证仍待完成。
+
 - 账号输入规则和开发创角：auth/DevelopmentLoginService。
 - 会话颁发、校验与有效期：auth/SessionService。
 - 角色 API：role/RoleController → RoleService → RoleRepository。

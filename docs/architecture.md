@@ -98,6 +98,10 @@ Creator 的 Prefab 与 Inspector 支持节点、组件与属性的编辑和保�
 
 ## 落地边界
 
+资源底座第一批已接入 `framework/assets/ResourcePool.ts` 与 `app/remake/StartupResources.ts`。前者只处理请求去重、作用域持有、失败重试及关闭后拒绝迟到结果；后者登记四项启动资源并适配 Creator，RemakeApp 持有作用域并在销毁时关闭。新资源先登记用途与生命周期，页面布局仍由 Prefab 维护。
+
+当前退出作用域只撤销自身 addRef，并以 decRef(false) 保留引擎缓存；旧页面尚未全部迁移，不主动释放共享纹理/Spine。Bundle 归属、配置按需加载、主动淘汰及内存预算对应主计划 P2-04–P2-09，不能因 ResourcePool 存在就视为全部完成。后续进度以 restructuring-plan.md 与 development-progress.md 顶部快照为准。
+
 先完成新架构下的登录、主城和一场战斗切片，再接入完整主循环。先用一个功能证明分层和人工修改体验，再调整框架；不在没有具体功能时一次生成大量基类、Manager 和空目录。
 
 新后端已在 backend 建立首个开发登录与角色资料切片，包含 JDBC 持久化、Flyway 迁移和独立测试。开发及当前集成测试使用隔离 H2，MySQL 8.4、正式渠道身份与新客户端 MVC 接入尚待验证；旧服与原数据库未切换。实际运行方法见 backend/README.md。旧工程检查结果保留为现状记录，与新后端测试分开报告。

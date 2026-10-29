@@ -12,7 +12,7 @@ import { LoginHandlers, LoginPanelOptions, LoginPanelView } from "./LoginPanel";
 import { bindTap, findDescendant, liftNode, mountCcbiView } from "./pagePrefabShell";
 import { createButton, createField, createLabel, createRect, place, setText, TextField, uiNode } from "./UiKit";
 
-export const USER_LOGIN_PREFAB_PATH = "prefabs/ui/login/UserLoginLayer";
+export const USER_LOGIN_PREFAB_PATH = "prefabs/ui/legacy-login/UserLoginLayer";
 export const CHOOSE_SERVER_PREFAB_PATH = "prefabs/ui/login/ChooseServerLayer";
 export const CHOOSE_SERVER_CELL_PATH = "prefabs/ui/login/ChooseServerCell";
 export const NOTICE_PREFAB_PATH = "prefabs/ui/login/NoticeLayer";

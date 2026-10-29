@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
-import { Button, Label, Node, Prefab } from "cc";
+import { Button, JsonAsset, Label, Node, Prefab, resources } from "cc";
 import { RemakeHomeView } from "../assets/scripts/features/home/ui/RemakeHomeView";
 import { CityHubView } from "../assets/scripts/features/city/ui/CityHubView";
 import { CityChromeView } from "../assets/scripts/features/city/ui/CityChromeView";
@@ -43,11 +43,17 @@ function fixture() {
   return { home, city, chrome };
 }
 async function main() {
+  resources.load = (path: string, _type: unknown, done: Function) => {
+    const asset = new JsonAsset();
+    asset.json = JSON.parse(readFileSync(`client/assets/resources/${path}.json`, "utf8"));
+    done(null, asset);
+  };
   const { home, city, chrome } = fixture();
   let logouts = 0;
   const unbind = home.bind({ logout: () => { logouts++; }, openFeature: () => {} });
   home.runOpen();
   home.render({ busy: false, error: "", role: { id: "role-id", nickname: "玩家甲", level: 7, gold: 0, diamonds: 123 } });
+  await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(chrome.identity, "玩家甲");
   assert.deepEqual(chrome.currencies, ["0", "123"], "zero is real data, not an unavailable placeholder");
   assert.equal(chrome.level, "7"); assert.equal(chrome.power, "", "do not invent power");
@@ -64,11 +70,12 @@ async function main() {
 
   const slow = fixture(); slow.home.runOpen();
   const cancelled = assert.rejects(slow.home.whenReady(), /页面已关/);
-  slow.home.runDispose(); slow.city.completeLoading(); await cancelled;
-  await Promise.resolve();
-  assert.equal(slow.city.disposedCount, 1, "late child readiness does not reopen a closed page");
+  slow.home.runDispose(); await cancelled;
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(slow.city.disposedCount, 0, "closing during config loading prevents child instantiation entirely");
+  assert.equal(slow.home.cityHost!.children.length, 0);
 
-  const prefab = JSON.parse(readFileSync("client/assets/prefabs/ui/remake-home/RemakeHome.prefab", "utf8"));
+  const prefab = JSON.parse(readFileSync("client/assets/bundles/remake-home/RemakeHome.prefab", "utf8"));
   const binding = prefab.find((row: any) => row.cityPrefab && row.chromePrefab);
   assert(binding, "existing city Prefabs are serialized references, not copied layouts");
   for (const [key, name] of [["cityPrefab", "CityHub"], ["chromePrefab", "CityChrome"]]) {

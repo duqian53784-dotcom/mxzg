@@ -1,6 +1,6 @@
 /**
- * 1:1 Prefab 壳的页面对照。纯数据，不加载资源。
- * 商店、祈福、先知、黑市、远征、国战没有 P1–P4 Prefab（那些在 P5，本轮不做）。
+ * 保留的核心旧页面壳对照。纯数据，不加载资源。
+ * 计划外壳已清理，新增项必须登记 tools/prefab-plan.json 并通过 prefab-plan 检查。
  */
 
 export const USE_PAGE_PREFAB_SHELL = true;
@@ -30,26 +30,10 @@ export const PAGE_PREFAB_SHELLS: { [id: string]: PagePrefabShellSpec } = {
   mainline: shell("prefabs/ui/battle/BattlePanelLayer", true),
   hero: shell("prefabs/ui/hero/HeroListLayer"),
   "hero-detail": shell("prefabs/ui/hero/HeroInfoLayer"),
-  heroPalace: shell("prefabs/ui/hero/HeroPalaceLayer"),
   summon: shell("prefabs/ui/summon/SummonLayer"),
-  smith: shell("prefabs/ui/smith/SmithLayer"),
   bag: shell("prefabs/ui/backpack/BackpackLayer"),
   mail: shell("prefabs/ui/mail/MailLayer"),
-  arena: shell("prefabs/ui/pvp/PvpLayer"),
-  tower: shell("prefabs/ui/fantasy-tower/FantasyTowerLayer"),
   idle: shell("prefabs/ui/quick-battle/QuickBattleLayer"),
-  achieve: shell("prefabs/ui/achievement/AchievementLayer"),
-  world: shell("prefabs/ui/role/WorldLevelLayer"),
-  pet: shell("prefabs/ui/pet/PetInfoLayer"),
-  cafe: shell("prefabs/ui/main-task/MainTaskLayer"),
-  main_ancient: shell("prefabs/ui/ancient/AncientLayer"),
-  main_hero_make: shell("prefabs/ui/hero-creat/HeroCreatLayer"),
-  main_pub_task: shell("prefabs/ui/main-task/MainTaskLayer"),
-  main_altar: shell("prefabs/ui/altar/AltarLayer"),
-  main_fantasy_land: shell("prefabs/ui/fantasy-land/FantasyLandMainLayer"),
-  main_hero_pernute: shell("prefabs/ui/hero/HeroPernuteLayer"),
-  main_exotic_adventure: shell("prefabs/ui/exotic-adventure/ExoticAdventureLayer"),
-  main_magic_cube: shell("prefabs/ui/magic-cube/MagicCubeLayer"),
 };
 
 export function pagePrefabShell(id: string): PagePrefabShellSpec | null {

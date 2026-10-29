@@ -68,8 +68,13 @@ async function main() {
   assert.equal(app.paintWaiters.size, 0, "shutdown settles frame waiters");
 
   const scene = JSON.parse(readFileSync("client/assets/scenes/Remake.scene", "utf8"));
-  const binding = scene.find((row: any) => row.loginPrefab && row.homePrefab);
+  const binding = scene.find((row: any) => row.loginPrefab && row.apiBaseUrl);
   assert(binding.pageHost && binding.startupHost && binding.loadingPrefab);
+  const accountMeta = JSON.parse(readFileSync("client/assets/prefabs/ui/account/AccountLogin.prefab.meta", "utf8"));
+  const legacyMeta = JSON.parse(readFileSync("client/assets/prefabs/ui/legacy-login/LoginPanel.prefab.meta", "utf8"));
+  assert.equal(binding.loginPrefab.__uuid__, accountMeta.uuid, "Remake uses only the account login page");
+  assert.notEqual(accountMeta.uuid, legacyMeta.uuid, "old login is a separate compatibility reference");
+  assert.equal(binding.homePrefab, undefined, "scene must not eagerly reference the lazy home feature");
   const layer = JSON.parse(readFileSync("client/assets/prefabs/ui/login/LoadingLayer.prefab.meta", "utf8"));
   assert.equal(binding.loadingPrefab.__uuid__, layer.uuid, "reuse existing LoadingLayer");
   const children = scene[scene[binding.pageHost.__id__]._parent.__id__]._children;

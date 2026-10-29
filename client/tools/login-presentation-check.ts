@@ -9,7 +9,7 @@ import { Node, sp } from "cc";
 const assets = join(process.cwd(), "client/assets");
 const read = (path: string): any => JSON.parse(readFileSync(join(assets, path), "utf8"));
 const prefab = read("prefabs/ui/account/AccountLogin.prefab") as any[];
-const original = read("prefabs/ui/login/LoginPanel.prefab") as any[];
+const original = read("prefabs/ui/legacy-login/LoginPanel.prefab") as any[];
 const node = (rows: any[], name: string) => {
   const found = rows.find(row => row.__type__ === "cc.Node" && row._name === name);
   assert(found, "missing node " + name);
@@ -25,10 +25,14 @@ const component = (rows: any[], host: any, type: string) => {
 const start = component(prefab, node(prefab, "StartGame"), "cc.Button");
 const oldStart = component(original, node(original, "BtnEnter"), "cc.Button");
 for (const key of ["_normalSprite", "_pressedSprite", "_hoverSprite", "_disabledSprite", "_transition"]) {
-  assert.deepEqual(start[key], oldStart[key], "existing start button " + key);
+  if (key === "_transition") assert.equal(start[key], oldStart[key]);
+  else {
+    assert.equal(start[key].__uuid__, oldStart[key].__uuid__, "existing start button " + key);
+    assert([undefined, "cc.SpriteFrame"].includes(start[key].__expectedType__), "valid Creator round-trip type annotation");
+  }
 }
-assert.deepEqual(component(prefab, node(prefab, "ServerBg"), "cc.Sprite")._spriteFrame,
-  component(original, node(original, "ServerBg"), "cc.Sprite")._spriteFrame);
+assert.equal(component(prefab, node(prefab, "ServerBg"), "cc.Sprite")._spriteFrame.__uuid__,
+  component(original, node(original, "ServerBg"), "cc.Sprite")._spriteFrame.__uuid__);
 const background = component(prefab, node(prefab, "Background"), "cc.Sprite");
 assert.equal(background._spriteFrame.__uuid__.split("@")[0], read("resources/ui/maps/map-bg-loading.jpg.meta").uuid);
 

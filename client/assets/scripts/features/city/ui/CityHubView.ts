@@ -55,6 +55,7 @@ const CITY_PLATES: { name: string; layer: number; piece: number }[] = [
 const plateMisses = new Set<string>();
 
 export interface CityHubOpenArgs {
+  loadConfig?: <T>(path: string) => Promise<T>;
   onAtom: (atom: string) => void;
   onMainline: () => void;
   query: CityMapQuery;
@@ -373,7 +374,7 @@ export class CityHubView extends BaseView<CityHubOpenArgs> {
 
   private async loadCfg<T>(path: string): Promise<T | null> {
     try {
-      return await ConfigLoader.loadJson<T>(path);
+      return await (this.args?.loadConfig || ConfigLoader.loadJson)<T>(path);
     } catch (err) {
       GameLog.shared.error("CityHub", path + " " + (err instanceof Error ? err.message : "load failed"));
       return null;

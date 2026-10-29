@@ -62,7 +62,7 @@ const COPY_FALLBACK: BootCopy = {
   tips: [],
 };
 
-export async function loadBootCopy(): Promise<BootCopy> {
+export async function loadBootCopy(read: <T>(path: string) => Promise<T> = ConfigLoader.loadJson): Promise<BootCopy> {
   const copy: BootCopy = {
     versionFail: COPY_FALLBACK.versionFail,
     retry: COPY_FALLBACK.retry,
@@ -73,7 +73,7 @@ export async function loadBootCopy(): Promise<BootCopy> {
     tips: [],
   };
   try {
-    const lang = await ConfigLoader.loadJson<{ rows?: unknown }>("config/language");
+    const lang = await read<{ rows?: unknown }>("config/language");
     const map = indexLanguage(lang.rows);
     copy.versionFail = pick(map, "47741", copy.versionFail);
     copy.retry = pick(map, "110013", copy.retry);
@@ -81,7 +81,7 @@ export async function loadBootCopy(): Promise<BootCopy> {
     copy.newVersion = pick(map, "110029", copy.newVersion);
     copy.wifi = pick(map, "110030", copy.wifi);
     copy.verify = pick(map, "47149", copy.verify);
-    const tipsFile = await ConfigLoader.loadJson<{ rows?: unknown }>("config/loadingtips");
+    const tipsFile = await read<{ rows?: unknown }>("config/loadingtips");
     const rows = Array.isArray(tipsFile.rows) ? tipsFile.rows : [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];

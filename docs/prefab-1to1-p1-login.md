@@ -6,7 +6,7 @@
 - 字体：STZhongsong → font/FZCSJW-GB1-0.ttf（替代）；CloudYuanCuGBK → font/CloudYuanCuGBK.ttf。
 - btn-close-2 没有，用 btn-close-1 代替。
 
-## UserLoginLayer（22 节点）→ `client/assets/prefabs/ui/login/UserLoginLayer.prefab`
+## UserLoginLayer（22 节点）→ `client/assets/prefabs/ui/legacy-login/UserLoginLayer.prefab`
 
 | 路径 | ccb 类 | 位置 | 锚点 | 尺寸 | 缩放 | 显示 | 组件 / 素材 / 文本 |
 |---|---|---|---|---|---|---|---|

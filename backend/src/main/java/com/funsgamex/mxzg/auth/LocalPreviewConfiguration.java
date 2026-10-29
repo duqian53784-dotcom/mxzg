@@ -13,7 +13,7 @@ public class LocalPreviewConfiguration implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/v1/**")
             .allowedOrigins("http://localhost:7456", "http://127.0.0.1:7456")
-            .allowedMethods("GET", "POST", "OPTIONS")
+            .allowedMethods("GET", "POST", "PUT", "OPTIONS")
             .allowedHeaders("Content-Type", "Authorization");
     }
 }

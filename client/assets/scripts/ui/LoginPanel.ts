@@ -59,7 +59,7 @@ const PREFAB_IDLE = new Color(255, 255, 255, 255);
 
 /**
  * 绑定 LoginPanel.prefab。节点名对齐 Prefab，对外仍是 LoginPanelView。
- * 路径相对 assets：prefabs/ui/login/LoginPanel。不走 resources.load。
+ * 路径相对 assets：prefabs/ui/legacy-login/LoginPanel。不走 resources.load。
  */
 export async function mountLoginPrefab(
   parent: Node,

@@ -9,7 +9,7 @@
 
 | Prefab | 路径（相对 assets） | 挂载点 | Flag（默认 `true`） |
 |--------|---------------------|--------|---------------------|
-| LoginPanel | `prefabs/ui/login/LoginPanel` | `Boot.ts` 的 `buildLoginPanel(...)` | `USE_LOGIN_PREFAB` |
+| LoginPanel | `prefabs/ui/legacy-login/LoginPanel` | `Boot.ts` 的 `buildLoginPanel(...)` | `USE_LOGIN_PREFAB` |
 | CreateRolePanel | `prefabs/ui/login/CreateRolePanel` | `Boot.ts` 的 `buildCreateRolePanel(...)` | `USE_CREATE_ROLE_PREFAB` |
 | CityChrome | `prefabs/ui/city/CityChrome` | `MainApp.ts` 的 `mountCityChrome(...)` | `USE_CITY_CHROME_PREFAB` |
 | CityHub | `prefabs/ui/city/CityHub` | `MainApp.ts` 的 `buildCity()` | `USE_CITY_HUB_PREFAB` |

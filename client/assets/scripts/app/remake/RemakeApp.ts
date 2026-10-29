@@ -1,4 +1,4 @@
-import { _decorator, AudioClip, Component, director, Director, Node, Prefab, resources, sp, SpriteFrame, sys } from "cc";
+import { _decorator, Asset, Component, director, Director, Node, Prefab, sys } from "cc";
 import { AccountModel } from "../../features/account/AccountModel";
 import { AccountApi, readSession } from "../../features/account/AccountApi";
 import { AccountService } from "../../features/account/AccountService";
@@ -12,12 +12,15 @@ import { UIManager, isOpenCancelled } from "../../framework/ui/UIManager";
 import { registerView } from "../../framework/ui/UIRegistry";
 import { UILayer } from "../../framework/ui/UILayer";
 import { RemakeNavigation } from "./RemakeNavigation";
-import { ConfigDb, ConfigLoader } from "../../config/ConfigLoader";
+import { prepareStartupConfig, remakeConfig } from "../../config/RemakeConfig";
 import { BootChrome, loadBootCopy } from "../../ui/bootChrome";
 import { playLogoSplash } from "../../ui/logoSplash";
 import type { LogoSplashHandle } from "../../ui/logoSplash";
 import { runStartup, StartupCancelled } from "./StartupFlow";
 import { LoginEntry } from "./LoginEntry";
+import { createStartupResourceScope, STARTUP_RESOURCE_KEYS } from "./StartupResources";
+import type { ResourceScope } from "../../framework/assets/ResourcePool";
+import { createHomeResourceScope } from "./HomeResources";
 
 const { ccclass, property } = _decorator;
 const SESSION_KEY = "mxzg.remake.developmentSession";
@@ -26,7 +29,6 @@ const SESSION_KEY = "mxzg.remake.developmentSession";
 @ccclass("RemakeApp")
 export class RemakeApp extends Component {
   @property(Prefab) loginPrefab: Prefab | null = null;
-  @property(Prefab) homePrefab: Prefab | null = null;
   @property(Prefab) loadingPrefab: Prefab | null = null;
   @property(Node) pageHost: Node | null = null;
   @property(Node) startupHost: Node | null = null;
@@ -42,9 +44,11 @@ export class RemakeApp extends Component {
   private routeEpoch = 0;
   private routePending = false;
   private paintWaiters = new Set<() => void>();
+  private startupResources: ResourceScope<Asset> | null = null;
+  private homeResources: ResourceScope<Prefab> | null = null;
 
   start(): void {
-    if (!this.loginPrefab || !this.homePrefab || !this.loadingPrefab || !this.pageHost || !this.startupHost) throw new Error("Remake 场景未绑定页面/加载 Prefab 或启动宿主，请重新打开已更新的 Remake.scene");
+    if (!this.loginPrefab || !this.loadingPrefab || !this.pageHost || !this.startupHost) throw new Error("Remake 场景未绑定页面/加载 Prefab 或启动宿主，请重新打开已更新的 Remake.scene");
     const model = new AccountModel();
     const api = new AccountApi(new JsonClient(this.apiBaseUrl, createXhrAdapter()));
     const storage = sys.localStorage;
@@ -68,11 +72,15 @@ export class RemakeApp extends Component {
       }),
     }));
     this.unregisterViews.push(registerView(RemakeHomeView, {
-      id: "remake-home", prefab: "prefabs/ui/remake-home/RemakeHome", layer: UILayer.Page,
-      cache: false, allowMultiple: false, load: async () => this.homePrefab!,
+      id: "remake-home", prefab: "bundles/remake-home/RemakeHome", layer: UILayer.Page,
+      cache: false, allowMultiple: false, load: async () => {
+        if (!this.homeResources) this.homeResources = createHomeResourceScope();
+        return this.homeResources.load("home");
+      },
       createController: view => new HomeController(model, service, view as RemakeHomeView),
     }));
     this.alive = true;
+    this.startupResources = createStartupResourceScope();
     syncRoute = () => {
       if (!this.alive || !this.started) return;
       if (model.snapshot.busy) {
@@ -146,23 +154,16 @@ export class RemakeApp extends Component {
         chrome.show();
         await runStartup([
           { label: "加载游戏配置", weight: 50, run: async progress => {
-            if (!ConfigDb.current) await ConfigLoader.loadAll(progress);
-            else progress(1, 1);
-            const copy = await loadBootCopy();
+            await prepareStartupConfig(progress);
+            const copy = await loadBootCopy(<T>(path: string) => remakeConfig.read<T>(path));
             if (this.alive) chrome.setTips(copy.tips);
           } },
           { label: "加载界面资源", weight: 20, run: async progress => {
-            const jobs: Array<[string, typeof SpriteFrame | typeof sp.SkeletonData | typeof AudioClip]> = [
-              ["spine/jiemian", sp.SkeletonData], ["spine/jindutiao", sp.SkeletonData],
-              ["ui/maps/map-bg-loading/spriteFrame", SpriteFrame], ["audio/bgm-logo", AudioClip],
-            ];
             let done = 0;
-            await Promise.all(jobs.map(([path, type]) => new Promise<void>((resolve, reject) => {
-              resources.load(path, type as typeof SpriteFrame, error => {
-                if (error) { reject(error); return; }
-                progress(++done, jobs.length); resolve();
-              });
-            })));
+            await Promise.all(STARTUP_RESOURCE_KEYS.map(async key => {
+              await this.startupResources!.load(key);
+              progress(++done, STARTUP_RESOURCE_KEYS.length);
+            }));
           } },
           { label: "准备账号信息", weight: 10, run: async () => restore() },
           { label: "准备登录界面", weight: 20, run: async () => openPage() },
@@ -206,8 +207,10 @@ export class RemakeApp extends Component {
     for (const done of this.paintWaiters) done();
     this.logo?.stop(); this.logo?.stopMusic(); this.logo = null;
     this.chrome?.destroy(); this.chrome = null;
+    this.startupResources?.dispose(); this.startupResources = null;
     this.offAccount?.(); this.offAccount = null;
     this.navigation?.dispose(); this.navigation = null;
+    this.homeResources?.dispose(); this.homeResources = null;
     for (const unregister of this.unregisterViews.splice(0)) unregister();
   }
 }

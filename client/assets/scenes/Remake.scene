@@ -295,10 +295,6 @@
       "__expectedType__": "cc.Prefab"
     },
     "apiBaseUrl": "http://127.0.0.1:18080",
-    "homePrefab": {
-      "__uuid__": "bd1203e8-e72a-5d44-bc5c-ab68a868898a",
-      "__expectedType__": "cc.Prefab"
-    },
     "pageHost": {
       "__id__": 18
     },

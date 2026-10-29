@@ -3,6 +3,7 @@ import { BaseView } from "../../../framework/ui/BaseView";
 import { CityChromeView } from "../../city/ui/CityChromeView";
 import { CityHubView } from "../../city/ui/CityHubView";
 import { CityChromeShell } from "../../../ui/CityChromeShell";
+import { prepareCityConfig, readCityGates, remakeConfig } from "../../../config/RemakeConfig";
 import type { AccountState } from "../../account/AccountModel";
 import type { HomeActions, HomeView } from "../HomeController";
 
@@ -39,6 +40,8 @@ export class RemakeHomeView extends BaseView implements HomeView {
   private async openCity(): Promise<void> {
     try {
       if (!this.cityPrefab || !this.chromePrefab || !this.cityHost || !this.chromeHost) throw new Error("RemakeHome 未绑定主城 Prefab 或宿主");
+      await prepareCityConfig();
+      if (this.closed) return;
       const cityNode = instantiate(this.cityPrefab);
       cityNode.parent = this.cityHost;
       this.city = cityNode.getComponent(CityHubView);
@@ -51,7 +54,8 @@ export class RemakeHomeView extends BaseView implements HomeView {
       this.city.runOpen({
         onAtom: id => this.actions?.openFeature(id),
         onMainline: () => this.actions?.openFeature("mainline"),
-        query: { level: () => this.role?.level || 1, openDay: () => 0, db: () => null },
+        query: { level: () => this.role?.level || 1, openDay: () => 0, db: readCityGates },
+        loadConfig: <T>(path: string) => remakeConfig.read<T>(path),
       });
       this.chrome.runOpen({
         onTab: id => this.actions?.openFeature(id),
