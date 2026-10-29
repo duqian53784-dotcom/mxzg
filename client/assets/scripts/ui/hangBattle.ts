@@ -8,8 +8,10 @@
  * 出场光只打在有模型的一侧，中心对齐那一侧的人。没有模型的一侧不播。
  * 数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
  * 摆完场会听 PAGE_SHELL_FIGHT。真服战报或 Mock 回合再往下播攻击、技能、血条和飘字。
+ * 打完盖 BattleEndLayer，等回挂机或下一关，不在横幅闪完后拆层。
+ * 真服胜利再拉 3007。Mock 按这一局的胜负写下本地下一关。
  */
-import { Button, Color, Label, Node, Overflow, resources, sp, Sprite, SpriteFrame, TTFFont, UITransform } from "cc";
+import { BlockInputEvents, Button, Color, Label, Node, Overflow, resources, sp, Sprite, SpriteFrame, TTFFont, UITransform } from "cc";
 import { battleRoundMax } from "../config/battleTiming";
 import { skillCastDelay } from "../config/lookups";
 import { chapterStageEnemies } from "../config/gameCatalog";
@@ -20,6 +22,7 @@ import { Session } from "../core/Session";
 import { planBattle, BattleRound, BattleUnit } from "../module/mainline/battle";
 import { mockBattleCast, replayFromStore } from "../module/mainline/battleFromStore";
 import { WireSession } from "../net/WireSession";
+import { hangFace } from "../features/battle/model/hangFace";
 import {
   WireBattleReport,
   WireSpineBeat,
@@ -45,8 +48,9 @@ import { placeHangFloats, type HangFloat } from "./hangFloat";
 import { pauseIdleSkirmishes, resumeIdleSkirmishes } from "./idleHangSkirmish";
 import { hangAppearAnchor, hangFightStageId, hangStandPoint, IDLE_HANG_SPOTS, IDLE_SKIRMISH_SPOTS, planHangFightLine } from "./idleHangSkirmishPlan";
 import { hangSpineStem } from "./idleHangRoster";
+import { mountBattleEnd } from "./battleEndView";
 import { PAGE_SHELL_FIGHT } from "./prefabShellMap";
-import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
+import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 export type { HangFloat };
 
@@ -173,6 +177,9 @@ export function finishHangBattle(page: Node, win: boolean | null): void {
   const seq = hold ? hold.seq : -1;
   const layer = layerOf(page);
   if (layer) stopHangAppear(layer);
+  const stageId = fightStageId();
+  settleHangResult(win, stageId);
+  repaintHangProgress(page);
   if (layer) {
     const banner = layer.getChildByName("HangSkill");
     if (banner) {
@@ -183,25 +190,174 @@ export function finishHangBattle(page: Node, win: boolean | null): void {
     const flash = layer.getChildByName("HangFlash");
     if (flash) flash.active = false;
   }
-  const timer = setTimeout(() => {
-    const live = holds.get(page);
-    if (!page.isValid || !live || live.seq !== seq) return;
-    stopHangBattle(page);
-  }, 1200);
-  const maybe = timer as { unref?: () => void };
-  if (typeof maybe.unref === "function") maybe.unref();
+  void showHangEnd(page, seq, win, stageId);
 }
 
 export function stopHangBattle(page: Node): void {
   const run = runs.get(page);
   holds.delete(page);
   if (run) dropRun(page, run);
+  dropHangEnd(page);
   const layer = layerOf(page);
   if (layer) layer.destroy();
   dropHangReplay(page);
   setTalk(page, true);
   setCaption(page, "战斗");
   resumeIdleSkirmishes();
+}
+
+/**
+ * 真服胜利发空 c2s 3007，等 s2c 回写 nowIdx / maxIdx，不在这里改 GameStore。
+ * Mock 胜利把打过的关写成下一关。失败和胜负未带都不推进。
+ */
+function settleHangResult(win: boolean | null, stageId: number | null): void {
+  const stageText = stageId === null ? "没有关号" : "第" + stageId + "关";
+  if (win !== true) {
+    if (win === false) GameLog.shared.info("Mainline", "开战结算 失败 " + stageText + "，进度不变");
+    else GameLog.shared.warn("Mainline", "开战结算 胜负未带 " + stageText + "，不拉 3007，不写进度");
+    return;
+  }
+  if (wireFight()) {
+    let sent = false;
+    try {
+      sent = WireSession.pullChapterProbe();
+    } catch (err) {
+      GameLog.shared.warn("Mainline", "开战结算 3007 没有发出 " + messageOf(err));
+      return;
+    }
+    if (!sent) {
+      GameLog.shared.warn("Mainline", "开战结算 3007 没有发出，" + stageText + " 进度不改");
+      return;
+    }
+    GameLog.shared.info("Mainline", "开战结算 胜利 " + stageText + "，已拉 3007");
+    return;
+  }
+  if (stageId === null) {
+    GameLog.shared.warn("Mainline", "开战结算 Mock 没有关号，不写进度");
+    return;
+  }
+  const wrote = GameStore.noteMockVictory(stageId);
+  if (!wrote.ok || wrote.next === null) {
+    GameLog.shared.warn("Mainline", "开战结算 Mock 没有写入 " + stageText + " " + wrote.reason);
+    return;
+  }
+  GameLog.shared.info("Mainline", "开战结算 Mock " + stageText + " 胜利，下一关 " + wrote.next);
+}
+
+function repaintHangProgress(page: Node): void {
+  if (!page.isValid) return;
+  const face = hangFace(Date.now(), Date.now());
+  const names: { [key: string]: string } = {
+    lbl_mission_name: face.caption,
+    HangMissionLabel: face.caption,
+    lbl_gold: face.gold,
+    lbl_souls: face.souls,
+    lbl_exp: face.exp,
+  };
+  const stack: Node[] = [page];
+  while (stack.length > 0) {
+    const node = stack.pop() as Node;
+    const text = names[node.name];
+    if (text) setText(node, text);
+    const kids = node.children;
+    for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+  }
+}
+
+async function showHangEnd(page: Node, seq: number, win: boolean | null, stageId: number | null): Promise<void> {
+  const live = (): boolean => {
+    const now = holds.get(page);
+    return page.isValid && !!now && now.seq === seq;
+  };
+  if (!page.isValid) {
+    GameLog.shared.warn("Mainline", "开战结算时页面已关");
+    return;
+  }
+  let hold: Node | null = null;
+  try {
+    hold = await mountBattleEnd(
+      page,
+      win,
+      () => closeHangEnd(page, seq, false),
+      {
+        stageId: stageId === null ? undefined : stageId,
+        onNext: win === true ? () => closeHangEnd(page, seq, true) : undefined,
+      }
+    );
+  } catch (err) {
+    GameLog.shared.warn("Mainline", "开战结算没有盖上 " + messageOf(err));
+    hold = null;
+  }
+  if (!live()) {
+    if (hold && hold.isValid) hold.destroy();
+    GameLog.shared.info("Mainline", "开战结算时这一局已停");
+    return;
+  }
+  if (!hold) hold = mountCodeEnd(page, win, seq);
+  if (!hold) {
+    GameLog.shared.warn("Mainline", "开战结算没有页面，不拆层");
+    return;
+  }
+  const headline = win === true ? "胜利" : win === false ? "失败" : "胜负未带";
+  GameLog.shared.info("Mainline", "开战结算 盖上结算页 " + headline);
+}
+
+function mountCodeEnd(page: Node, win: boolean | null, seq: number): Node | null {
+  if (!page.isValid) return null;
+  const hold = uiNode("BattleEndHold");
+  const ui = hold.addComponent(UITransform);
+  ui.setContentSize(720, 1280);
+  hold.addComponent(BlockInputEvents);
+  place(createRect("dim", 720, 1280, new Color(8, 16, 32, 180)), hold, 0, 0);
+  const title = win === true ? "胜利" : win === false ? "失败" : "胜负未带";
+  place(createLabel(title, 36, { color: INK, width: 320, height: 48 }), hold, 0, 80);
+  place(createButton("回挂机", () => closeHangEnd(page, seq, false), 200, 52), hold, 0, -40);
+  if (win === true) {
+    place(createButton("下一关", () => closeHangEnd(page, seq, true), 200, 52), hold, 0, -110);
+  }
+  const shell = page.getChildByName("PagePrefabShell");
+  const host = shell && shell.isValid && shell.active ? shell : page;
+  hold.parent = host;
+  hold.setSiblingIndex(Math.max(0, host.children.length - 1));
+  GameLog.shared.warn("Mainline", "开战结算 BattleEndLayer 没有挂上，改用代码结算 " + title);
+  return hold;
+}
+
+function closeHangEnd(page: Node, seq: number, next: boolean): void {
+  const live = holds.get(page);
+  if (!page.isValid || !live || live.seq !== seq) {
+    GameLog.shared.info("Mainline", "开战结算 回挂机时这一局已停");
+    return;
+  }
+  const left = live.left || "我方";
+  const right = live.right || "敌方";
+  stopHangBattle(page);
+  if (wireFight()) {
+    try {
+      WireSession.refreshPersisted();
+      const sent = WireSession.pullChapterProbe();
+      if (sent) GameLog.shared.info("Mainline", "开战结算 回挂机，再拉 2001、5001、3004、3007");
+      else GameLog.shared.warn("Mainline", "开战结算 回挂机时 3007 没有发出");
+    } catch (err) {
+      GameLog.shared.warn("Mainline", "开战结算 回挂机没有拉成 " + messageOf(err));
+    }
+  }
+  if (!next || !page.isValid) return;
+  beginHangBattle(page, left, right);
+  if (!page.isValid) return;
+  page.emit(PAGE_SHELL_FIGHT);
+  GameLog.shared.info("Mainline", "开战结算 下一关");
+}
+
+function dropHangEnd(page: Node): void {
+  const shell = page.isValid ? page.getChildByName("PagePrefabShell") : null;
+  const hosts: Node[] = [];
+  if (page.isValid) hosts.push(page);
+  if (shell && shell.isValid) hosts.push(shell);
+  for (let i = 0; i < hosts.length; i++) {
+    const node = hosts[i].getChildByName("BattleEndHold");
+    if (node && node.isValid) node.destroy();
+  }
 }
 
 /**

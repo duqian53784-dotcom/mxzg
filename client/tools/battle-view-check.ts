@@ -19,7 +19,7 @@ import { HangMissionChipView } from "../assets/scripts/features/battle/ui/HangMi
 import { isOpenCancelled, UIManager } from "../assets/scripts/framework/ui/UIManager";
 import { UILayer } from "../assets/scripts/framework/ui/UILayer";
 import { viewCtorById, viewSpecOf } from "../assets/scripts/framework/ui/UIRegistry";
-import { beginHangBattle, setHangSpeed, stopHangBattle } from "../assets/scripts/ui/hangBattle";
+import { beginHangBattle, finishHangBattle, setHangSpeed, stopHangBattle } from "../assets/scripts/ui/hangBattle";
 import { hangAppearAnchor, hangFightStageId, HANG_APPEAR_BODY, planHangFightLine } from "../assets/scripts/ui/idleHangSkirmishPlan";
 import { PAGE_SHELL_FIGHT } from "../assets/scripts/ui/prefabShellMap";
 import { clearPrefabCache } from "../assets/scripts/ui/prefabLoad";
@@ -170,6 +170,11 @@ function checkSources(): void {
   assert(hang.indexOf("PAGE_SHELL_FIGHT") >= 0 && hang.indexOf("showMockRound") >= 0, "开战要听战报驱动并播 Mock 回合");
   assert(hang.indexOf("开战没有进战报") >= 0, "没有战报要打日志");
   assert(shell.indexOf("开战发出 PAGE_SHELL_FIGHT") >= 0, "开战要发出战报驱动");
+  assert(hang.indexOf("mountBattleEnd") >= 0 && hang.indexOf("开战结算 盖上结算页") >= 0, "打完要盖结算页，不能静默拆层");
+  assert(hang.indexOf("noteMockVictory") >= 0, "Mock 胜利要写本地进度");
+  assert(hang.indexOf("pullChapterProbe") >= 0, "真服胜利要拉 3007");
+  assert(hang.indexOf("开战结算 3007 没有发出") >= 0, "3007 发不出要有日志");
+  assert(hang.indexOf("开战结算 失败") >= 0, "失败要有日志");
   const plan = read("client/assets/scripts/ui/idleHangSkirmishPlan.ts");
   const fightPlan = plan.slice(plan.indexOf("export function planHangFightLine"));
   assert(fightPlan.indexOf("export function planHangFightLine") === 0, "开战敌方有单独规则");
@@ -669,6 +674,14 @@ async function checkManager(): Promise<void> {
   }
 }
 
+function sawMainline(fragment: string): boolean {
+  const recent = GameLog.shared.recent();
+  for (let i = 0; i < recent.length; i++) {
+    if (recent[i].tag === "Mainline" && recent[i].message.indexOf(fragment) >= 0) return true;
+  }
+  return false;
+}
+
 function waitLine(match: (text: string) => boolean, ms: number): Promise<string> {
   const recent = GameLog.shared.recent();
   for (let i = recent.length - 1; i >= 0; i--) {
@@ -803,6 +816,112 @@ async function checkFightRounds(): Promise<void> {
   }
 }
 
+function checkMockProgress(): void {
+  const previous = Session.source;
+  try {
+    Session.source = "mock";
+    GameStore.reset();
+    const before = hangFace(0, 0);
+    assert(before.caption === "主线未同步", "结算前没有关号");
+    const wrote = GameStore.noteMockVictory(1);
+    assert(wrote.ok === true && wrote.next === 2, "Mock 胜利写下下一关");
+    assert(GameStore.source === "empty", "本地进度不把空仓库改成整份 Mock");
+    assert(GameStore.mockStageId() === 2, "下一关能被挂机读到");
+    const after = hangFace(0, 0);
+    assert(after.synced === true && after.caption !== before.caption, "关卡名跟着变 " + after.caption);
+    assert(after.gold !== before.gold, "收益跟着关卡变 " + before.gold + " → " + after.gold);
+    const again = GameStore.noteMockVictory(1);
+    assert(again.ok === false && GameStore.mockStageId() === 2, "重复通关不倒退");
+
+    GameStore.fillFromMock({
+      account: "battle-check",
+      serverId: 1,
+      roleId: 9,
+      name: "旧号",
+      level: 4,
+      gold: 77,
+      diamond: 5,
+      openDay: 2,
+      stageId: 4,
+      clearedStage: 3,
+      idleAnchorMs: 1234,
+      heroes: [{ heroId: 10001, heroType: null, name: "光耀骑士", level: 2, star: 3, fighting: null, weaponLevel: 1 }],
+      items: [{ id: 101, count: 6 }],
+    });
+    const moved = GameStore.noteMockVictory(4);
+    assert(moved.ok === true && moved.next === 5 && GameStore.mockStageId() === 5, "已有 Mock 进度往前一关");
+    const heroes = GameStore.heroes();
+    assert(GameStore.source === "mock" && heroes !== null && heroes.length === 1, "写关卡不改英雄");
+    assert(GameStore.bag() !== null && GameStore.bag()!.length === 1, "写关卡不改背包");
+
+    noteChapter(1, null);
+    const blocked = GameStore.noteMockVictory(3);
+    assert(blocked.ok === false && GameStore.chapter().nowIdx === 1 && GameStore.source === "wire", "真服不在本地改 idx");
+  } finally {
+    Session.source = previous;
+    GameStore.reset();
+  }
+}
+
+async function checkSettlePage(): Promise<void> {
+  const previous = Session.source;
+  const pages: Node[] = [];
+  try {
+    Session.source = "mock";
+    GameStore.reset();
+    const page = new Node("LiveShell");
+    pages.push(page);
+    beginHangBattle(page, "我方", "敌方");
+    GameLog.shared.clear();
+    const pending = waitLine((text) => text.indexOf("开战结算 盖上结算页") >= 0, 800);
+    finishHangBattle(page, true);
+    assert(GameStore.mockStageId() === 2, "打完立刻写下下一关");
+    assert(page.getChildByName("HangBattle") !== null, "结算出来之前战斗层还在");
+    const line = await pending;
+    assert(line.indexOf("胜利") >= 0, "结算页写明胜利 " + line);
+    assert(page.getChildByName("BattleEndHold") !== null, "结算页留在画面上");
+    assert(page.getChildByName("HangBattle") !== null, "结算页还在时不拆战斗层");
+    stopHangBattle(page);
+    assert(page.getChildByName("BattleEndHold") === null, "回挂机才收结算页");
+    assert(page.getChildByName("HangBattle") === null, "回挂机才拆战斗层");
+
+    GameStore.reset();
+    const lost = new Node("LiveShell");
+    pages.push(lost);
+    beginHangBattle(lost, "我方", "敌方");
+    GameLog.shared.clear();
+    const loseWait = waitLine((text) => text.indexOf("开战结算 盖上结算页") >= 0, 800);
+    finishHangBattle(lost, false);
+    assert(GameStore.mockStageId() === null, "失败不写关号");
+    const loseLine = await loseWait;
+    assert(loseLine.indexOf("失败") >= 0, "失败结算页 " + loseLine);
+    assert(sawMainline("开战结算 失败") && sawMainline("进度不变"), "失败要写明进度不变");
+    assert(lost.getChildByName("BattleEndHold") !== null, "失败也要有结算页");
+    stopHangBattle(lost);
+
+    Session.source = "wire";
+    noteChapter(1, null);
+    const wired = new Node("LiveShell");
+    pages.push(wired);
+    beginHangBattle(wired, "我方", "敌方");
+    GameLog.shared.clear();
+    const wireWait = waitLine((text) => text.indexOf("开战结算 盖上结算页") >= 0, 800);
+    finishHangBattle(wired, true);
+    assert(GameStore.chapter().nowIdx === 1, "发不出 3007 时不改 nowIdx");
+    const wireLine = await wireWait;
+    assert(wireLine.indexOf("胜利") >= 0, "真服打完也盖胜利页 " + wireLine);
+    assert(sawMainline("开战结算 3007 没有发出") && sawMainline("进度不改"), "真服发不出 3007 要写明");
+    assert(wired.getChildByName("BattleEndHold") !== null, "真服打完也盖结算页");
+    stopHangBattle(wired);
+  } finally {
+    for (let i = 0; i < pages.length; i++) {
+      if (pages[i].isValid) stopHangBattle(pages[i]);
+    }
+    Session.source = previous;
+    GameStore.reset();
+  }
+}
+
 async function main(): Promise<void> {
   GameLog.shared.mirrorConsole = false;
   checkFlag();
@@ -811,6 +930,8 @@ async function main(): Promise<void> {
   checkRegistry();
   checkData();
   checkFightLine();
+  checkMockProgress();
+  await checkSettlePage();
   await checkFightRounds();
   await checkPaint();
   await checkManager();

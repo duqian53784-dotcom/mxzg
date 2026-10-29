@@ -257,10 +257,37 @@ export class GameStore {
     return "主线 · 未同步";
   }
 
-  /** Mock 下一关。真服返回 null，调用方继续用 Session。 */
+  /**
+   * 本机下一关。真服返回 null，调用方继续用 3007。
+   * 空仓库在 Mock 胜利写下关号之后也能读到，不把 source 改成 mock，英雄和背包仍按原来的源。
+   */
   static mockStageId(): number | null {
-    if (this.state.source !== "mock" || this.state.stageId === null || this.state.stageId < 1) return null;
-    return this.state.stageId;
+    if (this.state.source === "wire") return null;
+    if (this.state.stageId === null || this.state.stageId < 1) return null;
+    return Math.floor(this.state.stageId);
+  }
+
+  /**
+   * Mock 挂机胜利后写下下一关。只动 stageId / clearedStage。
+   * 不改 source、英雄、背包、钱包。真服返回 false，进度只跟 s2c 3007。
+   * 打过的关不倒退。
+   */
+  static noteMockVictory(stageId: number): { ok: boolean; next: number | null; reason: string } {
+    if (this.state.source === "wire") return { ok: false, next: null, reason: "真服不在本地改关卡" };
+    if (typeof stageId !== "number" || !isFinite(stageId) || stageId < 1) {
+      return { ok: false, next: null, reason: "关号无效" };
+    }
+    const cleared = Math.floor(stageId);
+    const next = cleared + 1;
+    const had = this.state.clearedStage !== null && this.state.clearedStage >= 0 ? this.state.clearedStage : 0;
+    if (cleared <= had) {
+      const stay = this.state.stageId !== null && this.state.stageId >= 1 ? this.state.stageId : next;
+      return { ok: false, next: stay, reason: "已经过了这一关" };
+    }
+    this.state.clearedStage = cleared;
+    this.state.stageId = next;
+    this.persist();
+    return { ok: true, next, reason: "" };
   }
 
   static chapter(): { fromStore: boolean; nowIdx: number | null; maxIdx: number | null } {
