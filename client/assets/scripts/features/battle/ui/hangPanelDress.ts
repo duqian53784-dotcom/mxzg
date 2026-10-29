@@ -41,11 +41,7 @@ export function dressHangChrome(panel: Node, face: HangFace): void {
   }
   const mission = plate.getChildByName("lbl_mission_name");
   if (mission) mission.setSiblingIndex(Math.max(0, plate.children.length - 1));
-  const box = plate.getChildByName("spr_box");
-  if (box) {
-    box.active = true;
-    loopSprite(box, "HangBoxFx", framePaths(BOX_FX), 56, 60, () => noteOnce("box"));
-  }
+  seatChest(plate);
   seatFill(plate, "spr_progress_AFK_bg", "ui/city/main-scene_progress-AFK", timeRatio());
   seatFill(plate, "CCSprite_4", "ui/city/main-scene_progress-hangs", face.gold === "—/m" ? 0 : 1);
   seatFill(plate, "CCSprite_3", "ui/city/main-scene_progress-exp", face.souls === "—/m" ? 0 : 1);
@@ -67,6 +63,51 @@ function findBattleButton(panel: Node, plate: Node): Node | null {
   const shell = panel.parent;
   if (!shell) return null;
   return shell.getChildByName("btn_battle");
+}
+
+/** CCBI spr_box：(-253, 75.5)，44×44，main-scene_spr-box-2。不混进金币宝石堆。 */
+function seatChest(plate: Node): void {
+  let box = plate.getChildByName("spr_box");
+  if (!box) {
+    box = uiNode("spr_box");
+    const created = box.addComponent(UITransform);
+    assignContentSize(created, 44, 44);
+    created.setAnchorPoint(0.5, 0.5);
+    const image = box.addComponent(Sprite);
+    image.sizeMode = Sprite.SizeMode.CUSTOM;
+    image.type = Sprite.Type.SIMPLE;
+    try {
+      place(box, plate, -253, 75.5);
+    } catch (_err) {
+      if (box.isValid) box.destroy();
+      return;
+    }
+  }
+  box.active = true;
+  box.setPosition(-253, 75.5, 0);
+  const ui = box.getComponent(UITransform);
+  if (ui) {
+    ui.setAnchorPoint(0.5, 0.5);
+    assignContentSize(ui, 44, 44);
+  }
+  const sprite = box.getComponent(Sprite) || box.addComponent(Sprite);
+  sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+  const node = box;
+  try {
+    resources.load(CHEST_ICON + "/spriteFrame", SpriteFrame, (err, asset) => {
+      if (!node.isValid || err || !asset) return;
+      const image = node.getComponent(Sprite);
+      if (!image) return;
+      image.spriteFrame = asset;
+      image.sizeMode = Sprite.SizeMode.CUSTOM;
+    });
+  } catch (_err) {
+    /* 宝箱图没挂上时节点还在。 */
+  }
+  box.setSiblingIndex(Math.max(0, plate.children.length - 1));
+  const mission = plate.getChildByName("lbl_mission_name");
+  if (mission) mission.setSiblingIndex(Math.max(0, plate.children.length - 1));
+  loopSprite(box, "HangBoxFx", framePaths(BOX_FX), 56, 60, () => noteOnce("box"));
 }
 
 function seatCrystalFill(frame: Node): void {
@@ -164,7 +205,7 @@ function lootIcons(face: HangFace): string[] {
   if (goldOn || hasTable) icons.push(COIN_ICON, COIN_ICON, COIN_ICON, COIN_ICON);
   if (soulsOn || hasTable) icons.push(MOON_ICON, MOON_ICON);
   if (expOn || hasTable) icons.push(ROLE_ICON);
-  icons.push(GEM_ICON, GEM_ICON, CHEST_ICON);
+  icons.push(GEM_ICON, GEM_ICON);
   for (let i = 0; i < drops.length && icons.length < 8; i++) {
     const faceDrop = drops[i];
     icons.push(itemIconResource(faceDrop.itemType, null) || "ui/bag/backpack_" + faceDrop.itemType);
