@@ -18,8 +18,9 @@ import { NetClient } from "../net/NetClient";
 import { Proto } from "../net/protocol/Proto";
 import { WireSession } from "../net/WireSession";
 import { applyIdleClaim, claimToast, IDLE_HERO_EXP_ID, IDLE_ITEM_ID, IDLE_ROLE_EXP_ID } from "../module/idle/rewards";
-import { chapterPlaceLabel, heroBaseStats, heroProfile, heroSkillPage, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles, occupationName } from "../config/gameCatalog";
-import { chapterDrops, chapterIdleMinute, chapterStageFace, DropFace, heroLevelNeed, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, idleDropEverySec, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleBonus, vipIdleLine } from "../config/rosterCatalog";
+import { heroBaseStats, heroProfile, heroSkillPage, HeroProfile, itemBagTab, itemIconResource, itemIsWallet, itemProfile, listHeroProfiles, occupationName } from "../config/gameCatalog";
+import { chapterDrops, chapterIdleMinute, chapterStageCaption, chapterStageFace, DropFace, heroLevelNeed, heroSpaceCap, heroStarNeeds, heroStarStep, idleCapMs, idleDropEverySec, listDragons, listGodGears, listJewels, listRelics, RelicFace, SacrificeNeed, StarStep, vipIdleBonus, vipIdleLine } from "../config/rosterCatalog";
+import { hangFace, hangShownStage } from "../features/battle/model/hangFace";
 import { IDLE_UNIX_FLOOR, wireIdleCapMs, wireIdleElapsedMs } from "../net/protocol/wireIdle";
 import { formationFaceSlot, WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/wireLineUpSave";
 import { mainFormationHeroes } from "../net/protocol/starterLineup";
@@ -1548,17 +1549,9 @@ function paintFormationSlots(view: Node, selected: number[], onRemove: (heroId: 
   writeNamed(view, "lbl_battle_count", known ? String(power) : "—");
 }
 
-/** 挂机左上角的关卡字。没同步不写第 0 章。 */
+/** 挂机左上角的关卡字。和 BattleHangView 同一套，不拿 chapter.idx 把后面的关写成第 1 关。 */
 export function hangMissionCaption(): string {
-  const mock = GameStore.mockStageId();
-  const chapter = GameStore.chapter();
-  const synced = (mock !== null && mock >= 1) || chapter.nowIdx !== null || chapter.maxIdx !== null;
-  if (!synced) return "主线未同步";
-  const idx = currentStageIdx();
-  const place = chapterPlaceLabel(idx);
-  if (place) return place;
-  if (idx >= 1) return "第" + idx + "关";
-  return "主线未同步";
+  return hangFace(Date.now(), Date.now()).caption;
 }
 
 /** 已有 ChapterPreviewLayer。产出用这一关 reward_base，掉落用 drop_group。只有当前关出战，不新发协议。 */
@@ -1568,7 +1561,7 @@ export function dressChapterPreview(view: Node, onFight: () => void, stageIdx?: 
   const mock = GameStore.mockStageId();
   const chapter = GameStore.chapter();
   const known = (mock !== null && mock >= 1) || chapter.nowIdx !== null || chapter.maxIdx !== null;
-  const placeName = known ? chapterPlaceLabel(idx) : "";
+  const placeName = known ? chapterStageCaption(idx) || "" : "";
   const head = placeName || (known && idx >= 1 ? "第" + idx + "关" : "主线未同步");
   const face = known ? chapterStageFace(idx) : null;
   const area = face && face.name ? face.name : "";
@@ -3350,10 +3343,6 @@ function showInfoCard(view: Node, spec: InfoCard): void {
 }
 
 function currentStageIdx(): number {
-  const mock = GameStore.mockStageId();
-  if (mock !== null && mock >= 1) return Math.floor(mock);
-  const chapter = GameStore.chapter();
-  if (chapter.nowIdx !== null && chapter.nowIdx >= 1) return Math.floor(chapter.nowIdx);
-  if (chapter.maxIdx !== null && chapter.maxIdx >= 1) return Math.floor(chapter.maxIdx);
-  return 1;
+  const shown = hangShownStage();
+  return shown === null ? 1 : shown;
 }

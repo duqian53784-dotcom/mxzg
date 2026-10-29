@@ -14,6 +14,7 @@ import {
   decodeWireBattleMatch,
   formatWireBattleMatch,
   resolveWireBattleWin,
+  wireBattleActionCount,
   WIRE_BATTLE_MATCH_CMD,
   WireBattleMatch,
 } from "./protocol/wireBattle";
@@ -3366,13 +3367,16 @@ export class WireSession {
       return;
     }
     if (!snap) {
-      GameLog.shared.info("Wire", "s2c 3001 解不开，战报不改");
+      const body = wireBody(data);
+      const size = body && typeof body.length === "number" ? body.length : 0;
+      GameLog.shared.info("Wire", "s2c 3001 解不开，战报不改 体长 " + size);
       return;
     }
     this.battleMatch = snap;
     this.battleSerial += 1;
     const roleId = Session.role ? Session.role.roleId : null;
-    const note = "s2c 3001 " + formatWireBattleMatch(snap, roleId);
+    const attacks = snap.report ? wireBattleActionCount(snap.report) : 0;
+    const note = "s2c 3001 " + formatWireBattleMatch(snap, roleId) + " 攻击拍 " + attacks;
     GameLog.shared.info("Wire", note);
     if (snap.report && resolveWireBattleWin(snap.report, roleId) === true) {
       GameLog.shared.info("Wire", "s2c 3001 胜，再拉 3007");

@@ -3,12 +3,12 @@
  * 不解协议。关卡没同步时标题写「主线未同步」，不编一关名字。
  * 三格和旧挂机条同一套：表上的每分钟，真服没表写 —/m，Mock 才退回旧节奏。
  */
-import { chapterPlaceLabel } from "../../../config/gameCatalog";
-import { chapterIdleMinute, idleCapMs } from "../../../config/rosterCatalog";
+import { chapterIdleMinute, chapterStageCaption, idleCapMs } from "../../../config/rosterCatalog";
 import { GameStore } from "../../../core/GameStore";
 import { Session } from "../../../core/Session";
 import { formatHangClock, goldPerMin, itemEveryMs } from "../../../module/idle/rewards";
 import { IDLE_UNIX_FLOOR, wireIdleCapMs, wireIdleElapsedMs } from "../../../net/protocol/wireIdle";
+import { hangFightStageId } from "../../../ui/idleHangSkirmishPlan";
 
 export interface HangFace {
   caption: string;
@@ -40,18 +40,25 @@ function chapterSynced(): boolean {
   return (mock !== null && mock >= 1) || chapter.nowIdx !== null || chapter.maxIdx !== null;
 }
 
-function stageIdx(): number {
-  const mock = GameStore.mockStageId();
-  if (mock !== null && mock >= 1) return Math.floor(mock);
+/**
+ * 面板上的当前关，和开战日志同一套。
+ * chapter.idx 是阵位行，前几行都还是第 1 关。不能拿 maxIdx 去对那一列。
+ * 真服没同步时是 null。收益在没关号时仍按第 1 关的表，不把标题写成第 1 关。
+ */
+export function hangShownStage(): number | null {
   const chapter = GameStore.chapter();
-  if (chapter.nowIdx !== null && chapter.nowIdx >= 1) return Math.floor(chapter.nowIdx);
-  if (chapter.maxIdx !== null && chapter.maxIdx >= 1) return Math.floor(chapter.maxIdx);
-  return 1;
+  const wire = Session.source === "wire" || GameStore.source === "wire";
+  return hangFightStageId(GameStore.mockStageId(), chapter.nowIdx, chapter.maxIdx, wire);
+}
+
+function stageIdx(): number {
+  const shown = hangShownStage();
+  return shown === null ? 1 : shown;
 }
 
 function captionOf(synced: boolean, idx: number): string {
   if (!synced) return "主线未同步";
-  const place = chapterPlaceLabel(idx);
+  const place = chapterStageCaption(idx);
   if (place) return place;
   if (idx >= 1) return "第" + idx + "关";
   return "主线未同步";

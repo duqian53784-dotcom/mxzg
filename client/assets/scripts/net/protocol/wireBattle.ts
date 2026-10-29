@@ -20,6 +20,7 @@
  *
  * s2c 是 GResBattleMatch。report 是字段 1，length-delimited 的 BattleReport。
  * 仓库没有 Battle.proto 全文。字段 2 已确认是 battle_type，不是胜负。出现的 0 仍是 0。
+ * 日服旧客户端的战报 JSON（attack_info / skill_id / unit_id）若整段或字段 1 就是这份 JSON，按攻击拍收，不改下面的 protobuf 字段号。
  * 其余号按声明顺序锁在本文件：3 atk_id，4 def_id，5 win_id，6 repeated rounds，
  * 7 攻方英雄，8 守方英雄。回合 1 序号、2 行动；行动 1 atk_pos、2 skill_id、3 hits、4 camp；
  * 命中 1 def_pos、2 hurt、3 hp；英雄 1 pos、2 hero_id、3 hp、4 max_hp。
@@ -171,6 +172,28 @@ export interface WireBattleMatch {
   marks: WireBattleMark[];
 }
 
+/** 这一份里能播的攻击拍。只有空壳、没有位置、技能和命中的行动不算。 */
+export function wireBattleActionCount(report: WireBattleReport): number {
+  let count = 0;
+  for (let r = 0; r < report.rounds.length; r++) {
+    const actions = report.rounds[r].actions;
+    for (let a = 0; a < actions.length; a++) {
+      if (actionHasBeat(actions[a])) count += 1;
+    }
+  }
+  return count;
+}
+
+function actionHasBeat(action: WireBattleAction): boolean {
+  if (action.atkPos !== null || action.skillId !== null) return true;
+  if (action.camp === WIRE_BATTLE_CAMP_ALLY || action.camp === WIRE_BATTLE_CAMP_ENEMY) return true;
+  for (let i = 0; i < action.hits.length; i++) {
+    const hit = action.hits[i];
+    if (hit.defPos !== null || hit.hurt !== null || hit.hp !== null) return true;
+  }
+  return false;
+}
+
 export type WireSpineClip = "stand" | "attack" | "hit" | "die" | "idle";
 export type WireSpineSide = "ally" | "enemy" | "sword" | "flag";
 
@@ -239,6 +262,8 @@ export function decodeWireBattleMatch(body: Uint8Array | null | undefined): Wire
   if (!body) return null;
   if (body.length === 0) return { empty: true, report: null, marks: [] };
   if (body.length > MAX_BODY) return null;
+  const json = battleReportFromJson(body);
+  if (json && wireBattleActionCount(json) > 0) return { empty: false, report: json, marks: [] };
   const fields = readRawFields(body);
   if (!fields) return null;
   const marks: WireBattleMark[] = [];
@@ -672,6 +697,8 @@ function pushUnique(list: string[], stem: string): void {
 
 /** BattleReport。3001、3006 和 3102 的 report 都走这一段，不另写一套 rounds。 */
 export function decodeWireBattleReport(body: Uint8Array): WireBattleReport | null {
+  const json = battleReportFromJson(body);
+  if (json && wireBattleActionCount(json) > 0) return json;
   const report = emptyReport();
   if (body.length === 0) return report;
   const fields = readRawFields(body);
@@ -724,7 +751,186 @@ export function decodeWireBattleReport(body: Uint8Array): WireBattleReport | nul
     const mark = markOf(row);
     if (mark) report.marks.push(mark);
   }
+  if (wireBattleActionCount(report) === 0 && fields) {
+    for (let i = 0; i < fields.length; i++) {
+      const row = fields[i];
+      if (row.kind !== "bytes" || !row.bytes) continue;
+      const nested = battleReportFromJson(row.bytes);
+      if (nested && wireBattleActionCount(nested) > 0) return nested;
+    }
+  }
   return report;
+}
+
+/**
+ * 日服旧战报是 JSON：rounds[].attack_info[].skill.skill_id，攻击者是 unit_id。
+ * 不是这份形状就返回 null，调用方继续按 protobuf 解。
+ */
+function battleReportFromJson(body: Uint8Array): WireBattleReport | null {
+  if (body.length === 0 || body[0] !== 0x7b) return null;
+  let data: unknown;
+  try {
+    data = JSON.parse(bytesToText(body));
+  } catch (_err) {
+    return null;
+  }
+  if (!data || typeof data !== "object") return null;
+  const root = data as Record<string, unknown>;
+  if (!Array.isArray(root.rounds)) return null;
+  const attacker = asRecord(root.attacker);
+  const defender = asRecord(root.defender);
+  const atkHeroes = jsonHeroes(attacker);
+  const defHeroes = jsonHeroes(defender);
+  const seats = jsonSeats(atkHeroes, defHeroes, attacker, defender);
+  const rounds: WireBattleRound[] = [];
+  for (let i = 0; i < root.rounds.length; i++) {
+    const round = jsonRound(root.rounds[i], seats);
+    if (round) rounds.push(round);
+  }
+  const report = emptyReport();
+  report.battleType = finiteInt(root.battle_type);
+  report.atkId = attacker ? finiteInt(attacker.player_id) : null;
+  report.defId = defender ? finiteInt(defender.player_id) : null;
+  report.winId = finiteInt(root.win_id);
+  report.rounds = rounds;
+  report.atkHeroes = atkHeroes;
+  report.defHeroes = defHeroes;
+  report.marks.push({ field: 99, text: "attack_info" });
+  if (wireBattleActionCount(report) === 0) return null;
+  return report;
+}
+
+interface JsonSeat {
+  unitId: number;
+  pos: number | null;
+  camp: number;
+}
+
+function jsonHeroes(side: Record<string, unknown> | null): WireBattleHero[] {
+  if (!side || !Array.isArray(side.heros)) return [];
+  const out: WireBattleHero[] = [];
+  for (let i = 0; i < side.heros.length; i++) {
+    const row = asRecord(side.heros[i]);
+    if (!row) continue;
+    out.push({
+      pos: finiteInt(row.position),
+      heroId: finiteInt(row.hero_id),
+      hp: finiteInt(row.hp),
+      maxHp: finiteInt(row.max_hp),
+      marks: [],
+    });
+  }
+  return out;
+}
+
+function jsonSeats(
+  atk: WireBattleHero[],
+  def: WireBattleHero[],
+  attacker: Record<string, unknown> | null,
+  defender: Record<string, unknown> | null
+): JsonSeat[] {
+  const seats: JsonSeat[] = [];
+  pushSeats(seats, attacker, atk, WIRE_BATTLE_CAMP_ALLY);
+  pushSeats(seats, defender, def, WIRE_BATTLE_CAMP_ENEMY);
+  return seats;
+}
+
+function pushSeats(seats: JsonSeat[], side: Record<string, unknown> | null, heroes: WireBattleHero[], camp: number): void {
+  if (!side || !Array.isArray(side.heros)) return;
+  for (let i = 0; i < side.heros.length && i < heroes.length; i++) {
+    const row = asRecord(side.heros[i]);
+    if (!row) continue;
+    const unitId = finiteInt(row.unit_id);
+    if (unitId === null) continue;
+    seats.push({ unitId, pos: heroes[i].pos, camp });
+  }
+}
+
+function jsonRound(value: unknown, seats: JsonSeat[]): WireBattleRound | null {
+  const row = asRecord(value);
+  if (!row) return null;
+  const round: WireBattleRound = { index: finiteInt(row.round), actions: [], marks: [] };
+  if (!Array.isArray(row.attack_info)) return round;
+  for (let i = 0; i < row.attack_info.length; i++) {
+    const action = jsonAttack(row.attack_info[i], seats);
+    if (action) round.actions.push(action);
+  }
+  return round;
+}
+
+function jsonAttack(value: unknown, seats: JsonSeat[]): WireBattleAction | null {
+  const row = asRecord(value);
+  if (!row) return null;
+  const unitId = finiteInt(row.unit_id);
+  const seat = unitId === null ? null : findSeat(seats, unitId);
+  const skill = asRecord(row.skill);
+  const action: WireBattleAction = {
+    atkPos: seat ? seat.pos : null,
+    skillId: skill ? finiteInt(skill.skill_id) : null,
+    camp: seat ? seat.camp : null,
+    hits: [],
+    marks: [],
+  };
+  if (skill && Array.isArray(skill.effect_info)) {
+    for (let i = 0; i < skill.effect_info.length; i++) jsonHits(action, skill.effect_info[i], seats);
+  }
+  if (!actionHasBeat(action)) return null;
+  return action;
+}
+
+function jsonHits(action: WireBattleAction, value: unknown, seats: JsonSeat[]): void {
+  const effect = asRecord(value);
+  if (!effect || !Array.isArray(effect.buff_info)) return;
+  for (let i = 0; i < effect.buff_info.length; i++) {
+    const buff = asRecord(effect.buff_info[i]);
+    if (!buff) continue;
+    const hurt = jsonHurt(buff.update);
+    if (hurt === null) continue;
+    const targetId = finiteInt(buff.target_unitId);
+    const seat = targetId === null ? null : findSeat(seats, targetId);
+    const hit: WireBattleHit = { defPos: seat ? seat.pos : null, hurt, hp: null, marks: [] };
+    if (finiteInt(buff.hit) === 2) hit.marks.push({ field: 2, text: "暴击" });
+    action.hits.push(hit);
+  }
+}
+
+function jsonHurt(value: unknown): number | null {
+  if (!Array.isArray(value)) return null;
+  let hurt = 0;
+  let seen = false;
+  for (let i = 0; i < value.length; i++) {
+    const row = asRecord(value[i]);
+    if (!row) continue;
+    const delta = finiteInt(row.value);
+    if (delta === null || delta >= 0) continue;
+    hurt += -delta;
+    seen = true;
+  }
+  return seen ? hurt : null;
+}
+
+function findSeat(seats: JsonSeat[], unitId: number): JsonSeat | null {
+  for (let i = 0; i < seats.length; i++) {
+    if (seats[i].unitId === unitId) return seats[i];
+  }
+  return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function finiteInt(value: unknown): number | null {
+  if (typeof value !== "number" || !isFinite(value)) return null;
+  return Math.floor(value);
+}
+
+function bytesToText(body: Uint8Array): string {
+  if (typeof TextDecoder !== "undefined") return new TextDecoder("utf-8").decode(body);
+  let text = "";
+  for (let i = 0; i < body.length; i++) text += String.fromCharCode(body[i]);
+  return text;
 }
 
 function decodeRound(body: Uint8Array): WireBattleRound | null {
@@ -891,7 +1097,7 @@ function readRawFields(body: Uint8Array): RawField[] | null {
   let i = 0;
   while (i < body.length) {
     const key = readVarint(body, i);
-    if (!key) return null;
+    if (!key || key.overflow) return null;
     const field = key.value >>> 3;
     const wt = key.value & 7;
     i = key.next;
@@ -899,13 +1105,30 @@ function readRawFields(body: Uint8Array): RawField[] | null {
     if (wt === 0) {
       const val = readVarint(body, i);
       if (!val) return null;
-      fields.push({ field, kind: "varint", varint: val.value });
+      if (val.overflow) fields.push({ field, kind: "varint" });
+      else fields.push({ field, kind: "varint", varint: val.value });
       i = val.next;
+      continue;
+    }
+    if (wt === 1) {
+      if (i + 8 > body.length) return null;
+      const fixed = readFixed(body, i, 8);
+      i += 8;
+      if (fixed.overflow) fields.push({ field, kind: "varint" });
+      else fields.push({ field, kind: "varint", varint: fixed.value });
+      continue;
+    }
+    if (wt === 5) {
+      if (i + 4 > body.length) return null;
+      const fixed = readFixed(body, i, 4);
+      i += 4;
+      if (fixed.overflow) fields.push({ field, kind: "varint" });
+      else fields.push({ field, kind: "varint", varint: fixed.value });
       continue;
     }
     if (wt === 2) {
       const len = readVarint(body, i);
-      if (!len) return null;
+      if (!len || len.overflow) return null;
       i = len.next;
       if (len.value < 0 || i + len.value > body.length) return null;
       const blob = body.slice(i, i + len.value);
@@ -918,7 +1141,17 @@ function readRawFields(body: Uint8Array): RawField[] | null {
   return fields;
 }
 
-function readVarint(body: Uint8Array, offset: number): { value: number; next: number } | null {
+function readFixed(body: Uint8Array, offset: number, size: number): { value: number; overflow: boolean } {
+  let value = 0;
+  for (let b = 0; b < size; b++) {
+    const add = body[offset + b] * Math.pow(2, 8 * b);
+    if (!Number.isSafeInteger(value + add)) return { value: 0, overflow: true };
+    value += add;
+  }
+  return { value, overflow: false };
+}
+
+function readVarint(body: Uint8Array, offset: number): { value: number; next: number; overflow: boolean } | null {
   let value = 0;
   let shift = 0;
   let i = offset;
@@ -927,9 +1160,9 @@ function readVarint(body: Uint8Array, offset: number): { value: number; next: nu
     i += 1;
     value += (b & 0x7f) * Math.pow(2, shift);
     if ((b & 0x80) === 0) {
-      if (isProtoInt64Neg1(body, offset, i)) return { value: -1, next: i };
-      if (!Number.isSafeInteger(value) || value < 0) return null;
-      return { value, next: i };
+      if (isProtoInt64Neg1(body, offset, i)) return { value: -1, next: i, overflow: false };
+      if (!Number.isSafeInteger(value) || value < 0) return { value: 0, next: i, overflow: true };
+      return { value, next: i, overflow: false };
     }
     shift += 7;
   }

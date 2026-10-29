@@ -5,6 +5,7 @@
  * 刷新后真服角色在游戏服 MySQL 里，重新登录再由 s2c 灌回来。
  * 这里另存一份不含密码、不含 token 的快照，只为了 Mock 进度和登录页「上次角色」提示。
  */
+import { GameLog } from "./GameLog";
 import { formatWireMainline } from "../net/protocol/wireChapter";
 import type { WireBagItem } from "../net/protocol/wireBag";
 import type { WireBattleMatch } from "../net/protocol/wireBattle";
@@ -151,6 +152,27 @@ function emptyState(): StoreState {
 
 export class GameStore {
   private static state: StoreState = emptyState();
+  private static watchers: Array<() => void> = [];
+
+  /** 进度写进 Store 之后马上通知挂机面板。关掉时调用返回的函数。 */
+  static subscribe(listener: () => void): () => void {
+    this.watchers.push(listener);
+    return () => {
+      const index = this.watchers.indexOf(listener);
+      if (index >= 0) this.watchers.splice(index, 1);
+    };
+  }
+
+  private static notify(): void {
+    const list = this.watchers.slice();
+    for (let i = 0; i < list.length; i++) {
+      try {
+        list[i]();
+      } catch (err) {
+        GameLog.shared.error("Store", "挂机进度没有刷新 " + (err instanceof Error ? err.message : "未知错误"));
+      }
+    }
+  }
 
   static get source(): StoreSource {
     return this.state.source;
@@ -203,6 +225,7 @@ export class GameStore {
     next.battle = input.battle;
     this.state = next;
     this.persist();
+    this.notify();
   }
 
   /** Mock 回包之后整份替换。不拿来填真服。 */
@@ -246,6 +269,7 @@ export class GameStore {
       battle: null,
     };
     this.persist();
+    this.notify();
   }
 
   static mainlineLabel(): string {
@@ -287,6 +311,7 @@ export class GameStore {
     this.state.clearedStage = cleared;
     this.state.stageId = next;
     this.persist();
+    this.notify();
     return { ok: true, next, reason: "" };
   }
 

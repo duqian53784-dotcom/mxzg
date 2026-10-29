@@ -15,6 +15,7 @@
  */
 import { Color, HorizontalTextAlignment, Label, Node, Overflow, resources, sp, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
 import { chapterStageFace } from "../config/rosterCatalog";
+import { hangShownStage } from "../features/battle/model/hangFace";
 import { GameLog } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
@@ -92,6 +93,8 @@ export function mountIdleHang(parent: Node): Node {
     paintHallSprite(floor, "ui/chapter/hang/" + map + "_F", IDLE_HANG_FLOOR);
   };
   paintHall();
+  const offStage = GameStore.subscribe(() => paintHall());
+  root.once(Node.EventType.NODE_DESTROYED, () => offStage());
   // 进度光在挂机底栏 AFK 条上（screenFill），不另贴在屏外。
 
   const heroes = uiNode("IdleHeroes");
@@ -345,12 +348,8 @@ function spriteNode(name: string, width: number, height: number): Node {
 }
 
 function hangStageIdx(): number {
-  const mock = GameStore.mockStageId();
-  if (mock !== null && mock >= 1) return Math.floor(mock);
-  const chapter = GameStore.chapter();
-  if (chapter.nowIdx !== null && chapter.nowIdx >= 1) return Math.floor(chapter.nowIdx);
-  if (chapter.maxIdx !== null && chapter.maxIdx >= 1) return Math.floor(chapter.maxIdx);
-  return 1;
+  const shown = hangShownStage();
+  return shown === null ? 1 : shown;
 }
 
 const hallMiss = new Set<string>();
