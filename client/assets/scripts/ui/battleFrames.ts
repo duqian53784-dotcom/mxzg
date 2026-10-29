@@ -11,6 +11,7 @@ import {
   skillIdForSpineStem,
   skillLayerFrames,
   skillRestLayerFrames,
+  skillStemForId,
   skillStemFrames,
 } from "../net/protocol/battleAssetIndex";
 
@@ -183,5 +184,50 @@ export function hangSkillVfx(stem: string | null, skilled: boolean): { skill: st
     layers,
     arrow: skillId === null ? [] : skillArrowFrames(skillId),
     hit: hitFramePaths(skillId),
+  };
+}
+
+export interface HangStrikeStack {
+  skill: string[];
+  layers: string[][];
+  arrow: string[];
+  hit: string[];
+  /** report：战报技能号有帧。stem：套名映射。hero-skill：两处都没有，改播通用技能。 */
+  source: "report" | "stem" | "hero-skill";
+}
+
+/**
+ * 开战这一拍要挂的技能帧。
+ * 先用战报 skill_id 对帧表。对不上再按套名（补 0 / 换皮表）。两处都没有就播 hero-skill，调用方打「没有对上」并仍然挂上。
+ * 不改 hangSkillVfx，演武奇数刀仍走套名。
+ */
+export function hangStrikeFrames(stem: string | null, skillId: number | null): HangStrikeStack {
+  if (typeof skillId === "number" && isFinite(skillId) && skillStemForId(skillId)) {
+    return packStrike(Math.floor(Math.abs(skillId)), "report");
+  }
+  const mapped = skillIdForSpineStem(stem);
+  if (mapped !== null && skillStemForId(mapped)) return packStrike(mapped, "stem");
+  const fallback = hangSkillVfx(stem, true);
+  return {
+    skill: fallback.skill,
+    layers: [],
+    arrow: [],
+    hit: fallback.hit,
+    source: "hero-skill",
+  };
+}
+
+function packStrike(skillId: number, source: "report" | "stem"): HangStrikeStack {
+  const extra = skillCompanionFrames(skillId);
+  const layers: string[][] = [];
+  if (extra) {
+    for (let i = 0; i < extra.length; i++) layers.push(extra[i]);
+  }
+  return {
+    skill: skillFramePaths(skillId),
+    layers,
+    arrow: skillArrowFrames(skillId),
+    hit: hitFramePaths(skillId),
+    source,
   };
 }

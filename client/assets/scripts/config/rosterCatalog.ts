@@ -263,12 +263,19 @@ export function chapterExtraRewards(): ChapterExtraFace[] {
  * 表上没有这一关时是 null，调用方再写「第 N 关」。
  */
 export function chapterStageCaption(stageIdx: number): string | null {
+  const place = chapterStageNumbers(stageIdx);
+  if (!place) return null;
+  return "第" + place.chapterId + "章 · 第" + place.missionId + "关";
+}
+
+/** 圆环里只放关号。章号留给长文案。表上没有这一关时是 null。 */
+export function chapterStageNumbers(stageIdx: number): { chapterId: number; missionId: number } | null {
   const idx = Math.floor(stageIdx);
   if (!isFinite(stageIdx) || idx < 1) return null;
   for (let i = 0; i < stageBoardRows.length; i++) {
     const row = stageBoardRows[i];
     if (row.idx !== idx) continue;
-    return "第" + row.chapterId + "章 · 第" + row.missionId + "关";
+    return { chapterId: row.chapterId, missionId: row.missionId };
   }
   return null;
 }

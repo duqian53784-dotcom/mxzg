@@ -36,7 +36,12 @@ export interface SpineMountOptions {
   onReady?: () => void;
   /** 相对父节点的竖直座位。缺省：特效和点缀在 0，英雄在地砖 -36。 */
   seatY?: number;
+  /** 英雄缩放。缺省 0.58。挂机站场传 HANG_ACTOR_SCALE。特效不读这项。 */
+  scale?: number;
 }
+
+/** 挂机站场骨架。比森林战斗的 0.58 小，对齐日服挂机小人。 */
+export const HANG_ACTOR_SCALE = 0.36;
 
 const OPENING: { [stem: string]: WireSpineClip } = {
   zhandoujijian: "idle",
@@ -118,7 +123,8 @@ export function mountBattleSpine(parent: Node, stem: string, onFail: () => void,
   const node = uiNode("spine-" + stem);
   const accent = stem === "zhandoujijian" || stem === "battle-sword";
   const namedScale = VFX_SCALE[stem];
-  const scale = effect ? (typeof namedScale === "number" ? namedScale : 0.4) : accent ? 0.16 : 0.58;
+  const asked = options && typeof options.scale === "number" && options.scale > 0 ? options.scale : 0;
+  const scale = effect ? (typeof namedScale === "number" ? namedScale : 0.4) : accent ? 0.16 : asked > 0 ? asked : 0.58;
   const face = options && options.face === -1 ? -1 : 1;
   node.setScale(scale * face, scale, 1);
   const seatY = options && typeof options.seatY === "number" ? options.seatY : effect || accent ? 0 : -36;

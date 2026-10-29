@@ -36,7 +36,7 @@ import {
 import { paintSpeedIcon } from "./BattlePage";
 import { battleAppearFramePaths } from "./battleAppear";
 import { armBattleDelay } from "./battleClock";
-import { battleCastFrameCount, hangSkillVfx } from "./battleFrames";
+import { battleCastFrameCount, hangStrikeFrames } from "./battleFrames";
 import { battleFrameStep, mountFrameReel, type FrameReel } from "./battleFramePlay";
 import {
   battleCastWait,
@@ -47,7 +47,7 @@ import {
   signedHitFloats,
   signedHpDeltas,
 } from "./battlePresentation";
-import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
+import { HANG_ACTOR_SCALE, mountBattleSpine, mountNamedSpine } from "./battleSpine";
 import { placeHangFloats, type HangFloat } from "./hangFloat";
 import { pauseIdleSkirmishes, resumeIdleSkirmishes } from "./idleHangSkirmish";
 import { hangAppearAnchor, hangFightStageId, hangStandPoint, IDLE_HANG_SPOTS, IDLE_SKIRMISH_SPOTS, planHangFightLine } from "./idleHangSkirmishPlan";
@@ -378,6 +378,7 @@ interface FightRun {
   modelMiss: boolean;
   gestureMiss: boolean;
   skillMiss: boolean;
+  skillNoted: boolean;
   hitMiss: boolean;
 }
 
@@ -409,7 +410,7 @@ async function runHangFight(page: Node): Promise<void> {
   const hold = holds.get(page);
   const seq = hold ? hold.seq : -1;
   const prev = runs.get(page);
-  const run: FightRun = { seq, skip: false, wake: null, timers: [], modelMiss: false, gestureMiss: false, skillMiss: false, hitMiss: false };
+  const run: FightRun = { seq, skip: false, wake: null, timers: [], modelMiss: false, gestureMiss: false, skillMiss: false, skillNoted: false, hitMiss: false };
   runs.set(page, run);
   if (prev) dropRun(page, prev);
   bindRunControls(page);
@@ -765,7 +766,7 @@ function paintMockRound(page: Node, run: FightRun, round: BattleRound, stageId: 
     playSideClip(page, run, actor, 0, "attack");
     playSideClip(page, run, defender, damagedIndex(prev, next), "hit");
     const spot = hangStandPoint(defender, damagedIndex(prev, next));
-    playStrikeVfx(page, run, spot.x, spot.y, stemAt(page, actor, 0));
+    playStrikeVfx(page, run, spot.x, spot.y, stemAt(page, actor, 0), null);
   }
   showMockRound(page, round, stageId);
   noteRound(page, round.round + "/15", true);
@@ -788,6 +789,7 @@ function paintWireBeat(
   const clips: string[] = [];
   let struck = false;
   let attacker = 0;
+  let attackSide: "ally" | "enemy" = "ally";
   let hitAt = 0;
   let hitSide: "ally" | "enemy" = "enemy";
   for (let i = 0; i < beat.cues.length; i++) {
@@ -799,7 +801,10 @@ function paintWireBeat(
       playSideClip(page, run, where.side, where.index, cue.clip === "die" ? "die" : cue.clip);
       struck = true;
     }
-    if (cue.clip === "attack") attacker = where.index;
+    if (cue.clip === "attack") {
+      attacker = where.index;
+      attackSide = where.side;
+    }
     if (cue.clip === "hit" || cue.clip === "die") {
       hitSide = where.side;
       hitAt = where.index;
@@ -807,7 +812,8 @@ function paintWireBeat(
   }
   if (struck) {
     const spot = hangStandPoint(hitSide, hitAt);
-    playStrikeVfx(page, run, spot.x, spot.y, stemAt(page, "ally", attacker));
+    const skillId = presentBeat ? presentBeat.skillId : null;
+    playStrikeVfx(page, run, spot.x, spot.y, stemAt(page, attackSide, attacker), skillId);
   }
   let skill = presentBeat ? presentBeat.skillName : null;
   skill = fallbackAttackTitle(skill, beat.line, clips);
@@ -950,23 +956,49 @@ function playClip(skel: sp.Skeleton, clip: string): boolean {
   }
 }
 
-function playStrikeVfx(page: Node, run: FightRun, x: number, y: number, stem: string | null): void {
+function playStrikeVfx(page: Node, run: FightRun, x: number, y: number, stem: string | null, skillId: number | null): void {
   const layer = layerOf(page);
   if (!layer) return;
-  const stack = hangSkillVfx(stem, true);
-  const fx = strikeFx(layer);
-  if (stack.skill.length === 0) {
-    if (!run.skillMiss) {
-      run.skillMiss = true;
-      GameLog.shared.warn("Mainline", "开战技能帧没有对上 " + (stem || "英雄") + "，仍写技能名");
+  const stack = hangStrikeFrames(stem, skillId);
+  const who = stem || "英雄";
+  if (!run.skillNoted) {
+    let logged = false;
+    if (stack.source !== "report" && typeof skillId === "number" && isFinite(skillId)) {
+      GameLog.shared.warn("Mainline", "开战技能号 " + Math.floor(Math.abs(skillId)) + " 没有帧表，改用套 " + who);
+      logged = true;
     }
+    if (stack.source === "hero-skill") {
+      GameLog.shared.warn("Mainline", "开战技能帧没有对上 " + who + "，改播 hero-skill");
+      logged = true;
+    }
+    if (logged) run.skillNoted = true;
+  }
+  const fx = strikeFx(layer);
+  const noteMiss = (ok: boolean): void => {
+    if (ok || run.skillMiss) return;
+    run.skillMiss = true;
+    GameLog.shared.warn("Mainline", "开战技能帧没有挂上 " + who);
+  };
+  if (stack.skill.length === 0) {
+    noteMiss(false);
   } else {
     fx.skill.node.setPosition(x, y + 48, 0);
-    fx.skill.play(stack.skill, (ok) => {
-      if (ok || run.skillMiss) return;
-      run.skillMiss = true;
-      GameLog.shared.warn("Mainline", "开战技能帧没有挂上 " + (stem || "英雄"));
-    });
+    fx.skill.play(stack.skill, noteMiss);
+  }
+  for (let i = 0; i < fx.layers.length; i++) {
+    const paths = i < stack.layers.length ? stack.layers[i] : [];
+    if (paths.length === 0) {
+      fx.layers[i].stop();
+      continue;
+    }
+    fx.layers[i].node.setPosition(x, y + 48, 0);
+    fx.layers[i].play(paths, noteMiss);
+  }
+  if (stack.arrow.length > 0) {
+    fx.arrow.node.setPosition(x, y + 56, 0);
+    fx.arrow.play(stack.arrow, noteMiss);
+  } else {
+    fx.arrow.stop();
   }
   if (stack.hit.length === 0) return;
   fx.hit.node.setPosition(x, y + 24, 0);
@@ -979,6 +1011,8 @@ function playStrikeVfx(page: Node, run: FightRun, x: number, y: number, stem: st
 
 interface StrikeFx {
   skill: FrameReel;
+  layers: FrameReel[];
+  arrow: FrameReel;
   hit: FrameReel;
 }
 
@@ -992,6 +1026,12 @@ function strikeFx(layer: Node): StrikeFx {
   if (!mark.mxzgFx) {
     mark.mxzgFx = {
       skill: mountFrameReel(host, 280, "HangSkillReel"),
+      layers: [
+        mountFrameReel(host, 260, "HangSkillLayer0"),
+        mountFrameReel(host, 260, "HangSkillLayer1"),
+        mountFrameReel(host, 260, "HangSkillLayer2"),
+      ],
+      arrow: mountFrameReel(host, 280, "HangSkillArrow"),
       hit: mountFrameReel(host, 200, "HangHitReel"),
     };
   }
@@ -1347,7 +1387,7 @@ function seatHangEnemies(layer: Node): { x: number; y: number }[] {
       mountBattleSpine(slot, foe.stem, () => {
         GameLog.shared.warn("Mainline", "开战敌方 spine/" + foe.stem + " 没有挂上");
         if (slot.isValid) slot.active = false;
-      }, { face: spot.face });
+      }, { face: spot.face, scale: HANG_ACTOR_SCALE });
     }
     const stageText = line.stageId === null ? "—" : String(line.stageId);
     GameLog.shared.info(
