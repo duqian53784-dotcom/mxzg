@@ -7,15 +7,20 @@
  * 开战在大理石上各播一遍左右出场帧，播完或第一下受击就藏。数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
  */
 import { Button, Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, TTFFont, UITransform } from "cc";
+import { chapterEnemies } from "../config/gameCatalog";
+import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
+import { GameStore } from "../core/GameStore";
+import { Session } from "../core/Session";
 import { BattleRound, BattleUnit } from "../module/mainline/battle";
+import { wireSpineHasClip } from "../net/protocol/wireBattle";
 import { paintSpeedIcon } from "./BattlePage";
 import { BATTLE_APPEAR_LEFT, BATTLE_APPEAR_RIGHT, battleAppearFramePaths } from "./battleAppear";
 import { battleFrameStep, mountFrameReel } from "./battleFramePlay";
-import { mountNamedSpine } from "./battleSpine";
+import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
 import { placeHangFloats, type HangFloat } from "./hangFloat";
 import { pauseIdleSkirmishes, resumeIdleSkirmishes } from "./idleHangSkirmish";
-import { hangStandPoint, IDLE_HANG_SPOTS, IDLE_SKIRMISH_SPOTS } from "./idleHangSkirmishPlan";
+import { hangFightStageId, hangStandPoint, IDLE_HANG_SPOTS, IDLE_SKIRMISH_SPOTS, planHangFightLine } from "./idleHangSkirmishPlan";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 export type { HangFloat };
@@ -78,7 +83,7 @@ export function barsFromSides(
   return out;
 }
 
-/** 出阵之后、战报还没到时，先把中间按钮改成战斗中，并闪一下开战。 */
+/** 出阵之后先把中间按钮改成战斗中，并闪一下开战。右侧怪从战报守方或 chapter 表摆上。 */
 export function beginHangBattle(page: Node, left: string, right: string): void {
   const hold = ensureHold(page);
   hold.seq += 1;
@@ -88,6 +93,7 @@ export function beginHangBattle(page: Node, left: string, right: string): void {
   hold.enemies = null;
   pauseIdleSkirmishes();
   const layer = ensureLayer(page);
+  seatHangEnemies(layer);
   setCaption(page, "战斗中");
   const flash = layer.getChildByName("HangFlash");
   if (flash) {
@@ -361,6 +367,50 @@ function paintHangSprite(node: Node, path: string, miss: string): void {
     });
   } catch (err) {
     GameLog.shared.warn("Mainline", miss);
+  }
+}
+
+/**
+ * 演武暂停时会清掉右侧的怪。这里按战报守方或 chapter 表再摆上。
+ * 没有关卡、表是空的、类型没有 stand 时只打日志，不补默认怪。
+ */
+function seatHangEnemies(layer: Node): void {
+  try {
+    const old = layer.getChildByName("HangFoes");
+    if (old) old.destroy();
+    const wire = Session.source === "wire" || GameStore.source === "wire";
+    const chapter = GameStore.chapter();
+    const stageId = hangFightStageId(GameStore.mockStageId(), chapter.nowIdx, chapter.maxIdx, wire);
+    const rows = stageId === null ? [] : chapterEnemies(stageId);
+    const monsters: { heroType: number; hp: number | null; name: string }[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      monsters.push({ heroType: rows[i].heroType, hp: rows[i].hp, name: rows[i].name });
+    }
+    const match = GameStore.battle();
+    const report = match && match.report ? match.report.defHeroes : null;
+    const line = planHangFightLine(stageId, monsters, (stem) => wireSpineHasClip(stem, "stand"), report);
+    if (line.foes.length === 0) {
+      GameLog.shared.warn("Mainline", "开战敌方没有摆上 " + line.reason);
+      return;
+    }
+    const host = uiNode("HangFoes");
+    place(host, layer, 0, 0);
+    host.setSiblingIndex(0);
+    const names: string[] = [];
+    for (let i = 0; i < line.foes.length; i++) {
+      const foe = line.foes[i];
+      names.push(foe.stem);
+      const spot = hangStandPoint("enemy", foe.spot);
+      const slot = place(uiNode("HangFoe"), host, spot.x, spot.y);
+      mountBattleSpine(slot, foe.stem, () => {
+        GameLog.shared.warn("Mainline", "开战敌方 spine/" + foe.stem + " 没有挂上");
+        if (slot.isValid) slot.active = false;
+      }, { face: spot.face });
+    }
+    const stageText = line.stageId === null ? "—" : String(line.stageId);
+    GameLog.shared.info("Mainline", "开战敌方 " + line.source + " 关" + stageText + " " + names.join(",") + " " + line.reason);
+  } catch (err) {
+    GameLog.shared.warn("Mainline", "开战敌方没有摆上 " + messageOf(err));
   }
 }
 

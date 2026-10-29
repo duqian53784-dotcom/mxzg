@@ -80,6 +80,8 @@ export class HeroListView extends BaseView {
   private elem = 0;
   private board: HeroListBoardView | null = null;
   private opened = false;
+  /** 引擎会调用名为 start 的生命周期。打开逻辑不能用这个名字，否则和 onOpen 各挂一份板子。 */
+  private boardOpening = false;
   private scrollReady = false;
   private tabsBound = false;
   private offSync: (() => void) | null = null;
@@ -93,7 +95,7 @@ export class HeroListView extends BaseView {
     }
     this.opened = true;
     this.beginOpen();
-    void this.start();
+    void this.openBoard();
   }
 
   onClose(): void {
@@ -110,7 +112,9 @@ export class HeroListView extends BaseView {
     this.refresh();
   }
 
-  private async start(): Promise<void> {
+  private async openBoard(): Promise<void> {
+    if (this.boardOpening) return;
+    this.boardOpening = true;
     const started = Date.now();
     try {
       this.silenceHits();
@@ -122,7 +126,7 @@ export class HeroListView extends BaseView {
         this.failOpen(new Error("页面已关"));
         return;
       }
-      this.board = this.spawnBoard();
+      this.board = this.adoptBoard();
       if (!this.board) {
         this.failOpen(new Error("HeroListHeroLayer 没有挂上"));
         return;
@@ -154,6 +158,40 @@ export class HeroListView extends BaseView {
     }
   }
 
+  /**
+   * 只留一份羊皮纸。
+   * HeroListLayer 没有内嵌这份板子时才 spawn。已经有的（含多挂）不再生成。
+   * 预制根曾写成 (-320,-480)，那是居中父节点用的偏移。列表自己已经按底左锚点居中，再套一次会把筛选和格子挤到左下。
+   */
+  private adoptBoard(): HeroListBoardView | null {
+    const found = this.boardsOnPage();
+    for (let i = 1; i < found.length; i++) {
+      const extra = found[i].node;
+      GameLog.shared.warn("Hero", "多挂了一份 HeroListHeroLayer，拆掉");
+      if (extra && extra.isValid) extra.destroy();
+    }
+    const board = found.length > 0 ? found[0] : this.spawnBoard();
+    if (!board || !board.node) return null;
+    this.seatBoard(board.node);
+    if (this.tabMenu && this.tabMenu.parent === this.node && board.node.parent === this.node) {
+      board.node.setSiblingIndex(this.tabMenu.getSiblingIndex());
+    }
+    if (this.layerCapacity) this.layerCapacity.active = false;
+    board.dropHostMask();
+    return board;
+  }
+
+  private boardsOnPage(): HeroListBoardView[] {
+    const found: HeroListBoardView[] = [];
+    if (!this.node) return found;
+    const kids = this.node.children;
+    for (let i = 0; i < kids.length; i++) {
+      const board = kids[i].getComponent(HeroListBoardView) as HeroListBoardView | null;
+      if (board) found.push(board);
+    }
+    return found;
+  }
+
   private spawnBoard(): HeroListBoardView | null {
     if (!this.boardPrefab || !this.node || !this.node.isValid) return null;
     const node = spawnPrefab(this.boardPrefab, this.node);
@@ -162,10 +200,19 @@ export class HeroListView extends BaseView {
       GameLog.shared.warn("Hero", "HeroListHeroLayer 上没有 HeroListBoardView");
       return null;
     }
-    if (this.tabMenu && this.tabMenu.parent === this.node) node.setSiblingIndex(this.tabMenu.getSiblingIndex());
-    if (this.layerCapacity) this.layerCapacity.active = false;
-    board.dropHostMask();
     return board;
+  }
+
+  /** 和 HeroListLayer 同一套底左坐标。羊皮纸、筛选、格子都留在这一层里面，不压底栏。 */
+  private seatBoard(node: Node): void {
+    const ui = node.getComponent(UITransform);
+    if (ui) ui.setAnchorPoint(0, 0);
+    const x = node.position.x;
+    const y = node.position.y;
+    if (Math.abs(x) > 0.5 || Math.abs(y) > 0.5) {
+      GameLog.shared.info("Hero", "HeroListHeroLayer 从 (" + Math.round(x) + "," + Math.round(y) + ") 收回羊皮纸底左");
+    }
+    node.setPosition(0, 0, 0);
   }
 
   /** 预制上写着「空间：20/40」。进场景之前就换成名册，避免先闪假数。 */

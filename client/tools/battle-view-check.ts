@@ -19,6 +19,7 @@ import { HangMissionChipView } from "../assets/scripts/features/battle/ui/HangMi
 import { isOpenCancelled, UIManager } from "../assets/scripts/framework/ui/UIManager";
 import { UILayer } from "../assets/scripts/framework/ui/UILayer";
 import { viewCtorById, viewSpecOf } from "../assets/scripts/framework/ui/UIRegistry";
+import { hangFightStageId, planHangFightLine } from "../assets/scripts/ui/idleHangSkirmishPlan";
 import { clearPrefabCache } from "../assets/scripts/ui/prefabLoad";
 import { barIndex, barSlideDir, pageContentReady, selectedBarId } from "../assets/scripts/ui/barSlide";
 
@@ -157,6 +158,36 @@ function checkSources(): void {
   assert(barSlideDir(barIndex("dungeon"), barIndex("battle")) === -1, "副本到战斗从左进");
   assert(pageContentReady(["PagePrefabShell"]) === true, "挂机壳挂上就能滑");
   assert(pageContentReady(["IdleHang"]) === true, "殿堂挂上就能滑");
+  const hang = read("client/assets/scripts/ui/hangBattle.ts");
+  assert(hang.indexOf("seatHangEnemies") >= 0, "开战要摆敌方");
+  assert(hang.indexOf("开战敌方没有摆上") >= 0, "敌方摆不上要有日志");
+  assert(hang.indexOf("beginHangBattle") >= 0, "开战演出还在");
+  const plan = read("client/assets/scripts/ui/idleHangSkirmishPlan.ts");
+  const fightPlan = plan.slice(plan.indexOf("export function planHangFightLine"));
+  assert(fightPlan.indexOf("export function planHangFightLine") === 0, "开战敌方有单独规则");
+  assert(fightPlan.indexOf("IDLE_SKIRMISH_FALLBACK") < 0, "开战敌方不用演武 fallback");
+  assert(fightPlan.indexOf("WIRE_SPINE_ENEMY") < 0, "开战敌方不补默认三套");
+}
+
+function checkFightLine(): void {
+  const stand = (stem: string) => stem === "10101001" || stem === "10405006";
+  assert(hangFightStageId(null, null, null, true) === null, "真服未同步不用第 1 关冒充");
+  assert(hangFightStageId(4, 9, 12, false) === 4, "Mock 用本机关号");
+  assert(hangFightStageId(null, 3, 9, true) === 3, "真服用 nowIdx");
+  assert(hangFightStageId(null, null, null, false) === 1, "Mock 没有关号时仍读第 1 关");
+  const missing = planHangFightLine(null, [], stand, null);
+  assert(missing.source === "none" && missing.foes.length === 0 && missing.reason.indexOf("主线未同步") >= 0, "未同步不造敌方");
+  const empty = planHangFightLine(2, [], stand, null);
+  assert(empty.source === "none" && empty.reason.indexOf("守方表是空的") >= 0, "空表要说明");
+  const chapter = planHangFightLine(1, [{ heroType: 10101001, hp: 900, name: "前哨" }, { heroType: 9, hp: 1, name: "没套" }], stand, null);
+  assert(chapter.source === "chapter" && chapter.foes.length === 1 && chapter.foes[0].stem === "10101001", "只摆有 stand 的关卡怪");
+  assert(chapter.foes[0].face === -1 && chapter.foes[0].spot === 0 && chapter.foes[0].maxHp === 900, "敌方站右侧第一格");
+  const report = planHangFightLine(1, [{ heroType: 10101001, hp: 900, name: "前哨" }], stand, [{ heroId: 10405006, hp: 40, maxHp: 80 }]);
+  assert(report.source === "report" && report.foes.length === 1 && report.foes[0].stem === "10405006" && report.foes[0].maxHp === 80, "战报守方优先");
+  const badReport = planHangFightLine(1, [{ heroType: 10101001, hp: 900, name: "前哨" }], stand, [{ heroId: 999, hp: 1, maxHp: 1 }]);
+  assert(badReport.source === "chapter" && badReport.foes[0].stem === "10101001" && badReport.reason.indexOf("对不上 stand") >= 0, "战报对不上就退回关卡表");
+  const none = planHangFightLine(1, [{ heroType: 999, hp: 1, name: "没套" }], stand, null);
+  assert(none.foes.length === 0 && none.reason.indexOf("没有 stand") >= 0, "没有 stand 不补默认怪");
 }
 
 function checkPrefab(): void {
@@ -604,6 +635,7 @@ async function main(): Promise<void> {
   checkPrefab();
   checkRegistry();
   checkData();
+  checkFightLine();
   await checkPaint();
   await checkManager();
   GameStore.reset();

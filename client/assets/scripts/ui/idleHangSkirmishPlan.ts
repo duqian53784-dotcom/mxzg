@@ -355,3 +355,143 @@ export function planIdleWave(
   }
   return plans;
 }
+
+export interface HangFightMonster {
+  heroType: number;
+  hp: number | null;
+  name: string;
+}
+
+export interface HangFightReportHero {
+  heroId: number | null;
+  hp: number | null;
+  maxHp: number | null;
+}
+
+export interface HangFightFoe {
+  stem: string;
+  spot: number;
+  face: -1 | 1;
+  maxHp: number | null;
+  name: string;
+}
+
+export interface HangFightLine {
+  stageId: number | null;
+  source: "report" | "chapter" | "none";
+  reason: string;
+  foes: HangFightFoe[];
+}
+
+/**
+ * 开战用的关卡号。
+ * 真服没有 now/max 时返回 null，不用第 1 关冒充未同步。
+ * Mock 没有关号时仍是 1，和演武同一张 chapter 表。
+ */
+export function hangFightStageId(
+  mockStage: number | null,
+  nowIdx: number | null,
+  maxIdx: number | null,
+  wire: boolean
+): number | null {
+  if (!wire && mockStage !== null && mockStage >= 1) return Math.floor(mockStage);
+  if (nowIdx !== null && nowIdx >= 1) return Math.floor(nowIdx);
+  if (maxIdx !== null && maxIdx >= 1) return Math.floor(maxIdx);
+  if (wire) return null;
+  return 1;
+}
+
+/**
+ * 开战右侧的怪。战报守方优先，对不上 stand 再读 chapter。
+ * 不补演武 fallback，也不补默认三套。空表、未同步、没有 stand 都留空，调用方打日志。
+ */
+export function planHangFightLine(
+  stageId: number | null,
+  monsters: HangFightMonster[],
+  hasStand: (stem: string) => boolean,
+  reportHeroes: HangFightReportHero[] | null
+): HangFightLine {
+  const fromReport = foesFromReport(reportHeroes, hasStand);
+  if (fromReport.foes.length > 0) {
+    return { stageId, source: "report", reason: fromReport.reason, foes: fromReport.foes };
+  }
+  const prefix = fromReport.reason ? fromReport.reason + "，" : "";
+  if (stageId === null) {
+    return { stageId: null, source: "none", reason: prefix + "主线未同步", foes: [] };
+  }
+  const rows = monsters || [];
+  if (rows.length === 0) {
+    return { stageId, source: "none", reason: prefix + "第" + stageId + "关守方表是空的", foes: [] };
+  }
+  const missed: string[] = [];
+  const foes: HangFightFoe[] = [];
+  for (let i = 0; i < rows.length && foes.length < IDLE_SKIRMISH_SPOTS.length; i++) {
+    const row = rows[i];
+    const type = row.heroType;
+    if (typeof type !== "number" || !isFinite(type) || type <= 0) continue;
+    const stem = String(Math.floor(type));
+    if (!hasStand(stem)) {
+      missed.push(stem);
+      continue;
+    }
+    const spot = IDLE_SKIRMISH_SPOTS[foes.length];
+    const hp = row.hp;
+    foes.push({
+      stem,
+      spot: foes.length,
+      face: spot.face,
+      maxHp: typeof hp === "number" && isFinite(hp) && hp > 0 ? Math.floor(hp) : null,
+      name: row.name || "类型 " + stem,
+    });
+  }
+  if (foes.length === 0) {
+    const tail = missed.length > 0 ? "守方没有 stand " + missed.join(",") : "守方没有可用类型";
+    return { stageId, source: "none", reason: prefix + "第" + stageId + "关" + tail, foes: [] };
+  }
+  const names: string[] = [];
+  for (let i = 0; i < foes.length; i++) names.push(foes[i].stem);
+  return {
+    stageId,
+    source: "chapter",
+    reason: prefix + "第" + stageId + "关 " + names.join(","),
+    foes,
+  };
+}
+
+function foesFromReport(
+  heroes: HangFightReportHero[] | null,
+  hasStand: (stem: string) => boolean
+): { reason: string; foes: HangFightFoe[] } {
+  if (!heroes) return { reason: "", foes: [] };
+  if (heroes.length === 0) return { reason: "战报没有守方", foes: [] };
+  const missed: string[] = [];
+  const foes: HangFightFoe[] = [];
+  for (let i = 0; i < heroes.length && foes.length < IDLE_SKIRMISH_SPOTS.length; i++) {
+    const hero = heroes[i];
+    const id = hero.heroId;
+    if (typeof id !== "number" || !isFinite(id) || id <= 0) continue;
+    const stem = String(Math.floor(id));
+    if (!hasStand(stem)) {
+      missed.push(stem);
+      continue;
+    }
+    const spot = IDLE_SKIRMISH_SPOTS[foes.length];
+    const maxHp = hero.maxHp;
+    const hp = hero.hp;
+    const shown = typeof maxHp === "number" && isFinite(maxHp) && maxHp > 0 ? Math.floor(maxHp) : typeof hp === "number" && isFinite(hp) && hp > 0 ? Math.floor(hp) : null;
+    foes.push({
+      stem,
+      spot: foes.length,
+      face: spot.face,
+      maxHp: shown,
+      name: "类型 " + stem,
+    });
+  }
+  if (foes.length === 0) {
+    const tail = missed.length > 0 ? missed.join(",") : "没有 hero_id";
+    return { reason: "战报守方对不上 stand " + tail, foes: [] };
+  }
+  const names: string[] = [];
+  for (let i = 0; i < foes.length; i++) names.push(foes[i].stem);
+  return { reason: "战报守方 " + names.join(","), foes };
+}
