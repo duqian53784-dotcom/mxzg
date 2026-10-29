@@ -3,7 +3,7 @@
  * 不解协议。关卡没同步时标题写「主线未同步」，不编一关名字。
  * 三格和旧挂机条同一套：表上的每分钟，真服没表写 —/m，Mock 才退回旧节奏。
  */
-import { chapterIdleMinute, chapterStageCaption, idleCapMs } from "../../../config/rosterCatalog";
+import { chapterIdleMinute, chapterStageCaption, chapterStageNumbers, idleCapMs } from "../../../config/rosterCatalog";
 import { GameStore } from "../../../core/GameStore";
 import { Session } from "../../../core/Session";
 import { formatHangClock, goldPerMin, itemEveryMs } from "../../../module/idle/rewards";
@@ -11,7 +11,10 @@ import { IDLE_UNIX_FLOOR, wireIdleCapMs, wireIdleElapsedMs } from "../../../net/
 import { hangFightStageId } from "../../../ui/idleHangSkirmishPlan";
 
 export interface HangFace {
+  /** 章关长文案。写在左侧关卡标，不叠在金环上。 */
   caption: string;
+  /** 金环里的关号数字。没同步是空串。 */
+  ring: string;
   clock: string;
   gold: string;
   souls: string;
@@ -26,6 +29,7 @@ export function hangFace(nowMs: number, openedAtMs: number): HangFace {
   const rate = rates();
   return {
     caption: captionOf(synced, idx),
+    ring: ringOf(synced, idx),
     clock: clockText(nowMs, openedAtMs),
     gold: rate.gold,
     souls: rate.souls,
@@ -62,6 +66,15 @@ function captionOf(synced: boolean, idx: number): string {
   if (place) return place;
   if (idx >= 1) return "第" + idx + "关";
   return "主线未同步";
+}
+
+/** 金环只留关号。有章关表时用 missionId，否则用进战关号本身。 */
+function ringOf(synced: boolean, idx: number): string {
+  if (!synced) return "";
+  const place = chapterStageNumbers(idx);
+  if (place) return String(place.missionId);
+  if (idx >= 1) return String(idx);
+  return "";
 }
 
 function rates(): { gold: string; souls: string; exp: string } {

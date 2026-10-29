@@ -15,7 +15,6 @@ import { WireSession } from "../net/WireSession";
 import { formatWireQuickBattle } from "../net/protocol/wireQuickBattle";
 import { bindHangFill, mountIdleHang } from "./idleHangView";
 import { beginHangBattle } from "./hangBattle";
-import { hangLineupReady } from "./localLineup";
 import { PAGE_SHELL_FIGHT, pagePrefabShell, USE_PAGE_PREFAB_SHELL } from "./prefabShellMap";
 import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from "./chapterMapView";
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption, pinSprites, seatParchmentList } from "./screenFill";
@@ -843,7 +842,8 @@ function paintChipIcon(node: Node): void {
 }
 
 /**
- * MAIN 空着先出阵，已经有英雄就直接开战。出阵和关卡预览的「出战」都走这里。
+ * 日服每次点战斗都先弹出出阵（前 4 后 4）。确认后再开战。
+ * 不因已经有阵容跳过。出阵和关卡预览的「出战」都走这里。
  * 壳已经不在时返回 false，调用方要打日志并 Toast。出阵预制失败同样 Toast，不再只写 warn。
  */
 export function startShellFight(root: Node, page: Node): boolean {
@@ -852,21 +852,13 @@ export function startShellFight(root: Node, page: Node): boolean {
     return false;
   }
   GameLog.shared.info("Mainline", "进入 startShellFight");
+  GameLog.shared.info("Mainline", "开战先出阵");
   const go = () => {
     beginHangBattle(page, "我方", "敌方");
     if (!page.isValid) return;
     GameLog.shared.info("Mainline", "开战发出 PAGE_SHELL_FIGHT");
     page.emit(PAGE_SHELL_FIGHT);
   };
-  if (hangLineupReady()) {
-    try {
-      go();
-      return true;
-    } catch (err) {
-      GameLog.shared.warn("Mainline", "开战没有开始 " + messageOf(err));
-      return false;
-    }
-  }
   void openHangSheet(
     root,
     HANG_FORMATION_PREFAB,

@@ -101,6 +101,7 @@ import { plantHangLocomotion, SPINE_RUNTIME_VERSION, upgradeSpine37Json } from "
 import {
   hangAllyFloorPoint,
   hangAllyVisibleShift,
+  hangEnemyFloorPoint,
   IDLE_HANG_SPOTS,
   IDLE_SKIRMISH_HITS,
   jpHangHeroPosition,
@@ -28436,31 +28437,36 @@ function mainAppFile(): string {
 
 function checkIdleSkirmish(): void {
   assert(
-    IDLE_SKIRMISH_SPOTS.length === 3 &&
-      IDLE_SKIRMISH_SPOTS[0].x === 230 &&
-      IDLE_SKIRMISH_SPOTS[0].y === -20 &&
+    IDLE_SKIRMISH_SPOTS.length === 8 &&
+      IDLE_SKIRMISH_SPOTS[0].x === 88 &&
+      IDLE_SKIRMISH_SPOTS[0].y === 96 &&
       IDLE_SKIRMISH_SPOTS[0].face === -1 &&
-      IDLE_SKIRMISH_SPOTS[1].x === 300 &&
+      IDLE_SKIRMISH_SPOTS[1].x === 93 &&
+      IDLE_SKIRMISH_SPOTS[1].y === 28 &&
       IDLE_SKIRMISH_SPOTS[1].face === -1 &&
-      IDLE_SKIRMISH_SPOTS[2].x === 260 &&
-      IDLE_SKIRMISH_SPOTS[2].y === 84 &&
-      IDLE_SKIRMISH_SPOTS[2].face === -1 &&
+      IDLE_SKIRMISH_SPOTS[3].x === 104 &&
+      IDLE_SKIRMISH_SPOTS[3].y === -108 &&
+      IDLE_SKIRMISH_SPOTS[4].x === 222 &&
+      IDLE_SKIRMISH_SPOTS[7].x === 238 &&
+      IDLE_SKIRMISH_SPOTS[7].y === -108 &&
+      IDLE_SKIRMISH_SPOTS[7].face === -1 &&
       IDLE_HANG_SPOTS.length === 3 &&
       IDLE_HANG_SPOTS[0].face === 1 &&
       IDLE_HANG_SPOTS[1].face === 1 &&
       IDLE_HANG_SPOTS[2].face === 1 &&
-      IDLE_HANG_SPOTS[0].x < 0 &&
-      IDLE_HANG_SPOTS[1].x < 0 &&
-      IDLE_HANG_SPOTS[2].x < 0 &&
+      IDLE_HANG_SPOTS[0].x === -88 &&
+      IDLE_HANG_SPOTS[0].y === 96 &&
+      IDLE_HANG_SPOTS[1].x === -104 &&
+      IDLE_HANG_SPOTS[1].y === -108 &&
+      IDLE_HANG_SPOTS[2].x === -222 &&
+      IDLE_HANG_SPOTS[2].y === 96 &&
       IDLE_HANG_SPOTS[0].x > IDLE_HANG_SPOTS[1].x &&
-      IDLE_HANG_SPOTS[1].x === IDLE_HANG_SPOTS[2].x &&
-      IDLE_HANG_SPOTS[1].y > IDLE_HANG_SPOTS[0].y &&
-      IDLE_HANG_SPOTS[0].y > IDLE_HANG_SPOTS[2].y &&
+      IDLE_HANG_SPOTS[2].x < IDLE_HANG_SPOTS[0].x &&
       IDLE_HANG_SPOTS[2].x < IDLE_SKIRMISH_SPOTS[0].x &&
       IDLE_HANG_SPOTS[0].x === hangAllyFloorPoint(1).x &&
       IDLE_HANG_SPOTS[1].y === hangAllyFloorPoint(4).y &&
       IDLE_HANG_SPOTS[2].y === hangAllyFloorPoint(5).y,
-    "idle foes stand on the right and face the allies; allies use hang slots 1, 4 and 5 on the left"
+    "idle foes use the right front-4 back-4; allies use hang slots 1, 4 and 5 on the left"
   );
   const jpOne = jpHangHeroPosition(1, 720, 1280, true);
   const jpFour = jpHangHeroPosition(4, 720, 1280, true);
@@ -28472,16 +28478,20 @@ function checkIdleSkirmish(): void {
       jpFour.y > jpFive.y &&
       jpFoe.x > jpOne.x &&
       hangAllyFloorPoint(1).x < 0 &&
-      hangAllyFloorPoint(4).x === hangAllyFloorPoint(5).x &&
-      hangAllyFloorPoint(4).x < hangAllyFloorPoint(1).x &&
-      hangAllyFloorPoint(4).y > hangAllyFloorPoint(1).y &&
-      hangAllyFloorPoint(1).y > hangAllyFloorPoint(5).y &&
+      hangAllyFloorPoint(1).x === -88 &&
+      hangAllyFloorPoint(1).y === 96 &&
+      hangAllyFloorPoint(4).x === -104 &&
+      hangAllyFloorPoint(4).y === -108 &&
+      hangAllyFloorPoint(5).x === -222 &&
+      hangAllyFloorPoint(5).y === 96 &&
+      hangAllyFloorPoint(8).x === -238 &&
+      hangAllyFloorPoint(8).y === -108 &&
+      hangAllyFloorPoint(5).x < hangAllyFloorPoint(1).x &&
+      hangAllyFloorPoint(4).y > hangLootIconY() &&
+      hangAllyFloorPoint(8).y > hangLootIconY() &&
       hangAllyFloorPoint(5).y <= 120 &&
-      hangAllyFloorPoint(5).y > hangLootIconY() &&
-      hangAllyFloorPoint(4).x === -170 &&
-      hangAllyFloorPoint(1).x === -120 &&
-      hangAllyFloorPoint(4).x > -190 &&
-      hangAllyFloorPoint(1).x > hangAllyFloorPoint(4).x &&
+      hangEnemyFloorPoint(1).x === -hangAllyFloorPoint(1).x &&
+      hangEnemyFloorPoint(1).face === -1 &&
       hangAllyVisibleShift(720) === 0 &&
       hangAllyVisibleShift(640) === 0 &&
       hangAllyVisibleShift(590) === 25 &&
@@ -28520,11 +28530,13 @@ function checkIdleSkirmish(): void {
     waveOne.length === 1 &&
       waveOne[0].stem === "10101001" &&
       waveOne[0].spot === 0 &&
-      waveThree.length === 3 &&
+      waveThree.length === 4 &&
       waveThree[0].spot === 0 &&
       waveThree[2].stem === "10505010" &&
-      waveThree[2].spot === 2,
-    "a wave fields the stage foes together, capped at the three hang spots"
+      waveThree[2].spot === 2 &&
+      waveThree[3].stem === "10405007" &&
+      waveThree[3].spot === 3,
+    "a wave fields the stage foes together, capped at the eight hang spots"
   );
   assert(idleSkirmishMayStrike(true) === true && idleSkirmishMayStrike(false) === false, "no swing until the foe is visible");
   assert(idleSkirmishSwingClip(0) === "attack" && idleSkirmishSwingClip(1) === "attack2", "odd swings use attack2");
