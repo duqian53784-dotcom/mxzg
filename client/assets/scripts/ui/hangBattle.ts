@@ -7,8 +7,9 @@
  * 开战标题用 spine/ZDKS（图里已经有「战斗开始」）。套没挂上才写系统字，不叠两层。
  * 出场光只打在有模型的一侧，中心对齐那一侧的人。没有模型的一侧不播。
  * 数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
- * 摆完场会听 PAGE_SHELL_FIGHT。真服先重拉 3001。这一次新回来、并且带攻击的战报才播。
- * 3001 没发出、没回到，或回来的战报没有攻击拍，都不复用上一局，改播本场回合。
+ * 摆完场会听 PAGE_SHELL_FIGHT。真服先重拉 3001（空体 GReqBattleMatch）。带攻击拍的新战报才播。
+ * 3001 没发出、没回到，或等到超时仍没有攻击拍，都不复用上一局，改播本场回合。
+ * 真服已经回到带攻击的战报时不改播 planBattle。Mock 仍只走本场。
  * 胜负从这一份战报或本关 planBattle 写明，不留「胜负未带」。胜利才拉 3007，Mock 才写下 stageId。
  * 打完盖 BattleEndLayer，等回挂机或下一关，不在横幅闪完后拆层。
  */
@@ -26,6 +27,7 @@ import { WireSession } from "../net/WireSession";
 import { hangFace } from "../features/battle/model/hangFace";
 import {
   resolveWireBattleWin,
+  wireBattleActionCount,
   WireBattleReport,
   WireSpineBeat,
   WireSpineReplay,
@@ -168,7 +170,7 @@ export function showHangStrike(
   paintVs(layer, hold);
   const banner = layer.getChildByName("HangSkill");
   if (banner) setBanner(banner, skill);
-  paintBars(layer, bars || []);
+  paintBars(layer, fitBars(page, layer, bars || []));
   const host = layer.getChildByName("HangFloats");
   if (!host) return;
   placeHangFloats(host, floats);
@@ -490,14 +492,17 @@ async function takeWireReport(run: FightRun, live: () => boolean): Promise<Fight
     sent = false;
   }
   if (!sent) return takeWithoutSend();
-  GameLog.shared.info("Mainline", "开战进入战报，已发 3001");
+  GameLog.shared.info("Mainline", "开战进入战报，已发 3001 空体 GReqBattleMatch");
   const waited = await waitWireReport(since, run);
   if (waited.stopped) {
     if (run.skip) GameLog.shared.info("Mainline", "开战跳过时战报还没到，不播回合");
     else if (live()) GameLog.shared.info("Mainline", "开战已停，不再等战报");
     return null;
   }
-  if (waited.report && reportHasActions(waited.report)) return { report: waited.report, staged: false };
+  if (waited.report && reportHasActions(waited.report)) {
+    GameLog.shared.info("Mainline", "开战战报驱动 攻击拍 " + wireBattleActionCount(waited.report) + "，不改播本场");
+    return { report: waited.report, staged: false };
+  }
   if (waited.report) return stageTake(waited.report, "开战 3001 回到的战报没有攻击拍，不补一拍结束");
   if (WireSession.battleSerial !== since) return stageTake(null, "开战 3001 回到的战报没有 report");
   return stageTake(null, "开战 3001 没有回到");
@@ -528,15 +533,14 @@ function stageTake(report: WireBattleReport | null, why: string): FightTake | nu
 }
 
 function reportHasActions(report: WireBattleReport): boolean {
-  for (let r = 0; r < report.rounds.length; r++) {
-    if (report.rounds[r].actions.length > 0) return true;
-  }
-  return false;
+  return wireBattleActionCount(report) > 0;
 }
 
 function waitWireReport(since: number, run: FightRun): Promise<{ report: WireBattleReport | null; stopped: boolean }> {
   return new Promise((resolve) => {
     let settled = false;
+    let noted = false;
+    let pending: WireBattleReport | null = null;
     let off = (): void => {};
     let cancel = (): void => {};
     const finish = (report: WireBattleReport | null, stopped: boolean): void => {
@@ -551,9 +555,19 @@ function waitWireReport(since: number, run: FightRun): Promise<{ report: WireBat
     off = WireSession.onSync(() => {
       if (WireSession.battleSerial === since) return;
       const match = WireSession.battleMatch;
-      finish(match && match.report ? match.report : null, false);
+      const report = match && match.report ? match.report : null;
+      if (report && reportHasActions(report)) {
+        finish(report, false);
+        return;
+      }
+      pending = report;
+      if (noted) return;
+      noted = true;
+      const rounds = report ? report.rounds.length : 0;
+      const attacks = report ? wireBattleActionCount(report) : 0;
+      GameLog.shared.info("Mainline", "开战 3001 回到但没有攻击拍 回合 " + rounds + " 攻击拍 " + attacks + "，继续等");
     });
-    cancel = armBattleDelay(8000, () => finish(null, false));
+    cancel = armBattleDelay(8000, () => finish(pending, false));
     run.wake = abort;
   });
 }
@@ -1526,12 +1540,81 @@ function setBanner(banner: Node, text: string | null): void {
   }
 }
 
+/** 站着几个人就留几根。没站人时仍按这一拍的单位画，检查环境没有模型也不至于 0 根。 */
+function fitBars(page: Node, layer: Node, bars: HangBar[]): HangBar[] {
+  const allyPts = allyModelPoints(page);
+  const enemyPts = foeModelPoints(layer);
+  if (allyPts.length === 0 && enemyPts.length === 0) return bars;
+  const out: HangBar[] = [];
+  let ally = 0;
+  let enemy = 0;
+  for (let i = 0; i < bars.length; i++) {
+    const bar = bars[i];
+    if (bar.ally) {
+      if (allyPts.length === 0) {
+        out.push(bar);
+        continue;
+      }
+      if (ally >= allyPts.length) continue;
+      out.push(moveBar(bar, allyPts[ally]));
+      ally += 1;
+      continue;
+    }
+    if (enemyPts.length === 0) {
+      out.push(bar);
+      continue;
+    }
+    if (enemy >= enemyPts.length) continue;
+    out.push(moveBar(bar, enemyPts[enemy]));
+    enemy += 1;
+  }
+  while (ally < allyPts.length) {
+    out.push(fullBar(allyPts[ally], true, bars));
+    ally += 1;
+  }
+  while (enemy < enemyPts.length) {
+    out.push(fullBar(enemyPts[enemy], false, bars));
+    enemy += 1;
+  }
+  return out;
+}
+
+function moveBar(bar: HangBar, at: { x: number; y: number }): HangBar {
+  return { x: at.x, y: at.y + 108, hpRatio: bar.hpRatio, rageRatio: bar.rageRatio, ally: bar.ally };
+}
+
+function fullBar(at: { x: number; y: number }, ally: boolean, bars: HangBar[]): HangBar {
+  let rage = 0;
+  for (let i = 0; i < bars.length; i++) {
+    if (bars[i].ally === ally) {
+      rage = bars[i].rageRatio;
+      break;
+    }
+  }
+  return { x: at.x, y: at.y + 108, hpRatio: 1, rageRatio: rage, ally };
+}
+
+function foeModelPoints(layer: Node): { x: number; y: number }[] {
+  const host = layer.getChildByName("HangFoes");
+  if (!host) return [];
+  const out: { x: number; y: number }[] = [];
+  const kids = host.children;
+  for (let i = 0; i < kids.length; i++) {
+    if (!kids[i].active) continue;
+    out.push({ x: kids[i].position.x, y: kids[i].position.y });
+  }
+  return out;
+}
+
 function paintBars(layer: Node, bars: HangBar[]): void {
   const host = layer.getChildByName("HangBars");
   if (!host) return;
   const old = host.children.slice();
-  for (let i = 0; i < old.length; i++) old[i].destroy();
-  for (let i = 0; i < bars.length && i < 6; i++) {
+  for (let i = 0; i < old.length; i++) {
+    old[i].removeFromParent();
+    old[i].destroy();
+  }
+  for (let i = 0; i < bars.length; i++) {
     const row = bars[i];
     const root = uiNode("HangBar");
     place(root, host, row.x, row.y);

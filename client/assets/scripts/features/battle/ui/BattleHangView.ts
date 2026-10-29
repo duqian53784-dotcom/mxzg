@@ -96,6 +96,8 @@ export class BattleHangView extends BaseView {
   private chip: HangMissionChipView | null = null;
   private openedAt = 0;
   private offSync: (() => void) | null = null;
+  private offStore: (() => void) | null = null;
+  private faceKey = "";
   private timer: ReturnType<typeof setInterval> | null = null;
   private clockTick: (() => void) | null = null;
   private followChrome: (() => void) | null = null;
@@ -104,6 +106,7 @@ export class BattleHangView extends BaseView {
   onOpen(): void {
     GameLog.shared.info("Mainline", "打开实现 新 BattleHangView");
     if (this.opened) {
+      this.watchStore();
       this.refresh();
       this.armChrome();
       return;
@@ -117,6 +120,10 @@ export class BattleHangView extends BaseView {
   onClose(): void {
     this.clearTimer();
     this.clearChrome();
+    if (this.offStore) {
+      this.offStore();
+      this.offStore = null;
+    }
     if (this.offSync) {
       this.offSync();
       this.offSync = null;
@@ -140,6 +147,7 @@ export class BattleHangView extends BaseView {
         return;
       }
       this.offSync = WireSession.onSync(() => this.refresh());
+      this.watchStore();
       this.refresh();
       this.armClock();
       this.armChrome();
@@ -318,9 +326,19 @@ export class BattleHangView extends BaseView {
     return names.join("→");
   }
 
+  private watchStore(): void {
+    if (this.offStore) return;
+    this.offStore = GameStore.subscribe(() => this.refresh());
+  }
+
   private refresh(): void {
     if (!this.node || !this.node.isValid) return;
     const face = hangFace(Date.now(), this.openedAt);
+    const key = face.caption + "|" + face.gold + "|" + face.souls + "|" + face.exp;
+    if (key !== this.faceKey) {
+      this.faceKey = key;
+      GameLog.shared.info("Mainline", "挂机关卡刷新 " + face.caption + " 金" + face.gold + " 魂" + face.souls + " 经验" + face.exp);
+    }
     this.noteClock(face.clock);
     this.writeRate(this.goldLabel, face.gold);
     this.writeRate(this.soulsLabel, face.souls);

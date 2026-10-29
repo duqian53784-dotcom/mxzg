@@ -10,6 +10,7 @@ import { messageOf } from "../core/errors";
 import { GameLog, monoNow } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
 import { chapterIdleMinute } from "../config/rosterCatalog";
+import { hangShownStage } from "../features/battle/model/hangFace";
 import { WireSession } from "../net/WireSession";
 import { formatWireQuickBattle } from "../net/protocol/wireQuickBattle";
 import { bindHangFill, mountIdleHang } from "./idleHangView";
@@ -1047,12 +1048,8 @@ function silenceSheetMenus(root: Node): void {
 }
 
 function hangStageIdx(): number {
-  const mock = GameStore.mockStageId();
-  if (mock !== null && mock >= 1) return Math.floor(mock);
-  const chapter = GameStore.chapter();
-  if (chapter.nowIdx !== null && chapter.nowIdx >= 1) return Math.floor(chapter.nowIdx);
-  if (chapter.maxIdx !== null && chapter.maxIdx >= 1) return Math.floor(chapter.maxIdx);
-  return 1;
+  const shown = hangShownStage();
+  return shown === null ? 1 : shown;
 }
 
 async function openHangSheet(host: Node, path: string, onReady?: (view: Node) => void, surfaceFail = false): Promise<void> {

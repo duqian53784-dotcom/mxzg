@@ -6,8 +6,9 @@
  * 领取不发 3011。出战只放当前关，仍由调用方走原来的战斗。
  */
 import { Button, Label, Node, resources, ScrollView, Sprite, SpriteFrame, UITransform, Vec2 } from "cc";
-import { chapterPlaceLabel, itemIconResource } from "../config/gameCatalog";
-import { chapterExtraRewards, chapterMapStages, chapterStageFace, ChapterExtraFace } from "../config/rosterCatalog";
+import { itemIconResource } from "../config/gameCatalog";
+import { chapterExtraRewards, chapterMapStages, chapterStageCaption, chapterStageFace, ChapterExtraFace } from "../config/rosterCatalog";
+import { hangShownStage } from "../features/battle/model/hangFace";
 import { GameLog } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
 import {
@@ -230,18 +231,14 @@ function dressRewardRow(cell: Node, face: ChapterExtraFace, progress: string, on
 
 function mapCaption(idx: number, known: boolean, area: string): string {
   if (!known) return "主线未同步";
-  const place = chapterPlaceLabel(idx);
+  const place = chapterStageCaption(idx);
   const head = place || (idx >= 1 ? "第" + idx + "关" : "主线未同步");
   return area ? head + " " + area : head;
 }
 
 function stageIdx(): number {
-  const mock = GameStore.mockStageId();
-  if (mock !== null && mock >= 1) return Math.floor(mock);
-  const chapter = GameStore.chapter();
-  if (chapter.nowIdx !== null && chapter.nowIdx >= 1) return Math.floor(chapter.nowIdx);
-  if (chapter.maxIdx !== null && chapter.maxIdx >= 1) return Math.floor(chapter.maxIdx);
-  return 1;
+  const shown = hangShownStage();
+  return shown === null ? 1 : shown;
 }
 
 function synced(): boolean {

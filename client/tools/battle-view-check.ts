@@ -22,7 +22,8 @@ import { viewCtorById, viewSpecOf } from "../assets/scripts/framework/ui/UIRegis
 import { NetClient } from "../assets/scripts/net/NetClient";
 import { ITransport, NetHandler } from "../assets/scripts/net/NetTypes";
 import { WireSession } from "../assets/scripts/net/WireSession";
-import { beginHangBattle, finishHangBattle, setHangSpeed, stopHangBattle } from "../assets/scripts/ui/hangBattle";
+import { beginHangBattle, finishHangBattle, setHangSpeed, showHangStrike, stopHangBattle, HangBar } from "../assets/scripts/ui/hangBattle";
+import { decodeWireBattleReport, wireBattleActionCount } from "../assets/scripts/net/protocol/wireBattle";
 import { hangAppearAnchor, hangFightStageId, HANG_APPEAR_BODY, planHangFightLine } from "../assets/scripts/ui/idleHangSkirmishPlan";
 import { PAGE_SHELL_FIGHT } from "../assets/scripts/ui/prefabShellMap";
 import { clearPrefabCache } from "../assets/scripts/ui/prefabLoad";
@@ -378,6 +379,29 @@ function chipOf(view: BattleHangView): HangMissionChipView {
   throw new Error("没有挂上 HangMissionChip");
 }
 
+function noteProgress(nowIdx: number | null, maxIdx: number | null): void {
+  GameStore.noteWire({
+    enabled: true,
+    account: "battle-check",
+    serverId: 1,
+    roleId: 1,
+    name: "battle-check",
+    nameSynced: true,
+    level: 1,
+    gold: null,
+    diamond: null,
+    nowIdx,
+    maxIdx,
+    heroes: null,
+    bag: null,
+    lineUp: null,
+    unlockIds: null,
+    rewardTime: 1_700_000_000,
+    maxRewardTime: null,
+    battle: null,
+  });
+}
+
 function noteChapter(nowIdx: number | null, rewardTime: number | null): void {
   GameStore.noteWire({
     enabled: true,
@@ -408,6 +432,12 @@ function bindChapter(): void {
       {
         idx: 1,
         reward_base: "[{\"item_type\":900001,\"item_num\":200},{\"item_type\":900003,\"item_num\":10},{\"item_type\":900101,\"item_num\":25}]",
+      },
+      {
+        idx: 5,
+        chapter_id: 1,
+        mission_id: 5,
+        reward_base: "[{\"item_type\":900001,\"item_num\":500},{\"item_type\":900003,\"item_num\":20},{\"item_type\":900101,\"item_num\":40}]",
       },
     ],
   };
@@ -490,6 +520,10 @@ function checkData(): void {
     const live = hangFace(now, now);
     assert(live.synced === true && live.caption === "第1关", "关卡字来自 nowIdx");
     assert(live.gold === "200/m" && live.souls === "25/m" && live.exp === "10/m", "三格来自这一关 reward_base");
+    noteProgress(null, 4);
+    const moved = hangFace(now, now);
+    assert(moved.caption.indexOf("第5关") >= 0 && moved.caption.indexOf("第1关") < 0, "只有最高 idx 时标题是进战关 " + moved.caption);
+    assert(moved.gold === "500/m" && moved.souls === "40/m" && moved.exp === "20/m", "收益跟进战关，不留第 1 关");
     assert(live.clock === "01:30", "计时是 reward_time 到现在的 90 秒");
   } finally {
     Session.source = previous;
@@ -522,6 +556,11 @@ async function checkPaint(): Promise<void> {
     const mission = missionLabel(view);
     assert(view.missionName !== null && view.missionName.active === true, "关卡名留在预制 lbl_mission_name");
     assert(mission.string === "第1关", "关卡字来自当前关");
+    GameLog.shared.clear();
+    noteProgress(null, 4);
+    assert(missionLabel(view).string.indexOf("第5关") >= 0, "Store 变了立刻重绑关卡 " + missionLabel(view).string);
+    assert(view.goldLabel !== null && view.goldLabel.string === "500/m", "收益立刻跟着进战关");
+    assert(sawMainline("挂机关卡刷新"), "进度变化要打挂机关卡刷新");
     assert(mission.fontSize === 45, "关卡字号按 CCBI 45");
     assert(view.missionName.scale.x === 0.8 && view.missionName.scale.y === 0.8, "关卡字缩放按 CCBI 0.8");
     assert(mission.color.r === 254 && mission.color.g === 255 && mission.color.b === 255, "关卡字颜色按 CCBI 白");
@@ -1058,6 +1097,63 @@ async function checkSettlePage(): Promise<void> {
   }
 }
 
+function checkJsonReport(): void {
+  const body = new TextEncoder().encode(
+    JSON.stringify({
+      battle_type: 1,
+      win_id: 7,
+      attacker: { player_id: 7, heros: [{ unit_id: 1002, hero_id: 10101001, position: 1, hp: 100, max_hp: 100 }] },
+      defender: { player_id: 8, heros: [{ unit_id: 1005, hero_id: 10101001, position: 2, hp: 80, max_hp: 80 }] },
+      rounds: [
+        {
+          round: 1,
+          attack_info: [
+            {
+              unit_id: 1002,
+              skill: {
+                skill_id: 11,
+                effect_info: [{ buff_info: [{ target_unitId: 1005, hit: 1, update: [{ type: 223, value: -30 }] }] }],
+              },
+            },
+          ],
+        },
+      ],
+    })
+  );
+  const report = decodeWireBattleReport(body);
+  assert(report !== null && wireBattleActionCount(report) === 1, "日服 JSON 战报要有攻击拍");
+  const action = report && report.rounds[0] ? report.rounds[0].actions[0] : null;
+  assert(action !== null && action.atkPos === 1 && action.skillId === 11 && action.camp === 1, "攻击者位置和技能来自 attack_info");
+  assert(action !== null && action.hits.length === 1 && action.hits[0].hurt === 30 && action.hits[0].defPos === 2, "伤害来自 update 的负数");
+  assert(report !== null && report.atkId === 7 && report.winId === 7, "胜负仍看 win_id");
+}
+
+function checkStandingBars(): void {
+  const page = new Node("LiveShell");
+  const hang = new Node("IdleHang");
+  hang.parent = page;
+  const heroes = new Node("IdleHeroes");
+  heroes.parent = hang;
+  const hero = new Node("Hero");
+  hero.parent = heroes;
+  beginHangBattle(page, "我方", "敌方");
+  const layer = page.getChildByName("HangBattle");
+  if (!layer) throw new Error("没有 HangBattle");
+  const foes = new Node("HangFoes");
+  foes.parent = layer;
+  const foe = new Node("HangFoe");
+  foe.parent = foes;
+  const bars: HangBar[] = [];
+  for (let i = 0; i < 3; i++) bars.push({ x: i * 10, y: 0, hpRatio: 1, rageRatio: 0.2, ally: true });
+  for (let i = 0; i < 3; i++) bars.push({ x: i * 10, y: 0, hpRatio: 0.5, rageRatio: 0.2, ally: false });
+  showHangStrike(page, 1, 15, "攻击", [], bars);
+  const host = layer.getChildByName("HangBars");
+  assert(host !== null && host.children.length === 2, "站着两人就两根血条 " + (host ? host.children.length : 0));
+  showHangStrike(page, 2, 15, "攻击", [], bars);
+  assert(host !== null && host.children.length === 2, "下一拍清掉残留 " + (host ? host.children.length : 0));
+  stopHangBattle(page);
+}
+
 async function main(): Promise<void> {
   GameLog.shared.mirrorConsole = false;
   checkFlag();
@@ -1065,6 +1161,8 @@ async function main(): Promise<void> {
   checkPrefab();
   checkRegistry();
   checkData();
+  checkJsonReport();
+  checkStandingBars();
   checkFightLine();
   checkMockProgress();
   await checkSettlePage();

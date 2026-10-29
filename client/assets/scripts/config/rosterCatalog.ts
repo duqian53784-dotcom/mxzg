@@ -257,6 +257,22 @@ export function chapterExtraRewards(): ChapterExtraFace[] {
   return out;
 }
 
+/**
+ * 挂机关卡名。键是 chapterreward.idx，和进战关号同一套。
+ * 不读 chapter.idx。那一列前几行都是第 1 关的不同站位，拿进度去对会一直写成第 1 关。
+ * 表上没有这一关时是 null，调用方再写「第 N 关」。
+ */
+export function chapterStageCaption(stageIdx: number): string | null {
+  const idx = Math.floor(stageIdx);
+  if (!isFinite(stageIdx) || idx < 1) return null;
+  for (let i = 0; i < stageBoardRows.length; i++) {
+    const row = stageBoardRows[i];
+    if (row.idx !== idx) continue;
+    return "第" + row.chapterId + "章 · 第" + row.missionId + "关";
+  }
+  return null;
+}
+
 /** 当前关的每分钟收益。表还没登记时是 null，调用方留原来的句子。 */
 export function chapterIdleMinute(stageIdx: number): IdleMinute | null {
   const pick = pickIdleIdx(stageIdx);
