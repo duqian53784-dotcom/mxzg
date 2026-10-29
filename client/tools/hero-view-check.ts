@@ -214,6 +214,10 @@ function checkPrefab(): void {
   assertNode(boardData, board.comp, "heroPort", 123, "view");
   assertNode(boardData, board.comp, "heroContent", 127, "content");
   assertComp(boardData, board.comp, "emptyLabel", 139, "cc.Label");
+  const emptyLabel = boardData[idOf(board.comp.emptyLabel)];
+  assert(Number(emptyLabel._fontSize) >= 24 && Number(emptyLabel._lineHeight) >= 32, "空态文字在手机宽度下可读");
+  assert(uiHeight(boardData, idOf(emptyLabel.node)) >= Number(emptyLabel._lineHeight) * 3,
+    "错误原因和两行操作提示不能压进单行文本框后自动缩小");
   assertComp(boardData, board.comp, "capacityLabel", 88, "cc.Label");
   assertNode(boardData, board.comp, "elemRow", 17, "node_elem");
   assertNode(boardData, board.comp, "hitMenu", 89, "UIMenu_1");

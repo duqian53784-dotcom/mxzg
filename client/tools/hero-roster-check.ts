@@ -52,6 +52,11 @@ async function main() {
   assert.equal(readOwnedHeroes([hero, { ...hero, id: "a".repeat(8) + "-aaaa-aaaa-aaaa-aaaaaaaaaaaa" }]).length, 2,
     "two owned instances of one template are valid");
   response = { heroes: [] }; await assert.rejects(api.list(session.accessToken), /列表无效/);
+  const missingApi = new HeroApi(new JsonClient("http://127.0.0.1:18080", async () => ({ status: 404, data: {} })));
+  await assert.rejects(missingApi.list(session.accessToken), (error: unknown) =>
+    error instanceof HttpFailure && error.status === 404 && error.message.includes("请更新并重启新后端"));
+  const expiredApi = new HeroApi(new JsonClient("http://127.0.0.1:18080", async () => ({ status: 401, data: {} })));
+  await assert.rejects(expiredApi.list(session.accessToken), (error: unknown) => error instanceof HttpFailure && error.status === 401);
 
   const owner = identity();
   await assert.rejects(owner.service.authenticated(async () => 1), SessionChanged);

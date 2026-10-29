@@ -35,6 +35,10 @@ dev.ps1 优先使用工程隔离 JDK，未找到时使用已有 JAVA_HOME/Java�
 
 V2 迁移新增英雄/阵容表与角色阵容版本。按正常方式重启新后端后由 Flyway 执行，不需要删除已有 `.local` 数据库；旧服数据库不受影响。MySQL 真实验证仍待完成。
 
+如果能登录，但英雄列表返回 404，先确认启服窗口是否仍运行修改前的 Java 进程。更新源码或重新编译不会替换已启动的进程：在旧启服窗口按 Ctrl+C，待服务停止后重新双击 start-remake-backend.bat，再重试英雄列表。无需删除 `.local` 数据库。未带会话请求 `/api/v1/heroes` 时，新后端应返回 401；404 表示当前地址没有这个接口。
+
+dev.ps1 run 现在会先检查端口是否已有服务：识别到英雄接口 404 时明确提示重启旧后端，其他占用提示复用现有服务或先停止再启动；不会再直接启动第二个 Maven 进程撞端口。Windows 在项目根目录可执行 `python tools/test_backend_launcher.py` 检查三种占用情况，使用随机端口的临时 HTTP 服务，不访问用户数据库。
+
 - 账号输入规则和开发创角：auth/DevelopmentLoginService。
 - 会话颁发、校验与有效期：auth/SessionService。
 - 角色 API：role/RoleController → RoleService → RoleRepository。

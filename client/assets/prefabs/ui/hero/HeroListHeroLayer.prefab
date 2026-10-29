@@ -3329,8 +3329,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 360,
-      "height": 28
+      "width": 480,
+      "height": 112
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -3394,9 +3394,9 @@
     "_isBold": false,
     "_isUnderline": false,
     "_spacingX": 0,
-    "_lineHeight": 22,
-    "_fontSize": 18,
-    "_actualFontSize": 18,
+    "_lineHeight": 32,
+    "_fontSize": 24,
+    "_actualFontSize": 24,
     "_enableOutline": false,
     "_outlineWidth": 2,
     "_outlineColor": {
@@ -3425,8 +3425,7 @@
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "ERW57R9ORdugYFhxDqIPaA"
-  }
-,
+  },
   {
     "__type__": "cc.CompPrefabInfo",
     "fileId": "heroListBoardComp001"

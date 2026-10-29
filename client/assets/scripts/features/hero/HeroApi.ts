@@ -1,4 +1,4 @@
-import { JsonClient } from "../../platform/http/JsonClient";
+import { HttpFailure, JsonClient } from "../../platform/http/JsonClient";
 
 /** Server-owned instance ID stays a UUID; template ID is a separate config key. */
 export interface OwnedHero {
@@ -31,6 +31,13 @@ export function readOwnedHeroes(value: unknown): readonly OwnedHero[] {
 export class HeroApi implements HeroGateway {
   constructor(private readonly http: JsonClient) {}
   async list(token: string): Promise<readonly OwnedHero[]> {
-    return readOwnedHeroes(await this.http.request("/api/v1/heroes", undefined, token));
+    try {
+      return readOwnedHeroes(await this.http.request("/api/v1/heroes", undefined, token));
+    } catch (error) {
+      if (error instanceof HttpFailure && error.status === 404) {
+        throw new HttpFailure(404, "英雄接口不存在\n请更新并重启新后端");
+      }
+      throw error;
+    }
   }
 }
