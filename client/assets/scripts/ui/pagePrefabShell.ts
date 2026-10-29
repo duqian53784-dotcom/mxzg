@@ -853,7 +853,9 @@ export function startShellFight(root: Node, page: Node): boolean {
   GameLog.shared.info("Mainline", "进入 startShellFight");
   const go = () => {
     beginHangBattle(page, "我方", "敌方");
-    if (page.isValid) page.emit(PAGE_SHELL_FIGHT);
+    if (!page.isValid) return;
+    GameLog.shared.info("Mainline", "开战发出 PAGE_SHELL_FIGHT");
+    page.emit(PAGE_SHELL_FIGHT);
   };
   if (hangLineupReady()) {
     try {

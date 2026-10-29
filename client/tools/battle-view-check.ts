@@ -19,7 +19,9 @@ import { HangMissionChipView } from "../assets/scripts/features/battle/ui/HangMi
 import { isOpenCancelled, UIManager } from "../assets/scripts/framework/ui/UIManager";
 import { UILayer } from "../assets/scripts/framework/ui/UILayer";
 import { viewCtorById, viewSpecOf } from "../assets/scripts/framework/ui/UIRegistry";
+import { beginHangBattle, setHangSpeed, stopHangBattle } from "../assets/scripts/ui/hangBattle";
 import { hangAppearAnchor, hangFightStageId, HANG_APPEAR_BODY, planHangFightLine } from "../assets/scripts/ui/idleHangSkirmishPlan";
+import { PAGE_SHELL_FIGHT } from "../assets/scripts/ui/prefabShellMap";
 import { clearPrefabCache } from "../assets/scripts/ui/prefabLoad";
 import { barIndex, barSlideDir, pageContentReady, selectedBarId } from "../assets/scripts/ui/barSlide";
 
@@ -165,6 +167,9 @@ function checkSources(): void {
   assert(hang.indexOf("chapterStageEnemies") >= 0, "开战守方按关卡号");
   assert(hang.indexOf("这一侧没有模型") >= 0, "没有模型的一侧不播出场光");
   assert(hang.indexOf("beginHangBattle") >= 0, "开战演出还在");
+  assert(hang.indexOf("PAGE_SHELL_FIGHT") >= 0 && hang.indexOf("showMockRound") >= 0, "开战要听战报驱动并播 Mock 回合");
+  assert(hang.indexOf("开战没有进战报") >= 0, "没有战报要打日志");
+  assert(shell.indexOf("开战发出 PAGE_SHELL_FIGHT") >= 0, "开战要发出战报驱动");
   const plan = read("client/assets/scripts/ui/idleHangSkirmishPlan.ts");
   const fightPlan = plan.slice(plan.indexOf("export function planHangFightLine"));
   assert(fightPlan.indexOf("export function planHangFightLine") === 0, "开战敌方有单独规则");
@@ -664,6 +669,140 @@ async function checkManager(): Promise<void> {
   }
 }
 
+function waitLine(match: (text: string) => boolean, ms: number): Promise<string> {
+  const recent = GameLog.shared.recent();
+  for (let i = recent.length - 1; i >= 0; i--) {
+    if (recent[i].tag === "Mainline" && match(recent[i].message)) return Promise.resolve(recent[i].message);
+  }
+  return new Promise((resolve, reject) => {
+    let off = (): void => {};
+    const timer = setTimeout(() => {
+      off();
+      const recent = GameLog.shared.recent();
+      const tail: string[] = [];
+      for (let i = 0; i < recent.length; i++) {
+        if (recent[i].tag === "Mainline") tail.push(recent[i].level + " " + recent[i].message);
+      }
+      reject(new Error("没有等到开战回合\n" + tail.join("\n")));
+    }, ms);
+    off = GameLog.shared.subscribe((line) => {
+      if (line.tag !== "Mainline" || !match(line.message)) return;
+      clearTimeout(timer);
+      off();
+      resolve(line.message);
+    });
+  });
+}
+
+function struck(text: string): boolean {
+  return /开战回合 \d+\/\d+ 技能开 血条 [1-9]/.test(text) && /飘字 [1-9]/.test(text);
+}
+
+async function checkFightRounds(): Promise<void> {
+  const previous = Session.source;
+  const file = JSON.parse(read("client/assets/resources/config/chapter.json")) as ConfigTableFile<Record<string, unknown>>;
+  const tables = new Map<string, ConfigTableFile<Record<string, unknown>>>();
+  tables.set("chapter", file);
+  bindGameCatalog(tables);
+  const pages: Node[] = [];
+  try {
+    Session.source = "mock";
+    GameStore.reset();
+    const page = new Node("LiveShell");
+    pages.push(page);
+    beginHangBattle(page, "我方", "敌方");
+    GameLog.shared.clear();
+    page.emit(PAGE_SHELL_FIGHT);
+    const opened = await waitLine(struck, 800);
+    assert(opened.indexOf("技能开") >= 0, "Mock 第一拍要有技能、血条和飘字 " + opened);
+    const layer = page.getChildByName("HangBattle");
+    const foes = layer ? layer.getChildByName("HangFoes") : null;
+    assert(!!foes && foes.children.length > 0, "回合演出不能拆掉已经摆上的敌方");
+    const banner = layer ? layer.getChildByName("HangSkill") : null;
+    assert(!!banner && banner.active, "技能条开着");
+    stopHangBattle(page);
+
+    Session.source = "wire";
+    GameStore.reset();
+    const bare = new Node("LiveShell");
+    pages.push(bare);
+    beginHangBattle(bare, "我方", "敌方");
+    GameLog.shared.clear();
+    bare.emit(PAGE_SHELL_FIGHT);
+    const missed = await waitLine((text) => text.indexOf("开战没有进战报") >= 0, 800);
+    assert(missed.indexOf("不播回合") >= 0, "真服没有战报要写明不播");
+    stopHangBattle(bare);
+
+    GameStore.noteWire({
+      enabled: true,
+      account: "battle-check",
+      serverId: 1,
+      roleId: 7,
+      name: "battle-check",
+      nameSynced: true,
+      level: 1,
+      gold: null,
+      diamond: null,
+      nowIdx: 1,
+      maxIdx: 0,
+      heroes: null,
+      bag: null,
+      lineUp: null,
+      unlockIds: null,
+      rewardTime: null,
+      maxRewardTime: null,
+      battle: {
+        empty: false,
+        marks: [],
+        report: {
+          battleId: 1,
+          battleType: 1,
+          atkId: 7,
+          defId: 8,
+          winId: 7,
+          rounds: [
+            {
+              index: 1,
+              marks: [],
+              actions: [
+                {
+                  atkPos: 1,
+                  skillId: 101010011,
+                  camp: 1,
+                  marks: [],
+                  hits: [{ defPos: 1, hurt: 30, hp: 70, marks: [] }],
+                },
+              ],
+            },
+          ],
+          atkHeroes: [{ pos: 1, heroId: 10101001, hp: 100, maxHp: 100, marks: [] }],
+          defHeroes: [{ pos: 1, heroId: 10101001, hp: 100, maxHp: 100, marks: [] }],
+          marks: [],
+        },
+      },
+    });
+    const wired = new Node("LiveShell");
+    pages.push(wired);
+    beginHangBattle(wired, "我方", "敌方");
+    setHangSpeed(wired, 3);
+    GameLog.shared.clear();
+    wired.emit(PAGE_SHELL_FIGHT);
+    const played = await waitLine(struck, 4000);
+    assert(played.indexOf("技能开") >= 0, "真服战报要播技能、血条和飘字 " + played);
+    const wiredLayer = wired.getChildByName("HangBattle");
+    const wiredFoes = wiredLayer ? wiredLayer.getChildByName("HangFoes") : null;
+    assert(!!wiredFoes && wiredFoes.children.length > 0, "战报回合不能拆掉右侧敌方");
+    stopHangBattle(wired);
+  } finally {
+    for (let i = 0; i < pages.length; i++) {
+      if (pages[i].isValid) stopHangBattle(pages[i]);
+    }
+    Session.source = previous;
+    GameStore.reset();
+    bindGameCatalog(new Map());
+  }
+}
+
 async function main(): Promise<void> {
   GameLog.shared.mirrorConsole = false;
   checkFlag();
@@ -672,6 +811,7 @@ async function main(): Promise<void> {
   checkRegistry();
   checkData();
   checkFightLine();
+  await checkFightRounds();
   await checkPaint();
   await checkManager();
   GameStore.reset();
