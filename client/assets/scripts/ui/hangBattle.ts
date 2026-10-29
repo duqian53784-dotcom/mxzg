@@ -7,9 +7,10 @@
  * 开战标题用 spine/ZDKS（图里已经有「战斗开始」）。套没挂上才写系统字，不叠两层。
  * 出场光只打在有模型的一侧，中心对齐那一侧的人。没有模型的一侧不播。
  * 数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
- * 摆完场会听 PAGE_SHELL_FIGHT。真服战报或 Mock 回合再往下播攻击、技能、血条和飘字。
+ * 摆完场会听 PAGE_SHELL_FIGHT。真服先重拉 3001。这一次新回来、并且带攻击的战报才播。
+ * 3001 没发出、没回到，或回来的战报没有攻击拍，都不复用上一局，改播本场回合。
+ * 胜负从这一份战报或本关 planBattle 写明，不留「胜负未带」。胜利才拉 3007，Mock 才写下 stageId。
  * 打完盖 BattleEndLayer，等回挂机或下一关，不在横幅闪完后拆层。
- * 真服胜利再拉 3007。Mock 按这一局的胜负写下本地下一关。
  */
 import { BlockInputEvents, Button, Color, Label, Node, Overflow, resources, sp, Sprite, SpriteFrame, TTFFont, UITransform } from "cc";
 import { battleRoundMax } from "../config/battleTiming";
@@ -24,6 +25,7 @@ import { mockBattleCast, replayFromStore } from "../module/mainline/battleFromSt
 import { WireSession } from "../net/WireSession";
 import { hangFace } from "../features/battle/model/hangFace";
 import {
+  resolveWireBattleWin,
   WireBattleReport,
   WireSpineBeat,
   WireSpineReplay,
@@ -362,9 +364,9 @@ function dropHangEnd(page: Node): void {
 
 /**
  * 开战按钮先摆场，再发 PAGE_SHELL_FIGHT。
- * 这里听这一下：真服进 3001 或已有战报，Mock 用简化回合。
- * 每一拍写技能名、血条、飘字，并在已经站着的人身上播攻击和受击。
- * 没有战报、没有回合、骨架还没挂上，都打日志，不另造一页森林战斗。
+ * 真服每场都重发 3001。只播这一次新回来、并且带攻击的战报。
+ * 没回到、没有攻击拍，都不拿上一局来补一拍。改播本场 planBattle，胜负写明。
+ * Mock 直接播本场回合。没有关号、没有回合、骨架还没挂上，都打日志，不另造一页森林战斗。
  */
 interface FightRun {
   seq: number;
@@ -417,13 +419,20 @@ async function runHangFight(page: Node): Promise<void> {
   GameLog.shared.info("Mainline", "开战进入回合");
   try {
     if (wireFight()) {
-      const report = await takeWireReport(run, live);
+      const taken = await takeWireReport(run, live);
       if (!live()) return;
-      if (!report) return;
-      await playWireReport(page, run, report, live);
+      if (!taken) return;
+      if (taken.staged) {
+        const roleId = Session.role ? Session.role.roleId : null;
+        const carried = taken.report ? resolveWireBattleWin(taken.report, roleId) : null;
+        await playMockReport(page, run, live, carried);
+        return;
+      }
+      if (!taken.report) return;
+      await playWireReport(page, run, taken.report, live);
       return;
     }
-    await playMockReport(page, run, live);
+    await playMockReport(page, run, live, null);
   } catch (err) {
     GameLog.shared.warn("Mainline", "开战回合没有播 " + messageOf(err));
   }
@@ -460,8 +469,18 @@ function cachedWireReport(): WireBattleReport | null {
   return null;
 }
 
-/** 真服点开战才发 3001。发不出就播已经在手上的战报。两边都没有就停，不回落 Mock。 */
-async function takeWireReport(run: FightRun, live: () => boolean): Promise<WireBattleReport | null> {
+interface FightTake {
+  report: WireBattleReport | null;
+  /** 不播手里那份旧战报，改用本关 planBattle 的完整回合。 */
+  staged: boolean;
+}
+
+/**
+ * 真服点开战就发 3001。只认这一次新回来、并且带攻击的战报。
+ * 发得出但没回到，或回来的战报没有攻击拍，都不复用上一局，改播本场回合。
+ * 发不出时，手里这份若本来就有攻击才播。没有攻击、也没有关号，就停。
+ */
+async function takeWireReport(run: FightRun, live: () => boolean): Promise<FightTake | null> {
   const since = WireSession.battleSerial;
   let sent = false;
   try {
@@ -470,15 +489,7 @@ async function takeWireReport(run: FightRun, live: () => boolean): Promise<WireB
     GameLog.shared.warn("Mainline", "开战 3001 没有发出 " + messageOf(err));
     sent = false;
   }
-  if (!sent) {
-    const had = cachedWireReport();
-    if (!had) {
-      GameLog.shared.warn("Mainline", "开战没有进战报，3001 没有发出，也没有已有战报，不播回合");
-      return null;
-    }
-    GameLog.shared.info("Mainline", "开战 3001 没有发出，改播已有战报 回合 " + had.rounds.length);
-    return had;
-  }
+  if (!sent) return takeWithoutSend();
   GameLog.shared.info("Mainline", "开战进入战报，已发 3001");
   const waited = await waitWireReport(since, run);
   if (waited.stopped) {
@@ -486,18 +497,41 @@ async function takeWireReport(run: FightRun, live: () => boolean): Promise<WireB
     else if (live()) GameLog.shared.info("Mainline", "开战已停，不再等战报");
     return null;
   }
-  if (waited.report) return waited.report;
-  if (WireSession.battleSerial !== since) {
-    GameLog.shared.warn("Mainline", "开战 3001 回到的战报没有 report，不播回合");
+  if (waited.report && reportHasActions(waited.report)) return { report: waited.report, staged: false };
+  if (waited.report) return stageTake(waited.report, "开战 3001 回到的战报没有攻击拍，不补一拍结束");
+  if (WireSession.battleSerial !== since) return stageTake(null, "开战 3001 回到的战报没有 report");
+  return stageTake(null, "开战 3001 没有回到");
+}
+
+function takeWithoutSend(): FightTake | null {
+  const had = cachedWireReport();
+  if (had && reportHasActions(had)) {
+    GameLog.shared.info("Mainline", "开战 3001 没有发出，改播已有战报 回合 " + had.rounds.length);
+    return { report: had, staged: false };
+  }
+  if (had) return stageTake(null, "开战 3001 没有发出，已有战报没有攻击拍");
+  if (fightStageId() !== null) {
+    GameLog.shared.info("Mainline", "开战没有新的 3001，改播本场回合");
+    return { report: null, staged: true };
+  }
+  GameLog.shared.warn("Mainline", "开战没有进战报，3001 没有发出，也没有已有战报，不播回合");
+  return null;
+}
+
+function stageTake(report: WireBattleReport | null, why: string): FightTake | null {
+  if (fightStageId() === null) {
+    GameLog.shared.warn("Mainline", why + "，没有关号，不复用已有战报，不播回合");
     return null;
   }
-  const had = cachedWireReport();
-  if (had) {
-    GameLog.shared.warn("Mainline", "开战 3001 没有回到，改播已有战报 回合 " + had.rounds.length);
-    return had;
+  GameLog.shared.warn("Mainline", why + "，不复用已有战报，改播本场回合");
+  return { report, staged: true };
+}
+
+function reportHasActions(report: WireBattleReport): boolean {
+  for (let r = 0; r < report.rounds.length; r++) {
+    if (report.rounds[r].actions.length > 0) return true;
   }
-  GameLog.shared.warn("Mainline", "开战没有进战报，3001 超时，不播回合");
-  return null;
+  return false;
 }
 
 function waitWireReport(since: number, run: FightRun): Promise<{ report: WireBattleReport | null; stopped: boolean }> {
@@ -524,10 +558,10 @@ function waitWireReport(since: number, run: FightRun): Promise<{ report: WireBat
   });
 }
 
-async function playMockReport(page: Node, run: FightRun, live: () => boolean): Promise<void> {
+async function playMockReport(page: Node, run: FightRun, live: () => boolean, carried: boolean | null): Promise<void> {
   const stageId = fightStageId();
   if (stageId === null) {
-    GameLog.shared.warn("Mainline", "开战没有关号，不播 Mock 回合");
+    GameLog.shared.warn("Mainline", "开战没有关号，不播本场回合");
     return;
   }
   const level = fightLevel(stageId);
@@ -540,12 +574,16 @@ async function playMockReport(page: Node, run: FightRun, live: () => boolean): P
     enemies: cast.enemies,
   });
   if (plan.rounds.length === 0) {
-    GameLog.shared.warn("Mainline", "开战 Mock 没有回合，不播");
+    GameLog.shared.warn("Mainline", "开战本场没有回合，不播");
     return;
   }
+  const win = carried === true || carried === false ? carried : plan.win;
+  const from = carried === true || carried === false ? "来自战报" : "来自本关";
+  const title = wireFight() ? "开战本场" : "开战 Mock";
   const first = plan.rounds[0];
   primeHangSides(page, fullUnits(first.allies), fullUnits(first.enemies));
-  GameLog.shared.info("Mainline", "开战 Mock 第" + stageId + "关 " + plan.rounds.length + " 回合");
+  GameLog.shared.info("Mainline", "开战胜负 " + (win ? "胜利" : "失败") + " " + from);
+  GameLog.shared.info("Mainline", title + " 第" + stageId + "关 " + plan.rounds.length + " 回合");
   for (let i = 0; i < plan.rounds.length; i++) {
     if (!live()) return;
     if (run.skip) {
@@ -558,7 +596,7 @@ async function playMockReport(page: Node, run: FightRun, live: () => boolean): P
     if (!live()) return;
   }
   if (!live()) return;
-  finishHangBattle(page, plan.win);
+  finishHangBattle(page, win);
 }
 
 async function playWireReport(page: Node, run: FightRun, report: WireBattleReport, live: () => boolean): Promise<void> {
@@ -598,7 +636,22 @@ async function playWireReport(page: Node, run: FightRun, report: WireBattleRepor
     if (round < total) round += 1;
   }
   if (!live()) return;
-  finishHangBattle(page, plan.win);
+  finishHangBattle(page, verdictFromReport(plan.win, stageId));
+}
+
+/** 战报已经判出胜负就用它。没有就按本关 planBattle 写成胜或负，不把 null 送进结算。 */
+function verdictFromReport(win: boolean | null, stageId: number): boolean {
+  if (win === true || win === false) {
+    GameLog.shared.info("Mainline", "开战胜负 " + (win ? "胜利" : "失败") + " 来自战报");
+    return win;
+  }
+  const plan = planBattle({
+    stageId,
+    level: fightLevel(stageId),
+    roleName: fightRoleName(),
+  });
+  GameLog.shared.warn("Mainline", "开战战报没有胜负，按本关写成" + (plan.win ? "胜利" : "失败") + "，不留胜负未带");
+  return plan.win;
 }
 
 /** 一拍都没有攻击时补一拍，并在有血量时让守方掉一截，飘字才有数。不改战报原件。 */

@@ -19,6 +19,9 @@ import { HangMissionChipView } from "../assets/scripts/features/battle/ui/HangMi
 import { isOpenCancelled, UIManager } from "../assets/scripts/framework/ui/UIManager";
 import { UILayer } from "../assets/scripts/framework/ui/UILayer";
 import { viewCtorById, viewSpecOf } from "../assets/scripts/framework/ui/UIRegistry";
+import { NetClient } from "../assets/scripts/net/NetClient";
+import { ITransport, NetHandler } from "../assets/scripts/net/NetTypes";
+import { WireSession } from "../assets/scripts/net/WireSession";
 import { beginHangBattle, finishHangBattle, setHangSpeed, stopHangBattle } from "../assets/scripts/ui/hangBattle";
 import { hangAppearAnchor, hangFightStageId, HANG_APPEAR_BODY, planHangFightLine } from "../assets/scripts/ui/idleHangSkirmishPlan";
 import { PAGE_SHELL_FIGHT } from "../assets/scripts/ui/prefabShellMap";
@@ -169,6 +172,9 @@ function checkSources(): void {
   assert(hang.indexOf("beginHangBattle") >= 0, "开战演出还在");
   assert(hang.indexOf("PAGE_SHELL_FIGHT") >= 0 && hang.indexOf("showMockRound") >= 0, "开战要听战报驱动并播 Mock 回合");
   assert(hang.indexOf("开战没有进战报") >= 0, "没有战报要打日志");
+  assert(hang.indexOf("不复用已有战报") >= 0 && hang.indexOf("改播本场回合") >= 0, "3001 没回到不能复用上一局");
+  assert(hang.indexOf("来自战报") >= 0 && hang.indexOf("来自本关") >= 0, "胜负要写明来自战报或本关");
+  assert(hang.indexOf("不留胜负未带") >= 0, "战报没胜负不能静默");
   assert(shell.indexOf("开战发出 PAGE_SHELL_FIGHT") >= 0, "开战要发出战报驱动");
   assert(hang.indexOf("mountBattleEnd") >= 0 && hang.indexOf("开战结算 盖上结算页") >= 0, "打完要盖结算页，不能静默拆层");
   assert(hang.indexOf("noteMockVictory") >= 0, "Mock 胜利要写本地进度");
@@ -711,6 +717,133 @@ function struck(text: string): boolean {
   return /开战回合 \d+\/\d+ 技能开 血条 [1-9]/.test(text) && /飘字 [1-9]/.test(text);
 }
 
+class SilentTransport implements ITransport {
+  connect(): Promise<void> {
+    return Promise.resolve();
+  }
+  send(): void {}
+  close(): void {}
+  onMessage(_handler: NetHandler): void {}
+  onClose(_handler: () => void): void {}
+}
+
+function noteStaleBattle(): void {
+  GameStore.noteWire({
+    enabled: true,
+    account: "battle-check",
+    serverId: 1,
+    roleId: 7,
+    name: "battle-check",
+    nameSynced: true,
+    level: 4,
+    gold: null,
+    diamond: null,
+    nowIdx: 4,
+    maxIdx: 3,
+    heroes: null,
+    bag: null,
+    lineUp: null,
+    unlockIds: null,
+    rewardTime: null,
+    maxRewardTime: null,
+    battle: {
+      empty: false,
+      marks: [],
+      report: {
+        battleId: 4,
+        battleType: 1,
+        atkId: null,
+        defId: null,
+        winId: null,
+        rounds: [{ index: 1, marks: [], actions: [] }],
+        atkHeroes: [{ pos: 1, heroId: 10101001, hp: 80, maxHp: null, marks: [] }],
+        defHeroes: [{ pos: 1, heroId: 10101001, hp: 40, maxHp: null, marks: [] }],
+        marks: [],
+      },
+    },
+  });
+}
+
+/** 上一局没有攻击、也没有胜负。发不出 3001 时不能补一拍就结算。 */
+async function checkStaleReport(pages: Node[]): Promise<void> {
+  Session.source = "wire";
+  noteStaleBattle();
+  const stale = new Node("LiveShell");
+  pages.push(stale);
+  beginHangBattle(stale, "我方", "第4关");
+  GameLog.shared.clear();
+  stale.emit(PAGE_SHELL_FIGHT);
+  const opened = await waitLine(struck, 800);
+  assert(!/血条 0/.test(opened), "本场第一拍要有血条 " + opened);
+  const second = await waitLine((text) => text.indexOf("开战回合 2/") >= 0, 2500);
+  assert(second.indexOf("2/") >= 0, "本场要播到第二回合 " + second);
+  assert(sawMainline("不复用已有战报") && sawMainline("改播本场回合"), "没有攻击拍不能复用旧战报");
+  assert(sawMainline("开战胜负 胜利 来自本关"), "胜负要按本关写成胜利");
+  assert(sawMainline("4 回合"), "本场要有完整回合");
+  assert(!sawMainline("补一拍攻击") && !sawMainline("胜负未带") && !sawMainline("改播已有战报"), "不能补一拍或静默胜负未带");
+  const layer = stale.getChildByName("HangBattle");
+  const skip = layer ? layer.getChildByName("HangSkipBg") : null;
+  if (!skip) throw new Error("跳过钮还在");
+  skip.emit(Button.EventType.CLICK);
+  const settled = await waitLine((text) => text.indexOf("开战结算 盖上结算页") >= 0, 4000);
+  assert(settled.indexOf("胜利") >= 0, "结算页写胜利 " + settled);
+  assert(sawMainline("开战结算 3007 没有发出") && sawMainline("进度不改"), "没连上时胜利也要写明 3007 没发出");
+  assert(GameStore.chapter().nowIdx === 4, "3007 没发出时关号不动");
+  stopHangBattle(stale);
+
+  const again = new Node("LiveShell");
+  pages.push(again);
+  beginHangBattle(again, "我方", "第4关");
+  GameLog.shared.clear();
+  again.emit(PAGE_SHELL_FIGHT);
+  const againLine = await waitLine((text) => text.indexOf("开战本场") >= 0 && text.indexOf("4 回合") >= 0, 800);
+  assert(againLine.indexOf("4 回合") >= 0, "二次开战仍是完整回合 " + againLine);
+  const againHit = await waitLine(struck, 800);
+  assert(!/血条 0/.test(againHit), "二次开战第一拍要有血条 " + againHit);
+  assert(!sawMainline("补一拍攻击") && !sawMainline("改播已有战报"), "二次开战不复用上一局");
+  stopHangBattle(again);
+}
+
+/** 3001 发得出但没有回包。不能改播上一局，打完胜利要拉 3007。 */
+async function checkFreshPull(pages: Node[]): Promise<void> {
+  const net = new NetClient(new SilentTransport());
+  try {
+    await net.connect("silent://battle");
+    WireSession.watch(net);
+    WireSession.nowIdx = 4;
+    WireSession.maxIdx = 3;
+    WireSession.battleSerial = 0;
+    noteStaleBattle();
+    const slow = new Node("LiveShell");
+    pages.push(slow);
+    beginHangBattle(slow, "我方", "第4关");
+    GameLog.shared.clear();
+    slow.emit(PAGE_SHELL_FIGHT);
+    const missed = await waitLine((text) => text.indexOf("开战 3001 没有回到") >= 0, 9000);
+    assert(missed.indexOf("不复用已有战报") >= 0 && missed.indexOf("改播本场回合") >= 0, "超时不能复用旧战报 " + missed);
+    const planned = await waitLine((text) => text.indexOf("开战本场") >= 0 && text.indexOf("4 回合") >= 0, 800);
+    assert(planned.indexOf("4 回合") >= 0, "超时后改播完整回合 " + planned);
+    assert(sawMainline("开战胜负 胜利 来自本关"), "超时后胜负按本关写成胜利");
+    const layer = slow.getChildByName("HangBattle");
+    const skip = layer ? layer.getChildByName("HangSkipBg") : null;
+    if (!skip) throw new Error("超时后跳过钮还在");
+    skip.emit(Button.EventType.CLICK);
+    const settled = await waitLine((text) => text.indexOf("开战结算 盖上结算页") >= 0, 4000);
+    assert(settled.indexOf("胜利") >= 0, "超时后结算页写胜利 " + settled);
+    assert(sawMainline("已拉 3007"), "胜利要拉 3007");
+    assert(!sawMainline("胜负未带") && !sawMainline("补一拍攻击") && !sawMainline("改播已有战报"), "超时不能补一拍或静默胜负未带");
+    assert(GameStore.chapter().nowIdx === 4, "3007 还没回时本地关号不动");
+    stopHangBattle(slow);
+  } finally {
+    WireSession.release(net);
+    net.close();
+    WireSession.nowIdx = null;
+    WireSession.maxIdx = null;
+    WireSession.battleMatch = null;
+    WireSession.battleSerial = 0;
+  }
+}
+
 async function checkFightRounds(): Promise<void> {
   const previous = Session.source;
   const file = JSON.parse(read("client/assets/resources/config/chapter.json")) as ConfigTableFile<Record<string, unknown>>;
@@ -806,6 +939,9 @@ async function checkFightRounds(): Promise<void> {
     const wiredFoes = wiredLayer ? wiredLayer.getChildByName("HangFoes") : null;
     assert(!!wiredFoes && wiredFoes.children.length > 0, "战报回合不能拆掉右侧敌方");
     stopHangBattle(wired);
+
+    await checkStaleReport(pages);
+    await checkFreshPull(pages);
   } finally {
     for (let i = 0; i < pages.length; i++) {
       if (pages[i].isValid) stopHangBattle(pages[i]);
