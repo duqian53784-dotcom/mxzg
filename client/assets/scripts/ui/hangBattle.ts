@@ -7,23 +7,45 @@
  * 开战标题用 spine/ZDKS（图里已经有「战斗开始」）。套没挂上才写系统字，不叠两层。
  * 出场光只打在有模型的一侧，中心对齐那一侧的人。没有模型的一侧不播。
  * 数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
+ * 摆完场会听 PAGE_SHELL_FIGHT。真服战报或 Mock 回合再往下播攻击、技能、血条和飘字。
  */
-import { Button, Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, TTFFont, UITransform } from "cc";
+import { Button, Color, Label, Node, Overflow, resources, sp, Sprite, SpriteFrame, TTFFont, UITransform } from "cc";
+import { battleRoundMax } from "../config/battleTiming";
+import { skillCastDelay } from "../config/lookups";
 import { chapterStageEnemies } from "../config/gameCatalog";
 import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
 import { Session } from "../core/Session";
-import { BattleRound, BattleUnit } from "../module/mainline/battle";
-import { wireSpineHasClip } from "../net/protocol/wireBattle";
+import { planBattle, BattleRound, BattleUnit } from "../module/mainline/battle";
+import { mockBattleCast, replayFromStore } from "../module/mainline/battleFromStore";
+import { WireSession } from "../net/WireSession";
+import {
+  WireBattleReport,
+  WireSpineBeat,
+  WireSpineReplay,
+  wireSpineHasClip,
+} from "../net/protocol/wireBattle";
 import { paintSpeedIcon } from "./BattlePage";
 import { battleAppearFramePaths } from "./battleAppear";
-import { battleFrameStep, mountFrameReel } from "./battleFramePlay";
+import { armBattleDelay } from "./battleClock";
+import { battleCastFrameCount, hangSkillVfx } from "./battleFrames";
+import { battleFrameStep, mountFrameReel, type FrameReel } from "./battleFramePlay";
+import {
+  battleCastWait,
+  battleRoundNumber,
+  fallbackAttackTitle,
+  nextBattleSpeed,
+  planBattlePresentation,
+  signedHitFloats,
+  signedHpDeltas,
+} from "./battlePresentation";
 import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
 import { placeHangFloats, type HangFloat } from "./hangFloat";
 import { pauseIdleSkirmishes, resumeIdleSkirmishes } from "./idleHangSkirmish";
 import { hangAppearAnchor, hangFightStageId, hangStandPoint, IDLE_HANG_SPOTS, IDLE_SKIRMISH_SPOTS, planHangFightLine } from "./idleHangSkirmishPlan";
 import { hangSpineStem } from "./idleHangRoster";
+import { PAGE_SHELL_FIGHT } from "./prefabShellMap";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 export type { HangFloat };
@@ -88,6 +110,7 @@ export function barsFromSides(
 
 /** 出阵之后先把中间按钮改成战斗中，并闪一下开战。右侧怪从战报守方或 chapter 表摆上。 */
 export function beginHangBattle(page: Node, left: string, right: string): void {
+  armHangFight(page);
   const hold = ensureHold(page);
   hold.seq += 1;
   hold.left = left || "我方";
@@ -114,7 +137,7 @@ export function showMockRound(page: Node, round: BattleRound, stageId: number): 
   pushSide(floats, hold.enemies, round.enemies, "enemy", round.line.indexOf("溃败") >= 0);
   hold.allies = round.allies.map(copyUnit);
   hold.enemies = round.enemies.map(copyUnit);
-  const skill = skillFromLine(round.line);
+  const skill = strikeSkill(round);
   const rage = round.round >= 1 ? Math.min(1, round.round / 15) : 0;
   showHangStrike(page, round.round, 15, skill, floats, barsFromSides(round.allies, round.enemies, rage));
 }
@@ -170,13 +193,680 @@ export function finishHangBattle(page: Node, win: boolean | null): void {
 }
 
 export function stopHangBattle(page: Node): void {
+  const run = runs.get(page);
   holds.delete(page);
+  if (run) dropRun(page, run);
   const layer = layerOf(page);
   if (layer) layer.destroy();
   dropHangReplay(page);
   setTalk(page, true);
   setCaption(page, "战斗");
   resumeIdleSkirmishes();
+}
+
+/**
+ * 开战按钮先摆场，再发 PAGE_SHELL_FIGHT。
+ * 这里听这一下：真服进 3001 或已有战报，Mock 用简化回合。
+ * 每一拍写技能名、血条、飘字，并在已经站着的人身上播攻击和受击。
+ * 没有战报、没有回合、骨架还没挂上，都打日志，不另造一页森林战斗。
+ */
+interface FightRun {
+  seq: number;
+  skip: boolean;
+  wake: (() => void) | null;
+  timers: Array<ReturnType<typeof setTimeout>>;
+  modelMiss: boolean;
+  gestureMiss: boolean;
+  skillMiss: boolean;
+  hitMiss: boolean;
+}
+
+const runs = new Map<Node, FightRun>();
+
+function armHangFight(page: Node): void {
+  const mark = page as Node & { mxzgFightDrive?: boolean };
+  if (mark.mxzgFightDrive) return;
+  mark.mxzgFightDrive = true;
+  page.on(PAGE_SHELL_FIGHT, () => {
+    void runHangFight(page);
+  });
+  page.once(Node.EventType.NODE_DESTROYED, () => {
+    const run = runs.get(page);
+    if (run) dropRun(page, run);
+  });
+}
+
+function dropRun(page: Node, run: FightRun): void {
+  const wake = run.wake;
+  run.wake = null;
+  if (wake) wake();
+  for (let i = 0; i < run.timers.length; i++) clearTimeout(run.timers[i]);
+  run.timers.length = 0;
+  if (runs.get(page) === run) runs.delete(page);
+}
+
+async function runHangFight(page: Node): Promise<void> {
+  const hold = holds.get(page);
+  const seq = hold ? hold.seq : -1;
+  const prev = runs.get(page);
+  const run: FightRun = { seq, skip: false, wake: null, timers: [], modelMiss: false, gestureMiss: false, skillMiss: false, hitMiss: false };
+  runs.set(page, run);
+  if (prev) dropRun(page, prev);
+  bindRunControls(page);
+  const live = (): boolean => {
+    if (!page.isValid) return false;
+    const now = holds.get(page);
+    return !!now && now.seq === seq && runs.get(page) === run;
+  };
+  GameLog.shared.info("Mainline", "开战进入回合");
+  try {
+    if (wireFight()) {
+      const report = await takeWireReport(run, live);
+      if (!live()) return;
+      if (!report) return;
+      await playWireReport(page, run, report, live);
+      return;
+    }
+    await playMockReport(page, run, live);
+  } catch (err) {
+    GameLog.shared.warn("Mainline", "开战回合没有播 " + messageOf(err));
+  }
+}
+
+function bindRunControls(page: Node): void {
+  const mark = page as Node & { mxzgFightControls?: boolean };
+  if (mark.mxzgFightControls) return;
+  mark.mxzgFightControls = true;
+  bindHangSpeed(page, () => {
+    const hold = holds.get(page);
+    const next = nextBattleSpeed(hold ? hold.speed : 1);
+    setHangSpeed(page, next);
+    GameLog.shared.info("Mainline", "开战加速 ×" + next);
+  });
+  bindHangSkip(page, () => {
+    const run = runs.get(page);
+    if (!run) return;
+    run.skip = true;
+    if (run.wake) run.wake();
+    GameLog.shared.info("Mainline", "开战跳过，停在最后一拍");
+  });
+}
+
+function wireFight(): boolean {
+  return Session.source === "wire" || GameStore.source === "wire";
+}
+
+function cachedWireReport(): WireBattleReport | null {
+  const match = GameStore.battle() || WireSession.battleMatch;
+  if (match && match.report) return match.report;
+  if (WireSession.chapterReport && WireSession.chapterReport.report) return WireSession.chapterReport.report;
+  if (WireSession.battleReport && WireSession.battleReport.report) return WireSession.battleReport.report;
+  return null;
+}
+
+/** 真服点开战才发 3001。发不出就播已经在手上的战报。两边都没有就停，不回落 Mock。 */
+async function takeWireReport(run: FightRun, live: () => boolean): Promise<WireBattleReport | null> {
+  const since = WireSession.battleSerial;
+  let sent = false;
+  try {
+    sent = WireSession.challengeMainline();
+  } catch (err) {
+    GameLog.shared.warn("Mainline", "开战 3001 没有发出 " + messageOf(err));
+    sent = false;
+  }
+  if (!sent) {
+    const had = cachedWireReport();
+    if (!had) {
+      GameLog.shared.warn("Mainline", "开战没有进战报，3001 没有发出，也没有已有战报，不播回合");
+      return null;
+    }
+    GameLog.shared.info("Mainline", "开战 3001 没有发出，改播已有战报 回合 " + had.rounds.length);
+    return had;
+  }
+  GameLog.shared.info("Mainline", "开战进入战报，已发 3001");
+  const waited = await waitWireReport(since, run);
+  if (waited.stopped) {
+    if (run.skip) GameLog.shared.info("Mainline", "开战跳过时战报还没到，不播回合");
+    else if (live()) GameLog.shared.info("Mainline", "开战已停，不再等战报");
+    return null;
+  }
+  if (waited.report) return waited.report;
+  if (WireSession.battleSerial !== since) {
+    GameLog.shared.warn("Mainline", "开战 3001 回到的战报没有 report，不播回合");
+    return null;
+  }
+  const had = cachedWireReport();
+  if (had) {
+    GameLog.shared.warn("Mainline", "开战 3001 没有回到，改播已有战报 回合 " + had.rounds.length);
+    return had;
+  }
+  GameLog.shared.warn("Mainline", "开战没有进战报，3001 超时，不播回合");
+  return null;
+}
+
+function waitWireReport(since: number, run: FightRun): Promise<{ report: WireBattleReport | null; stopped: boolean }> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let off = (): void => {};
+    let cancel = (): void => {};
+    const finish = (report: WireBattleReport | null, stopped: boolean): void => {
+      if (settled) return;
+      settled = true;
+      off();
+      cancel();
+      if (run.wake === abort) run.wake = null;
+      resolve({ report, stopped });
+    };
+    const abort = (): void => finish(null, true);
+    off = WireSession.onSync(() => {
+      if (WireSession.battleSerial === since) return;
+      const match = WireSession.battleMatch;
+      finish(match && match.report ? match.report : null, false);
+    });
+    cancel = armBattleDelay(8000, () => finish(null, false));
+    run.wake = abort;
+  });
+}
+
+async function playMockReport(page: Node, run: FightRun, live: () => boolean): Promise<void> {
+  const stageId = fightStageId();
+  if (stageId === null) {
+    GameLog.shared.warn("Mainline", "开战没有关号，不播 Mock 回合");
+    return;
+  }
+  const level = fightLevel(stageId);
+  const cast = mockBattleCast(stageId);
+  const plan = planBattle({
+    stageId,
+    level,
+    roleName: fightRoleName(),
+    allies: cast.allies,
+    enemies: cast.enemies,
+  });
+  if (plan.rounds.length === 0) {
+    GameLog.shared.warn("Mainline", "开战 Mock 没有回合，不播");
+    return;
+  }
+  const first = plan.rounds[0];
+  primeHangSides(page, fullUnits(first.allies), fullUnits(first.enemies));
+  GameLog.shared.info("Mainline", "开战 Mock 第" + stageId + "关 " + plan.rounds.length + " 回合");
+  for (let i = 0; i < plan.rounds.length; i++) {
+    if (!live()) return;
+    if (run.skip) {
+      paintMockRound(page, run, plan.rounds[plan.rounds.length - 1], stageId);
+      break;
+    }
+    paintMockRound(page, run, plan.rounds[i], stageId);
+    const last = i === plan.rounds.length - 1;
+    await waitBeat(run, battleCastWait(playSpeed(page), last, 8));
+    if (!live()) return;
+  }
+  if (!live()) return;
+  finishHangBattle(page, plan.win);
+}
+
+async function playWireReport(page: Node, run: FightRun, report: WireBattleReport, live: () => boolean): Promise<void> {
+  const stageId = fightStageId();
+  if (stageId === null) {
+    GameLog.shared.warn("Mainline", "开战战报没有关号，不播回合");
+    return;
+  }
+  const roleId = Session.role ? Session.role.roleId : null;
+  const plan = replayFromStore(report, roleId, stageId);
+  const present = planBattlePresentation(report, plan);
+  const beats = playbackStrikes(plan);
+  if (beats.length === 0) {
+    GameLog.shared.warn("Mainline", "开战战报没有回合，不播");
+    return;
+  }
+  const cap = battleRoundMax(report.battleType === null ? 1 : report.battleType);
+  const total = cap !== null && cap >= 1 ? cap : 15;
+  const hpNow: Array<number | null> = [];
+  for (let i = 0; i < plan.slots.length; i++) hpNow.push(plan.slots[i].hp);
+  let round = 1;
+  GameLog.shared.info("Mainline", "开战战报 关" + stageId + " " + beats.length + " 拍");
+  for (let i = 0; i < beats.length; i++) {
+    if (!live()) return;
+    const index = run.skip ? beats.length - 1 : i;
+    const beat = beats[index];
+    const parsed = battleRoundNumber(beat.line);
+    if (parsed !== null) round = parsed;
+    const presentBeat = index >= 0 && index < present.beats.length ? present.beats[index] : null;
+    const skillId = presentBeat ? presentBeat.skillId : null;
+    paintWireBeat(page, run, plan, beat, presentBeat, hpNow, round, total);
+    if (run.skip || index === beats.length - 1) break;
+    const frames = battleCastFrameCount(skillId);
+    const extra = skillId === null ? 0 : skillCastDelay(skillId);
+    await waitBeat(run, battleCastWait(playSpeed(page), false, frames, extra));
+    if (!live()) return;
+    if (round < total) round += 1;
+  }
+  if (!live()) return;
+  finishHangBattle(page, plan.win);
+}
+
+/** 一拍都没有攻击时补一拍，并在有血量时让守方掉一截，飘字才有数。不改战报原件。 */
+function playbackStrikes(plan: WireSpineReplay): WireSpineBeat[] {
+  const beats = plan.beats.map(copyBeat);
+  if (!hasStrike(beats)) {
+    const cues = beats.length > 0 ? beats[beats.length - 1].cues.map((cue) => ({ slot: cue.slot, clip: cue.clip })) : [];
+    let ally = -1;
+    let enemy = -1;
+    for (let i = 0; i < plan.slots.length; i++) {
+      if (ally < 0 && plan.slots[i].side === "ally") ally = i;
+      if (enemy < 0 && plan.slots[i].side === "enemy") enemy = i;
+    }
+    if (ally >= 0) setCue(cues, ally, "attack");
+    if (enemy >= 0) setCue(cues, enemy, "hit");
+    const hp: Array<number | null> = [];
+    for (let i = 0; i < plan.slots.length; i++) hp.push(null);
+    beats.push({ line: "回合 1 · 攻击", cues, hp, vfx: [] });
+    GameLog.shared.info("Mainline", "开战战报没有攻击拍，补一拍攻击");
+  }
+  if (!hasHpChange(plan, beats)) punchEnemy(plan, beats);
+  return beats;
+}
+
+function copyBeat(beat: WireSpineBeat): WireSpineBeat {
+  const cues = [];
+  for (let i = 0; i < beat.cues.length; i++) cues.push({ slot: beat.cues[i].slot, clip: beat.cues[i].clip });
+  const vfx = [];
+  for (let i = 0; i < beat.vfx.length; i++) {
+    vfx.push({ stem: beat.vfx[i].stem, anchor: beat.vfx[i].anchor, role: beat.vfx[i].role });
+  }
+  return { line: beat.line, cues, hp: beat.hp.slice(), vfx };
+}
+
+function hasStrike(beats: WireSpineBeat[]): boolean {
+  for (let i = 0; i < beats.length; i++) {
+    const cues = beats[i].cues;
+    for (let c = 0; c < cues.length; c++) {
+      if (cues[c].clip === "attack" || cues[c].clip === "hit") return true;
+    }
+  }
+  return false;
+}
+
+function hasHpChange(plan: WireSpineReplay, beats: WireSpineBeat[]): boolean {
+  const hp: Array<number | null> = [];
+  for (let i = 0; i < plan.slots.length; i++) hp.push(plan.slots[i].hp);
+  for (let b = 0; b < beats.length; b++) {
+    const next = beats[b].hp;
+    for (let i = 0; i < next.length && i < hp.length; i++) {
+      if (next[i] === null || hp[i] === null) continue;
+      if (next[i] !== hp[i]) return true;
+    }
+    for (let i = 0; i < next.length && i < hp.length; i++) {
+      if (next[i] !== null) hp[i] = next[i];
+    }
+  }
+  return false;
+}
+
+function punchEnemy(plan: WireSpineReplay, beats: WireSpineBeat[]): void {
+  let beat: WireSpineBeat | null = null;
+  for (let i = beats.length - 1; i >= 0; i--) {
+    const cues = beats[i].cues;
+    for (let c = 0; c < cues.length; c++) {
+      if (cues[c].clip === "attack" || cues[c].clip === "hit") beat = beats[i];
+    }
+    if (beat) break;
+  }
+  if (!beat) return;
+  for (let i = 0; i < plan.slots.length; i++) {
+    if (plan.slots[i].side !== "enemy") continue;
+    const hp = plan.slots[i].hp;
+    if (typeof hp !== "number" || !isFinite(hp) || hp <= 1) continue;
+    beat.hp[i] = Math.max(1, Math.floor(hp * 0.72));
+    return;
+  }
+  GameLog.shared.info("Mainline", "开战战报没有可减的血量，这一拍不写飘字");
+}
+
+function setCue(cues: WireSpineBeat["cues"], slot: number, clip: WireSpineBeat["cues"][number]["clip"]): void {
+  for (let i = 0; i < cues.length; i++) {
+    if (cues[i].slot !== slot) continue;
+    cues[i] = { slot, clip };
+    return;
+  }
+  cues.push({ slot, clip });
+}
+
+function paintMockRound(page: Node, run: FightRun, round: BattleRound, stageId: number): void {
+  const hold = holds.get(page);
+  const actor = round.actor === "enemy" ? "enemy" : round.actor === "ally" ? "ally" : null;
+  if (actor) {
+    const defender = actor === "ally" ? "enemy" : "ally";
+    const prev = defender === "enemy" ? (hold ? hold.enemies : null) : hold ? hold.allies : null;
+    const next = defender === "enemy" ? round.enemies : round.allies;
+    playSideClip(page, run, actor, 0, "attack");
+    playSideClip(page, run, defender, damagedIndex(prev, next), "hit");
+    const spot = hangStandPoint(defender, damagedIndex(prev, next));
+    playStrikeVfx(page, run, spot.x, spot.y, stemAt(page, actor, 0));
+  }
+  showMockRound(page, round, stageId);
+  noteRound(page, round.round + "/15", true);
+}
+
+function paintWireBeat(
+  page: Node,
+  run: FightRun,
+  plan: WireSpineReplay,
+  beat: WireSpineBeat,
+  presentBeat: { skillName: string | null; skillId: number | null; floats: { anchor: number | null; hurt: number; crit: boolean }[] } | null,
+  hpNow: Array<number | null>,
+  round: number,
+  total: number
+): void {
+  const prev = hpNow.slice();
+  for (let i = 0; i < beat.hp.length && i < hpNow.length; i++) {
+    if (beat.hp[i] !== null) hpNow[i] = beat.hp[i];
+  }
+  const clips: string[] = [];
+  let struck = false;
+  let attacker = 0;
+  let hitAt = 0;
+  let hitSide: "ally" | "enemy" = "enemy";
+  for (let i = 0; i < beat.cues.length; i++) {
+    const cue = beat.cues[i];
+    clips.push(cue.clip);
+    const where = sideOrdinal(plan, cue.slot);
+    if (!where) continue;
+    if (cue.clip === "attack" || cue.clip === "hit" || cue.clip === "die") {
+      playSideClip(page, run, where.side, where.index, cue.clip === "die" ? "die" : cue.clip);
+      struck = true;
+    }
+    if (cue.clip === "attack") attacker = where.index;
+    if (cue.clip === "hit" || cue.clip === "die") {
+      hitSide = where.side;
+      hitAt = where.index;
+    }
+  }
+  if (struck) {
+    const spot = hangStandPoint(hitSide, hitAt);
+    playStrikeVfx(page, run, spot.x, spot.y, stemAt(page, "ally", attacker));
+  }
+  let skill = presentBeat ? presentBeat.skillName : null;
+  skill = fallbackAttackTitle(skill, beat.line, clips);
+  let rows = signedHpDeltas(prev, hpNow);
+  if (presentBeat && presentBeat.floats.length > 0) rows = signedHitFloats(presentBeat.floats);
+  const floats: HangFloat[] = [];
+  for (let i = 0; i < rows.length && floats.length < 6; i++) {
+    const hurt = rows[i].hurt;
+    if (typeof hurt !== "number" || !isFinite(hurt) || hurt === 0) continue;
+    const anchor = rows[i].anchor;
+    if (anchor === null) continue;
+    const where = sideOrdinal(plan, anchor);
+    if (!where) continue;
+    const at = hangFloatOrigin(where.side, where.index);
+    const heal = hurt > 0;
+    floats.push({
+      text: heal ? "+" + String(hurt) : String(hurt),
+      x: at.x,
+      y: at.y,
+      heal,
+      crit: rows[i].crit === true,
+    });
+  }
+  const allies: { hp: number; maxHp: number }[] = [];
+  const enemies: { hp: number; maxHp: number }[] = [];
+  for (let i = 0; i < plan.slots.length; i++) {
+    const slot = plan.slots[i];
+    const hp = hpNow[i];
+    if (hp === null || typeof slot.maxHp !== "number" || !isFinite(slot.maxHp) || slot.maxHp <= 0) continue;
+    const row = { hp, maxHp: slot.maxHp };
+    if (slot.side === "ally") allies.push(row);
+    else if (slot.side === "enemy") enemies.push(row);
+  }
+  const bars = barsFromSides(allies, enemies, round >= 1 ? Math.min(1, round / total) : 0);
+  if (struck && !skill) GameLog.shared.warn("Mainline", "开战这一拍没有技能名 " + round + "/" + total);
+  if (struck && bars.length === 0) GameLog.shared.warn("Mainline", "开战这一拍没有血条 " + round + "/" + total);
+  if (struck && floats.length === 0) GameLog.shared.warn("Mainline", "开战这一拍没有飘字 " + round + "/" + total);
+  showHangStrike(page, round, total, skill, floats, bars);
+  noteRound(page, round + "/" + total, struck);
+}
+
+function sideOrdinal(plan: WireSpineReplay, slot: number): { side: "ally" | "enemy"; index: number } | null {
+  if (slot < 0 || slot >= plan.slots.length) return null;
+  const side = plan.slots[slot].side;
+  if (side !== "ally" && side !== "enemy") return null;
+  let index = 0;
+  for (let i = 0; i < slot; i++) if (plan.slots[i].side === side) index += 1;
+  return { side, index };
+}
+
+function noteRound(page: Node, label: string, struck: boolean): void {
+  const layer = layerOf(page);
+  if (!layer) {
+    GameLog.shared.warn("Mainline", "开战回合没有 HangBattle，不播 " + label);
+    return;
+  }
+  const skill = layer.getChildByName("HangSkill");
+  const bars = layer.getChildByName("HangBars");
+  const floats = layer.getChildByName("HangFloats");
+  const skillOn = !!(skill && skill.active);
+  const barN = bars ? bars.children.length : 0;
+  const floatN = floats ? floats.children.length : 0;
+  GameLog.shared.info("Mainline", "开战回合 " + label + " 技能" + (skillOn ? "开" : "关") + " 血条 " + barN + " 飘字 " + floatN);
+  if (!struck) return;
+  if (!skillOn) GameLog.shared.warn("Mainline", "开战回合没有技能名 " + label);
+  if (barN === 0) GameLog.shared.warn("Mainline", "开战回合没有血条 " + label);
+  if (floatN === 0) GameLog.shared.warn("Mainline", "开战回合没有飘字 " + label);
+}
+
+function playSideClip(page: Node, run: FightRun, side: "ally" | "enemy", index: number, clip: "attack" | "hit" | "die"): void {
+  const host = sideHost(page, side);
+  const slot = host && index >= 0 && index < host.children.length ? host.children[index] : null;
+  if (!slot) {
+    if (!run.modelMiss) {
+      run.modelMiss = true;
+      const which = side === "ally" ? "我方" : "敌方";
+      GameLog.shared.warn("Mainline", "开战攻击没有" + which + "模型，不播动作，仍写技能和血条");
+    }
+    return;
+  }
+  const stem = stemOf(slot) || side;
+  playLater(run, slot, clip, stem);
+}
+
+function playLater(run: FightRun, node: Node, clip: string, stem: string): void {
+  const stamp = node as Node & { mxzgClipToken?: number };
+  const token = (stamp.mxzgClipToken || 0) + 1;
+  stamp.mxzgClipToken = token;
+  const attempt = (left: number): void => {
+    if (!node.isValid || stamp.mxzgClipToken !== token) return;
+    const skel = findSkeleton(node);
+    if (skel && playClip(skel, clip)) return;
+    if (left <= 0) {
+      if (run.gestureMiss) return;
+      run.gestureMiss = true;
+      const why = skel ? "没有动作 " + clip : "骨架还没挂上";
+      GameLog.shared.warn("Mainline", "开战攻击没有播上 spine/" + stem + " " + why + "，仍写技能和血条");
+      return;
+    }
+    const timer = setTimeout(() => attempt(left - 1), 160);
+    const maybe = timer as { unref?: () => void };
+    if (typeof maybe.unref === "function") maybe.unref();
+    run.timers.push(timer);
+  };
+  attempt(6);
+}
+
+function findSkeleton(node: Node): sp.Skeleton | null {
+  const own = node.getComponent(sp.Skeleton);
+  if (own) return own as sp.Skeleton;
+  const kids = node.children;
+  for (let i = 0; i < kids.length; i++) {
+    const found = findSkeleton(kids[i]);
+    if (found) return found;
+  }
+  return null;
+}
+
+function playClip(skel: sp.Skeleton, clip: string): boolean {
+  let found = false;
+  try {
+    found = !!skel.findAnimation(clip);
+  } catch (err) {
+    return false;
+  }
+  if (!found && clip !== "attack") {
+    try {
+      found = !!skel.findAnimation("hit");
+      if (found) clip = "hit";
+    } catch (err) {
+      return false;
+    }
+  }
+  if (!found) return false;
+  try {
+    skel.setAnimation(0, clip, false);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+function playStrikeVfx(page: Node, run: FightRun, x: number, y: number, stem: string | null): void {
+  const layer = layerOf(page);
+  if (!layer) return;
+  const stack = hangSkillVfx(stem, true);
+  const fx = strikeFx(layer);
+  if (stack.skill.length === 0) {
+    if (!run.skillMiss) {
+      run.skillMiss = true;
+      GameLog.shared.warn("Mainline", "开战技能帧没有对上 " + (stem || "英雄") + "，仍写技能名");
+    }
+  } else {
+    fx.skill.node.setPosition(x, y + 48, 0);
+    fx.skill.play(stack.skill, (ok) => {
+      if (ok || run.skillMiss) return;
+      run.skillMiss = true;
+      GameLog.shared.warn("Mainline", "开战技能帧没有挂上 " + (stem || "英雄"));
+    });
+  }
+  if (stack.hit.length === 0) return;
+  fx.hit.node.setPosition(x, y + 24, 0);
+  fx.hit.play(stack.hit, (ok) => {
+    if (ok || run.hitMiss) return;
+    run.hitMiss = true;
+    GameLog.shared.warn("Mainline", "开战受击帧没有挂上");
+  });
+}
+
+interface StrikeFx {
+  skill: FrameReel;
+  hit: FrameReel;
+}
+
+function strikeFx(layer: Node): StrikeFx {
+  let host = layer.getChildByName("HangStrikeFx");
+  if (!host || !host.isValid) {
+    host = uiNode("HangStrikeFx");
+    place(host, layer, 0, 0);
+  }
+  const mark = host as Node & { mxzgFx?: StrikeFx };
+  if (!mark.mxzgFx) {
+    mark.mxzgFx = {
+      skill: mountFrameReel(host, 280, "HangSkillReel"),
+      hit: mountFrameReel(host, 200, "HangHitReel"),
+    };
+  }
+  return mark.mxzgFx;
+}
+
+function sideHost(page: Node, side: "ally" | "enemy"): Node | null {
+  if (side === "enemy") {
+    const layer = layerOf(page);
+    return layer ? layer.getChildByName("HangFoes") : null;
+  }
+  const hang = battleHost(page).getChildByName("IdleHang");
+  if (!hang) return null;
+  return hang.getChildByName("IdleHeroes");
+}
+
+function stemAt(page: Node, side: "ally" | "enemy", index: number): string | null {
+  const host = sideHost(page, side);
+  if (!host || index < 0 || index >= host.children.length) return null;
+  return stemOf(host.children[index]);
+}
+
+function stemOf(slot: Node): string | null {
+  const kids = slot.children;
+  for (let i = 0; i < kids.length; i++) {
+    const name = kids[i].name;
+    if (name.indexOf("spine-") === 0) return name.slice("spine-".length);
+  }
+  return null;
+}
+
+function damagedIndex(prev: BattleUnit[] | null, next: BattleUnit[]): number {
+  if (!prev) return 0;
+  const n = prev.length < next.length ? prev.length : next.length;
+  for (let i = 0; i < n && i < 3; i++) {
+    if (prev[i].hp > next[i].hp) return i;
+  }
+  return 0;
+}
+
+function waitBeat(run: FightRun, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let cancel = (): void => {};
+    const done = (): void => {
+      if (settled) return;
+      settled = true;
+      cancel();
+      if (run.wake === done) run.wake = null;
+      resolve();
+    };
+    cancel = armBattleDelay(ms, done);
+    run.wake = done;
+  });
+}
+
+function playSpeed(page: Node): number {
+  const hold = holds.get(page);
+  return hold ? hold.speed : 1;
+}
+
+function fightStageId(): number | null {
+  const chapter = GameStore.chapter();
+  return hangFightStageId(GameStore.mockStageId(), chapter.nowIdx, chapter.maxIdx, wireFight());
+}
+
+function fightLevel(stageId: number): number {
+  const level = Session.role && Session.role.level >= 1 ? Math.floor(Session.role.level) : 1;
+  return level >= stageId ? level : stageId;
+}
+
+function fightRoleName(): string {
+  const name = Session.role && Session.role.name ? Session.role.name.trim() : "";
+  return name || "我方";
+}
+
+function primeHangSides(page: Node, allies: BattleUnit[], enemies: BattleUnit[]): void {
+  const hold = ensureHold(page);
+  hold.allies = allies.map(copyUnit);
+  hold.enemies = enemies.map(copyUnit);
+}
+
+function fullUnits(units: BattleUnit[]): BattleUnit[] {
+  const out: BattleUnit[] = [];
+  for (let i = 0; i < units.length; i++) {
+    const unit = units[i];
+    const max = unit.maxHp;
+    const hp = typeof max === "number" && isFinite(max) ? max : unit.hp;
+    out.push({ name: unit.name, hp, maxHp: max });
+  }
+  return out;
+}
+
+function strikeSkill(round: BattleRound): string | null {
+  const named = skillFromLine(round.line);
+  if (round.actor !== "ally" && round.actor !== "enemy") return named;
+  if (named && (named.indexOf("攻击") >= 0 || named.indexOf("技能") >= 0)) return named;
+  return "攻击";
 }
 
 /**
