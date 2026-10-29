@@ -545,21 +545,24 @@ function checkData(): void {
 
 async function checkPaint(): Promise<void> {
   const previous = Session.source;
+  const previousNow = Date.now;
+  const paintTime = previousNow();
+  // Prefab loading may cross a second. Compare a deterministic clock, not two wall times.
+  Date.now = () => paintTime;
   try {
     bindChapter();
     Session.source = "wire";
     noteChapter(1, Math.floor(Date.now() / 1000) - 90);
     const nav = installNav();
     const view = await openView();
-    const before = hangFace(Date.now(), 0).clock;
     const shown = view.clockLabel ? view.clockLabel.string : "";
-    const after = hangFace(Date.now(), 0).clock;
-    assert(shown === before || shown === after, "面板计时跟 reward_time，实际 " + shown);
+    assert(shown === "01:30", "面板计时跟 reward_time 的 90 秒，实际 " + shown);
     assert(shown.indexOf("999") < 0, "不留 999");
     assert(view.goldLabel !== null && view.goldLabel.string === "200/m", "金币是表里的每分钟");
     assert(view.soulsLabel !== null && view.soulsLabel.string === "25/m", "英雄经验是表里的每分钟");
     assert(view.expLabel !== null && view.expLabel.string === "10/m", "角色经验是表里的每分钟");
     assert(view.bubbleLabel !== null && view.bubbleLabel.string === shown, "泡上的计时和条上一样");
+    Date.now = previousNow;
     const chip = chipOf(view);
     assert(chip.caption !== null && chip.caption.string === "第1关", "章关长文案在左侧小标");
     assert(view.worldMap !== null && view.worldMap.active === false, "缩略图收起");
@@ -613,6 +616,7 @@ async function checkPaint(): Promise<void> {
     assert(unsynced.goldLabel !== null && unsynced.goldLabel.string === "—/m", "未同步且没进 Store 时三格是破折号");
     unsynced.node.destroy();
   } finally {
+    Date.now = previousNow;
     Session.source = previous;
     GameStore.reset();
     clearChapter();

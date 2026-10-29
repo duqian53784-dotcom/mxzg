@@ -54,10 +54,20 @@ HeroProfile 字段为 id（英雄实例 UUID 字符串）、templateId（配置�
 
 H2 验证不能替代 MySQL 8.4 的迁移和并发验证。重登一致性已有测试，完整进程重启与真实渠道身份仍需后续证据。
 
-## 客户端接入前的工作
+## 客户端数据层与待接界面
 
-已有 HeroListView 仍依赖旧 GameStore/WireSession，不能直接打开后声称新英雄功能完成。下一批先建立新英雄 Model/Service 与类型边界，再适配现有列表/格子 Prefab；不复制旧协议状态。
+客户端列表数据层已建立，但尚未装配到 RemakeApp 或打开英雄页面：
 
-还要登记英雄配置组（名称、类型、品质、技能、职业和图标等实际依赖），核对 bindGameCatalog 的投影与资源 Bundle，再开放页面。模板和初始英雄方案未完成，空列表必须有真实空态。
+- HeroApi：GET /api/v1/heroes 的运行时校验，UUID 实例 ID 与整数模板 ID 分离；拒绝坏结构、重复实例和小数/字符串数值。
+- HeroRosterModel：只存 idle/loading/ready/error 与不可变英雄快照，不含 token。ready + [] 是有效空名册，不回退旧 Mock/图鉴。
+- HeroRosterService：鉴权读取、并发请求去重、失败后重试；退出、换号、关闭和销毁均作废迟到结果。普通网络错误保留会话，当前会话 401 清理身份与名册。
+- AccountService.authenticated：各功能共用的会话能力；请求前和返回后检查有效期，旧账号的 401 不清除新账号，不允许各页面自行读本地 token。
+- HeroCatalog：独立投影 herotype/item 的名称、元素与图标，不写旧 GameStore、WireSession 或全局 gameCatalog。英雄实际等级/星级以服务器为准。
 
-当前主城“英雄/出阵”入口仍提示未开放；本批是后端基础，尚无可验收的客户端英雄/出阵交互。OpenAPI/客户端代码生成与接口漂移检查仍待 P3-02 后续实施，本 Markdown 不能替代机器可读契约。
+已有 HeroListView 仍依赖旧 GameStore/WireSession。下一批为它注入新列表展示模型，继续复用 HeroListLayer、HeroListHeroLayer 与 HeroIconCell，并由统一 UIManager 管理开关和返回。不把新 UUID 强转成旧 StoreHero 的数值 ID。先接只读列表及加载/空态/失败重试，再接详情和出阵。
+
+最小 hero 配置组已登记 herotype/item，按需准备，登录和主城不提前请求。详情所需品质、技能、职业等依赖、图标 Bundle 生命周期和页面实际运行仍待接入。初始英雄发放方案未完成，空列表必须有真实空态。
+
+检查入口：`node client/tools/check-project.mjs --suite hero-roster`。可用 MXZG_REMAKE_API 指向隔离测试后端，实连执行开发登录、读取空名册、无效 token 401 与恢复会话再读。此模式会创建测试账号，应使用隔离库；本轮以随机端口和 H2 内存库执行，不连接用户文件库。
+
+当前主城“英雄/出阵”入口仍提示未开放；尚无可验收的客户端英雄/出阵交互。OpenAPI/客户端代码生成与接口漂移检查仍待 P3-02 后续实施，本 Markdown 不能替代机器可读契约。

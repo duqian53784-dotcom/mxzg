@@ -9,7 +9,16 @@ export interface SessionStore {
   clear(): void;
 }
 
-export class AccountService {
+export class SessionChanged extends Error {
+  constructor() { super("会话已切换，请重新请求"); this.name = "SessionChanged"; }
+}
+
+/** Features use this capability instead of reading storage or owning a token. */
+export interface AccountAuthorization {
+  authenticated<T>(request: (token: string) => Promise<T>): Promise<T>;
+}
+
+export class AccountService implements AccountAuthorization {
   private operation = 0;
   private session: AccountSession | null = null;
   constructor(private readonly model: AccountModel, private readonly api: AccountGateway,
@@ -57,10 +66,42 @@ export class AccountService {
   }
 
   logout(): void {
+    this.invalidate("");
+  }
+
+  private invalidate(error: string): void {
     this.operation++;
     this.session = null;
     this.safely(() => this.store.clear());
-    this.model.replace({ busy: false, role: null, error: "" });
+    this.model.replace({ busy: false, role: null, error });
+  }
+
+  async authenticated<T>(request: (token: string) => Promise<T>): Promise<T> {
+    const session = this.session;
+    const operation = this.operation;
+    if (!session || this.model.snapshot.busy || !this.model.snapshot.role) throw new SessionChanged();
+    if (Date.parse(session.expiresAt) <= this.now()) {
+      this.expire();
+      throw new HttpFailure(401, "登录已失效，请重新登录");
+    }
+    const current = () => operation === this.operation && session === this.session;
+    try {
+      const value = await request(session.accessToken);
+      if (!current()) throw new SessionChanged();
+      if (Date.parse(session.expiresAt) <= this.now()) {
+        throw new HttpFailure(401, "登录已失效，请重新登录");
+      }
+      return value;
+    } catch (error) {
+      // An old account's 401 must never log out the new account.
+      if (!current()) throw new SessionChanged();
+      if (error instanceof HttpFailure && error.status === 401) this.expire();
+      throw error;
+    }
+  }
+
+  private expire(): void {
+    this.invalidate("登录已失效，请重新登录");
   }
 
   private accept(result: LoginResult): void {

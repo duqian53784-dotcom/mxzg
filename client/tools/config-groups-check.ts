@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { JsonAsset, resources } from "cc";
 import { GroupedConfig } from "../assets/scripts/config/GroupedConfig";
 import { ConfigDb } from "../assets/scripts/config/ConfigLoader";
-import { prepareStartupConfig, prepareCityConfig, remakeConfig, readCityGates, validateRemakeConfig } from "../assets/scripts/config/RemakeConfig";
+import { prepareStartupConfig, prepareCityConfig, prepareHeroConfig, remakeConfig, readCityGates, validateRemakeConfig } from "../assets/scripts/config/RemakeConfig";
 import { loadBootCopy } from "../assets/scripts/ui/bootChrome";
 
 async function main() {
@@ -49,11 +49,15 @@ async function main() {
   await prepareCityConfig();
   assert.equal(requested.length, 7);
   assert(readCityGates()!.opencondition.length > 0);
+  assert(!requested.includes("config/herotype"), "hero config is not a login/city requirement");
+  await Promise.all([prepareHeroConfig(), prepareHeroConfig()]);
+  assert.equal(requested.length, 9, "hero read group adds only herotype and item, with concurrent dedup");
+  assert((await remakeConfig.read<any>("config/herotype")).rows.length > 0);
   assert.equal(ConfigDb.current, old); assert.equal(old.tableCount, 536, "legacy DB is never replaced by partial data");
   assert.throws(() => validateRemakeConfig("config/language", {}), /配置缺少/);
   assert.throws(() => validateRemakeConfig("config/maincity/createmaincitybtn", { act: [] }), /配置缺少/);
   const app = readFileSync("client/assets/scripts/app/remake/RemakeApp.ts", "utf8");
   assert(!app.includes("ConfigLoader.loadAll"));
-  console.log("config-groups-check passed: atomic groups, failure retry, concurrent dedup, real 2+5 configs, copy reuse and legacy DB isolation");
+  console.log("config-groups-check passed: atomic groups, failure retry, concurrent dedup, real 2+5+2 configs, copy reuse and legacy DB isolation");
 }
 void main().catch(error => { console.error(error); process.exitCode = 1; });

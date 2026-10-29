@@ -6,9 +6,9 @@
 
 - 从 0 到 1 主计划与固定任务编号：[实施路线与验收清单](restructuring-plan.md)。后续按 P0–P9 更新；较早批次的记录不覆盖最新决定。
 - 历史基线 main / 2313a128；其后已实现资源/配置分组、英雄阵容后端与 Prefab 清理。本轮按用户要求统一同步 main，准确版本与推送状态以 Git 为准；下方“未推送”是各批完成当时的历史状态。
-- 当前主线：P1 视觉待验收；P2-01 静态审计、P2-04 主城按需 Bundle 与 P2-05 配置 2+5 分组源码已落地，仍在进行中。实际构建/预览、后续玩法配置与动态依赖是下一批重点。详见 resource-loading.md / config-loading.md。
+- 当前主线：P1 视觉待验收；P2-01 静态审计、P2-04 主城按需 Bundle 与 P2-05 配置 2+5 分组源码已落地，仍在进行中。P4-02 已继续完成英雄列表客户端数据层与真实 HTTP 联调，英雄按需配置另加 2 张；下一步适配已有列表/格子 Prefab，详见 hero-lineup-contract.md / config-loading.md。
 - 最新入口：资源加载完成 → 登录页 → 玩家点击开始并通过校验 → 主城。恢复会话不自动进城。
-- 后端最近检查 15/15 通过；本批客户端完整检查 15/17，仅两项既有背包布局失败。Prefab 已按用户要求从 607 清理至 90，详见 prefab-cleanup.md。实际 MySQL、Creator 与三端构建/运行仍未验收。
+- 后端最近检查 15/15 通过且打包成功；本批客户端完整检查 16/18，仅两项既有背包布局失败。strict 与隔离后端的英雄列表实连通过。Prefab 已按用户要求从 607 清理至 90，详见 prefab-cleanup.md。实际 MySQL、Creator 与三端构建/运行仍未验收。
 - 已复用真实主城地图/顶底栏，但英雄、阵容、战斗、结算尚未接入新后端，不是完整可玩或发行版本。
 
 当前用户要求：不自动操作或检查其 Creator 窗口；视觉验收由用户提供截图。后续自动任务继续代码、类型、绑定、接口与构建检查，不自行恢复桌面操作。
@@ -20,6 +20,7 @@
 - 后端 7 项测试通过，覆盖真实 HTTP、重复和并发登录、状态保存、身份隔离、过期、生产入口隔离，以及 Creator 本地预览的 CORS 预检与未知来源拒绝。
 - 客户端 account 功能的 Model、Controller、Service、API 边界与平台 HTTP 适配；不引用旧 WireSession。
 - 登录检查覆盖数据校验、会话恢复、退出后的迟到响应、交错登录、网络失败与 401 的区别，以及 Controller 绑定与退订。
+- 英雄列表新增 HeroApi、HeroRosterModel/Service 与独立 HeroCatalog；共用 AccountService.authenticated，不读取旧协议状态。已验证加载/空数据/错误/重试、会话隔离、关闭与销毁，以及登录后真实 HTTP 读取。尚未装配英雄页面，不代表主城入口已开放。
 - AccountLogin.prefab 与独立 Remake.scene，显式绑定 View、输入框、按钮和标签，可在 Creator 中编辑。
 - 新客户端代码通过 Creator 3.8.8 自带 TypeScript 编译器与引擎声明的 strict 类型检查，Prefab/scene 脚本绑定检查通过。
 - 同一 AccountService/AccountApi 已通过 Node 测试 HTTP 适配器实连打包后的新后端，开发登录与会话恢复通过。实连使用隔离 H2 内存库；第一次服务启动等待 30 秒超时，后以更长等待及隔离库完成验证，不能据此判定原文件库故障。
@@ -48,6 +49,7 @@
 - 绑定：`python client/tools/check_script_type_ids.py`。
 - 新代码 strict 检查：使用 Creator 自带 TypeScript 编译器执行 `-p client/tools/tsconfig.remake.json`；先让编辑器生成 client/temp/declarations。
 - 实际 Service 联调：先启动新后端，将 MXZG_REMAKE_API 设为 http://127.0.0.1:18080，再执行 account 检查。Node 使用 fetch 作为测试适配器，业务 Model/Service/API 与样板共用。
+- 英雄数据层：`node client/tools/check-project.mjs --suite hero-roster`；可选 MXZG_REMAKE_API 进行实连，此模式会创建测试账号，使用隔离库。本轮验证使用随机端口和 H2 内存库，服务已停止；日志 client/temp/project-checks/hero-roster-live.log。
 
 ## 尚未验收
 
@@ -61,8 +63,8 @@
 
 1. 用户要求在此前进度上改进，而不是另起简陋页面。已有登录 Prefab 控件、日服背景与角色动画已接入同一个 AccountLogin.prefab，输入锚点已修正；下一步根据用户预览截图验收动态美术、窄屏与输入，并继续核查缺失 Logo。Creator 窗口操作已由用户要求停止。
 2. 新 MVC 页面已接入统一 UIManager；后续扩展功能继续使用显式注册和同一生命周期，不另建管理器。
-3. 固定并生成最小 API 类型，完善新主城的功能入口。
-4. 新后端英雄、出阵、一次战斗与结算用例，复用规则必须先有输入/输出对照。
+3. 将新的英雄名册数据适配到现有 HeroListLayer / HeroListHeroLayer / HeroIconCell，保留统一 UIManager 和返回主城路径；实现真实加载、空态和失败重试后开放只读列表。详情、养成与出阵仍分别验收，避免旧页面读 Mock 或把 UUID 转成数值 ID。
+4. 继续 P3-02 的机器可读契约/类型同步，以及新后端出阵、一次战斗与结算用例；复用规则必须先有输入/输出对照。
 5. MySQL 持久化和三端样包验证，再逐步替换旧入口。
 
 自动任务应先核对当前 Git 状态与本文件，延续而非重做已完成事项；保留用户已有修改，不清库、不擅自部署或购买服务。
@@ -179,3 +181,14 @@
 - 将 LoginPanel、UserLoginLayer 成对移动到 prefabs/ui/legacy-login，保持 UUID；更新旧常量、回退路径、清理保留策略及美术参照检查。login 只保留加载/公告/选服/角色初始化等共用组件，account 继续作为当前唯一登录入口。
 - 新增 login-entries.md 说明维护位置与旧入口移除条件；startup 检查显式验证当前场景绑定 AccountLogin，不能意外绑定旧页。Prefab 仍为保留 90、已删 517。
 - 本轮提交将包含此前资源/配置分组、英雄阵容后端、文档与 Prefab 清理；排除用户已有 ChapterMapLayer 修改、Creator 设置和资源导入元数据。推送结果以最终 Git 校验为准。
+
+## P4-01/P4-02：英雄列表客户端数据层（2026-10-29）
+
+- 新增 HeroApi，读取当前角色的英雄数组并校验运行时结构。实例 UUID、模板整数、实际等级与星级各自保留；拒绝重复实例、坏 UUID、小数和字符串数值，同模板的多个实例允许共存。
+- 新增 HeroRosterModel/Service，数据流与旧 GameStore/WireSession 分离。明确 idle/loading/ready/error；新角色 ready + [] 是正常结果，不回退图鉴或生成测试英雄。支持并发去重和错误重试，换号、退出、关闭与销毁会作废旧请求并清除名册。
+- AccountService 增加共用 authenticated 能力，请求前及回包后检查会话有效期；当前会话 401 清除保存身份并通知现有账号 Model，旧账号的迟到 401 不影响新账号。网络失败保留会话，token 不进入英雄展示状态。
+- hero 配置组只含 herotype/item，按需准备，不增加登录或进城必需表。HeroCatalog 使用现有简体名称、元素、图标索引和 item 图标回退，保持旧目录与 ConfigDb 不变；模板星级不替代实例星级。已核对 10101001 对应独眼梦魇与现有 20101001 图标。
+- 使用最新打包的新后端、随机本机端口、隔离 H2 内存库完成真实客户端 Service/API 联调：开发登录、空名册、无效 token 401、恢复会话后再读取。测试进程已停止，用户文件库未使用。首次测试适配器误用了同名局部 fetch，修正为 globalThis.fetch 后实连通过。
+- 回归发现旧战斗绘制检查跨秒比较真实时间会偶发失败，改为固定绘制测试时钟，仍精确要求显示 01:30；测试结束和失败时恢复时钟，未修改战斗业务。
+- 最终客户端综合检查 16/18，仅既有 backpack 第一格位置与 legacy 背包布局两项失败；新 strict 检查通过。后端 15/15 通过并完成 package。未操作 Creator 窗口，实际渲染与三端构建未验收。
+- 本批尚未装配到 RemakeApp，主城英雄/出阵入口仍未开放。下一步直接适配已有英雄列表/格子与返回路径，再补详情和出阵，不新建另一套列表美术。本批在本地保存，不自动推送 main。
