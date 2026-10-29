@@ -2,7 +2,7 @@ import { Node, Prefab } from "cc";
 import { messageOf } from "../../core/errors";
 import { GameLog, monoNow } from "../../core/GameLog";
 import { loadPrefab, spawnPrefab } from "../../ui/prefabLoad";
-import { logViewReady } from "../../ui/uiOpenLog";
+import { logViewReady } from "./UIOpenLog";
 import { BaseView } from "./BaseView";
 import { UILayer } from "./UILayer";
 import { ViewClass, ViewSpec, viewCtorById, viewSpecOf } from "./UIRegistry";
@@ -65,6 +65,14 @@ export class UIManager {
   install(nav: PageNav, host: UIManagerHost): void {
     this.nav = nav;
     this.host = host;
+  }
+
+  /** Release only the application that owns this navigation binding. */
+  uninstall(nav: PageNav): void {
+    if (this.nav !== nav) return;
+    this.invalidatePending();
+    this.nav = null;
+    this.host = null;
   }
 
   /**
@@ -274,7 +282,7 @@ export class UIManager {
     try {
       let prefab: Prefab;
       try {
-        prefab = await loadPrefab(spec.prefab);
+        prefab = spec.load ? await spec.load() : await loadPrefab(spec.prefab);
       } catch (err) {
         throw new Error(spec.prefab + " " + messageOf(err));
       }
@@ -287,7 +295,8 @@ export class UIManager {
       const found = viewNode.getComponent(ctor);
       if (!found) throw new Error(spec.prefab + " 上没有视图组件");
       view = found;
-      found.runOpen(args);
+      if (spec.createController) found.attachController(spec.createController(found));
+      found.runOpen(args as T);
       await found.whenReady();
       this.ensureResident(spec.id, epoch);
       if (!viewNode.isValid || !found.node || !found.node.isValid) throw new Error("页面已关");
@@ -447,7 +456,7 @@ export class UIManager {
   private async mount(shell: Node, ctor: ViewClass<unknown>, spec: ViewSpec, args: unknown): Promise<BaseView<unknown>> {
     let prefab: Prefab;
     try {
-      prefab = await loadPrefab(spec.prefab);
+      prefab = spec.load ? await spec.load() : await loadPrefab(spec.prefab);
     } catch (err) {
       throw new Error(spec.prefab + " " + messageOf(err));
     }
@@ -456,8 +465,14 @@ export class UIManager {
     if (!shell.isValid || !viewNode.isValid) throw new Error("页面已关");
     const found = viewNode.getComponent(ctor);
     if (!found) throw new Error(spec.prefab + " 上没有视图组件");
-    found.runOpen(args);
-    await found.whenReady();
+    try {
+      if (spec.createController) found.attachController(spec.createController(found));
+      found.runOpen(args);
+      await found.whenReady();
+    } catch (error) {
+      found.runDispose();
+      throw error;
+    }
     return found;
   }
 

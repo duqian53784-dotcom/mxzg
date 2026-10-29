@@ -49,7 +49,10 @@ export const _decorator = {
   ccclass(_name?: string): ClassDecorator {
     return (ctor) => ctor;
   },
-  property(..._args: unknown[]): PropertyDecorator {
+  property(..._args: unknown[]): any {
+    // Support both @property and @property(Type), as the engine does. Returning a
+    // decorator from the bare form makes transpiled fields accidentally read-only.
+    if (_args.length >= 2 && (typeof _args[1] === "string" || typeof _args[1] === "symbol")) return;
     return () => undefined;
   },
 };
@@ -404,9 +407,14 @@ const directorListeners = new Map<string, Listener[]>();
 
 export class Director {
   static EVENT_AFTER_UPDATE = "after-update";
+  static EVENT_AFTER_DRAW = "after-draw";
 }
 
 export const director = {
+  once(type: string, callback: Listener): void {
+    const once = (...args: unknown[]) => { director.off(type, once); callback(...args); };
+    director.on(type, once);
+  },
   loadScene(_name: string, _cb?: (err: Error | null, scene?: Node) => void): boolean {
     return false;
   },

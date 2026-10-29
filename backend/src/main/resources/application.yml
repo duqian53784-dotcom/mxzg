@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: mxzg-remake
+  datasource:
+    url: ${MXZG_DATABASE_URL}
+    username: ${MXZG_DATABASE_USER}
+    password: ${MXZG_DATABASE_PASSWORD}
+  mvc:
+    problemdetails:
+      enabled: true
+server:
+  port: ${MXZG_PORT:18080}

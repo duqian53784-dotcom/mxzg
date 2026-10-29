@@ -1,5 +1,7 @@
 ﻿# scripts
 
+> 下文主要是历史迁移记录，Mock 启动、设计宽度和部分入口已过期。当前 Boot 始终走本机真服桥，`?dev=mock` 不开启离线。继续开发先读仓库 docs/product-requirements.md、docs/project-audit.md、docs/restructuring-plan.md，以当前代码和检查结果为准。
+
 - `core/` 启动、会话（Boot、Session）
 - `net/` 网络状态机、MockTransport（带 MockGameSession）、录包回放、可选 WsTransport（`?transport=ws` 连本机桥 `13111/game`，心跳 1004 和登录 1001）、P0 协议 stub（`net/protocol/`，占位号仍只给 Mock）
 - `config/` JSON 读表

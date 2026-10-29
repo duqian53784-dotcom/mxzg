@@ -262,7 +262,7 @@ export function positiveUiSize(ui: UITransform | null): { width: number; height:
 export function assignContentSize(ui: UITransform | null, width: number, height: number): boolean {
   if (!ui) return false;
   if (!isFinite(width) || !isFinite(height)) return false;
-  const raw = ui as UITransform & { _contentSize?: { width: number; height: number } | null };
+  const raw = ui as unknown as { _contentSize?: { width: number; height: number } | null };
   try {
     if (!raw._contentSize) raw._contentSize = { width: width, height: height };
   } catch (_err) {

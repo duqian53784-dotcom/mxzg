@@ -36,7 +36,7 @@ import {
 import { paintIdleLoot, playIdleHarvest, seatHangTimer, writeHangClock } from "./idleHangView";
 import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
 import { HERO_DETAIL_SPINE_SEAT_Y, HERO_EMPTY_RING_NAMES, HERO_SKILL_BADGE_OFFSET } from "./heroDetailPlan";
-import { deployedHeroIds, localLineupIds, setLocalLineup } from "./localLineup";
+import { deployedHeroIds, localLineupIds, setLocalLineup } from "../module/mainline/localLineup";
 import { mockRuntimeEnabled } from "../net/transportSelect";
 import { emptyBagToast } from "../module/bag/items";
 import { formatStoreBagLine } from "../module/bag/bagView";

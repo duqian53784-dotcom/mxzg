@@ -41,7 +41,7 @@ import { CITY_CHROME_PREFAB_PATH, loadPrefab } from "./prefabLoad";
 import { installGmHotkey, openGmDebug, uninstallGmHotkey } from "../features/gm/GmHotkey";
 import { attachPagePrefabShell, HANG_PROBE_EVENT, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
 import { pagePrefabShell } from "./prefabShellMap";
-import { beginPageOpen } from "./uiOpenLog";
+import { beginPageOpen } from "../framework/ui/UIOpenLog";
 import { BackpackView } from "../features/backpack/ui/BackpackView";
 import { useBackpackView } from "../features/backpack/config/BackpackFeatureFlag";
 import { useBattleView } from "../features/battle/config/BattleFeatureFlag";

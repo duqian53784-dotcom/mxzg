@@ -20,7 +20,7 @@ import { CHAPTER_REWARD_PREFAB, dressChapterRewardBoard, mountChapterMap } from 
 import { bindFormationSheet, dressChapterPreview, dressHangPanel, dressHeroDetail, fillPageShell, hangMissionCaption, pinSprites, seatParchmentList } from "./screenFill";
 import { loadPrefab, spawnPrefab } from "./prefabLoad";
 import { UIManager } from "../framework/ui/UIManager";
-import { cancelPageOpen, logOpenedPrefab, notePrefabReady, pageOpenToken, prefabBaseName } from "./uiOpenLog";
+import { cancelPageOpen, logOpenedPrefab, notePrefabReady, pageOpenToken, prefabBaseName } from "../framework/ui/UIOpenLog";
 import { setText } from "./UiKit";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize, uiSize } from "./visibleFit";
 

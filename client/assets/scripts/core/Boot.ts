@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Boot 启动流（B1）。
  *
  * 阶段：logo → version → hot-update → assets → 读表 → 登录门 → 同步角色包 → Main。
@@ -18,7 +18,7 @@
  *
  * Creator 里怎么挂（仓库不改 .scene，避免脚本 uuid 对不上）：
  * 1. 用 Creator 3.8.8 打开 client 工程
- * 2. 打开 assets/scenes/Boot.scene
+ * 2. 打开 assets/scenes/legacy/Boot.scene
  * 3. 层级管理器选中 Canvas（不要挂到 Camera）
  * 4. 属性检查器 → 添加组件 → 自定义脚本 → Boot
  * 5. 保存场景。项目启动场景保持 Boot，再点预览

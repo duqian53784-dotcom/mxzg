@@ -26,7 +26,7 @@ import { HangCastMember, hangCastForFormation, idleHangCastFrom } from "./idleHa
 import { mountIdleSkirmish } from "./idleHangSkirmish";
 import { mountHangTalk } from "./idleHangTalk";
 import { hangAllyFloorPoint, hangAllyVisibleShift, hangLinePosition, HANG_CAST_LIMIT, IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
-import { localLineupIds, onLocalLineup } from "./localLineup";
+import { localLineupIds, onLocalLineup } from "../module/mainline/localLineup";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "./safeAreaLayout";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, uiSize } from "./visibleFit";
 import { createRect, place, uiNode } from "./UiKit";

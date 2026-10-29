@@ -556,7 +556,7 @@ import {
   summonToast,
 } from "../assets/scripts/module/summon/pull";
 import { consoleParts, consoleUsesCss, GameLog } from "../assets/scripts/core/GameLog";
-import { beginPageOpen, cancelPageOpen, markPageContent, markPageShown, pageOpenToken } from "../assets/scripts/ui/uiOpenLog";
+import { beginPageOpen, cancelPageOpen, markPageContent, markPageShown, pageOpenToken } from "../assets/scripts/framework/ui/UIOpenLog";
 import { GameStore, saveRoleCache } from "../assets/scripts/core/GameStore";
 import {
   bindGameCatalog,

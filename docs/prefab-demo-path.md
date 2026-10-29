@@ -5,7 +5,7 @@
 ## 怎么跑
 
 1. 用 Cocos Creator **3.8.8** 打开 `client/`。
-2. 打开 `assets/scenes/Boot.scene`，Canvas 上挂 `Boot`（不要挂到 Camera）。启动场景保持 Boot。
+2. 打开 `assets/scenes/legacy/Boot.scene`，Canvas 上挂 `Boot`（不要挂到 Camera）。启动场景保持 Boot。
 3. 预览。默认连本机桥，不必加 `?transport=ws`（见 `docs/h5-websocket.md`）。Mock 只在 `?dev=mock`。真服探针（关-、请求战报、切磋）只在 `?dev=wire`，这个参数不改传输。浏览器预览刷新后会出现 **ccc-devtools** 节点树面板（`client/preview-template/`，无需 Chrome 插件）。本轮不建 P5。
 4. 检查器勾选 `skipLogin` 只在 `?dev=mock` 时跳过登录壳。默认真服仍显示登录面板。
 

@@ -1,5 +1,5 @@
 import { Node } from "cc";
-import { GameLog, monoNow } from "../core/GameLog";
+import { GameLog, monoNow } from "../../core/GameLog";
 
 const ENGINE_COMPONENTS = [
   "UITransform",
@@ -23,8 +23,7 @@ const ENGINE_COMPONENTS = [
 
 /**
  * 打开界面耗时。
- * 本分支没有 UIManager / BaseView.whenReady / finishOpen（那些在未合并的界面栈上）。
- * 起点是 MainApp.presentPage：PanelNav 真正创建页面的那次打开。
+ * 旧页面起点是 MainApp.presentPage；新 View 由 UIManager 在 whenReady 后记时。
  * 终点（ready）：
  * - 有预制：预制已经 instantiate，并且壳节点挂到页面上（attachPagePrefabShell 在 root.parent 之后；
  *   挂机是 BattlePanelLayer 挂进已经显示的壳）。页面节点会更早 setVisible(true)，那一次不打日志。

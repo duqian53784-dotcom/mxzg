@@ -3,7 +3,7 @@
  * 挂在 SafeFrame 上。项目设计分辨率是 640×1280。进场景后按可见尺寸铺，不再按父节点 2000 放大。
  * Prefab 加载失败只打日志，不另造 LoadingLayer / UpdateLayer。
  */
-import { BlockInputEvents, Button, Color, Label, Mask, Node, Sprite, SpriteFrame, UITransform, resources } from "cc";
+import { Asset, BlockInputEvents, Button, Color, Label, Mask, Node, Prefab, Sprite, SpriteFrame, UIOpacity, UITransform, resources } from "cc";
 import { ConfigLoader } from "../config/ConfigLoader";
 import { GameLog } from "../core/GameLog";
 import { mountNamedSpine } from "./battleSpine";
@@ -98,6 +98,7 @@ export async function loadBootCopy(): Promise<BootCopy> {
 }
 
 export class BootChrome {
+  private cancelFade: (() => void) | null = null;
   private root: Node | null = null;
   private kind: BootChromeKind = "loading";
   private ratio = 0;
@@ -108,7 +109,7 @@ export class BootChrome {
   private retryResolve: ((ok: boolean) => void) | null = null;
   private destroyed = false;
 
-  constructor(private parent: Node) {}
+  constructor(private parent: Node, private load?: (kind: BootChromeKind) => Promise<Prefab>) {}
 
   /**
    * keepAbove 留在最上面。logo 淡出时用，避免加载层一挂上就把底图盖住。
@@ -120,7 +121,7 @@ export class BootChrome {
     const path = kind === "update" ? UPDATE_PREFAB_PATH : LOADING_PREFAB_PATH;
     let root: Node | null = null;
     try {
-      const prefab = await loadPrefab(path);
+      const prefab = this.load ? await this.load(kind) : await loadPrefab(path);
       if (this.destroyed || !this.parent.isValid) return;
       root = spawnPrefab(prefab, this.parent);
     } catch (err) {
@@ -187,13 +188,17 @@ export class BootChrome {
   }
 
   show(): void {
+    this.cancelFade?.();
     if (this.root && this.root.isValid) {
+      const opacity = this.root.getComponent(UIOpacity);
+      if (opacity) opacity.opacity = 255;
       this.root.active = true;
       this.raise();
     }
   }
 
   hide(): void {
+    this.cancelFade?.();
     if (this.root && this.root.isValid) this.root.active = false;
     const retry = this.child("Retry");
     if (retry) retry.active = false;
@@ -218,6 +223,7 @@ export class BootChrome {
   }
 
   destroy(): void {
+    this.cancelFade?.();
     this.destroyed = true;
     if (this.tipTimer) clearInterval(this.tipTimer);
     this.tipTimer = null;
@@ -227,6 +233,31 @@ export class BootChrome {
       resolve(false);
     }
     this.destroyRoot();
+  }
+
+  get isReady(): boolean { return !!this.root?.isValid; }
+
+  /** Visual transition only. Progress stays tied to the completed startup tasks. */
+  fadeOut(seconds = 0.3): Promise<void> {
+    this.cancelFade?.();
+    const root = this.root;
+    if (!root?.isValid) return Promise.resolve();
+    const opacity = root.getComponent(UIOpacity) || root.addComponent(UIOpacity);
+    return new Promise(resolve => {
+      const started = Date.now();
+      const finish = () => {
+        clearInterval(timer);
+        if (this.cancelFade === finish) this.cancelFade = null;
+        resolve();
+      };
+      const timer = setInterval(() => {
+        if (!root.isValid) { finish(); return; }
+        const fraction = seconds > 0 ? Math.min(1, (Date.now() - started) / (seconds * 1000)) : 1;
+        opacity.opacity = Math.round(255 * (1 - fraction));
+        if (fraction === 1) finish();
+      }, 16);
+      this.cancelFade = finish;
+    });
   }
 
   private apply(): void {
@@ -383,6 +414,6 @@ function stripHtml(raw: string): string {
 
 export function preloadBootAsset(path: string, type: unknown): Promise<void> {
   return new Promise((resolve) => {
-    resources.load(path, type, () => resolve());
+    resources.load(path, type as typeof Asset, () => resolve());
   });
 }

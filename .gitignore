@@ -27,6 +27,11 @@ SERVER_LINK.txt
 # IP geolocation DB is large and stays on the machine, not in git.
 ip2region.db
 
+# Remake backend local tools, build output and development database.
+/backend/.tools/
+/backend/.local/
+/backend/target/
+
 # Cocos Creator
 client/library/
 client/temp/

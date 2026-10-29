@@ -5,6 +5,11 @@ import type { BaseView } from "./BaseView";
 /** 把预制挂进页面宿主。背包的店内底图放在自己的挂载里，不写进 UIManager。 */
 export type ViewMount = (host: Node, prefab: Prefab) => Node | Promise<Node>;
 
+export interface ViewController {
+  show(): void;
+  close(): void;
+}
+
 /** 一个正式界面：视图类、Prefab、页面 id 绑在一起。 */
 export interface ViewSpec {
   id: string;
@@ -22,6 +27,10 @@ export interface ViewSpec {
   hostId?: string;
   /** 不写就直接生成在宿主下。 */
   mount?: ViewMount;
+  /** Application-supplied loader; scene-bound Prefabs need no business UUID fallback. */
+  load?: () => Promise<Prefab>;
+  /** Explicit application composition. The framework knows only this lifecycle contract. */
+  createController?: (view: BaseView<unknown>) => ViewController;
 }
 
 export type ViewClass<T> = new () => BaseView<T>;
@@ -31,6 +40,11 @@ const byId = new Map<string, Function>();
 
 /** 类装饰器。和 @ccclass 一起写在视图上。 */
 export function view(spec: ViewSpec): ClassDecorator {
+  return ctor => { registerView(ctor, spec); };
+}
+
+/** New applications register their pages in one readable composition module. */
+export function registerView(ctor: Function, spec: ViewSpec): () => void {
   const stored: ViewSpec = {
     id: spec.id,
     prefab: spec.prefab,
@@ -39,15 +53,19 @@ export function view(spec: ViewSpec): ClassDecorator {
     allowMultiple: spec.allowMultiple === true,
     hostId: spec.hostId,
     mount: spec.mount,
+    load: spec.load,
+    createController: spec.createController,
   };
-  return (ctor) => {
-    const previous = byId.get(stored.id);
-    if (previous && previous !== ctor) {
-      throw new Error("页面 id 重复 " + stored.id);
-    }
-    byCtor.set(ctor as unknown as Function, stored);
-    byId.set(stored.id, ctor as unknown as Function);
-    return ctor;
+  const previous = byId.get(stored.id);
+  if (previous && previous !== ctor) throw new Error("页面 id 重复 " + stored.id);
+  const oldSpec = byCtor.get(ctor);
+  if (oldSpec && oldSpec.id !== stored.id) throw new Error("同一 View 不能登记多个页面 id");
+  byCtor.set(ctor, stored);
+  byId.set(stored.id, ctor);
+  return () => {
+    if (byCtor.get(ctor) !== stored) return;
+    byCtor.delete(ctor);
+    if (byId.get(stored.id) === ctor) byId.delete(stored.id);
   };
 }
 

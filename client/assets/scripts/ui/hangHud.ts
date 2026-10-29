@@ -4,7 +4,7 @@
  */
 import { GameStore, StoreHero } from "../core/GameStore";
 import { heroProfile } from "../config/gameCatalog";
-import { deployedHeroIds } from "./localLineup";
+import { deployedHeroIds } from "../module/mainline/localLineup";
 
 export interface FightRow {
   heroId: number | null;

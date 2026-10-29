@@ -123,7 +123,7 @@ export class CityHubView extends BaseView<CityHubOpenArgs> {
     }
     this.started = true;
     this.beginOpen();
-    void this.start();
+    void this.initializeCity();
   }
 
   onClose(): void {
@@ -149,7 +149,7 @@ export class CityHubView extends BaseView<CityHubOpenArgs> {
     });
   }
 
-  private async start(): Promise<void> {
+  private async initializeCity(): Promise<void> {
     try {
       if (!this.args) throw new Error("主城没有打开参数");
       this.collect();
@@ -162,7 +162,7 @@ export class CityHubView extends BaseView<CityHubOpenArgs> {
         this.loadCfg<MainCityBtnFile>(CITY_CFG_BTN),
         this.loadCfg<MainCityEffectFile>(CITY_CFG_EFFECT),
       ]);
-      if (!this.node || !this.node.isValid) {
+      if (this.cleaned || !this.node || !this.node.isValid) {
         this.failOpen(new Error("页面已关"));
         return;
       }

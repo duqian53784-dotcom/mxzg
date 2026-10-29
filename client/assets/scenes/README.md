@@ -1,13 +1,37 @@
-﻿# 场景
+# 场景入口与用途
 
-Boot / Main / Battle 已在 Creator 里建好。启动场景应为 Boot。
+当前开发入口是顶层的 **Remake.scene**。在 Creator 打开它并选择“预览当前场景”。README 是说明文档，不是场景。
 
-脚本不会写进 `.scene`。Canvas 上已经挂了 **Boot**，拉代码后直接预览，不用再挂组件。说明见 `assets/scripts/README.md`。
+## Remake.scene：当前新后端入口
 
-Canvas 上已有四边对齐的 Widget。安全区由代码处理，不要再挂引擎自带的 SafeArea 组件。见 `docs/safe-area.md`。
+- Canvas 挂载 RemakeApp，装配账号服务、统一 UIManager 和页面导航。
+- PageHost 承载页面，位于其上方的 StartupHost 承载既有 LoadingLayer 与启动过渡。启动依次加载配置、界面资源、准备账号信息、等待登录页就绪，再淡出加载层；恢复会话也停留登录页，必须点击“开始游戏”才进入主城。
+- 使用 backend 下的新 Java 服务，双击 scripts/start-remake-backend.bat 启动，默认地址 http://127.0.0.1:18080。
+- 登录与角色资料页面使用 Prefab 切换，均在同一场景中；新增 UI 页面不需要新增场景。
+- 默认账号 player_1，右上角“开发账号”可修改。登录后复用已有 CityHub 地图与 CityChrome 顶底栏，显示新后端真实角色资料；右上侧“账号”可查看角色 ID 并退出。英雄、主线等业务尚未接入新后端，点击提示暂未开放。
 
-构建发布前，场景列表包含 Boot 与 Main（Battle 可先不进包）。Web Mobile 构建仍可后补。
+## legacy/Boot.scene：旧游戏启动入口
 
-C3 的战斗画面在主城页面里用代码生成，预览不用打开 Battle.scene，也不用把 Battle 挂进场景列表。
+- Canvas 挂载 Boot，负责旧资源加载、登录、角色同步与主城预加载。
+- 使用旧服务器和 WebSocket 桥，对应 scripts/start-local-all 启服脚本。
+- 登录成功后加载名为 Main 的场景，并给其 Canvas 添加 MainApp。
+- 对照或回归已有游戏页面时，从此场景开始预览。
 
-C4 的挂机页同样是代码生成的。预览不用新挂组件，也不用改场景。
+## legacy/Main.scene：旧主城承载场景
+
+- 提供 Canvas 和 Camera，MainApp 由 Boot 登录成功后动态挂载。
+- 单独预览不会完成账号、网络和主城初始化，应通过 Boot 进入。
+- 暂时必须保留：Boot 仍调用 director.loadScene("Main")。移动目录没有修改场景名或 UUID。
+
+## legacy/placeholders/Battle.scene：历史空占位场景
+
+- 当前仅有 Canvas、Camera 等基础配置，没有战斗入口脚本；现有代码也没有加载它。
+- 已有战斗功能通过主城中的页面与 Prefab 展示，不经过此场景。
+- 暂存供历史对照，日常预览和新后端构建不需要选择它。
+
+## 构建与目录约定
+
+- 新后端联调版本：首场景和场景列表选择 Remake，目前不代表完整游戏发行版。
+- 旧游戏版本：首场景选择 legacy/Boot，列表包含 legacy/Boot 与 legacy/Main。
+- 本次保留全部场景及其 .meta UUID，只调整旧场景目录；本机已有构建任务仅同步资源 URL，不改其历史启动选择或构建参数。重新构建前按目标核对首场景。
+- 后续游戏 UI 优先使用可编辑 Prefab，交由统一 UIManager 管理；仅在确有独立运行生命周期时增加场景。

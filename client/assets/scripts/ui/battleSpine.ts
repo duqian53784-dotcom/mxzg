@@ -282,7 +282,7 @@ function runtimeSpineData(stem: string, asset: sp.SkeletonData): sp.SkeletonData
     if (typeof src.scale === "number") dst.scale = src.scale;
     dst._uuid = uuid;
     const upgraded = upgradeSpine37Json(raw);
-    dst.skeletonJson = plantHangLocomotion(upgraded === raw ? JSON.parse(JSON.stringify(upgraded)) : upgraded);
+    dst.skeletonJson = plantHangLocomotion(upgraded === raw ? JSON.parse(JSON.stringify(upgraded)) : upgraded) as typeof copy.skeletonJson;
     runtimePacks[stem] = copy;
     return copy;
   } catch (err) {

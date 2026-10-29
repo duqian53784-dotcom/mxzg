@@ -7,7 +7,7 @@ import { HeroProfile, heroProfile, listHeroProfiles } from "../../config/gameCat
 import { heroSpaceCap } from "../../config/rosterCatalog";
 import { GameStore, StoreHero } from "../../core/GameStore";
 import { Session } from "../../core/Session";
-import { deployedHeroIds } from "../../ui/localLineup";
+import { deployedHeroIds } from "../mainline/localLineup";
 import { WireSession } from "../../net/WireSession";
 import { WIRE_HERO_UNSYNCED_TOAST } from "../../net/protocol/wireHero";
 

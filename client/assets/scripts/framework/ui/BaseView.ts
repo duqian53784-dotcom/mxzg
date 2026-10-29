@@ -1,5 +1,6 @@
 import { _decorator, Component } from "cc";
 import { requestViewClose } from "./ViewClose";
+import type { ViewController } from "./UIRegistry";
 
 const { ccclass } = _decorator;
 
@@ -21,6 +22,13 @@ export class BaseView<TArgs = unknown> extends Component {
   private shown = false;
   private unbound = false;
   private disposed = false;
+  private controller: ViewController | null = null;
+
+  /** UIManager attaches the application-created controller before opening the View. */
+  attachController(controller: ViewController): void {
+    if (this.created || this.disposed || this.controller) throw new Error("Controller must be attached once before View creation");
+    this.controller = controller;
+  }
 
   /** 实例第一次挂上时。 */
   onCreate(): void {}
@@ -99,11 +107,13 @@ export class BaseView<TArgs = unknown> extends Component {
     this.args = args;
     this.shown = true;
     this.onOpen(args);
+    this.controller?.show();
   }
 
   runClose(): void {
     if (!this.shown) return;
     this.shown = false;
+    this.controller?.close();
     this.onClose();
   }
 
@@ -120,5 +130,6 @@ export class BaseView<TArgs = unknown> extends Component {
     this.runUnbind();
     this.disposed = true;
     this.dispose();
+    this.controller = null;
   }
 }

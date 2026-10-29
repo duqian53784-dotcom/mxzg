@@ -8,7 +8,7 @@ import { BAR_SLIDE_MS, BAR_SLIDE_READY_MS, pageContentReady, SlideCapture, slide
 import { StackView } from "./StackView";
 import { Toast } from "./Toast";
 import { uiNode } from "./UiKit";
-import { markPageShown } from "./uiOpenLog";
+import { markPageShown } from "../framework/ui/UIOpenLog";
 
 /**
  * 挂在同一个 Canvas 上的四层：Page / Chrome / Popup / Toast。

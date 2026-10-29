@@ -2,11 +2,11 @@
  * ?dev=mock 时，出阵只记在本局。
  * 真服不读这里。MAIN 以 s2c 3101 为准，确认出阵走 c2s 3100。
  */
-import { GameStore } from "../core/GameStore";
-import { Session } from "../core/Session";
-import { WireSession } from "../net/WireSession";
-import { mainFormationHeroes } from "../net/protocol/starterLineup";
-import { mockRuntimeEnabled } from "../net/transportSelect";
+import { GameStore } from "../../core/GameStore";
+import { Session } from "../../core/Session";
+import { WireSession } from "../../net/WireSession";
+import { mainFormationHeroes } from "../../net/protocol/starterLineup";
+import { mockRuntimeEnabled } from "../../net/transportSelect";
 
 const ids: number[] = [];
 const listeners: Array<() => void> = [];
