@@ -141,9 +141,12 @@ function checkSources(): void {
   assert(shell.indexOf("export function bindHangProbe") >= 0, "空地长按仍能打开探针");
   assert(shell.indexOf("hangLineupReady") < 0, "每次点战斗都先出阵，不因 hangLineupReady 跳过");
   assert(shell.indexOf("开战先出阵") >= 0, "开战先打出阵日志");
+  assert(shell.indexOf("开战入口=") >= 0 && shell.indexOf("出阵=开") >= 0, "开战入口要打出阵日志");
   const hangView = read("client/assets/scripts/features/battle/ui/BattleHangView.ts");
   assert(hangView.indexOf("face.ring") >= 0, "圆环只写关号");
   assert(hangView.indexOf("this.chip.show(face.caption)") >= 0, "章关长文案写在左侧关卡标");
+  assert(hangView.indexOf("HorizontalTextAlignment.RIGHT") >= 0, "收益条右对齐");
+  assert(hangView.indexOf("开战入口=挂机计时 出阵=跳过原因=只刷新收益") >= 0, "挂机计时不开战");
   const main = read("client/assets/scripts/ui/MainApp.ts");
   assert(main.indexOf("useBattleView") >= 0, "MainApp 有战斗开关");
   assert(main.indexOf("UIManager.instance.open(BattleHangView)") >= 0, "开关打开时走 BattleHangView");
@@ -157,6 +160,7 @@ function checkSources(): void {
   assert(branch.indexOf("this.openChild(\"mainline\")") >= 0, "旧开关仍 openChild");
   assert(branch.indexOf("BattleHangView") >= 0, "新开关打开战斗视图");
   assert(branch.indexOf("useBattleView") >= 0, "打开挂机看开关");
+  assert(branch.indexOf("开战入口=城内按钮 出阵=跳过原因=只打开挂机页") >= 0, "城内按钮只打开挂机");
   const manager = read("client/assets/scripts/framework/ui/UIManager.ts");
   assert(manager.indexOf("BattleHang") < 0 && manager.indexOf("mountBattle") < 0, "UIManager 不写死战斗");
   assert(!existsSync(join(root, "client/assets/prefabs/ui/battle/WireBattlePage.prefab")), "不恢复 WireBattlePage");
@@ -176,6 +180,8 @@ function checkSources(): void {
   assert(hang.indexOf("chapterStageEnemies") >= 0, "开战守方按关卡号");
   assert(hang.indexOf("这一侧没有模型") >= 0, "没有模型的一侧不播出场光");
   assert(hang.indexOf("beginHangBattle") >= 0, "开战演出还在");
+  assert(hang.indexOf("开战入口=PAGE_SHELL_FIGHT 出阵=跳过原因=没有出阵确认") >= 0, "战报驱动没有出阵确认就不开");
+  assert(hang.indexOf("startShellFight") >= 0, "下一关也先出阵");
   assert(hang.indexOf("PAGE_SHELL_FIGHT") >= 0 && hang.indexOf("showMockRound") >= 0, "开战要听战报驱动并播 Mock 回合");
   assert(hang.indexOf("开战没有进战报") >= 0, "没有战报要打日志");
   assert(hang.indexOf("不复用已有战报") >= 0 && hang.indexOf("改播本场回合") >= 0, "3001 没回到不能复用上一局");

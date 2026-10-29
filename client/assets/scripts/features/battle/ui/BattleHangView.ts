@@ -1,4 +1,4 @@
-import { _decorator, Button, Color, director, Director, Label, Node, Overflow, Prefab, UITransform } from "cc";
+import { _decorator, Button, Color, director, Director, HorizontalTextAlignment, Label, Node, Overflow, Prefab, UITransform, VerticalTextAlignment } from "cc";
 import { messageOf } from "../../../core/errors";
 import { GameLog } from "../../../core/GameLog";
 import { GameStore } from "../../../core/GameStore";
@@ -294,12 +294,13 @@ export class BattleHangView extends BaseView {
     const page = this.namedAncestor("LiveShell");
     if (!shell || !shell.isValid || !page || !page.isValid) {
       const chain = this.parentChain();
+      GameLog.shared.info("Mainline", "开战入口=战斗按钮 出阵=跳过原因=挂机壳还没挂上");
       GameLog.shared.warn("Mainline", SHELL_MISSING + " " + chain);
       UIManager.instance.toast(SHELL_MISSING);
       return;
     }
     try {
-      const started = startShellFight(shell, page);
+      const started = startShellFight(shell, page, "战斗按钮");
       if (!started) {
         GameLog.shared.warn("Mainline", FIGHT_FAILED + " " + this.parentChain());
         UIManager.instance.toast(FIGHT_FAILED);
@@ -356,6 +357,7 @@ export class BattleHangView extends BaseView {
   private noteClock(clock: string): void {
     if (this.clockNoted) return;
     this.clockNoted = true;
+    GameLog.shared.info("Mainline", "开战入口=挂机计时 出阵=跳过原因=只刷新收益");
     const idle = GameStore.idle();
     const anchor = idle.fromStore ? idle.rewardTime : idle.anchorMs;
     GameLog.shared.info("Mainline", "挂机计时 起点 " + anchor + " 显示 " + clock);
@@ -385,6 +387,8 @@ export class BattleHangView extends BaseView {
       label.fontSize = 40;
       label.lineHeight = 40;
       label.overflow = Overflow.NONE;
+      label.horizontalAlign = HorizontalTextAlignment.RIGHT;
+      label.verticalAlign = VerticalTextAlignment.CENTER;
       label.color = RATE_INK;
     } catch (_err) {
       label.string = text;

@@ -25,7 +25,7 @@ import { IDLE_UNIX_FLOOR, wireIdleCapMs, wireIdleElapsedMs } from "../net/protoc
 import { formationFaceSlot, WIRE_LINEUP_SAVE_POSITIONS } from "../net/protocol/wireLineUpSave";
 import { mainFormationHeroes } from "../net/protocol/starterLineup";
 import { formatHangClock, goldPerMin, itemEveryMs } from "../module/idle/rewards";
-import { plainTalk } from "./idleHangTalkPlan";
+import { pickHeroTalkLan, plainTalk, readHeroTalkRows } from "./idleHangTalkPlan";
 import { hangSpineStem } from "./idleHangRoster";
 import {
   hangBarFillBox,
@@ -780,6 +780,7 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
       }, { seatY: HERO_DETAIL_SPINE_SEAT_Y });
       if (ring) raiseEquipMenus(ring);
     }
+    seatHeroTalk(view, hero.level);
   };
   showHead();
   let refresh = () => {};
@@ -825,6 +826,7 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
     for (let i = 0; i < tabNodes.length; i++) paintTab(tabNodes[i], i === tab);
     if (grow) grow.active = tab === 0;
     if (starBoard) starBoard.active = tab === 1;
+    if (body) body.active = tab >= 2;
     const profile = heroProfile(hero.heroType);
     const stats = heroBaseStats(hero.heroType, hero.star ?? (profile ? profile.star : 1));
     if (tab === 0) {
@@ -878,7 +880,7 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
   void mountNested(view, HERO_LEVEL_BOARD, "GrowBoard").then((node) => {
     if (!node || !view.isValid) return;
     grow = node;
-    seatOnPanel(node, panel, 150);
+    seatOnPanel(node, panel, 318, 150);
     silenceBigMenus(node);
     const grade = findNamed(node, "btn_up_grade");
     if (grade) grade.active = false;
@@ -899,7 +901,7 @@ export function dressHeroDetail(view: Node, hero: StoreHero): void {
   void mountNested(view, HERO_STAR_BOARD, "StarBoard").then((node) => {
     if (!node || !view.isValid) return;
     starBoard = node;
-    seatOnPanel(node, panel, 112.5);
+    seatOnPanel(node, panel, 320, 112.5);
     silenceBigMenus(node);
     const button = findNamed(node, "btn_up_star");
     setGray(button, false);
@@ -2212,8 +2214,16 @@ function bindHeroChrome(view: Node, picker: () => HeroPick, onSwitch: (hero: Sto
   holdReadOnly(findNamed(view, "btn_wear"), view, "不发穿戴协议", false);
   holdReadOnly(findNamed(view, "btn_disboard"), view, "不发穿戴协议", false);
   holdReadOnly(findNamed(view, "btn_setting"), view, "不发协议", true);
-  holdReadOnly(findNamed(view, "btn_unfold"), view, "不发协议", true);
-  holdReadOnly(findNamed(view, "btn_only_show"), view, "不发协议", true);
+  const only = findNamed(view, "btn_only_show");
+  if (only) only.active = false;
+  const unfold = findNamed(view, "btn_unfold");
+  if (unfold) {
+    unfold.active = true;
+    setGray(unfold, false);
+    fitButton(unfold, "展开", 16);
+    if (unfold.parent) unfold.setSiblingIndex(Math.max(0, unfold.parent.children.length - 1));
+  }
+  holdReadOnly(unfold, view, "不发协议", false);
 }
 
 function holdNav(node: Node | null, step: number, picker: () => HeroPick, onSwitch: (hero: StoreHero) => void): void {
@@ -3032,9 +3042,75 @@ function silenceBigMenus(root: Node): void {
   }
 }
 
-/** 育成 / 星UP 的内容块对齐详情底栏，避免盖住页签。 */
-function seatOnPanel(board: Node, panel: Node, contentY: number): void {
-  board.setPosition(0, panel.position.y - contentY, 0);
+/**
+ * 育成 / 星UP 放进 node_panel。内容块原点对齐羊皮纸下沿再上移 8，顶上留给页签。
+ * pieceX/pieceY 是 CCBI 里 node_all 或 CCNode_1 的位置。
+ */
+function seatOnPanel(board: Node, panel: Node, pieceX: number, pieceY: number): void {
+  if (board.parent !== panel) board.parent = panel;
+  board.setPosition(-pieceX, 8 - pieceY, 0);
+  const tabs = panel.getChildByName("scroll_view_tab");
+  if (tabs) tabs.setSiblingIndex(Math.max(0, panel.children.length - 1));
+}
+
+const TALK_INK = new Color(141, 89, 58, 255);
+
+/** 台词在返回下沿之下，并抬到 menu_back 前面。返回中心约 (570, 835)、高 55。 */
+function seatHeroTalk(view: Node, level: number | null): void {
+  let talk = findNamed(view, "node_talk");
+  if (!talk) {
+    talk = uiNode("node_talk");
+    const ui = talk.addComponent(UITransform);
+    assignContentSize(ui, 220, 72);
+    ui.setAnchorPoint(0.5, 0.5);
+    const bubble = uiNode("spr_bubble");
+    const bubbleUi = bubble.addComponent(UITransform);
+    assignContentSize(bubbleUi, 220, 72);
+    bubbleUi.setAnchorPoint(0.5, 0.5);
+    const image = bubble.addComponent(Sprite);
+    image.sizeMode = Sprite.SizeMode.CUSTOM;
+    image.type = Sprite.Type.SIMPLE;
+    place(bubble, talk, 0, 0);
+    paintSprite(bubble, "ui/common/other_spr-bubble-5");
+    const line = createLabel("", 18, { color: TALK_INK, width: 180, height: 48 });
+    line.name = "lbl_talk";
+    place(line, talk, 0, 6);
+  }
+  if (talk.parent !== view) talk.parent = view;
+  talk.active = true;
+  talk.setPosition(400, 700, 0);
+  talk.setSiblingIndex(Math.max(0, view.children.length - 1));
+  const line = findNamed(talk, "lbl_talk");
+  const text = heroTalkLine(level);
+  if (line) setText(line, text);
+  if (!text) GameLog.shared.info("Hero", "详情台词 herotalk 还没读到");
+}
+
+function heroTalkLine(level: number | null): string {
+  const db = ConfigDb.current;
+  const talkFile = db ? db.tables.get("herotalk") : null;
+  const rows = readHeroTalkRows(talkFile || null);
+  if (rows.length === 0) return "";
+  const lan = pickHeroTalkLan(rows, level, 0);
+  if (lan !== null) {
+    const file = db ? db.tables.get("language") : null;
+    const list = file && Array.isArray(file.rows) ? file.rows : [];
+    const key = String(lan);
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i] as { key?: unknown; value?: unknown } | null;
+      if (!row || row.key === undefined || String(row.key) !== key) continue;
+      const text = plainTalk(typeof row.value === "string" ? row.value : "");
+      if (text) return text;
+    }
+  }
+  const list = talkFile && Array.isArray(talkFile.rows) ? talkFile.rows : [];
+  for (let i = 0; i < list.length; i++) {
+    const row = list[i] as { lan?: unknown; note?: unknown } | null;
+    if (!row) continue;
+    if (lan !== null && String(row.lan) !== String(lan)) continue;
+    if (typeof row.note === "string" && row.note.trim()) return row.note.trim();
+  }
+  return "";
 }
 
 function paintStarMarks(host: Node | null, count: number): void {

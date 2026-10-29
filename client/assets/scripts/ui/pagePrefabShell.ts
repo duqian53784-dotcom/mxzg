@@ -802,7 +802,7 @@ function openChapterMap(root: Node, page: Node): void {
         void openHangSheet(sheet, HANG_CHAPTER_PREFAB, (view) => {
           dressChapterPreview(view, () => {
             close();
-            startShellFight(root, page);
+            startShellFight(root, page, "章节出战");
           }, idx);
         });
       };
@@ -842,35 +842,39 @@ function paintChipIcon(node: Node): void {
 }
 
 /**
- * 日服每次点战斗都先弹出出阵（前 4 后 4）。确认后再开战。
- * 不因已经有阵容跳过。出阵和关卡预览的「出战」都走这里。
- * 壳已经不在时返回 false，调用方要打日志并 Toast。出阵预制失败同样 Toast，不再只写 warn。
+ * 日服每次开战都先弹出 HeroSelectLayer（前 4 后 4）。确认后再 beginHangBattle。
+ * 战斗钮、底栏、章节出战、结算下一关都走这里。不因已经有阵容跳过。
+ * 壳已经不在时返回 false。出阵预制失败只打跳过原因，不开战。
  */
-export function startShellFight(root: Node, page: Node): boolean {
+export function startShellFight(root: Node, page: Node, entry = "战斗按钮"): boolean {
   if (!root.isValid || !page.isValid) {
     GameLog.shared.warn("Mainline", "进入 startShellFight 时挂机壳已关");
+    GameLog.shared.info("Mainline", "开战入口=" + entry + " 出阵=跳过原因=挂机壳已关");
     return false;
   }
   GameLog.shared.info("Mainline", "进入 startShellFight");
-  GameLog.shared.info("Mainline", "开战先出阵");
   const go = () => {
     beginHangBattle(page, "我方", "敌方");
     if (!page.isValid) return;
     GameLog.shared.info("Mainline", "开战发出 PAGE_SHELL_FIGHT");
     page.emit(PAGE_SHELL_FIGHT);
   };
+  const host = page.isValid ? page : root;
   void openHangSheet(
-    root,
+    host,
     HANG_FORMATION_PREFAB,
     (sheet) => {
+      GameLog.shared.info("Mainline", "开战入口=" + entry + " 出阵=开");
+      GameLog.shared.info("Mainline", "开战先出阵");
       bindFormationSheet(sheet, () => {
-        const host = sheet.parent;
-        if (host && host.isValid) host.destroy();
+        const wrap = sheet.parent;
+        if (wrap && wrap.isValid) wrap.destroy();
         go();
       });
     },
     true
   ).catch((err) => {
+    GameLog.shared.info("Mainline", "开战入口=" + entry + " 出阵=跳过原因=出阵预制没有挂上");
     GameLog.shared.warn("Mainline", "开战没有开始 " + messageOf(err));
     toastFightFail();
   });
@@ -890,7 +894,7 @@ function wireFightButtons(view: Node, root: Node, page: Node, again: boolean): v
   const battle = findDescendant(root, "btn_battle");
   if (battle) {
     liftNode(battle, root);
-    bindTapOnce(battle, () => startShellFight(root, page));
+    bindTapOnce(battle, () => startShellFight(root, page, "底栏战斗"));
     pokeButton(battle, again);
   }
   bindHangSheets(view, root, again);
@@ -1072,7 +1076,12 @@ async function openHangSheet(host: Node, path: string, onReady?: (view: Node) =>
     } else GameLog.shared.warn("Mainline", path + " 没有 btn_close");
     if (onReady) onReady(view);
     sheet.parent = host;
-    sheet.setSiblingIndex(Math.max(0, host.children.length - 1));
+    const raise = () => {
+      if (!sheet.isValid || !host.isValid || sheet.parent !== host) return;
+      sheet.setSiblingIndex(Math.max(0, host.children.length - 1));
+    };
+    raise();
+    director.once(Director.EVENT_AFTER_UPDATE, raise);
     logOpenedPrefab(view, path, prefabBaseName(path), Math.max(0, Math.round(monoNow() - started)), "Mainline");
     GameLog.shared.info("Mainline", "hang sheet " + path);
   } catch (err) {

@@ -102,6 +102,7 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
   let scrolling = false;
   let scrollMs = 0;
   let haltTick: (() => void) | null = null;
+  let notedEntry = false;
 
   const control = {
     pause(): void {
@@ -259,6 +260,10 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     if (actors.length === 0) {
       arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
       return;
+    }
+    if (!notedEntry) {
+      notedEntry = true;
+      GameLog.shared.info("Mainline", "开战入口=自动开战 出阵=跳过原因=演武不调用开战");
     }
     plantAllies();
     playMarch();

@@ -54,6 +54,7 @@ import { hangAppearAnchor, hangFightStageId, hangStandPoint, IDLE_HANG_SPOTS, ID
 import { hangSpineStem } from "./idleHangRoster";
 import { mountBattleEnd } from "./battleEndView";
 import { PAGE_SHELL_FIGHT } from "./prefabShellMap";
+import { startShellFight } from "./pagePrefabShell";
 import { createButton, createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 export type { HangFloat };
@@ -333,8 +334,6 @@ function closeHangEnd(page: Node, seq: number, next: boolean): void {
     GameLog.shared.info("Mainline", "开战结算 回挂机时这一局已停");
     return;
   }
-  const left = live.left || "我方";
-  const right = live.right || "敌方";
   stopHangBattle(page);
   if (wireFight()) {
     try {
@@ -347,10 +346,9 @@ function closeHangEnd(page: Node, seq: number, next: boolean): void {
     }
   }
   if (!next || !page.isValid) return;
-  beginHangBattle(page, left, right);
-  if (!page.isValid) return;
-  page.emit(PAGE_SHELL_FIGHT);
-  GameLog.shared.info("Mainline", "开战结算 下一关");
+  const shell = page.getChildByName("PagePrefabShell");
+  const root = shell && shell.isValid ? shell : page;
+  startShellFight(root, page, "结算下一关");
 }
 
 function dropHangEnd(page: Node): void {
@@ -389,6 +387,10 @@ function armHangFight(page: Node): void {
   if (mark.mxzgFightDrive) return;
   mark.mxzgFightDrive = true;
   page.on(PAGE_SHELL_FIGHT, () => {
+    if (!holds.get(page)) {
+      GameLog.shared.info("Mainline", "开战入口=PAGE_SHELL_FIGHT 出阵=跳过原因=没有出阵确认");
+      return;
+    }
     void runHangFight(page);
   });
   page.once(Node.EventType.NODE_DESTROYED, () => {
