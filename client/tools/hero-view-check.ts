@@ -118,6 +118,7 @@ function checkSources(): void {
   for (let i = 0; i < views.length; i++) {
     const text = read(views[i]);
     assert(text.indexOf("getChildByName") < 0, views[i] + " 不应 getChildByName");
+    assert(text.indexOf("private async start(") < 0, views[i] + " 不要用 start 生命周期名");
     assert(text.indexOf("findNamed") < 0, views[i] + " 不应 findNamed");
     assert(text.indexOf("findNode") < 0, views[i] + " 不应 findNode");
     assert(text.indexOf("decodeWire") < 0, views[i] + " 不应解协议");
@@ -187,6 +188,8 @@ function checkPrefab(): void {
   assert(cellPrefab.__uuid__ === "e7c1a4b0-6d28-4f53-9c11-2a8b7e6d5c40", "cellPrefab 是 HeroIconCell");
 
   const boardData = loadPrefab("client/assets/prefabs/ui/hero/HeroListHeroLayer.prefab");
+  const rootPos = boardData[1]._lpos as { x?: number; y?: number };
+  assert(rootPos.x === 0 && rootPos.y === 0, "HeroListHeroLayer 根在底左，不再写居中偏移");
   const board = component(boardData, boardType);
   assertNode(boardData, board.comp, "sprBox", 5, "spr_box");
   assertNode(boardData, board.comp, "heroScroll", 119, "HeroScroll");
@@ -288,6 +291,10 @@ function makeCell(node: Node): void {
 
 function makeBoard(node: Node): HeroListBoardView {
   node.name = "HeroListHeroLayer";
+  node.setPosition(-320, -480, 0);
+  const rootUi = node.getComponent(UITransform) || node.addComponent(UITransform);
+  rootUi.setAnchorPoint(0.5, 0.5);
+  rootUi.setContentSize(640, 960);
   const board = node.addComponent(HeroListBoardView);
   board.sprBox = sized("spr_box", 580, 450);
   board.sprBox.parent = node;
@@ -354,6 +361,15 @@ function makeView(): HeroListView {
     makeCell(node);
   });
   return view;
+}
+
+function boardCount(view: HeroListView): number {
+  let count = 0;
+  const kids = view.node.children;
+  for (let i = 0; i < kids.length; i++) {
+    if (kids[i].getComponent(HeroListBoardView)) count += 1;
+  }
+  return count;
 }
 
 function boardOf(view: HeroListView): HeroListBoardView {
@@ -532,6 +548,13 @@ async function checkPaint(): Promise<void> {
   noteHeroes([heroEntry(11, 101, 7, 4), heroEntry(12, 102, 3, 3)]);
   const view = await openView();
   const board = boardOf(view);
+  assert(boardCount(view) === 1, "只挂一份 HeroListHeroLayer");
+  assert(board.node.position.x === 0 && board.node.position.y === 0, "板子收回羊皮纸底左");
+  const boardUi = board.node.getComponent(UITransform);
+  assert(boardUi !== null && boardUi.anchorX === 0 && boardUi.anchorY === 0, "板子锚点在底左");
+  view.onOpen();
+  pump(1);
+  assert(boardCount(view) === 1, "再次打开不再挂第二份");
   assert(board.heroContent !== null && board.heroPort !== null && board.heroContent.parent === board.heroPort, "content 进了 view");
   assert(board.heroScroll !== null && board.heroScroll.getComponent(Mask) === null, "HeroScroll 上的 Mask 要摘掉");
   const portMask = board.heroPort.getComponent(Mask) as Mask | null;
