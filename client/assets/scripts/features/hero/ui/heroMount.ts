@@ -1,10 +1,12 @@
 import { Node, Prefab, Sprite, UITransform } from "cc";
 import { messageOf } from "../../../core/errors";
 import { GameLog } from "../../../core/GameLog";
+import { StoreHero } from "../../../core/GameStore";
 import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
 import { loadPrefab, spawnPrefab } from "../../../ui/prefabLoad";
 import { mountCcbiView } from "../../../ui/pagePrefabShell";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot } from "../../../ui/visibleFit";
+import { HeroInfoView } from "./HeroInfoView";
 
 const PAGE_SHELL = "prefabs/ui/common/PagePrefabShell";
 const LIST_BACKDROP = "prefabs/ui/common/ListBackdrop";
@@ -43,6 +45,27 @@ export async function mountHeroListPage(host: Node, layer: Prefab): Promise<Node
   const view = spawnPrefab(layer, parent);
   mountCcbiView(view);
   return view;
+}
+
+/**
+ * 详情盖在页面壳上，不挂进已经缩放的列表，避免立绘跟着羊皮纸缩小。
+ * 调用方已经备好 HeroInfoLayer。这里同步挂上，不等立绘资源。
+ */
+export function openHeroDetail(host: Node | null, infoPrefab: Prefab | null, hero: StoreHero): Node | null {
+  if (!host || !host.isValid || !infoPrefab) return null;
+  const old = host.getChildByName("HeroDetailSheet");
+  if (old) old.destroy();
+  const sheet = new Node("HeroDetailSheet");
+  sheet.parent = host;
+  sheet.setSiblingIndex(Math.max(0, host.children.length - 1));
+  const card = spawnPrefab(infoPrefab, sheet);
+  const info = card.getComponent(HeroInfoView);
+  if (!info) {
+    GameLog.shared.warn("Hero", "HeroInfoLayer 上没有 HeroInfoView");
+    return sheet;
+  }
+  info.show(hero);
+  return sheet;
 }
 
 function paintBackdrop(pack: Node): void {

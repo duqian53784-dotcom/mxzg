@@ -14,8 +14,10 @@ import { GameStore } from "../assets/scripts/core/GameStore";
 import { Session } from "../assets/scripts/core/Session";
 import { heroViewFromSearch, setUseHeroView, useHeroView } from "../assets/scripts/features/hero/config/HeroFeatureFlag";
 import { HeroIconCellView } from "../assets/scripts/features/hero/ui/HeroIconCellView";
+import { HeroInfoView } from "../assets/scripts/features/hero/ui/HeroInfoView";
 import { HeroListBoardView } from "../assets/scripts/features/hero/ui/HeroListBoardView";
 import { HeroListView } from "../assets/scripts/features/hero/ui/HeroListView";
+import { HERO_PORT_H, seatHeroParchment } from "../assets/scripts/features/hero/ui/heroChrome";
 import { isOpenCancelled, UIManager } from "../assets/scripts/framework/ui/UIManager";
 import { UILayer } from "../assets/scripts/framework/ui/UILayer";
 import { viewCtorById, viewSpecOf } from "../assets/scripts/framework/ui/UIRegistry";
@@ -114,6 +116,7 @@ function checkSources(): void {
     "client/assets/scripts/features/hero/ui/HeroListView.ts",
     "client/assets/scripts/features/hero/ui/HeroListBoardView.ts",
     "client/assets/scripts/features/hero/ui/HeroIconCellView.ts",
+    "client/assets/scripts/features/hero/ui/HeroInfoView.ts",
   ];
   for (let i = 0; i < views.length; i++) {
     const text = read(views[i]);
@@ -186,6 +189,14 @@ function checkPrefab(): void {
   const cellPrefab = view.comp.cellPrefab as { __uuid__?: string };
   assert(boardPrefab.__uuid__ === "d3a470c0-fa13-47fa-811e-f38c7317e9d8", "boardPrefab 是 HeroListHeroLayer");
   assert(cellPrefab.__uuid__ === "e7c1a4b0-6d28-4f53-9c11-2a8b7e6d5c40", "cellPrefab 是 HeroIconCell");
+  assertNode(layer, view.comp, "sprBg", 5, "spr_bg");
+  assertNode(layer, view.comp, "parchment", 155, "ParchmentPlate");
+  assertNode(layer, view.comp, "titleRoot", 11, "node_title");
+  const infoPrefab = view.comp.infoPrefab as { __uuid__?: string };
+  assert(infoPrefab.__uuid__ === "fa5d3f0c-1441-479b-a182-48d374c7dc6c", "infoPrefab 是 HeroInfoLayer");
+  assert(uiHeight(layer, idOf(layer[44].node)) === 32, "英雄页签字有高度");
+  assert(uiHeight(layer, idOf(layer[58].node)) === 32, "图鉴页签字有高度");
+  assert(uiHeight(layer, idOf(layer[72].node)) === 32, "圣龙页签字有高度");
 
   const boardData = loadPrefab("client/assets/prefabs/ui/hero/HeroListHeroLayer.prefab");
   const rootPos = boardData[1]._lpos as { x?: number; y?: number };
@@ -201,6 +212,11 @@ function checkPrefab(): void {
   assertNode(boardData, board.comp, "hitMenu", 89, "UIMenu_1");
   assertNode(boardData, board.comp, "skin", 93, "btn_permanent_skin");
   assertNode(boardData, board.comp, "evolve", 111, "btn_evolve");
+  assertNode(boardData, board.comp, "pattern", 11, "CCSprite_1");
+  assert(uiHeight(boardData, 119) === HERO_PORT_H, "滚动视口高 388，大约露出 3.5 行");
+  assert(uiHeight(boardData, 123) === HERO_PORT_H, "view 跟滚动视口一样高");
+  assert(uiHeight(boardData, 119) < 448, "视口不要撑到四行");
+  assert(JSON.stringify(boardData).indexOf("永久皮肤") >= 0, "永久皮肤用简体");
   const elems = board.comp.elemButtons as { __id__?: number }[];
   assert(elems.length === 6, "六个元素钮");
   const elemIds = [32, 40, 48, 56, 64, 72];
@@ -219,6 +235,30 @@ function checkPrefab(): void {
   assertNode(cellData, cell.comp, "battle", 79, "spr_battle");
   const stars = cell.comp.stars as { __id__?: number }[];
   assert(stars.map((row) => row.__id__).join(",") === "37,43,49,55,61", "五颗星按 star0 到 star4");
+
+  const infoType = classId(metaUuid("client/assets/scripts/features/hero/ui/HeroInfoView.ts.meta"));
+  const infoData = loadPrefab("client/assets/prefabs/ui/hero/HeroInfoLayer.prefab");
+  const info = component(infoData, infoType);
+  assert((infoData[1]._components || []).some((row) => row.__id__ === info.index), "HeroInfoLayer 根上有 HeroInfoView");
+  assert(infoData[idOf(info.comp.portrait)]._name === "node_equip", "立绘挂在 node_equip");
+  const talkLabel = infoData[idOf(info.comp.talk)];
+  assert(talkLabel.__type__ === "cc.Label", "台词是 Label");
+  assert(infoData[idOf(talkLabel.node)]._name === "lbl_talk", "台词节点是 lbl_talk");
+  const infoText = JSON.stringify(infoData);
+  assert(infoText.indexOf("图鉴") >= 0, "详情底栏有图鉴");
+  assert(infoText.indexOf("穿上") >= 0 && infoText.indexOf("卸下") >= 0 && infoText.indexOf("升级") >= 0, "详情有穿上卸下升级");
+  assert(infoText.indexOf("设置") >= 0 && infoText.indexOf("展开") >= 0, "详情有设置和展开");
+}
+
+function uiHeight(data: PrefabObj[], nodeId: number): number {
+  const node = data[nodeId];
+  const comps = (node && node._components) || [];
+  for (let i = 0; i < comps.length; i++) {
+    const comp = data[comps[i].__id__ || -1];
+    const size = comp && (comp._contentSize as { height?: number } | undefined);
+    if (comp && comp.__type__ === "cc.UITransform" && size && typeof size.height === "number") return size.height;
+  }
+  return -1;
 }
 
 function checkRegistry(): void {
@@ -311,7 +351,10 @@ function makeBoard(node: Node): HeroListBoardView {
   empty.parent = board.heroScroll;
   const cap = new Node("lbl_capacity");
   board.capacityLabel = labelOn(cap, "空间：20/40");
-  cap.parent = node;
+  const capHost = new Node("node_capacity");
+  capHost.setPosition(605, 71.889, 0);
+  capHost.parent = node;
+  cap.parent = capHost;
   board.elemRow = new Node("node_elem");
   board.elemRow.parent = node;
   board.elemButtons = [];
@@ -324,8 +367,14 @@ function makeBoard(node: Node): HeroListBoardView {
   board.hitMenu.parent = node;
   board.skin = new Node("btn_permanent_skin");
   board.skin.parent = node;
+  const lower = new Node("bottom_menu");
+  lower.setPosition(0, 31.6, 0);
+  lower.parent = node;
   board.evolve = new Node("btn_evolve");
-  board.evolve.parent = node;
+  board.evolve.parent = lower;
+  board.pattern = new Node("CCSprite_1");
+  board.pattern.setPosition(320, 47.5, 0);
+  board.pattern.parent = node;
   return board;
 }
 
@@ -556,6 +605,16 @@ async function checkPaint(): Promise<void> {
   pump(1);
   assert(boardCount(view) === 1, "再次打开不再挂第二份");
   assert(board.heroContent !== null && board.heroPort !== null && board.heroContent.parent === board.heroPort, "content 进了 view");
+  const portUi = board.heroPort.getComponent(UITransform);
+  assert(portUi !== null && portUi.contentSize.height === HERO_PORT_H, "运行时视口露出大约 3.5 行");
+  assert(portUi.contentSize.height < 448 && portUi.contentSize.height > 320, "视口介于三行和四行之间");
+  const boxUi = board.sprBox ? board.sprBox.getComponent(UITransform) : null;
+  assert(boxUi !== null && boxUi.contentSize.height === 450, "不把内框撑高去塞满四行");
+  assert(view.heroTitle !== null && view.heroTitle.string === "英  雄", "英雄页签有字");
+  assert(view.bookTitle !== null && view.bookTitle.string === "图  鉴", "图鉴页签有字");
+  assert(view.dragonTitle !== null && view.dragonTitle.string === "圣 龙", "圣龙页签有字");
+  const titleUi = view.heroTitle.node.getComponent(UITransform);
+  assert(titleUi !== null && titleUi.contentSize.height > 0, "页签字不是 0 高");
   assert(board.heroScroll !== null && board.heroScroll.getComponent(Mask) === null, "HeroScroll 上的 Mask 要摘掉");
   const portMask = board.heroPort.getComponent(Mask) as Mask | null;
   assert(portMask !== null && portMask.type === Mask.Type.GRAPHICS_RECT, "视口用矩形遮罩");
@@ -624,6 +683,125 @@ async function checkPaint(): Promise<void> {
   assert(cellsOf(hidden).length === 16, "进场景后铺出格子");
   assert(cellsOf(hidden)[0].levelLabel !== null && cellsOf(hidden)[0].levelLabel!.string === "7", "进场景后画出雷顿");
   hidden.node.destroy();
+}
+
+function near(actual: number, expected: number): boolean {
+  return Math.abs(actual - expected) < 0.6;
+}
+
+async function checkWindow(): Promise<void> {
+  bindTables();
+  noteHeroes([heroEntry(11, 101, 7, 4)]);
+  const seat = seatHeroParchment(441.75, 672, -480, 1);
+  assert(seat.height > 900, "羊皮纸高度占满中部");
+  assert(seat.top > 900, "纸的上沿贴住顶栏");
+  assert(seat.bottom < 50, "纸的下沿贴住底栏");
+  assert(seat.extraTop > 80, "页签要跟着纸上沿抬");
+  const view = makeView();
+  view.node.setPosition(-320, -480, 0);
+  view.sprBg = sized("spr_bg", 640, 672);
+  view.sprBg.setPosition(320, 441.75, 0);
+  view.sprBg.parent = view.node;
+  view.parchment = sized("ParchmentPlate", 640, 672);
+  view.parchment.setPosition(320, 441.75, 0);
+  view.parchment.parent = view.node;
+  view.titleRoot = new Node("node_title");
+  view.titleRoot.setPosition(320, 770.25, 0);
+  view.titleRoot.parent = view.node;
+  view.onOpen();
+  await view.whenReady();
+  pump(2);
+  const bgUi = view.sprBg.getComponent(UITransform) as UITransform;
+  const plateUi = view.parchment.getComponent(UITransform) as UITransform;
+  assert(bgUi.contentSize.height > 900 && plateUi.contentSize.height > 900, "羊皮纸和垫片一起拉高");
+  assert(near(view.sprBg.position.y, seat.centerY), "羊皮纸中心落在顶底栏之间");
+  assert(near(view.titleRoot.position.y, 770.25 + seat.extraTop), "标题留在纸的上沿");
+  const board = boardOf(view);
+  assert(near(board.node.position.y, seat.extraTop), "格子板跟着纸上沿抬");
+  const pattern = board.pattern;
+  const capHost = board.capacityLabel && board.capacityLabel.node ? board.capacityLabel.node.parent : null;
+  const evolveHost = board.evolve ? board.evolve.parent : null;
+  assert(pattern !== null && near(pattern.position.y, seat.bottom + 36 - board.node.position.y), "花边贴住新的纸底");
+  assert(capHost !== null && near(capHost.position.y, seat.bottom + 64 - board.node.position.y), "空间字贴住新的纸底");
+  assert(evolveHost !== null && near(evolveHost.position.y, seat.bottom + 28 - board.node.position.y), "进化钮贴住新的纸底");
+  const parked = board.node.position.y;
+  view.onOpen();
+  pump(1);
+  assert(board.node.position.y === parked, "再次打开不再把纸抬第二次");
+  view.node.destroy();
+}
+
+function walkNamed(node: Node, prefix: string, found: { hit: boolean }): void {
+  if (node.name.indexOf(prefix) === 0) found.hit = true;
+  const kids = node.children;
+  for (let i = 0; i < kids.length; i++) walkNamed(kids[i], prefix, found);
+}
+
+async function checkDetail(): Promise<void> {
+  bindTables();
+  const db = ConfigDb.current;
+  assert(db !== null, "配置还在");
+  if (!db) return;
+  const herotalk: ConfigTableFile<Record<string, unknown>> = {
+    table: "herotalk",
+    rows: [{ level_min: 1, level_max: 99, lan: 70901, note: "十连召唤必出五星" }],
+  };
+  const language: ConfigTableFile<Record<string, unknown>> = {
+    table: "language",
+    rows: [{ key: 70901, value: "十连召唤必出五星" }],
+  };
+  db.tables.set("herotalk", herotalk);
+  db.tables.set("language", language);
+  noteHeroes([heroEntry(11, 101, 7, 4)]);
+  const view = makeView();
+  view.infoPrefab = fakePrefab((node) => {
+    node.name = "HeroInfoLayer";
+    const info = node.addComponent(HeroInfoView);
+    info.portrait = new Node("node_equip");
+    info.portrait.parent = node;
+    info.talkBubble = new Node("spr_bubble");
+    info.talkBubble.parent = node;
+    info.talk = labelOn(new Node("lbl_talk"), "");
+    if (info.talk.node) info.talk.node.parent = node;
+    info.nameLabel = labelOn(new Node("lbl_hero_name"), "");
+    if (info.nameLabel.node) info.nameLabel.node.parent = node;
+    info.wearTitle = labelOn(new Node("wear"), "");
+    if (info.wearTitle.node) info.wearTitle.node.parent = node;
+    info.offTitle = labelOn(new Node("off"), "");
+    if (info.offTitle.node) info.offTitle.node.parent = node;
+    info.gradeTitle = labelOn(new Node("grade"), "");
+    if (info.gradeTitle.node) info.gradeTitle.node.parent = node;
+    info.settingTitle = labelOn(new Node("setting"), "");
+    if (info.settingTitle.node) info.settingTitle.node.parent = node;
+    info.unfoldTitle = labelOn(new Node("unfold"), "");
+    if (info.unfoldTitle.node) info.unfoldTitle.node.parent = node;
+    info.bookTitle = labelOn(new Node("book"), "");
+    if (info.bookTitle.node) info.bookTitle.node.parent = node;
+  });
+  view.onOpen();
+  await view.whenReady();
+  pump(2);
+  const before = toasts.length;
+  const cell = cellsOf(view)[0];
+  cell.node.emit(Button.EventType.CLICK);
+  assert(toasts.length === before, "绑了详情就不只弹名字");
+  const parent = view.node.parent;
+  const sheet = parent ? parent.getChildByName("HeroDetailSheet") : null;
+  assert(sheet !== null && sheet.children.length > 0, "详情盖在列表外面");
+  const info = sheet.children[0].getComponent(HeroInfoView) as HeroInfoView | null;
+  assert(info !== null && info.talk !== null && info.talk.string === "十连召唤必出五星", "详情台词来自 herotalk");
+  assert(info.portrait !== null && info.portrait.active === true, "立绘宿主还在");
+  const spine = { hit: false };
+  walkNamed(info.portrait, "spine-", spine);
+  assert(spine.hit, "详情挂上动态立绘节点");
+  assert(info.bookTitle !== null && info.bookTitle.string === "图鉴", "详情底栏有图鉴");
+  assert(info.wearTitle !== null && info.wearTitle.string === "穿上", "详情有穿上");
+  assert(info.offTitle !== null && info.offTitle.string === "卸下", "详情有卸下");
+  assert(info.gradeTitle !== null && info.gradeTitle.string === "升级", "详情有升级");
+  assert(info.settingTitle !== null && info.settingTitle.string === "设置", "详情有设置");
+  assert(info.unfoldTitle !== null && info.unfoldTitle.string === "展开", "详情有展开");
+  view.node.destroy();
+  if (sheet.isValid) sheet.destroy();
 }
 
 async function checkManager(): Promise<void> {
@@ -733,6 +911,8 @@ async function main(): Promise<void> {
   checkRegistry();
   checkData();
   await checkPaint();
+  await checkWindow();
+  await checkDetail();
   await checkManager();
   GameStore.reset();
   ConfigDb.current = null;
