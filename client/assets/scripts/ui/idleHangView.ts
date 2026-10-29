@@ -10,8 +10,8 @@
  * 掉落堆上方另挂一句 herotalk，不压左列头顶。进真战报时藏起来。
  * main-scene_spr-drop-1 是空的蓝金匾，不拿来当掉落堆。
  * 掉落堆和计时泡抬到金环顶上面，不盖住环，堆心仍在金环中线。
- * 站场按阵位号铺人（日服 getHangHeroPosition），不是按 0、1、2 往三角表里塞。
- * 一次铺上挂机名单的每一只（最多三格），演武不拆它们。点「战斗」才进真战报。
+ * 站场按阵位号铺人（前 4 后 4），不是按 0、1、2 往三角表里塞。
+ * 一次铺上挂机名单的每一只（最多 8 只），演武不拆它们。点「战斗」才进真战报。
  */
 import { Color, HorizontalTextAlignment, Label, Node, Overflow, resources, sp, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
 import { chapterStageFace } from "../config/rosterCatalog";
@@ -19,13 +19,13 @@ import { hangShownStage } from "../features/battle/model/hangFace";
 import { GameLog } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
 import { WireSession } from "../net/WireSession";
-import { mountBattleSpine, mountNamedSpine, SpineActor } from "./battleSpine";
+import { HANG_ACTOR_SCALE, mountBattleSpine, mountNamedSpine, SpineActor } from "./battleSpine";
 import { harvestCollectClip } from "./cityMapLayout";
 import { hangLootBubbleY, hangLootIconY, hangLootSpineY, HANG_LOOT_BUBBLE_X } from "./hangChrome";
 import { HangCastMember, hangCastForFormation, idleHangCastFrom } from "./idleHangRoster";
 import { mountIdleSkirmish } from "./idleHangSkirmish";
 import { mountHangTalk } from "./idleHangTalk";
-import { hangAllyFloorPoint, hangAllyVisibleShift, hangLinePosition, IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
+import { hangAllyFloorPoint, hangAllyVisibleShift, hangLinePosition, HANG_CAST_LIMIT, IDLE_HANG_SPOTS } from "./idleHangSkirmishPlan";
 import { localLineupIds, onLocalLineup } from "./localLineup";
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from "./safeAreaLayout";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, uiSize } from "./visibleFit";
@@ -47,18 +47,18 @@ export function idleHangCast(): HangCastMember[] {
   const localIds = localLineupIds();
   if (localIds.length > 0) {
     const formation = [];
-    const n = localIds.length < IDLE_HANG_SPOTS.length ? localIds.length : IDLE_HANG_SPOTS.length;
+    const n = localIds.length < HANG_CAST_LIMIT ? localIds.length : HANG_CAST_LIMIT;
     const used: number[] = [];
     for (let i = 0; i < n; i++) {
       formation.push({ heroId: localIds[i], position: hangLinePosition(null, i, used) });
     }
-    const cast = hangCastForFormation(formation, GameStore.heroes(), IDLE_HANG_SPOTS.length);
+    const cast = hangCastForFormation(formation, GameStore.heroes(), HANG_CAST_LIMIT);
     if (cast.length > 0) return cast;
   }
   const roster = GameStore.hangRoster();
-  if (roster) return idleHangCastFrom(roster.lineUp, roster.heroes, IDLE_HANG_SPOTS.length);
+  if (roster) return idleHangCastFrom(roster.lineUp, roster.heroes, HANG_CAST_LIMIT);
   const bag = WireSession.heroes;
-  return idleHangCastFrom(WireSession.lineUp, bag, IDLE_HANG_SPOTS.length);
+  return idleHangCastFrom(WireSession.lineUp, bag, HANG_CAST_LIMIT);
 }
 
 /** 只要套名。站位看 idleHangCast 的 position。 */
@@ -119,7 +119,7 @@ export function mountIdleHang(parent: Node): Node {
       slot.mxzgHangPos = cast[i].position;
       actors.push(mountBattleSpine(slot, cast[i].stem, () => {
         if (slot.isValid) slot.active = false;
-      }, { face: spot.face }));
+      }, { face: spot.face, scale: HANG_ACTOR_SCALE }));
     }
     skirmish.retarget(actors);
   };

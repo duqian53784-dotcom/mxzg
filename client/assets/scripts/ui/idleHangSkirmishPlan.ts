@@ -1,10 +1,10 @@
 /**
  * 挂机演武的纯规则。不碰场景，也不发协议。
- * 我方站位移植日服 BattleUtils.getHangHeroPosition（挂机 isMirror，人在左边）。
- * 下标是阵容 position（协议站位 1..9），不是把人按 0、1、2 塞进一张固定三角表。
+ * 日服挂机左右各前 4 后 4，大约 8 个站位。人在左、朝右，怪在右、朝左。
+ * 下标是阵容 position（协议站位 1..8），不是把人按 0、1、2 挤进画面中间。
  * 不是 BattlePage battlePrefabLayout（那是左敌右我），也不是 c2s 3100 的写入格子。
- * 没有阵位时，三只默认英雄占阵位 1、4、5。坐标由公式收到地砖左半边，不另造一张和公式无关的六格表。
- * 敌方仍用右侧三格。日服非镜像公式把怪排在同一高度，还会走出右缘，所以不替换这三格。
+ * 没有阵位时，三只默认英雄仍占阵位 1、4、5，只是这三格已经拉开，不再收进一小块。
+ * jpHangHeroPosition 仍是日服原公式，给对照。画面上的点用 hangFormationPoint，不把全员夹进近列。
  */
 
 /**
@@ -18,23 +18,21 @@ export const HANG_LAYER_W = 640;
 export const HANG_LAYER_H = 1280;
 
 /**
- * 没有阵位时占的三格，也是战报只有顺序下标时的三格。
- * 日服公式按阵位号分列分行：floor(位号/2) 越大越靠左，位号大于 1 时偶数高、奇数低。
- * 1 在近列中行，4 在远列高行，5 和 4 同列、在低行。三格都在左半边，没有人站到 x≥0。
+ * 没有阵位时先占的三格，也是战报只有顺序下标时的三格。
+ * 1 在前排最上，4 在前排最下，5 在后排最上。三格分开，不叠在画面中间。
  */
 export const IDLE_HANG_DEFAULT_POSITIONS = [1, 4, 5] as const;
 
-/**
- * 左队收进金环左边。掉落堆心在 x≈0，图标大约铺到 x=-123。
- * 锚点在脚。朝右的骨架会向左伸出大约 120–180，远列停在 -260 时最左会裁出 640 的左缘。
- * 近列 -120、远列 -220，4/5 号落在中间（-170）。列和行的相对关系不变，身体留在地砖里。
- * 可见宽小于 640 时再由 hangAllyVisibleShift 把整列右移，不改这张表。
- * 三行收在柱廊下沿和金环上沿之间，低行的脚不踩进掉落堆。
- */
-const ALLY_LANE_NEAR_X = -120;
-const ALLY_LANE_FAR_X = -220;
-const ALLY_LANE_LOW_Y = -36;
-const ALLY_LANE_HIGH_Y = 84;
+/** 一侧最多 8 人：前 4（位号 1–4）后 4（位号 5–8）。 */
+export const HANG_CAST_LIMIT = 8;
+
+/** 四行从高到低。最低一行的脚停在掉落堆图标之上。 */
+const HANG_ROW_Y = [96, 28, -40, -108];
+/** 前排离中线的距离。后排再往外，左右不再挤在中间。 */
+const HANG_FRONT_X = 96;
+const HANG_BACK_X = 230;
+/** 没写阵位时按这个顺序补格，前三格仍是 1、4、5。 */
+const HANG_FILL_ORDER = [1, 4, 5, 2, 3, 6, 7, 8];
 
 export interface HangSpot {
   x: number;
@@ -76,29 +74,34 @@ export function jpHangHeroPosition(
 
 /**
  * 阵位号落到挂机地砖。画面中心是原点。
- * 日服底左角先减去层的一半。低行会落进底栏金环，列距也会把 4、5 号推出左缘，
- * 所以按公式的列、行比例收进左半边地砖，不改哪一号跟哪一号同列、谁高谁低。
- * 人朝右。x 保持为负，y 不超过地砖上沿。
+ * 1–4 前排，5–8 后排，四行拉开。我方在左朝右，敌方是镜像、朝左。
+ * 位号小于 1 时站前排第一行。超过 8 的号按 8 格循环，避免叠到中线。
  */
-export function hangAllyFloorPoint(position: number): HangSpot {
+export function hangFormationPoint(position: number, ally: boolean): HangSpot {
   const slot = wholeIndex(position);
-  const raw = hangCenterPoint(slot, true);
-  const near = hangCenterPoint(1, true);
-  const far = hangCenterPoint(9, true);
-  const low = hangCenterPoint(3, true);
-  const high = hangCenterPoint(2, true);
-  let x = Math.round(lerp(near.x, far.x, ALLY_LANE_NEAR_X, ALLY_LANE_FAR_X, raw.x));
-  let y = Math.round(lerp(low.y, high.y, ALLY_LANE_LOW_Y, ALLY_LANE_HIGH_Y, raw.y));
-  if (!(x < 0) || x > ALLY_LANE_NEAR_X) x = ALLY_LANE_NEAR_X;
-  if (x < ALLY_LANE_FAR_X) x = ALLY_LANE_FAR_X;
-  if (y > IDLE_FLOOR_TOP) y = IDLE_FLOOR_TOP;
-  if (y < ALLY_LANE_LOW_Y) y = ALLY_LANE_LOW_Y;
-  return { x, y, face: 1 };
+  const raw = slot < 1 ? 0 : (slot - 1) % HANG_CAST_LIMIT;
+  const row = raw % HANG_ROW_Y.length;
+  const lane = raw < 4 ? HANG_FRONT_X : HANG_BACK_X;
+  const stagger = (row - 1.5) * 16;
+  const dir = ally ? -1 : 1;
+  const x = Math.round(dir * lane + dir * stagger * 0.35);
+  const y = HANG_ROW_Y[row];
+  return { x, y, face: ally ? 1 : -1 };
+}
+
+/** 我方脚点。人朝右，x 为负。 */
+export function hangAllyFloorPoint(position: number): HangSpot {
+  return hangFormationPoint(position, true);
+}
+
+/** 敌方脚点。怪朝左，x 为正，和我方同一行同一列距。 */
+export function hangEnemyFloorPoint(position: number): HangSpot {
+  return hangFormationPoint(position, false);
 }
 
 /**
- * 阵位号原样用。没有阵位时按顺序补 1、4、5，避开已经占了的号。
- * used 由调用方带着，避免两只人叠在同一格。
+ * 阵位号原样用。没有阵位时按 1、4、5、2、3、6、7、8 补，避开已经占了的号。
+ * 前三只仍是 1、4、5。used 由调用方带着，避免两只人叠在同一格。
  */
 export function hangLinePosition(position: number | null, order: number, used: number[]): number {
   if (typeof position === "number" && isFinite(position) && position >= 1) {
@@ -107,14 +110,14 @@ export function hangLinePosition(position: number | null, order: number, used: n
     return n;
   }
   const start = isFinite(order) && order >= 0 ? Math.floor(order) : 0;
-  for (let step = 0; step < IDLE_HANG_DEFAULT_POSITIONS.length; step++) {
-    const candidate = IDLE_HANG_DEFAULT_POSITIONS[(start + step) % IDLE_HANG_DEFAULT_POSITIONS.length];
+  for (let step = 0; step < HANG_FILL_ORDER.length; step++) {
+    const candidate = HANG_FILL_ORDER[(start + step) % HANG_FILL_ORDER.length];
     if (used.indexOf(candidate) < 0) {
       used.push(candidate);
       return candidate;
     }
   }
-  let extra = IDLE_HANG_DEFAULT_POSITIONS.length + 1;
+  let extra = HANG_FILL_ORDER.length + 1;
   while (used.indexOf(extra) >= 0) extra += 1;
   used.push(extra);
   return extra;
@@ -127,16 +130,12 @@ export const IDLE_HANG_SPOTS: ReadonlyArray<HangSpot> = [
   hangAllyFloorPoint(IDLE_HANG_DEFAULT_POSITIONS[2]),
 ];
 
-/** 右侧地砖。三格都朝左对着我方。入场从格子再往右滑进来，不落到我方阵上。 */
-export const IDLE_SKIRMISH_SPOTS: ReadonlyArray<HangSpot> = [
-  { x: 230, y: -20, face: -1 },
-  { x: 300, y: 36, face: -1 },
-  { x: 260, y: 84, face: -1 },
-];
+/** 右侧前 4 后 4。都朝左对着我方。入场从格子再往右滑进来。 */
+export const IDLE_SKIRMISH_SPOTS: ReadonlyArray<HangSpot> = hangEnemySpots();
 
 /**
  * 演武条和战报格子只有顺序下标。我方 0、1、2 是默认阵位 1、4、5，不是 BattlePage 槽，也不是把下标当成阵位号。
- * 知道阵位号时用 hangAllyFloorPoint。敌方下标仍是右侧三格。
+ * 知道阵位号时用 hangAllyFloorPoint。敌方下标是右侧八格。
  */
 export function hangStandPoint(side: "ally" | "enemy", index: number): HangSpot {
   const spots = side === "enemy" ? IDLE_SKIRMISH_SPOTS : IDLE_HANG_SPOTS;
@@ -156,15 +155,10 @@ export function hangAllyVisibleShift(layerWidth: number): number {
   return (HANG_LAYER_W - width) / 2;
 }
 
-function hangCenterPoint(index: number, isMirror: boolean): { x: number; y: number } {
-  const jp = jpHangHeroPosition(index, HANG_LAYER_W, HANG_LAYER_H, isMirror);
-  return { x: jp.x - HANG_LAYER_W / 2, y: jp.y - HANG_LAYER_H / 2 };
-}
-
-function lerp(from: number, to: number, outFrom: number, outTo: number, value: number): number {
-  const span = to - from;
-  if (span === 0) return outFrom;
-  return outFrom + ((value - from) / span) * (outTo - outFrom);
+function hangEnemySpots(): HangSpot[] {
+  const spots: HangSpot[] = [];
+  for (let position = 1; position <= HANG_CAST_LIMIT; position++) spots.push(hangEnemyFloorPoint(position));
+  return spots;
 }
 
 function wholeIndex(index: number): number {
@@ -333,7 +327,7 @@ export function planIdleFoe(
 }
 
 /**
- * 这一波同时上场的怪。有几只能站的就上几只，最多三个格子。
+ * 这一波同时上场的怪。有几只能站的就上几只，最多八个格子。
  * 不按死亡再补下一只。表里一只就一只。一只都没有就用 fallback 的第一只，站 0 号格。
  */
 export function planIdleWave(

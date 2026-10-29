@@ -664,6 +664,7 @@ export class MainApp extends Component {
    */
   private openMainline(): void {
     GameLog.shared.info("MainApp", "click mainline");
+    GameLog.shared.info("Mainline", "开战入口=城内按钮 出阵=跳过原因=只打开挂机页");
     if (!useBattleView()) {
       GameLog.shared.info("Mainline", "打开实现 旧 mountHangBattleShell");
       this.openChild("mainline");

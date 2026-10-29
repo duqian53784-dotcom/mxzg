@@ -1,4 +1,4 @@
-import { _decorator, Button, Color, director, Director, Label, Node, Overflow, Prefab, UITransform } from "cc";
+import { _decorator, Button, Color, director, Director, HorizontalTextAlignment, Label, Node, Overflow, Prefab, UITransform, VerticalTextAlignment } from "cc";
 import { messageOf } from "../../../core/errors";
 import { GameLog } from "../../../core/GameLog";
 import { GameStore } from "../../../core/GameStore";
@@ -13,6 +13,7 @@ import { assignContentSize } from "../../../ui/visibleFit";
 import { hangFace } from "../model/hangFace";
 import { HangMissionChipView } from "./HangMissionChipView";
 import { mountBattleHang, seatHangChip } from "./battleMount";
+import { dressHangChrome } from "./hangPanelDress";
 
 const { ccclass, property } = _decorator;
 
@@ -24,10 +25,12 @@ const SHELL_MISSING = "挂机壳还没挂上";
 const FIGHT_FAILED = "开战没有开始";
 /** CCBI lbl_mission_name：字号 45，缩放 0.8，rgb(254,255,255)。位置留在预制上。 */
 const MISSION_INK = new Color(254, 255, 255, 255);
+/** CCBI 收益字：字号 40，缩放 0.5，右对齐，白色。不改成 16 号再拉成 118 宽。 */
+const RATE_INK = new Color(254, 255, 255, 255);
 
 /**
  * 挂机战斗主面板。底栏三钮、收益和计时绑在 BattlePanelLayer 上。
- * 关卡字写在 CCBI 的 lbl_mission_name。数据来自 GameStore 和 chapterreward，这里不解协议。
+ * 金环只写关号。章关长文案在左侧 HangMissionChip。数据来自 GameStore 和 chapterreward，这里不解协议。
  * 点「战斗」进入 startShellFight。结算、章节地图、快速战斗和战力UP留在旧壳。
  */
 @view({
@@ -291,12 +294,13 @@ export class BattleHangView extends BaseView {
     const page = this.namedAncestor("LiveShell");
     if (!shell || !shell.isValid || !page || !page.isValid) {
       const chain = this.parentChain();
+      GameLog.shared.info("Mainline", "开战入口=战斗按钮 出阵=跳过原因=挂机壳还没挂上");
       GameLog.shared.warn("Mainline", SHELL_MISSING + " " + chain);
       UIManager.instance.toast(SHELL_MISSING);
       return;
     }
     try {
-      const started = startShellFight(shell, page);
+      const started = startShellFight(shell, page, "战斗按钮");
       if (!started) {
         GameLog.shared.warn("Mainline", FIGHT_FAILED + " " + this.parentChain());
         UIManager.instance.toast(FIGHT_FAILED);
@@ -345,13 +349,15 @@ export class BattleHangView extends BaseView {
     this.writeRate(this.expLabel, face.exp);
     this.writeClock(this.clockLabel, face.clock);
     this.writeClock(this.bubbleLabel, face.clock);
-    this.writeMission(face.caption);
-    if (this.chip) this.chip.show("");
+    this.writeMission(face.ring);
+    if (this.chip) this.chip.show(face.caption);
+    dressHangChrome(this.node, face);
   }
 
   private noteClock(clock: string): void {
     if (this.clockNoted) return;
     this.clockNoted = true;
+    GameLog.shared.info("Mainline", "开战入口=挂机计时 出阵=跳过原因=只刷新收益");
     const idle = GameStore.idle();
     const anchor = idle.fromStore ? idle.rewardTime : idle.anchorMs;
     GameLog.shared.info("Mainline", "挂机计时 起点 " + anchor + " 显示 " + clock);
@@ -373,17 +379,17 @@ export class BattleHangView extends BaseView {
 
   private writeRate(label: Label | null, text: string): void {
     if (!label || !label.node || !label.node.isValid) return;
-    label.node.setScale(1, 1, 1);
+    label.node.setScale(0.5, 0.5, 1);
     const ui = label.node.getComponent(UITransform);
-    if (ui) {
-      ui.setAnchorPoint(1, 0.5);
-      assignContentSize(ui, 118, 24);
-    }
+    if (ui) ui.setAnchorPoint(1, 0.5);
     try {
       label.string = text;
-      label.fontSize = 16;
-      label.lineHeight = 20;
-      label.overflow = Overflow.SHRINK;
+      label.fontSize = 40;
+      label.lineHeight = 40;
+      label.overflow = Overflow.NONE;
+      label.horizontalAlign = HorizontalTextAlignment.RIGHT;
+      label.verticalAlign = VerticalTextAlignment.CENTER;
+      label.color = RATE_INK;
     } catch (_err) {
       label.string = text;
     }

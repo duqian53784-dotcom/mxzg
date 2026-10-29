@@ -1,6 +1,6 @@
 /**
  * 挂机舞台上的演武。阵容站好之后一直打，不点「战斗」也打。
- * 我方是挂机页铺上的那几只（最多三格），整段行军和战斗都留在地砖上，不拆、不重刷。
+ * 我方是挂机页铺上的那几只（最多八格，前 4 后 4），整段行军和战斗都留在地砖上，不拆、不重刷。
  * 行军时大家播 run，天和大理石往左循环。遇到怪就改站立，背景停。
  * 怪从右侧滑进格子。滑到位并且骨架出来之后才出刀。受击只打在被打的那只怪上。
  * 怪收掉之后我方接着跑。不把我方当成新刷出来的人。
@@ -15,13 +15,12 @@ import { GameStore } from "../core/GameStore";
 import { WIRE_SPINE_ENEMY_STEMS, WIRE_SPINE_HIT_STEM, wireSpineHasClip, wireSpineVfxClip } from "../net/protocol/wireBattle";
 import { hangSkillVfx } from "./battleFrames";
 import { mountFrameReel } from "./battleFramePlay";
-import { mountBattleSpine, SpineActor } from "./battleSpine";
+import { HANG_ACTOR_SCALE, mountBattleSpine, SpineActor } from "./battleSpine";
 import { placeHangFloats } from "./hangFloat";
 import {
   IDLE_FOE_ENTER_MS,
   IDLE_HALL_SCROLL_PX,
   hangAllyFloorPoint,
-  IDLE_HANG_SPOTS,
   IDLE_MARCH_MS,
   IDLE_SKIRMISH_APPEAR_MS,
   IDLE_SKIRMISH_GAP_MS,
@@ -103,6 +102,7 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
   let scrolling = false;
   let scrollMs = 0;
   let haltTick: (() => void) | null = null;
+  let notedEntry = false;
 
   const control = {
     pause(): void {
@@ -191,18 +191,15 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
   function applyHangFace(actor: SpineActor, face: -1 | 1): void {
     const node = actor.node;
     if (!node || !node.isValid) return;
-    const sy = Math.abs(node.scale.y);
-    const scale = sy > 0.05 && sy < 0.95 ? sy : 0.58;
-    node.setScale(scale * face, scale, 1);
+    node.setScale(HANG_ACTOR_SCALE * face, HANG_ACTOR_SCALE, 1);
   }
 
   function plantAllies(): void {
-    const n = actors.length < IDLE_HANG_SPOTS.length ? actors.length : IDLE_HANG_SPOTS.length;
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < actors.length; i++) {
       const actor = actors[i];
       const home = actor.node.parent as (Node & { mxzgHangPos?: number }) | null;
       if (!home || !home.isValid) continue;
-      const spot = typeof home.mxzgHangPos === "number" ? hangAllyFloorPoint(home.mxzgHangPos) : IDLE_HANG_SPOTS[i];
+      const spot = typeof home.mxzgHangPos === "number" ? hangAllyFloorPoint(home.mxzgHangPos) : hangAllyFloorPoint(i + 1);
       home.active = true;
       home.setPosition(spot.x, spot.y, 0);
       applyHangFace(actor, spot.face);
@@ -263,6 +260,10 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
     if (actors.length === 0) {
       arm(IDLE_SKIRMISH_GAP_MS, beginCycle);
       return;
+    }
+    if (!notedEntry) {
+      notedEntry = true;
+      GameLog.shared.info("Mainline", "开战入口=自动开战 出阵=跳过原因=演武不调用开战");
     }
     plantAllies();
     playMarch();
@@ -333,6 +334,7 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
         maybeFight(gen);
       }, {
         face: plan.face,
+        scale: HANG_ACTOR_SCALE,
         onReady: () => {
           if (gen !== waveGen || !node.isValid || foe.dead) return;
           foe.ready = true;
