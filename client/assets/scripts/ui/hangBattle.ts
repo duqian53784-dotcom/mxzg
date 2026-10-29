@@ -4,10 +4,12 @@
  * 血条跟站位。战报没有怒气字段时，怒气条按当前回合 / 15 填充，只标位置。
  * 飘字数字走 yellow-73 / green-73 / red-73。字库没挂上时退回红、绿、金系统字。
  * 技能名用 font/FZCSJW-GB1-0，和战斗壳 SkillNameLabel 同一套字。没挂上仍是系统字。
- * 开战在大理石上各播一遍左右出场帧，播完或第一下受击就藏。数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
+ * 开战标题用 spine/ZDKS（图里已经有「战斗开始」）。套没挂上才写系统字，不叠两层。
+ * 出场光只打在有模型的一侧，中心对齐那一侧的人。没有模型的一侧不播。
+ * 数字只来自这一拍真正的血量差或战报 hurt。没有就不写 0。
  */
 import { Button, Color, Label, Node, Overflow, resources, Sprite, SpriteFrame, TTFFont, UITransform } from "cc";
-import { chapterEnemies } from "../config/gameCatalog";
+import { chapterStageEnemies } from "../config/gameCatalog";
 import { messageOf } from "../core/errors";
 import { GameLog } from "../core/GameLog";
 import { GameStore } from "../core/GameStore";
@@ -15,12 +17,13 @@ import { Session } from "../core/Session";
 import { BattleRound, BattleUnit } from "../module/mainline/battle";
 import { wireSpineHasClip } from "../net/protocol/wireBattle";
 import { paintSpeedIcon } from "./BattlePage";
-import { BATTLE_APPEAR_LEFT, BATTLE_APPEAR_RIGHT, battleAppearFramePaths } from "./battleAppear";
+import { battleAppearFramePaths } from "./battleAppear";
 import { battleFrameStep, mountFrameReel } from "./battleFramePlay";
 import { mountBattleSpine, mountNamedSpine } from "./battleSpine";
 import { placeHangFloats, type HangFloat } from "./hangFloat";
 import { pauseIdleSkirmishes, resumeIdleSkirmishes } from "./idleHangSkirmish";
-import { hangFightStageId, hangStandPoint, IDLE_HANG_SPOTS, IDLE_SKIRMISH_SPOTS, planHangFightLine } from "./idleHangSkirmishPlan";
+import { hangAppearAnchor, hangFightStageId, hangStandPoint, IDLE_HANG_SPOTS, IDLE_SKIRMISH_SPOTS, planHangFightLine } from "./idleHangSkirmishPlan";
+import { hangSpineStem } from "./idleHangRoster";
 import { createLabel, createRect, place, setText, uiNode } from "./UiKit";
 
 export type { HangFloat };
@@ -93,15 +96,10 @@ export function beginHangBattle(page: Node, left: string, right: string): void {
   hold.enemies = null;
   pauseIdleSkirmishes();
   const layer = ensureLayer(page);
-  seatHangEnemies(layer);
+  const foes = seatHangEnemies(layer);
   setCaption(page, "战斗中");
-  const flash = layer.getChildByName("HangFlash");
-  if (flash) {
-    flash.active = true;
-    setText(flash, "战斗开始");
-  }
   playOpenVfx(layer);
-  playHangAppear(layer, hold.speed);
+  playHangAppear(layer, hold.speed, allyModelPoints(page), foes);
   paintVs(layer, hold);
   const round = layer.getChildByName("HangRound");
   if (round) setText(round, "1/15");
@@ -132,7 +130,7 @@ export function showHangStrike(
   const hold = ensureHold(page);
   const layer = ensureLayer(page);
   const flash = layer.getChildByName("HangFlash");
-  if (flash) flash.active = round <= 1 && floats.length === 0;
+  if (flash && (titleOnSpine || round > 1 || floats.length > 0)) flash.active = false;
   if (!flash || !flash.active) stopHangAppear(layer);
   const cap = total >= 1 ? total : 15;
   const now = round >= 1 ? round : 1;
@@ -276,6 +274,8 @@ function setIdleCast(host: Node, active: boolean): void {
 
 let openVfxMiss = false;
 let appearMiss = false;
+/** ZDKS 图里已经写着「战斗开始」。挂上之后不再另写一层系统字。 */
+let titleOnSpine = false;
 
 interface AppearRun {
   stop(): void;
@@ -283,15 +283,27 @@ interface AppearRun {
 
 const appearRuns = new Map<Node, AppearRun>();
 
-/** 左右出场光各播一遍。锚点与 LayerAppear 相同，帧按原图尺寸，不收成一张。 */
-function playHangAppear(layer: Node, speed: number): void {
+/** 只在有模型的一侧播出场光，光心落在这些人身上。另一侧清掉上一局留下的帧。 */
+function playHangAppear(
+  layer: Node,
+  speed: number,
+  allies: ReadonlyArray<{ x: number; y: number }>,
+  enemies: ReadonlyArray<{ x: number; y: number }>
+): void {
   stopHangAppear(layer);
   const timers: Array<ReturnType<typeof setTimeout>> = [];
   const stops: Array<() => void> = [];
   const step = battleFrameStep(speed);
-  const arm = (name: string, at: { x: number; y: number }, side: "left" | "right") => {
+  const left = hangAppearAnchor(allies);
+  const right = hangAppearAnchor(enemies);
+  const arm = (name: string, at: { x: number; y: number } | null, side: "left" | "right") => {
     const old = layer.getChildByName(name);
     if (old) old.destroy();
+    if (!at) {
+      const which = side === "left" ? "左侧" : "右侧";
+      GameLog.shared.info("Mainline", "开战出场光跳过" + which + "，这一侧没有模型");
+      return;
+    }
     const paths = battleAppearFramePaths(side);
     const reel = mountFrameReel(layer, 240, name);
     reel.node.setPosition(at.x, at.y, 0);
@@ -304,8 +316,8 @@ function playHangAppear(layer: Node, speed: number): void {
     if (typeof maybe.unref === "function") maybe.unref();
     timers.push(timer);
   };
-  arm("HangAppearLeft", BATTLE_APPEAR_LEFT, "left");
-  arm("HangAppearRight", BATTLE_APPEAR_RIGHT, "right");
+  arm("HangAppearLeft", left, "left");
+  arm("HangAppearRight", right, "right");
   const stop = () => {
     for (let i = 0; i < timers.length; i++) clearTimeout(timers[i]);
     for (let i = 0; i < stops.length; i++) stops[i]();
@@ -337,6 +349,9 @@ function noteAppearMiss(): void {
 }
 
 function playOpenVfx(layer: Node): void {
+  const flash = layer.getChildByName("HangFlash");
+  if (flash) flash.active = false;
+  titleOnSpine = false;
   let host = layer.getChildByName("HangOpenVfx");
   if (!host || !host.isValid) {
     host = uiNode("HangOpenVfx");
@@ -345,7 +360,16 @@ function playOpenVfx(layer: Node): void {
   }
   mountNamedSpine(host, "ZDKS", "stand", {
     loop: false,
+    onReady: () => {
+      titleOnSpine = true;
+      if (flash && flash.isValid) flash.active = false;
+    },
     onFail: () => {
+      titleOnSpine = false;
+      if (flash && flash.isValid) {
+        flash.active = true;
+        setText(flash, "战斗开始");
+      }
       if (openVfxMiss) return;
       openVfxMiss = true;
       GameLog.shared.warn("Mainline", "开战特效 spine/ZDKS 没有挂上，仍写战斗开始");
@@ -371,36 +395,41 @@ function paintHangSprite(node: Node, path: string, miss: string): void {
 }
 
 /**
- * 演武暂停时会清掉右侧的怪。这里按战报守方或 chapter 表再摆上。
- * 没有关卡、表是空的、类型没有 stand 时只打日志，不补默认怪。
+ * 演武暂停时会清掉右侧的怪。这里按战报守方或 chapter.note 再摆上。
+ * 关号用进战 idx：max_idx 是 chapterId，打的是下一关。两个 idx 都没有就不造第 1 关。
+ * 没有关卡、表是空的、类型没有 stand、spine 路径挂不上时只打日志，不补默认怪。
+ * 返回摆上的站位。空数组表示右侧没有模型。
  */
-function seatHangEnemies(layer: Node): void {
+function seatHangEnemies(layer: Node): { x: number; y: number }[] {
   try {
     const old = layer.getChildByName("HangFoes");
     if (old) old.destroy();
     const wire = Session.source === "wire" || GameStore.source === "wire";
     const chapter = GameStore.chapter();
     const stageId = hangFightStageId(GameStore.mockStageId(), chapter.nowIdx, chapter.maxIdx, wire);
-    const rows = stageId === null ? [] : chapterEnemies(stageId);
+    const rows = stageId === null ? [] : chapterStageEnemies(stageId);
     const monsters: { heroType: number; hp: number | null; name: string }[] = [];
     for (let i = 0; i < rows.length; i++) {
       monsters.push({ heroType: rows[i].heroType, hp: rows[i].hp, name: rows[i].name });
     }
     const match = GameStore.battle();
     const report = match && match.report ? match.report.defHeroes : null;
-    const line = planHangFightLine(stageId, monsters, (stem) => wireSpineHasClip(stem, "stand"), report);
+    const line = planHangFightLine(stageId, monsters, (stem) => wireSpineHasClip(stem, "stand"), fightReport(report));
     if (line.foes.length === 0) {
-      GameLog.shared.warn("Mainline", "开战敌方没有摆上 " + line.reason);
-      return;
+      const stageText = stageId === null ? "关号未同步" : "关" + stageId;
+      GameLog.shared.warn("Mainline", "开战敌方没有摆上 " + stageText + " " + line.reason);
+      return [];
     }
     const host = uiNode("HangFoes");
     place(host, layer, 0, 0);
     host.setSiblingIndex(0);
     const names: string[] = [];
+    const points: { x: number; y: number }[] = [];
     for (let i = 0; i < line.foes.length; i++) {
       const foe = line.foes[i];
       names.push(foe.stem);
       const spot = hangStandPoint("enemy", foe.spot);
+      points.push({ x: spot.x, y: spot.y });
       const slot = place(uiNode("HangFoe"), host, spot.x, spot.y);
       mountBattleSpine(slot, foe.stem, () => {
         GameLog.shared.warn("Mainline", "开战敌方 spine/" + foe.stem + " 没有挂上");
@@ -408,10 +437,70 @@ function seatHangEnemies(layer: Node): void {
       }, { face: spot.face });
     }
     const stageText = line.stageId === null ? "—" : String(line.stageId);
-    GameLog.shared.info("Mainline", "开战敌方 " + line.source + " 关" + stageText + " " + names.join(",") + " " + line.reason);
+    GameLog.shared.info(
+      "Mainline",
+      "开战敌方 " + line.source + " 关" + stageText + " " + names.join(",") + " spine/" + names.join(",spine/") + " " + line.reason
+    );
+    return points;
   } catch (err) {
     GameLog.shared.warn("Mainline", "开战敌方没有摆上 " + messageOf(err));
+    return [];
   }
+}
+
+/** 战报 hero_id 对不上套时，用名册 hero_type。两边都不是套名就留原 id，让后面打日志。 */
+function fightReport(
+  heroes: { heroId: number | null; hp: number | null; maxHp: number | null }[] | null
+): { heroId: number | null; hp: number | null; maxHp: number | null }[] | null {
+  if (!heroes) return null;
+  const roster = GameStore.heroes();
+  const out: { heroId: number | null; hp: number | null; maxHp: number | null }[] = [];
+  for (let i = 0; i < heroes.length; i++) {
+    const hero = heroes[i];
+    out.push({ heroId: spineIdOf(hero.heroId, roster), hp: hero.hp, maxHp: hero.maxHp });
+  }
+  return out;
+}
+
+function spineIdOf(
+  heroId: number | null,
+  roster: { heroId: number | null; heroType: number | null }[] | null
+): number | null {
+  if (typeof heroId !== "number" || !isFinite(heroId) || heroId <= 0) return heroId;
+  const id = Math.floor(heroId);
+  let type: number | null = null;
+  if (roster) {
+    for (let i = 0; i < roster.length; i++) {
+      if (roster[i].heroId === id) {
+        type = roster[i].heroType;
+        break;
+      }
+    }
+  }
+  const stem = hangSpineStem(id, type);
+  const parsed = Number(stem);
+  if (!isFinite(parsed) || parsed <= 0) return id;
+  return Math.floor(parsed);
+}
+
+/** 大理石上还站着的我方。含窄屏把整列右移的那段。没有人就空。 */
+function allyModelPoints(page: Node): { x: number; y: number }[] {
+  const host = battleHost(page);
+  const hang = host.getChildByName("IdleHang");
+  if (!hang || !hang.isValid) return [];
+  const heroes = hang.getChildByName("IdleHeroes");
+  if (!heroes) return [];
+  const out: { x: number; y: number }[] = [];
+  const kids = heroes.children;
+  for (let i = 0; i < kids.length; i++) {
+    const kid = kids[i];
+    if (!kid.active) continue;
+    out.push({
+      x: hang.position.x + heroes.position.x + kid.position.x,
+      y: hang.position.y + heroes.position.y + kid.position.y,
+    });
+  }
+  return out;
 }
 
 function ensureLayer(page: Node): Node {
@@ -429,6 +518,7 @@ function ensureLayer(page: Node): Node {
 
   const flash = createLabel("战斗开始", 42, { color: INK, width: 420, height: 64 });
   flash.name = "HangFlash";
+  flash.active = false;
   place(flash, layer, 0, 250);
 
   const roundBg = createRect("HangRoundBg", 160, 36, new Color(16, 18, 28, 180));

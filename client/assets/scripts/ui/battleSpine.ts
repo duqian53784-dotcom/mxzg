@@ -64,6 +64,8 @@ export interface NamedSpinePlay {
   loop?: boolean;
   onFail?: () => void;
   onComplete?: () => void;
+  /** 骨架已经挂上并开始播。加载失败不调用。 */
+  onReady?: () => void;
 }
 
 /** 进度条、掉落堆这类单节点特效。失败只留空节点并回调，不抛。 */
@@ -101,6 +103,7 @@ export function mountNamedSpine(host: Node, stem: string, clip: string, play?: N
           }
         }
         arm(view);
+        if (play && play.onReady) play.onReady();
       } catch (_err) {
         fail();
       }

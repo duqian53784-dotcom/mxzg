@@ -69,6 +69,8 @@ const items = new Map<number, ItemProfile>();
 const itemTypes = new Map<number, number>();
 const chapters = new Map<number, ChapterPlace>();
 const chapterEnemiesByIdx = new Map<number, ChapterEnemy[]>();
+/** chapter.note，和 chapterreward.idx、进战关号同一套。不是行 idx。 */
+const chapterEnemiesByStage = new Map<number, ChapterEnemy[]>();
 const levels = new Map<number, number>();
 const occupationNames = new Map<number, string>();
 const skillBooks = new Map<number, { name: string; levels: SkillLevelText[] }>();
@@ -80,6 +82,7 @@ export function clearGameCatalog(): void {
   itemTypes.clear();
   chapters.clear();
   chapterEnemiesByIdx.clear();
+  chapterEnemiesByStage.clear();
   levels.clear();
   occupationNames.clear();
   skillBooks.clear();
@@ -217,6 +220,18 @@ export function chapterEnemies(idx: number | null | undefined): ChapterEnemy[] {
   return rows ? rows.slice() : [];
 }
 
+/**
+ * 这一关的守方。键是 chapter.note，和 chapterreward.idx、进战关号同一套。
+ * chapter.idx 是行号：同一关有多行阵位，后面的行经常是 hero_type 0。
+ * 没有这一关、或表还没绑上，返回空数组，不补别的关。
+ */
+export function chapterStageEnemies(stage: number | null | undefined): ChapterEnemy[] {
+  const key = whole(stage);
+  if (key === null || key < 1) return [];
+  const rows = chapterEnemiesByStage.get(key);
+  return rows ? rows.slice() : [];
+}
+
 /** mainlevel.exp。没有这一级是 null。 */
 export function mainlevelExpLabel(level: number | null | undefined): string | null {
   const key = whole(level);
@@ -340,6 +355,11 @@ function bindChapters(table: Table): void {
     const list = chapterEnemiesByIdx.get(idx) || [];
     list.push(enemy);
     chapterEnemiesByIdx.set(idx, list);
+    const stage = num(row.note);
+    if (stage === null || stage < 1) continue;
+    const staged = chapterEnemiesByStage.get(stage) || [];
+    staged.push(enemy);
+    chapterEnemiesByStage.set(stage, staged);
   }
 }
 

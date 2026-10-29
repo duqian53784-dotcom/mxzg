@@ -384,9 +384,10 @@ export interface HangFightLine {
 }
 
 /**
- * 开战用的关卡号。
- * 真服没有 now/max 时返回 null，不用第 1 关冒充未同步。
- * Mock 没有关号时仍是 1，和演武同一张 chapter 表。
+ * 开战用的关卡号，和 chapter.note、chapterreward.idx 同一套。
+ * 真服两个 idx 都没有时返回 null，不用第 1 关冒充未同步。
+ * max_idx 是 RoleMission.chapterId，服打的是 chapterId+1。出现的 0 仍是 0，进战是 1。
+ * 有 nowIdx（≥1）时仍用它。Mock 没有关号时仍是 1。
  */
 export function hangFightStageId(
   mockStage: number | null,
@@ -396,9 +397,32 @@ export function hangFightStageId(
 ): number | null {
   if (!wire && mockStage !== null && mockStage >= 1) return Math.floor(mockStage);
   if (nowIdx !== null && nowIdx >= 1) return Math.floor(nowIdx);
-  if (maxIdx !== null && maxIdx >= 1) return Math.floor(maxIdx);
+  if (maxIdx !== null && maxIdx >= 0) return Math.floor(maxIdx) + 1;
+  if (nowIdx === 0) return 1;
   if (wire) return null;
   return 1;
+}
+
+/**
+ * 出场光盖在这一侧模型身上。脚在站位上，光心抬到身体。
+ * 没有模型返回 null，调用方不播这一侧。不是森林 LayerAppear 的 (±180, 0)。
+ */
+export const HANG_APPEAR_BODY = 40;
+
+export function hangAppearAnchor(points: ReadonlyArray<{ x: number; y: number }>): { x: number; y: number } | null {
+  if (!points || points.length === 0) return null;
+  let x = 0;
+  let y = 0;
+  let n = 0;
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+    if (!isFinite(point.x) || !isFinite(point.y)) continue;
+    x += point.x;
+    y += point.y;
+    n += 1;
+  }
+  if (n === 0) return null;
+  return { x: Math.round(x / n), y: Math.round(y / n) + HANG_APPEAR_BODY };
 }
 
 /**
