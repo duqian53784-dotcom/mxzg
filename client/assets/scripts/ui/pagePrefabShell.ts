@@ -646,7 +646,7 @@ function repairLabel(node: Node): void {
   if (!label || !parent) return;
   const parentUi = parent.getComponent(UITransform);
   const parentSize = positiveUiSize(parentUi);
-  if (!parentSize) return;
+  if (!parentUi || !parentSize) return;
   const width = parentSize.width;
   const height = parentSize.height;
   const center = labelCenterInParent(parentUi.anchorX, parentUi.anchorY, width, height, node.position.x, node.position.y);
@@ -670,7 +670,7 @@ function sizedAncestor(node: Node): { node: Node; ui: UITransform } | null {
   let cur = node.parent;
   while (cur) {
     const ui = cur.getComponent(UITransform);
-    if (positiveUiSize(ui)) return { node: cur, ui };
+    if (ui && positiveUiSize(ui)) return { node: cur, ui };
     cur = cur.parent;
   }
   return null;

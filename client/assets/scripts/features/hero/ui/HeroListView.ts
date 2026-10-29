@@ -15,6 +15,7 @@ import { HeroIconCellView } from "./HeroIconCellView";
 import { HeroListBoardView } from "./HeroListBoardView";
 import { HERO_TAB_BOOK, HERO_TAB_DRAGON, HERO_TAB_HERO, seatHeroParchment } from "./heroChrome";
 import { mountHeroListPage, openHeroDetail } from "./heroMount";
+import type { HeroRosterSource, HeroRosterView } from "../HeroRosterPresentation";
 
 const { ccclass, property } = _decorator;
 
@@ -38,7 +39,7 @@ const DRAGON_LATER = "圣龙仍走旧英雄页";
   mount: mountHeroListPage,
 })
 @ccclass("HeroListView")
-export class HeroListView extends BaseView {
+export class HeroListView extends BaseView implements HeroRosterView {
   @property(Button)
   btnHero: Button | null = null;
 
@@ -101,8 +102,20 @@ export class HeroListView extends BaseView {
   private cityFit = false;
   private offSync: (() => void) | null = null;
   private shownWatch: (() => void) | null = null;
+  private roster: HeroRosterSource | null = null;
+  private closed = false;
+
+  /** Called by application composition before opening. Old Boot keeps its default source. */
+  useRoster(source: HeroRosterSource): void {
+    if (this.opened) throw new Error("英雄数据源必须在开页前注入");
+    this.roster = source;
+  }
+  refreshRoster(): void { if (!this.closed) this.refresh(); }
+
+  private readModel() { return this.roster ? this.roster.read(this.elem) : buildHeroList(this.tab, this.elem); }
 
   onOpen(): void {
+    this.closed = false;
     GameLog.shared.info("Hero", "打开实现 新 HeroListView");
     if (this.opened) {
       this.refresh();
@@ -114,6 +127,8 @@ export class HeroListView extends BaseView {
   }
 
   onClose(): void {
+    this.closed = true;
+    this.failOpen(new Error("页面已关"));
     this.clearShownWatch();
     if (this.offSync) {
       this.offSync();
@@ -137,7 +152,7 @@ export class HeroListView extends BaseView {
       this.fitTitles();
       this.bindTabs();
       await this.ensurePrefabs();
-      if (!this.node || !this.node.isValid) {
+      if (this.closed || !this.node || !this.node.isValid) {
         this.failOpen(new Error("页面已关"));
         return;
       }
@@ -149,7 +164,7 @@ export class HeroListView extends BaseView {
       this.board.bindElem((id) => this.pickElem(id));
       this.fitCityMiddle();
       this.primeCapacity();
-      this.offSync = WireSession.onSync(() => this.refresh());
+      if (!this.roster) this.offSync = WireSession.onSync(() => this.refresh());
       this.refresh();
       if (!this.scrollReady && this.node.activeInHierarchy) {
         this.failOpen(new Error("HeroListHeroLayer 的 spr_box 下没有 HeroScroll"));
@@ -268,13 +283,13 @@ export class HeroListView extends BaseView {
   private primeCapacity(): void {
     const board = this.board;
     if (!board) return;
-    const model = buildHeroList(this.tab, this.elem);
+    const model = this.readModel();
     board.setCapacity(model.capacityLine);
     if (!model.synced) board.setEmpty(model.emptyText);
   }
 
   private refresh(): void {
-    if (!this.node || !this.node.isValid || !this.board || !this.cellPrefab) return;
+    if (this.closed || !this.node || !this.node.isValid || !this.board || !this.cellPrefab) return;
     if (!this.node.activeInHierarchy) {
       this.watchShown();
       return;
@@ -319,8 +334,12 @@ export class HeroListView extends BaseView {
     if (!board || !content || !content.isValid || !this.cellPrefab) return;
     this.paintTabs();
     board.setCorner(this.tab);
+    if (this.roster) {
+      if (board.skin) board.skin.active = false;
+      if (board.evolve) board.evolve.active = false;
+    }
     board.markElem(this.elem);
-    const model = buildHeroList(this.tab, this.elem);
+    const model = this.readModel();
     board.setCapacity(model.capacityLine);
     board.setEmpty(model.emptyText);
     this.clear(content);
@@ -335,7 +354,7 @@ export class HeroListView extends BaseView {
       }
       this.adoptLayer(node, layer);
       const line = heroCellLine(face);
-      cell.show(face, line ? () => this.onCell(face.hero, line) : null);
+      cell.show(face, line ? () => this.roster ? this.roster.select(face) : this.onCell(face.hero, line) : null);
       const seat = heroCellSeat(i);
       node.setPosition(seat.x, seat.y, 0);
     }
@@ -365,6 +384,12 @@ export class HeroListView extends BaseView {
       this.tabMenu.setSiblingIndex(this.tabMenu.parent.children.length - 1);
     } else {
       GameLog.shared.warn("Hero", "HeroListLayer 没有 UIMenu_1");
+    }
+    if (this.roster) {
+      this.listenTab(this.btnHero, () => this.roster?.retry());
+      if (this.btnBook) this.btnBook.node.active = false;
+      if (this.btnDragon) this.btnDragon.node.active = false;
+      return;
     }
     this.listenTab(this.btnHero, () => this.showTab("hero"));
     this.listenTab(this.btnBook, () => this.showTab("book"));

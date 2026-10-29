@@ -2,7 +2,7 @@ import { AccountModel } from "../account/AccountModel";
 import type { AccountState } from "../account/AccountModel";
 import { AccountService } from "../account/AccountService";
 
-export interface HomeActions { logout(): void; openFeature(id: string): void; }
+export interface HomeActions { logout(): void; openFeature(id: string): void; heroAvailable?: boolean; }
 export interface HomeView {
   bind(actions: HomeActions): () => void;
   render(state: AccountState): void;
@@ -13,11 +13,12 @@ export interface HomeView {
 export class HomeController {
   private disposers: Array<() => void> = [];
   constructor(private readonly account: AccountModel, private readonly service: AccountService,
-    private readonly view: HomeView) {}
+    private readonly view: HomeView, private readonly openFeature?: (id: string) => boolean) {}
 
   show(): void {
     if (this.disposers.length) return;
-    const unbind = this.view.bind({ logout: () => this.service.logout(), openFeature: id => {
+    const unbind = this.view.bind({ logout: () => this.service.logout(), heroAvailable: !!this.openFeature, openFeature: id => {
+      if (this.openFeature?.(id)) return;
       this.view.showNotice(id === "city" ? "" : "该功能暂未开放");
     } });
     this.disposers = [unbind, this.account.subscribe(state => this.view.render(state))];

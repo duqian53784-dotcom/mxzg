@@ -50,7 +50,8 @@ export function mockBattleCast(stageId: number): { allies?: BattleCast[]; enemie
   const rows = chapterEnemies(stageId);
   for (let i = 0; i < rows.length && enemies.length < 3; i++) {
     const cast: BattleCast = { name: rows[i].name };
-    if (rows[i].hp !== null) cast.maxHp = rows[i].hp;
+    const hp = rows[i].hp;
+    if (hp !== null) cast.maxHp = hp;
     enemies.push(cast);
   }
   return {

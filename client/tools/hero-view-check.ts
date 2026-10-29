@@ -26,6 +26,13 @@ import { WireHeroEntry } from "../assets/scripts/net/protocol/wireHero";
 import { WireSession } from "../assets/scripts/net/WireSession";
 import { clearPrefabCache } from "../assets/scripts/ui/prefabLoad";
 import { barIndex, barSlideDir, pageContentReady, selectedBarId } from "../assets/scripts/ui/barSlide";
+import { AccountModel } from "../assets/scripts/features/account/AccountModel";
+import { AccountService } from "../assets/scripts/features/account/AccountService";
+import { HeroCatalog } from "../assets/scripts/features/hero/HeroCatalog";
+import { HeroRosterModel } from "../assets/scripts/features/hero/HeroRosterModel";
+import { HeroRosterService } from "../assets/scripts/features/hero/HeroRosterService";
+import { HeroRosterController } from "../assets/scripts/features/hero/HeroRosterController";
+import type { OwnedHero } from "../assets/scripts/features/hero/HeroApi";
 
 const root = process.cwd();
 
@@ -903,7 +910,66 @@ async function checkManager(): Promise<void> {
   assert(UIManager.instance.createPageHost("hero") === null, "失败后不能再交出空壳");
 }
 
+async function checkRemakeRoster(): Promise<void> {
+  const account = new AccountModel();
+  const accountService = new AccountService(account, {
+    developmentLogin: async () => ({ session: { accessToken: "a".repeat(43), expiresAt: "2099-01-01T00:00:00Z" },
+      role: { id: "hero-ui", nickname: "hero-ui", level: 1, gold: 0, diamonds: 0 } }),
+    currentRole: async () => { throw new Error("not used"); },
+  }, { read: () => null, write: () => {}, clear: () => {} });
+  await accountService.login("hero_ui");
+  const model = new HeroRosterModel();
+  let resolve!: (heroes: OwnedHero[]) => void;
+  let response = new Promise<OwnedHero[]>(done => { resolve = done; });
+  const service = new HeroRosterService(model, account, accountService, { list: () => response });
+  const catalog = new HeroCatalog(JSON.parse(read("client/assets/resources/config/herotype.json")), JSON.parse(read("client/assets/resources/config/item.json")));
+  const view = makeView();
+  const originalSync = WireSession.onSync;
+  let wireSubscriptions = 0;
+  WireSession.onSync = function (listener) { wireSubscriptions++; return originalSync.call(WireSession, listener); };
+  let notice = "";
+  const controller = new HeroRosterController(model, service, catalog, view, text => { notice = text; });
+  view.attachController(controller);
+  try {
+    // Deliberately contaminate the legacy store; the injected source must ignore it.
+    bindTables(); noteHeroes([heroEntry(11, 101, 7, 4)]);
+    view.runOpen(); await view.whenReady(); pump(2);
+    const board = boardOf(view);
+    assert(wireSubscriptions === 0, "重做列表不订阅旧 WireSession");
+    assert(cellsOf(view).length === 0, "加载时不读旧名册或图鉴");
+    assert(board.emptyLabel!.string === "正在加载英雄…", "绘制加载状态");
+    assert(!view.btnBook!.node.active && !view.btnDragon!.node.active, "隐藏未接入页签");
+    assert(!board.skin!.active && !board.evolve!.active, "隐藏未接入养成按钮");
+    resolve([]); await service.refresh(); pump(1);
+    assert(board.emptyLabel!.string === "尚未获得英雄" && cellsOf(view).length === 0, "真实空名册不回退图鉴");
+    assert(board.capacityLabel!.string === "英雄：0", "不显示旧协议容量");
+    response = Promise.reject(new Error("读取失败"));
+    view.btnHero!.node.emit(Button.EventType.CLICK); await service.refresh(); pump(1);
+    assert(board.emptyLabel!.string.indexOf("点击上方“英雄”重试") >= 0, "失败保留重试入口");
+    response = Promise.resolve([{ id: "f45747b7-f032-4d00-9546-3504b9a967e5", templateId: 10101001, level: 7, star: 4 }]);
+    view.btnHero!.node.emit(Button.EventType.CLICK); await service.refresh(); pump(1);
+    const cells = cellsOf(view);
+    assert(cells.length === 1 && cells[0].nameLabel!.string === "独眼梦魇", "复用格子显示新名册与现有简体配置");
+    assert(cells[0].levelLabel!.string === "7" && cells[0].stars.filter(node => node.active).length === 4, "等级和星级来自实例");
+    cells[0].node.emit(Button.EventType.CLICK);
+    assert(notice.indexOf("详情暂未开放") >= 0 && !view.node.parent!.getChildByName("HeroDetailSheet"), "不打开旧详情");
+    board.elemButtons[2].node.emit(Button.EventType.CLICK); pump(1);
+    assert(cellsOf(view).length === 0 && board.emptyLabel!.string === "没有符合筛选条件的英雄", "筛选空态");
+    board.elemButtons[0].node.emit(Button.EventType.CLICK); pump(1);
+    assert(cellsOf(view).length === 1, "切回全部显示英雄");
+    response = new Promise<OwnedHero[]>(done => { resolve = done; });
+    view.btnHero!.node.emit(Button.EventType.CLICK);
+    const pending = service.refresh();
+    view.runDispose(); resolve([{ id: "f45747b7-f032-4d00-9546-3504b9a967e5", templateId: 10101001, level: 7, star: 4 }]);
+    assert(await pending === false && model.snapshot.status === "idle", "关闭后迟到响应作废");
+  } finally {
+    view.runDispose(); service.dispose(); view.node.destroy();
+    WireSession.onSync = originalSync; GameStore.reset();
+  }
+}
+
 async function main(): Promise<void> {
+  await checkRemakeRoster();
   GameLog.shared.mirrorConsole = false;
   checkFlag();
   checkSources();

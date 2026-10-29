@@ -104,4 +104,8 @@ Creator 的 Prefab 与 Inspector 支持节点、组件与属性的编辑和保�
 
 先完成新架构下的登录、主城和一场战斗切片，再接入完整主循环。先用一个功能证明分层和人工修改体验，再调整框架；不在没有具体功能时一次生成大量基类、Manager 和空目录。
 
+英雄列表采用已有 View 的数据源注入作为兼容接缝：HeroRosterController 在 UIManager 开页前注入 HeroRosterPresentation，展示读取独立 Model，Service 通过 AccountService 的会话能力访问新 API。旧 Boot 不注入时仍使用原路径；新增功能不继续写 GameStore/WireSession。列表和格子 Prefab 保持原 UUID，重做分支隐藏未接入的详情/养成入口。
+
+会话根与玩法页分开管理：RemakeNavigation 保留主城根和共享顶底栏，玩法内容由统一 UIManager 创建、关闭和退订；退出会话时关闭玩法和根。HomeFeatureNavigation 只处理功能打开/取消/返回意图，LoginEntry 继续负责“资源就绪后停登录，点击开始才进主城”。
+
 新后端已在 backend 建立首个开发登录与角色资料切片，包含 JDBC 持久化、Flyway 迁移和独立测试。开发及当前集成测试使用隔离 H2，MySQL 8.4、正式渠道身份与新客户端 MVC 接入尚待验证；旧服与原数据库未切换。实际运行方法见 backend/README.md。旧工程检查结果保留为现状记录，与新后端测试分开报告。

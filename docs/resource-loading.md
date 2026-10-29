@@ -55,3 +55,11 @@ python tools/test_resource_audit.py
 尚未验证：Creator 实际 Bundle 导入、发布构建后的资源归属、冷启动传输字节和耗时、主城首帧/重复进入、H5/App/微信包体、GPU/纹理内存、页面级释放。没有据源码数字宣称首屏已减少多少网络流量。
 
 当前撤销引用使用 decRef(false)，保留引擎缓存；旧直接加载路径仍在运行，不主动 releaseAll。下一步先完成实际 Bundle 构建与预览，再按依赖清单扩大按需加载范围。
+
+## 英雄列表按需资源（2026-10-29）
+
+HeroResources 在点击主城底栏英雄时先准备 herotype/item，然后通过现有 prefabs Bundle 加载五项：HeroListLayer、HeroListHeroLayer、HeroIconCell、PagePrefabShell、ListBackdrop。没有复制这些 Prefab，也没有增加一个英雄 Bundle 或改动登录场景引用。
+
+五项 Prefab 的独立引用由应用作用域持有到 RemakeApp 销毁，仍采用 addRef / decRef(false)。挂载沿用既有 loadPrefab 缓存，预热与实例化共用成功结果；保留该加载器已有的 UUID 回退，没有添加新回退。动态头像贴图仍走现有 SpritePaint，不据此宣称页面纹理已能独立释放。
+
+home-bundle 检查已覆盖英雄配置失败时不发起 Prefab 加载、重试、并发共享、五项资源的引用与作用域释放。实际构建归属、网络和内存仍待 Creator/三端验证。

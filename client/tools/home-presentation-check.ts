@@ -59,6 +59,15 @@ async function main() {
   assert.equal(chrome.level, "7"); assert.equal(chrome.power, "", "do not invent power");
   assert(chrome.tabs.every(tab => tab.state === (tab.id === "city" ? "selected" : "locked")));
   city.completeLoading(); await home.whenReady();
+  const featureUnbind = home.bind({ logout: () => { logouts++; }, openFeature: () => {}, heroAvailable: true });
+  assert.equal(chrome.tabs.find(tab => tab.id === "hero").state, "open");
+  home.showFeature("hero");
+  assert.equal(home.featureHost, home.cityHost);
+  assert.equal(city.node.active, false, "feature hides only the city, preserving shared chrome");
+  assert.equal(chrome.tabs.find(tab => tab.id === "hero").state, "selected");
+  assert.equal(chrome.tabs.find(tab => tab.id === "city").state, "open");
+  home.showFeature("city"); assert.equal(city.node.active, true);
+  featureUnbind();
   home.accountButton!.node.emit(Button.EventType.CLICK);
   assert.equal(home.accountPanel!.active, true);
   home.showNotice("该功能暂未开放"); assert.equal(home.noticePanel!.active, true);

@@ -2097,7 +2097,7 @@ export class MockGameSession {
     }
     if (Array.isArray(seed.goalClaimed)) {
       for (let i = 0; i < seed.goalClaimed.length; i++) {
-        const raw = seed.goalClaimed[i];
+        const raw: unknown = seed.goalClaimed[i];
         if (typeof raw !== "string") continue;
         const id = raw.trim();
         if (id) this.goalClaimed[id] = true;

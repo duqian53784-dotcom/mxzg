@@ -21,6 +21,15 @@ import { LoginEntry } from "./LoginEntry";
 import { createStartupResourceScope, STARTUP_RESOURCE_KEYS } from "./StartupResources";
 import type { ResourceScope } from "../../framework/assets/ResourcePool";
 import { createHomeResourceScope } from "./HomeResources";
+import { createHeroResourceScope, loadHeroPage } from "./HeroResources";
+import { HeroListView } from "../../features/hero/ui/HeroListView";
+import { mountHeroListPage } from "../../features/hero/ui/heroMount";
+import { HeroApi } from "../../features/hero/HeroApi";
+import { HeroCatalog } from "../../features/hero/HeroCatalog";
+import { HeroRosterModel } from "../../features/hero/HeroRosterModel";
+import { HeroRosterService } from "../../features/hero/HeroRosterService";
+import { HeroRosterController } from "../../features/hero/HeroRosterController";
+import { HomeFeatureNavigation } from "./HomeFeatureNavigation";
 
 const { ccclass, property } = _decorator;
 const SESSION_KEY = "mxzg.remake.developmentSession";
@@ -46,11 +55,14 @@ export class RemakeApp extends Component {
   private paintWaiters = new Set<() => void>();
   private startupResources: ResourceScope<Asset> | null = null;
   private homeResources: ResourceScope<Prefab> | null = null;
+  private heroResources: ResourceScope<Prefab> | null = null;
+  private features: HomeFeatureNavigation | null = null;
 
   start(): void {
     if (!this.loginPrefab || !this.loadingPrefab || !this.pageHost || !this.startupHost) throw new Error("Remake 场景未绑定页面/加载 Prefab 或启动宿主，请重新打开已更新的 Remake.scene");
     const model = new AccountModel();
-    const api = new AccountApi(new JsonClient(this.apiBaseUrl, createXhrAdapter()));
+    const http = new JsonClient(this.apiBaseUrl, createXhrAdapter());
+    const api = new AccountApi(http);
     const storage = sys.localStorage;
     const service = new AccountService(model, api, {
       read: () => { const saved = storage.getItem(SESSION_KEY); return saved ? readSession(JSON.parse(saved)) : null; },
@@ -59,8 +71,17 @@ export class RemakeApp extends Component {
     });
     const ui = UIManager.instance;
     const entry = new LoginEntry();
+    let homeView: RemakeHomeView | null = null;
     let syncRoute = () => {};
-    this.navigation = new RemakeNavigation(ui, this.pageHost);
+    this.navigation = new RemakeNavigation(ui, this.pageHost, {
+      parent: id => id === "hero" && this.navigation?.current === "remake-home" ? homeView?.featureHost || null : null,
+      changed: id => homeView?.showFeature(id === "hero" ? "hero" : "city"),
+    });
+    const features = this.features = new HomeFeatureNavigation(ui, {
+      current: () => this.navigation?.current || null,
+      authorized: () => this.alive && this.started && !model.snapshot.busy && !!model.snapshot.role && entry.route(true) === "remake-home",
+      notice: text => homeView?.showNotice(text),
+    });
     ui.install(this.navigation, { showToast: text => console.warn("[RemakeUI] " + text) });
     // All business composition lives here. The UI framework imports no account/home classes.
     this.unregisterViews.push(registerView(AccountLoginView, {
@@ -77,7 +98,26 @@ export class RemakeApp extends Component {
         if (!this.homeResources) this.homeResources = createHomeResourceScope();
         return this.homeResources.load("home");
       },
-      createController: view => new HomeController(model, service, view as RemakeHomeView),
+      createController: view => {
+        homeView = view as RemakeHomeView;
+        return new HomeController(model, service, homeView, id => features.open(id));
+      },
+    }));
+    this.unregisterViews.push(registerView(HeroListView, {
+      id: "hero", prefab: "prefabs/ui/hero/HeroListLayer", layer: UILayer.Page,
+      cache: false, allowMultiple: false, mount: mountHeroListPage,
+      load: async () => {
+        if (!this.heroResources) this.heroResources = createHeroResourceScope();
+        return loadHeroPage(this.heroResources);
+      },
+      createController: view => {
+        const catalog = new HeroCatalog(remakeConfig.get("config/herotype"), remakeConfig.get("config/item"));
+        const roster = new HeroRosterModel();
+        const rosterService = new HeroRosterService(roster, model, service, new HeroApi(http));
+        try {
+          return new HeroRosterController(roster, rosterService, catalog, view as HeroListView, text => homeView?.showNotice(text));
+        } catch (error) { rosterService.dispose(); throw error; }
+      },
     }));
     this.alive = true;
     this.startupResources = createStartupResourceScope();
@@ -89,7 +129,7 @@ export class RemakeApp extends Component {
         this.chrome?.setRatio(0);
         return;
       }
-      if (!model.snapshot.role) entry.reset();
+      if (!model.snapshot.role) { entry.reset(); features.reset(); }
       const route = entry.route(!!model.snapshot.role);
       if (route === this.requestedRoute) {
         if (!this.routePending) this.chrome?.hide();
@@ -209,8 +249,10 @@ export class RemakeApp extends Component {
     this.chrome?.destroy(); this.chrome = null;
     this.startupResources?.dispose(); this.startupResources = null;
     this.offAccount?.(); this.offAccount = null;
+    this.features?.dispose(); this.features = null;
     this.navigation?.dispose(); this.navigation = null;
     this.homeResources?.dispose(); this.homeResources = null;
+    this.heroResources?.dispose(); this.heroResources = null;
     for (const unregister of this.unregisterViews.splice(0)) unregister();
   }
 }

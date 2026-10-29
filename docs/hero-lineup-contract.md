@@ -1,6 +1,6 @@
 # 英雄与主阵容：第一批接口与复用边界
 
-更新：2026-10-29。对应 P3-02、P4-01/P4-02/P4-03，当前为实现中的最小契约，尚未生成客户端类型或接入正式英雄页面。
+更新：2026-10-29。对应 P3-02、P4-01/P4-02/P4-03，当前为实现中的最小契约。客户端只读英雄列表已接入现有 Prefab，视觉与三端运行待验收；接口类型生成尚未完成。
 
 ## 当前已实现的接口
 
@@ -56,7 +56,7 @@ H2 验证不能替代 MySQL 8.4 的迁移和并发验证。重登一致性已有
 
 ## 客户端数据层与待接界面
 
-客户端列表数据层已建立，但尚未装配到 RemakeApp 或打开英雄页面：
+客户端列表数据层已装配到 RemakeApp，由主城底栏英雄进入：
 
 - HeroApi：GET /api/v1/heroes 的运行时校验，UUID 实例 ID 与整数模板 ID 分离；拒绝坏结构、重复实例和小数/字符串数值。
 - HeroRosterModel：只存 idle/loading/ready/error 与不可变英雄快照，不含 token。ready + [] 是有效空名册，不回退旧 Mock/图鉴。
@@ -64,10 +64,16 @@ H2 验证不能替代 MySQL 8.4 的迁移和并发验证。重登一致性已有
 - AccountService.authenticated：各功能共用的会话能力；请求前和返回后检查有效期，旧账号的 401 不清除新账号，不允许各页面自行读本地 token。
 - HeroCatalog：独立投影 herotype/item 的名称、元素与图标，不写旧 GameStore、WireSession 或全局 gameCatalog。英雄实际等级/星级以服务器为准。
 
-已有 HeroListView 仍依赖旧 GameStore/WireSession。下一批为它注入新列表展示模型，继续复用 HeroListLayer、HeroListHeroLayer 与 HeroIconCell，并由统一 UIManager 管理开关和返回。不把新 UUID 强转成旧 StoreHero 的数值 ID。先接只读列表及加载/空态/失败重试，再接详情和出阵。
+HeroRosterController 在开页前为已有 HeroListView 注入展示数据源，再由 UIManager 驱动 show/close。这个分支不读取旧 GameStore、不订阅 WireSession，也不把新 UUID 转成 StoreHero 数值 ID；旧 Boot 未注入时保留原行为。已复用 HeroListLayer、HeroListHeroLayer、HeroIconCell 和原页面背景，不新造列表美术。
 
-最小 hero 配置组已登记 herotype/item，按需准备，登录和主城不提前请求。详情所需品质、技能、职业等依赖、图标 Bundle 生命周期和页面实际运行仍待接入。初始英雄发放方案未完成，空列表必须有真实空态。
+只读列表支持加载、真实空名册、元素筛选、筛选空态、错误和点击上方“英雄”重试。显示已拥有数量，不猜测旧服容量。实际等级与星级来自实例；未知模板保留明确名称和默认头像，不伪造完整配置。图鉴、圣龙、永久皮肤和进化按钮在重做路径隐藏，点击格子仅提示详情尚未开放，不打开旧 HeroInfoView。
+
+RemakeNavigation 保留主城根及顶底栏，把英雄页挂在主城内容宿主；底栏主城或 UIManager.back 只关闭英雄页并恢复地图，退出登录则清理英雄页和主城。HomeFeatureNavigation 单独记录功能打开意图；加载中点主城会取消，快速“英雄→主城→英雄”会在旧任务取消后重开最新意图。它不替代登录页的显式 Start 校验。
+
+最小 hero 配置组已登记 herotype/item，按需准备，登录和主城不提前请求。HeroResources 为五项原有 Prefab 提供作用域持有。详情所需品质、技能、职业等依赖、动态图标释放和页面实际运行仍待继续。初始英雄发放方案未完成，新账号应显示“尚未获得英雄”。
 
 检查入口：`node client/tools/check-project.mjs --suite hero-roster`。可用 MXZG_REMAKE_API 指向隔离测试后端，实连执行开发登录、读取空名册、无效 token 401 与恢复会话再读。此模式会创建测试账号，应使用隔离库；本轮以随机端口和 H2 内存库执行，不连接用户文件库。
 
-当前主城“英雄/出阵”入口仍提示未开放；尚无可验收的客户端英雄/出阵交互。OpenAPI/客户端代码生成与接口漂移检查仍待 P3-02 后续实施，本 Markdown 不能替代机器可读契约。
+当前只开放底栏英雄的只读列表。详情、出阵和养成尚未接入；不要用旧详情的写操作替代新后端用例。hero 检查覆盖新数据源绘制、空态、失败重试、筛选、隐藏按钮、迟到回包与旧状态污染隔离；remake-navigation / feature-navigation / home-presentation 覆盖返回、退出、取消重进与共享顶底栏。它们不能代替实际渲染验收。
+
+OpenAPI/客户端代码生成与接口漂移检查仍待 P3-02 后续实施，本 Markdown 不能替代机器可读契约。

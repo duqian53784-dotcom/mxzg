@@ -28,6 +28,19 @@ export class RemakeHomeView extends BaseView implements HomeView {
   private actions: HomeActions | null = null;
   private closed = false;
   private extraUnbind: Array<() => void> = [];
+  private currentFeature: "city" | "hero" = "city";
+
+  get featureHost(): Node | null { return this.cityHost; }
+
+  /** The shared chrome/account tools stay on the root; only city content is hidden. */
+  showFeature(id: "city" | "hero"): void {
+    if (this.closed) return;
+    this.currentFeature = id;
+    if (this.city?.node.isValid) this.city.node.active = id === "city";
+    if (this.accountPanel) this.accountPanel.active = false;
+    this.showNotice("");
+    this.paintRole();
+  }
 
   onOpen(): void {
     this.closed = false;
@@ -96,6 +109,7 @@ export class RemakeHomeView extends BaseView implements HomeView {
     if (!this.profileLabel || !this.logoutButton) throw new Error("RemakeHome Prefab 未绑定 profileLabel 或 logoutButton");
     const logout = () => actions.logout();
     this.actions = actions;
+    this.paintRole();
     const toggleAccount = () => { if (this.accountPanel) this.accountPanel.active = !this.accountPanel.active; };
     this.logoutButton.node.on(Button.EventType.CLICK, logout);
     this.accountButton?.node.on(Button.EventType.CLICK, toggleAccount);
@@ -127,7 +141,8 @@ export class RemakeHomeView extends BaseView implements HomeView {
     this.chrome.setAvatar(null);
     this.chrome.setCityExtras(false);
     this.chrome.setTabs(["city", "hero", "bag", "battle", "dungeon", "clan", "fetter"].map(id => ({
-      id, text: "", state: id === "city" ? "selected" : "locked",
+      id, text: "", state: id === this.currentFeature ? "selected" :
+        id === "city" || (id === "hero" && this.actions?.heroAvailable) ? "open" : "locked",
     })));
     this.city?.refreshLocks();
   }

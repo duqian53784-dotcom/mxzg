@@ -17,6 +17,7 @@ class FailedFixture extends BaseView {}
 class SlowFixture extends BaseView {}
 class ThrowingFixture extends BaseView {}
 class ResidentFixture extends BaseView {}
+class FeatureFixture extends BaseView {}
 
 async function main() {
   const ui = new UIManager();
@@ -88,6 +89,45 @@ async function main() {
   unregisterOld(); assert.equal(viewCtorById("test-remake-login"), LoginFixture, "old application cleanup must not unregister the new owner");
   unregisterCurrent(); assert.equal(viewCtorById("test-remake-login"), null);
 
+  let slot: Node | null = null;
+  const changes: Array<string | null> = [];
+  const featureNav = new RemakeNavigation(ui, parent, {
+    parent: id => id === "test-remake-feature" ? slot : null,
+    changed: id => { changes.push(id); },
+  });
+  ui.install(featureNav, { showToast: () => {} });
+  const keptHome = register(HomeFixture, "test-remake-home");
+  const feature = register(FeatureFixture, "test-remake-feature");
+  register(LoginFixture, "test-remake-login");
+  await ui.open(HomeFixture);
+  const keptHomeNode = hosts.get("test-remake-home")!;
+  slot = new Node("MiddleContent"); slot.parent = keptHomeNode;
+  await ui.open(FeatureFixture);
+  assert.equal(hosts.get("test-remake-feature")!.parent!.parent, slot);
+  assert(ui.isOpen("test-remake-home") && keptHomeNode.isValid);
+  assert.equal(keptHome.closed, 0, "feature keeps the shared home and HUD controller alive");
+  assert.equal(featureNav.back(), true);
+  assert.equal(feature.closed, 1); assert.equal(keptHome.closed, 0);
+  assert.equal(featureNav.current, "test-remake-home");
+  assert.equal(featureNav.back(), false, "home cannot return to a previous session");
+  await ui.open(FeatureFixture);
+  await ui.open(LoginFixture);
+  assert.equal(feature.closed, 2); assert.equal(keptHome.closed, 1, "logout disposes both feature and home");
+  assert.equal(featureNav.current, "test-remake-login");
+  assert.equal(parent.children.length, 1);
+  assert(changes.includes("test-remake-feature") && changes[changes.length - 1] === null);
+  await ui.open(HomeFixture);
+  slot = new Node("NextMiddleContent"); slot.parent = hosts.get("test-remake-home")!;
+  let finishFeature!: (prefab: Prefab) => void;
+  const slowFeature = register(FeatureFixture, "test-remake-feature", () => new Promise(resolve => { finishFeature = resolve; }));
+  const cancelledFeature = ui.open(FeatureFixture);
+  ui.keepOnly("test-remake-home"); finishFeature(new Prefab());
+  await assert.rejects(cancelledFeature, isOpenCancelled);
+  assert.equal(featureNav.current, "test-remake-home"); assert.equal(slowFeature.closed, 1);
+  register(FeatureFixture, "test-remake-feature");
+  await ui.open(FeatureFixture); featureNav.dispose();
+  assert.equal(parent.children.length, 0, "application disposal removes feature and root hosts");
+
   const model = new AccountModel();
   const service = new AccountService(model, { developmentLogin: async () => { throw new Error("not used"); }, currentRole: async () => { throw new Error("not used"); } }, { read: () => null, write: () => {}, clear: () => {} });
   let renders = 0; let actions: HomeActions | null = null;
@@ -102,6 +142,18 @@ async function main() {
   controller.close(); const closedRenders = renders;
   model.replace({ busy: false, role: null, error: "later" }); assert.equal(renders, closedRenders);
   assert.equal(actions, null);
+
+  const picked: string[] = [];
+  const enabled = new HomeController(model, service, { bind: callbacks => { actions = callbacks; return () => { actions = null; }; },
+    render: () => {}, showNotice: text => { notice = text; } }, id => {
+      if (id !== "hero" && id !== "city") return false;
+      picked.push(id); return true;
+    });
+  enabled.show();
+  assert((actions as HomeActions).heroAvailable);
+  (actions as HomeActions).openFeature("hero"); assert.deepEqual(picked, ["hero"]);
+  (actions as HomeActions).openFeature("bag"); assert.equal(notice, "该功能暂未开放");
+  enabled.close();
 
   const assets = join(process.cwd(), "client/assets");
   const prefab = JSON.parse(readFileSync(join(assets, "bundles/remake-home/RemakeHome.prefab"), "utf8"));

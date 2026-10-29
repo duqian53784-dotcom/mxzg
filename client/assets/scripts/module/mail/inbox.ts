@@ -133,7 +133,7 @@ export function isClaimable(mail: { hasAttachment: boolean; claimed: boolean }):
 
 export function mailClaimToast(resp: { count?: number; rewards?: MailAttachment[] } | null | undefined): string {
   const phrase = rewardPhrase(resp && resp.rewards ? resp.rewards : []);
-  const count = finiteInt(resp && resp.count);
+  const count = finiteInt(resp?.count);
   if (count > 1) return "领取成功：" + count + " 封" + (phrase ? "，" + phrase : "");
   return "领取成功" + (phrase ? "：" + phrase : "");
 }

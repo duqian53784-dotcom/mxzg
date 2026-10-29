@@ -1,6 +1,6 @@
 # 重做版配置分组与加载约定
 
-更新：2026-10-29。对应 P2-05，目前覆盖加载提示、已有主城，以及英雄列表展示的最小配置组；英雄页面尚未装配此组。
+更新：2026-10-29。对应 P2-05，目前覆盖加载提示、已有主城，以及已接入只读英雄列表的最小配置组。
 
 ## 维护入口
 
@@ -9,6 +9,7 @@
 - RemakeApp：调用 prepareStartupConfig，加载提示读取同一缓存。
 - HomeResources：点击开始成功后先准备主城配置，再请求主城 Bundle；失败进入已有加载重试流程。
 - RemakeHomeView：为 CityHubView 注入配置读取器与开放条件快照，不复制第二套地图布局代码。
+- HeroResources：点击主城底栏英雄后先准备 hero 组，再加载原列表/格子/页面壳；失败保留主城，可再次点击英雄重试。
 
 ## 当前依赖
 
@@ -27,7 +28,7 @@
 
 未知开服天数仍用保守输入，不编造第 1 天。尚未接入的功能点击继续提示未开放；读取开放条件不等于玩法已接入新后端。
 
-英雄列表数据层提供独立的 hero 组，供后续页面按需调用 `prepareHeroConfig`，不在登录或进城时调用：
+英雄列表使用独立的 hero 组，由 HeroResources 按需调用 `prepareHeroConfig`，不在登录或进城时调用：
 
 - config/herotype：模板 ID、简体名称（note）、元素与 item_id 图标索引。
 - config/item：当 herotype.item_id 为 0 时，按 item.idx=模板 ID 查 hero-icon 路径。
