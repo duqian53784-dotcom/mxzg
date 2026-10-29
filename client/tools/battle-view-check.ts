@@ -8,7 +8,7 @@ import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { assetManager, Button, Label, Node, Prefab, Sprite, UITransform } from "cc";
 import { ConfigDb, ConfigTableFile } from "../assets/scripts/config/ConfigLoader";
-import { bindGameCatalog } from "../assets/scripts/config/gameCatalog";
+import { bindGameCatalog, chapterEnemies, chapterStageEnemies } from "../assets/scripts/config/gameCatalog";
 import { GameLog } from "../assets/scripts/core/GameLog";
 import { GameStore } from "../assets/scripts/core/GameStore";
 import { Session } from "../assets/scripts/core/Session";
@@ -19,7 +19,7 @@ import { HangMissionChipView } from "../assets/scripts/features/battle/ui/HangMi
 import { isOpenCancelled, UIManager } from "../assets/scripts/framework/ui/UIManager";
 import { UILayer } from "../assets/scripts/framework/ui/UILayer";
 import { viewCtorById, viewSpecOf } from "../assets/scripts/framework/ui/UIRegistry";
-import { hangFightStageId, planHangFightLine } from "../assets/scripts/ui/idleHangSkirmishPlan";
+import { hangAppearAnchor, hangFightStageId, HANG_APPEAR_BODY, planHangFightLine } from "../assets/scripts/ui/idleHangSkirmishPlan";
 import { clearPrefabCache } from "../assets/scripts/ui/prefabLoad";
 import { barIndex, barSlideDir, pageContentReady, selectedBarId } from "../assets/scripts/ui/barSlide";
 
@@ -161,6 +161,9 @@ function checkSources(): void {
   const hang = read("client/assets/scripts/ui/hangBattle.ts");
   assert(hang.indexOf("seatHangEnemies") >= 0, "开战要摆敌方");
   assert(hang.indexOf("开战敌方没有摆上") >= 0, "敌方摆不上要有日志");
+  assert(hang.indexOf("开战敌方 spine/") >= 0, "spine 没挂上要有日志");
+  assert(hang.indexOf("chapterStageEnemies") >= 0, "开战守方按关卡号");
+  assert(hang.indexOf("这一侧没有模型") >= 0, "没有模型的一侧不播出场光");
   assert(hang.indexOf("beginHangBattle") >= 0, "开战演出还在");
   const plan = read("client/assets/scripts/ui/idleHangSkirmishPlan.ts");
   const fightPlan = plan.slice(plan.indexOf("export function planHangFightLine"));
@@ -174,7 +177,13 @@ function checkFightLine(): void {
   assert(hangFightStageId(null, null, null, true) === null, "真服未同步不用第 1 关冒充");
   assert(hangFightStageId(4, 9, 12, false) === 4, "Mock 用本机关号");
   assert(hangFightStageId(null, 3, 9, true) === 3, "真服用 nowIdx");
+  assert(hangFightStageId(null, null, 0, true) === 1, "max_idx 0 是已同步，进战是下一关");
+  assert(hangFightStageId(null, null, 9, true) === 10, "只有 max_idx 时打 chapterId+1");
+  assert(hangFightStageId(null, 0, null, true) === 1, "now_idx 0 仍是已同步");
   assert(hangFightStageId(null, null, null, false) === 1, "Mock 没有关号时仍读第 1 关");
+  const onAlly = hangAppearAnchor([{ x: -120, y: 24 }]);
+  assert(onAlly !== null && onAlly.x === -120 && onAlly.y === 24 + HANG_APPEAR_BODY, "出场光落在模型上");
+  assert(hangAppearAnchor([]) === null, "没有模型不给出场光锚点");
   const missing = planHangFightLine(null, [], stand, null);
   assert(missing.source === "none" && missing.foes.length === 0 && missing.reason.indexOf("主线未同步") >= 0, "未同步不造敌方");
   const empty = planHangFightLine(2, [], stand, null);
@@ -188,6 +197,33 @@ function checkFightLine(): void {
   assert(badReport.source === "chapter" && badReport.foes[0].stem === "10101001" && badReport.reason.indexOf("对不上 stand") >= 0, "战报对不上就退回关卡表");
   const none = planHangFightLine(1, [{ heroType: 999, hp: 1, name: "没套" }], stand, null);
   assert(none.foes.length === 0 && none.reason.indexOf("没有 stand") >= 0, "没有 stand 不补默认怪");
+  checkChapterStage();
+}
+
+function checkChapterStage(): void {
+  const file = JSON.parse(read("client/assets/resources/config/chapter.json")) as ConfigTableFile<Record<string, unknown>>;
+  const tables = new Map<string, ConfigTableFile<Record<string, unknown>>>();
+  tables.set("chapter", file);
+  bindGameCatalog(tables);
+  try {
+    const stage1 = chapterStageEnemies(1);
+    assert(stage1.length === 1 && stage1[0].heroType === 10101001, "第1关守方是 10101001");
+    const stage2 = chapterStageEnemies(2);
+    assert(stage2.length === 1 && stage2[0].heroType === 10505005, "第2关读 note，不读空的行 idx");
+    assert(chapterEnemies(2).length === 0, "行 idx 2 的 hero_type 是 0");
+    const stage5 = chapterStageEnemies(5);
+    assert(stage5.length === 3 && stage5[0].heroType === 10102002, "第5关三只怪");
+    assert(chapterStageEnemies(null).length === 0, "没有关号不造怪");
+    const line = planHangFightLine(
+      2,
+      stage2.map((row) => ({ heroType: row.heroType, hp: row.hp, name: row.name })),
+      (stem) => stem === "10505005",
+      null
+    );
+    assert(line.source === "chapter" && line.foes.length === 1 && line.foes[0].stem === "10505005", "第2关能摆上");
+  } finally {
+    bindGameCatalog(new Map());
+  }
 }
 
 function checkPrefab(): void {
