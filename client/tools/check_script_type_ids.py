@@ -104,6 +104,18 @@ def main():
         types = []
         walk_types(data, types)
         rel = os.path.relpath(path, ROOT)
+        if isinstance(data, list):
+            for index, component in enumerate(data):
+                if not isinstance(component, dict) or component.get("__type__") != "cc.Button":
+                    continue
+                target = component.get("_target")
+                if target is None:
+                    continue
+                target_id = target.get("__id__") if isinstance(target, dict) else None
+                if (not isinstance(target_id, int) or not 0 <= target_id < len(data)
+                        or not isinstance(data[target_id], dict)
+                        or data[target_id].get("__type__") != "cc.Node"):
+                    errors.append("%s Button[%d] target must refer to a cc.Node" % (rel, index))
         for type_name in types:
             if is_engine_type(type_name):
                 continue
@@ -121,12 +133,13 @@ def main():
             bindings.append((rel, type_name, uuid, script))
 
     if errors:
-        raise SystemExit("22-char script types are not packer ids:\n" + "\n".join(errors))
+        raise SystemExit("Invalid prefab/scene bindings:\n" + "\n".join(errors))
 
     print("script bindings %d" % len(bindings))
     for rel, type_name, uuid, script in bindings:
         print("%s %s %s %s" % (rel, type_name, uuid, script))
     print("no 22-char script __type__ in prefab/scene")
+    print("Button targets refer to cc.Node")
     return 0
 
 

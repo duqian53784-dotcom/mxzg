@@ -109,7 +109,7 @@ export class GameLog {
       this.buffer.splice(0, this.buffer.length - this.capacity);
     }
     if (this.mirrorConsole) mirror(this, line);
-    for (const handler of [...this.listeners]) {
+    for (const handler of Array.from(this.listeners)) {
       try {
         handler(line);
       } catch (err) {

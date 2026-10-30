@@ -58,7 +58,7 @@ export class ServerPickerView extends BaseView<ServerSelection> {
         for (const content of [this.regionContent!, this.serverContent!])
             for (const child of content.children.slice())
                 child.destroy();
-        const regions = [...new Map(selection.servers.map(row => [row.regionId, row])).values()];
+        const regions = Array.from(new Map(selection.servers.map(row => [row.regionId, row])).values());
         regions.forEach((row, index) => this.cell(this.regionContent!, index, { ...row, name: row.regionName, enabled: true }, row.regionId === this.region, () => { this.region = row.regionId; this.paint(); }, true));
         const servers = selection.servers.filter(row => row.regionId === this.region);
         this.serverContent!.getComponent(UITransform)?.setContentSize(362, Math.max(602, servers.length * 88));

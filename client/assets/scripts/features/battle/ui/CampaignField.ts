@@ -130,7 +130,7 @@ export class CampaignField {
         this.idle = mountIdleSkirmish(this.shell.root,{ plans: () => units.filter(unit => !unit.ally).slice(0,7).map((unit,index) => ({
             stem:String(unit.templateId),spot:index,face:-1 as const,maxHp:unit.maxHp,
         })) });
-        this.idle.retarget([...this.actors.values()].map(entry => entry.actor));
+        this.idle.retarget(Array.from(this.actors.values()).map(entry => entry.actor));
     }
     pauseIdle(): void { this.idle?.pause(); }
     resumeIdle(): void { this.idle?.resume(); }

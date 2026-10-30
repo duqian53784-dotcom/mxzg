@@ -8,7 +8,7 @@
   "userData": {
     "isBundle": true,
     "bundleName": "remake-home",
-    "priority": 0,
+    "priority": 1,
     "bundleConfigID": "default"
   }
 }

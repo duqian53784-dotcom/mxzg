@@ -173,7 +173,7 @@ export class NetClient {
   private emitLocal(cmd: string, msg: NetMessage): void {
     const set = this.handlers.get(cmd);
     if (!set) return;
-    for (const handler of [...set]) handler(msg);
+    for (const handler of Array.from(set)) handler(msg);
   }
 
   private onTransportClosed(): void {
@@ -235,7 +235,7 @@ export class NetClient {
     const prev = this.state;
     this.state = next;
     GameLog.shared.info("Net", prev + " -> " + next);
-    for (const handler of [...this.stateHandlers]) handler(next);
+    for (const handler of Array.from(this.stateHandlers)) handler(next);
   }
 
   /** Node 测试里定时器不挡住进程退出；浏览器没有 unref。 */

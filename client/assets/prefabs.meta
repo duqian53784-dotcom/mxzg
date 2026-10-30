@@ -8,7 +8,7 @@
   "userData": {
     "isBundle": true,
     "bundleName": "prefabs",
-    "priority": 1,
+    "priority": 2,
     "bundleConfigID": "default"
   }
 }

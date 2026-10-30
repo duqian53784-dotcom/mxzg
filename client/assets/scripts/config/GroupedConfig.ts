@@ -6,7 +6,8 @@ export class GroupedConfig {
     private readonly validate: (path: string, value: unknown) => void) {}
 
   async prepare(paths: readonly string[], progress?: (done: number, total: number) => void): Promise<void> {
-    const names = [...new Set(paths)];
+    // Creator's publish transform assumes array spreads are arrays, including Set iterators.
+    const names = Array.from(new Set(paths));
     let done = 0;
     let acceptingProgress = true;
     progress?.(0, names.length);

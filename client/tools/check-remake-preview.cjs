@@ -1,6 +1,6 @@
 /** Real Creator preview acceptance. Starts an isolated headless browser, clicks
  * the actual UI, and creates one normal development account in local-2.
- * Requires a running backend on 18080 and Remake preview on 7456.
+ * Requires backend 18080; MXZG_PREVIEW_URL selects Creator or the standalone H5.
  * Screenshots/logs belong under ignored client/temp/project-checks.
  */
 const { resolve } = require('node:path');
@@ -8,19 +8,39 @@ const { mkdirSync } = require('node:fs');
 process.chdir(resolve(__dirname, '../..'));
 mkdirSync('client/temp/project-checks', { recursive: true });
 const { chromium } = require(process.env.MXZG_PLAYWRIGHT_MODULE || 'playwright');
+const previewUrl = process.env.MXZG_PREVIEW_URL || 'http://localhost:7456/';
+const shotPrefix = process.env.MXZG_SCREENSHOT_PREFIX || 'night';
+if (!/^[a-z0-9-]+$/i.test(shotPrefix)) throw Error('Invalid screenshot prefix');
+const standalone = new URL(previewUrl).port === '18081';
 (async () => {
     const browser = await chromium.launch({ headless: true, channel: 'chrome' });
     let page;
     const errors = [];
     try {
-        page = await browser.newPage({ viewport: { width: 1280, height: 1024 } });
+        page = await browser.newPage({ viewport: standalone ? { width: 393, height: 852 } : { width: 1280, height: 1024 } });
+        if (standalone) {
+            // Prove this run cannot silently fall back to the editor's preview server.
+            await page.route(/https?:\/\/(localhost|127\.0\.0\.1):7456\//, route => route.abort());
+            page.on('request', request => {
+                if (/https?:\/\/(localhost|127\.0\.0\.1):7456\//.test(request.url())) errors.push('Dependency on Creator preview');
+            });
+        }
         page.on('pageerror', e => { errors.push(e.message); console.log('PAGEERROR', e.message); });
+        page.on('requestfailed', request => console.log('REQUEST FAILED', request.url(), request.failure()?.errorText));
         page.on('console', m => {
-            if (m.type() === 'error')
-                console.log('CONSOLE', m.text().slice(0, 250));
+            if (m.type() === 'error') {
+                console.log('CONSOLE', m.text(), m.location());
+                errors.push(m.text());
+            }
         });
-        await page.goto('http://localhost:7456/', { waitUntil: 'load' });
-        await page.waitForTimeout(9000);
+        async function connectEngine() {
+            await page.waitForFunction(() => window.cc?.director || window.System?.import, { timeout: 30000 });
+            await page.evaluate(async () => { if (!window.cc?.director) window.cc = await window.System.import('cc'); });
+            await page.waitForTimeout(9000);
+        }
+        await page.goto(previewUrl, { waitUntil: 'load' });
+        await connectEngine();
+        if (errors.length) throw Error('startup logged browser errors');
         async function clickTarget(className, prop, text) {
             await page.waitForFunction(({ className, prop, text }) => {
                 const cc = window.cc;
@@ -77,7 +97,16 @@ const { chromium } = require(process.env.MXZG_PLAYWRIGHT_MODULE || 'playwright')
             await page.mouse.click(box.x + (t.b.x + t.b.width / 2) * box.width / t.size.width, box.y + box.height - (t.b.y + t.b.height / 2) * box.height / t.size.height);
             await page.waitForTimeout(600);
         }
-        async function snap(name) { await page.screenshot({ path: 'client/temp/project-checks/night-' + name + '.png' }); console.log('SHOT', name); }
+        async function snap(name) {
+            await page.screenshot({ path: 'client/temp/project-checks/' + shotPrefix + '-' + name + '.png' });
+            console.log('SHOT', name);
+            if (standalone && name === 'login') {
+                console.log('H5 login asset transfer', await page.evaluate(() => {
+                    const entries = performance.getEntriesByType('resource').filter(entry => entry.name.startsWith(location.origin + '/'));
+                    return { requests: entries.length, bytes: entries.reduce((sum, entry) => sum + entry.transferSize, 0) };
+                }));
+            }
+        }
         async function state() {
             return page.evaluate(() => {
                 const out = [];
@@ -222,7 +251,7 @@ const { chromium } = require(process.env.MXZG_PLAYWRIGHT_MODULE || 'playwright')
         await page.waitForTimeout(600);
         await snap('item-detail');
         await page.reload();
-        await page.waitForTimeout(8500);
+        await connectEngine();
         if (!(await state()).some(v => v.view === 'AccountLoginView') || (await state()).some(v => v.view === 'RemakeHomeView'))
             throw Error('restore entered home without Start');
         await snap('restored-login');
@@ -233,9 +262,9 @@ const { chromium } = require(process.env.MXZG_PLAYWRIGHT_MODULE || 'playwright')
         if (!(await state()).some(v => v.view === 'CampaignView' && v.stage === 2))
             throw Error('stage not retained after reload');
         await snap('restored-battle');
-        console.log('PASS preview: server picker, explicit Start, heroes, inventory detail, idle march, formation cancel/save, battle/skip/claim, stage 2 and restore gate; runtime errors:', errors.length);
         if (errors.length)
             throw Error('browser runtime errors');
+        console.log('PASS preview: server picker, explicit Start, heroes, inventory detail, idle march, formation cancel/save, battle/skip/claim, stage 2 and restore gate; runtime errors:', errors.length);
     }
     catch (e) {
         if (page)
@@ -245,7 +274,7 @@ const { chromium } = require(process.env.MXZG_PLAYWRIGHT_MODULE || 'playwright')
                     out.push({ view: c.constructor.name, phase: c.last?.phase, stage: c.last?.state?.stageId }); for (const child of n.children)
                 walk(child); } walk(window.cc?.director?.getScene()); return out; }));
         if (page)
-            await page.screenshot({ path: 'client/temp/project-checks/night-failure.png' });
+            await page.screenshot({ path: 'client/temp/project-checks/' + shotPrefix + '-failure.png' });
         throw e;
     }
     finally {

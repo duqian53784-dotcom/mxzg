@@ -5804,7 +5804,7 @@ export class WireSession {
 
   private static emit(): void {
     this.mirrorStore();
-    for (const listener of [...this.listeners]) {
+    for (const listener of Array.from(this.listeners)) {
       try {
         listener();
       } catch (err) {

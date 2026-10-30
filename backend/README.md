@@ -15,6 +15,8 @@
 
 Windows 最方便的启动方式：双击 `scripts/start-remake-backend.bat`。若直接运行 ps1 提示“系统禁止运行脚本”，可用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "F:\project\mxzg\backend\dev.ps1" run`；仅对本次子进程生效，不修改系统执行策略。首次启动会保持窗口运行，看到应用 Started 与 18080 监听后可进入游戏；已有可用后端时显示 `[READY]` 并复用，不再启动第二份。bat 成功返回或报错后都会等待按键，避免双击后窗口立即关闭；复用时关闭此提示窗口不会停止原后端。在 Remake.scene 预览中输入 player_1 进行开发登录。
 
+修改后端后双击 `scripts/restart-remake-backend.bat`，会核对并停止当前仓库的 local Java 服务，再重新编译和启动。另有 stop/status 入口；详细说明及独立 H5 的构建、预览入口见 [本机工作流](../docs/local-remake-workflow.md)。Windows 开发停止采用终止已核对 JVM 的方式，不作为生产优雅停服工具。
+
 当前后端是游戏 API 服务，尚无网页管理后台。浏览器直接打开根地址并不是登录入口；开发登录由客户端调用 `/api/v1/development/login`。
 
 local 模式仅绑定本机 127.0.0.1，使用 `.local/game` 下的 H2 文件数据库，Flyway 自动执行版本化建表。它用于开发演示；生产目标仍为 MySQL 8.4，MySQL 兼容性需独立集成测试。默认不启用 local，需要显式设置 MXZG_DATABASE_URL、MXZG_DATABASE_USER、MXZG_DATABASE_PASSWORD。

@@ -17,6 +17,7 @@ async function main() {
   const prefabs = meta("client/assets/prefabs.meta").userData;
   const resources = meta("client/assets/resources.meta").userData;
   assert(feature.isBundle && feature.bundleName === HOME_BUNDLE);
+  assert(Number.isInteger(feature.priority) && feature.priority >= 1 && feature.priority <= 20, "custom bundle priority must be in Creator's supported range");
   assert(resources.priority > prefabs.priority && prefabs.priority > feature.priority, "shared bundle priority must exceed the feature");
   const loaded = new Map<string, object>(); const order: string[] = [];
   let attempts = 0, pins = 0, drops = 0;

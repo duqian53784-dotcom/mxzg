@@ -22,6 +22,7 @@ const suites = [
   ["home-bundle", "ts", "client/tools/home-bundle-check.ts"],
   ["resource-audit", "python", "tools/test_resource_audit.py"],
   ["config-groups", "ts", "client/tools/config-groups-check.ts"],
+  ["creator-compat", "node", "client/tools/creator-compat-check.cjs"],
   ["prefab-plan", "python", "tools/check_prefab_plan.py"],
   ["architecture", "python", "tools/project_audit.py"],
   ["bindings", "python", "client/tools/check_script_type_ids.py"],
@@ -66,6 +67,9 @@ for (const [id, kind, source] of selected) {
         logLevel: "silent" });
       command = process.execPath;
       commandArgs = [outfile];
+    } else if (kind === "node") {
+      command = process.execPath;
+      commandArgs = [source];
     } else {
       command = process.env.MXZG_PYTHON || "python";
       commandArgs = [source];

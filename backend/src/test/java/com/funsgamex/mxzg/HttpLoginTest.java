@@ -46,14 +46,17 @@ class HttpLoginTest {
             .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build(),
             HttpResponse.BodyHandlers.ofString());
     }
-    @Test void creatorPreviewPreflightIsAllowedAndOtherOriginsAreRejected() throws Exception {
-        for (String origin : new String[]{"http://localhost:7456", "https://untrusted.example"}) {
+    @Test void localPreviewsAreAllowedAndOtherOriginsAreRejected() throws Exception {
+        for (String origin : new String[]{"http://localhost:7456", "http://127.0.0.1:7456",
+                "http://localhost:18081", "http://127.0.0.1:18081",
+                "http://localhost:18082", "https://untrusted.example"}) {
             var request = HttpRequest.newBuilder(uri("/api/v1/development/login"))
                 .header("Origin", origin).header("Access-Control-Request-Method", "POST")
                 .header("Access-Control-Request-Headers", "content-type")
                 .method("OPTIONS", HttpRequest.BodyPublishers.noBody()).build();
             var response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            assertEquals(origin.startsWith("http://localhost") ? 200 : 403, response.statusCode());
+            boolean allowed = origin.endsWith(":7456") || origin.endsWith(":18081");
+            assertEquals(allowed ? 200 : 403, response.statusCode());
             if (response.statusCode() == 200) assertEquals(origin, response.headers().firstValue("Access-Control-Allow-Origin").orElseThrow());
         }
     }
