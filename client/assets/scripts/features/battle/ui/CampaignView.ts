@@ -1,7 +1,7 @@
 import { _decorator, Button, Label, Node } from "cc";
 import { BaseView } from "../../../framework/ui/BaseView";
 import { mountBattleEnd } from "../../../ui/battleEndView";
-import { ItemCatalog } from "../../backpack/ItemCatalog";
+import { BagItemCatalog } from "../../Bag/BagItemCatalog";
 import type { CampaignActions, CampaignPhase, CampaignScreen } from "../CampaignController";
 import type { CampaignState, CampaignReport } from "../CampaignApi";
 import { CampaignField } from "./CampaignField";
@@ -26,7 +26,7 @@ export class CampaignView extends BaseView implements CampaignScreen {
     roleExpLabel: Label | null = null;
     private field: CampaignField | null = null;
     private result: Node | null = null;
-    private catalog: ItemCatalog | null = null;
+    private catalog: BagItemCatalog | null = null;
     private closed = false;
     private actions: CampaignActions | null = null;
     private roleLevel: () => number = () => 1;
@@ -37,7 +37,7 @@ export class CampaignView extends BaseView implements CampaignScreen {
         phase: CampaignPhase;
         error: string;
     } | null = null;
-    configure(catalog: ItemCatalog, roleLevel: () => number, chooseFormation: () => Promise<boolean>, closeFormation: () => void): void {
+    configure(catalog: BagItemCatalog, roleLevel: () => number, chooseFormation: () => Promise<boolean>, closeFormation: () => void): void {
         this.catalog = catalog; this.roleLevel = roleLevel; this.chooseFormation = chooseFormation; this.closeFormation = closeFormation;
     }
     onOpen(): void {

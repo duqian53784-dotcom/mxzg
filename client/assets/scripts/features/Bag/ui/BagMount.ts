@@ -1,11 +1,11 @@
 import { Button, BlockInputEvents, Node, Prefab, Sprite, UITransform } from "cc";
 import { messageOf } from "../../../core/errors";
 import { GameLog } from "../../../core/GameLog";
-import { BagFace } from "../../../module/bag/bagBoard";
+import { BagFace } from "../data/BagItemData";
 import { loadPrefab, spawnPrefab } from "../../../ui/prefabLoad";
 import { mountCcbiView } from "../../../ui/pagePrefabShell";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, positiveUiSize } from "../../../ui/visibleFit";
-import { BackpackInfoView } from "./BackpackInfoView";
+import { BagInfoView } from "./BagInfoView";
 import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
 
 const PAGE_SHELL = "prefabs/ui/common/PagePrefabShell";
@@ -14,7 +14,7 @@ const BAG_BACKDROP = ["ui/bag/map-bg-backpack-1", "ui/maps/map-bg-backpack-1"];
 
 /**
  * 把背包 Prefab 盖进页面宿主。店内底和羊皮纸跟原来的壳一样。
- * 这里只认已知预制的直接子节点，不在 BackpackView 里搜整棵树。
+ * 这里只认已知预制的直接子节点，不在 BagView 里搜整棵树。
  */
 export async function mountBackpackPage(host: Node, layer: Prefab): Promise<Node> {
   let shell: Node | null = null;
@@ -69,9 +69,9 @@ export function openBagInfo(host: Node, dimPrefab: Prefab, infoPrefab: Prefab, f
   const card = spawnPrefab(infoPrefab, sheet);
   seatCenter(card, host);
   if (!card.getComponent(BlockInputEvents)) card.addComponent(BlockInputEvents);
-  const info = card.getComponent(BackpackInfoView);
+  const info = card.getComponent(BagInfoView);
   if (!info) {
-    GameLog.shared.warn("Bag", "BackpackInfoLayer 上没有 BackpackInfoView");
+    GameLog.shared.warn("Bag", "BackpackInfoLayer 上没有 BagInfoView");
     return sheet;
   }
   info.show(face, close, toast);

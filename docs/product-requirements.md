@@ -6,9 +6,11 @@
 
 ## 当前批次的范围与开发顺序
 
-三端骨架仍是前期目标；当前批次仅实现通用 SuperScroll、SuperContent，并接入 BackpackLayer 的物品列表，交付可在 Creator Inspector 修改的完整样板。不同时迁移英雄、邮件、商店等列表，不扩展其他玩法。上一批出阵页的代码与运行证据保留，人工编辑体验仍待用户确认，不自动视为已验收。
+三端骨架仍是前期目标；当前批次是统一运行架构的第一批：只完成背包 BagController/BagModel/BagView，接入库存查询与战斗领奖的库存更新；账号和战斗仅改必要边界，不同时重构其他模块。技术验证完成后先交用户检查代码阅读与 Prefab 修改体验，再推进账号、英雄、阵容、主线与挂机。出阵和 SuperScroll 的既有样板保留，人工体验不自动视为已验收。
 
 2026-10-30 最新要求：后续不再构建 H5 或其他任何包，等用户需要时再执行；日常开发与本批验收以本机 Creator 预览为主。保留已有独立 H5 通过证据，但不能拿旧产物或本机预览冒充当前源码的包验收。上一批取消的默认布局 H5 构建不计作成功发布。
+
+客户端新标准统一为完整名称的模块级 MVC：BagController 继承 BaseController、BagModel 继承 BaseModel、BagView 继承 BaseView；全局 EventDispatcher 与 EventScope 统一通知和监听清理。Controller 处理请求/回包与操作，Model 保存唯一角色状态并提供只读查询，View 打开先监听再读 Model、关闭只解除自身订阅，Prefab 保存静态配置。Controller/Model 独立于窗口；换号/换服/退出使旧请求失效；先提交全部相关状态再发有类型事件。旧的强制 Service/Presenter/Presentation 客户端层次要求已被替代，现有未迁移模块列入后续批次，不作为并行标准。具体实施见 [架构指南](architecture.md) 与 [背包维护指南](bag-mvc-maintenance.md)。
 
 背包列表使用原生 ScrollView/Layout 的薄扩展，布局与 Cell Prefab 只在 Inspector 维护，业务传递类型明确的数据和渲染回调；同分类刷新保留滚动位置，分类切换回到起点。等尺寸 Cell 为第一版范围，虚拟列表以实际数据量与性能证据决定，不默认扩展。
 

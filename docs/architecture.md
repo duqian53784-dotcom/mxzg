@@ -1,49 +1,51 @@
 # mxzg 重做版架构与维护指南
 
-决定日期：2026-10-29。首要标准是人能阅读、在编辑器中修改界面、追踪一次操作并独立排查错误。采用按功能组织的轻量 MVC 客户端和模块化单体后端，职责清晰优先于抽象数量。本文描述目标架构，现有代码尚未完成切换。
+决定日期：2026-10-29；客户端架构基线于 2026-10-30 按用户要求替换。首要标准是人能阅读、在编辑器中修改界面、追踪一次操作并独立排查错误。采用按功能组织的轻量 MVC 客户端和模块化单体后端，职责清晰优先于抽象数量。本文记录统一标准及实际边界：背包已按本批切换，其他模块尚未完成。
 
-## 客户端采用轻量 MVC
+## 客户端统一采用模块级 MVC
 
-每个功能集中放置 Model、Controller、Service 和 View，小功能允许合并不必要的文件，不创建只有转发作用的空壳。
+2026-10-30 最新用户基线：模块使用完整名称和固定目录，不再使用 BagC/BagM/BagV 缩写，也不再让业务 Controller 按页面开关生命周期工作。本文旧的强制 Service/Presenter 分层以及上一轮模块私有 TypedEvents 方案已被替代。当前只落实背包样板，不代表全项目完成。
 
-- Model：该功能的数据与状态，提供只读快照和变更通知。一个业务数据只有一个所有者；不 import cc、View、UIManager 或旧 WireSession。
-- View：Creator Component，绑定 Prefab 节点、渲染传入的展示数据、播放局部动画、转发用户意图。不直接请求服务器或决定业务跳转。
-- Controller：普通 TypeScript，接收 View 意图，调用 Service，监听 Model 并生成展示数据；管理筛选、选中、加载反馈、错误提示与跳转意图。
-- Service：执行功能用例，调用类型明确的接口，校验并将已接受的回包和推送提交给 Model。不操纵节点或弹窗。
-- UIManager：只管理页面、弹窗、层级、返回、加载取消、复用与销毁。注册表在 app 中显式关联页面、Prefab 和 Controller 工厂，框架不硬编码具体业务。
+`features/Bag/` 包含 `BagController.ts`、`BagModel.ts`、`BagEvent.ts`；`ui/` 是 BagView、BagItemView、BagInfoView、BagTabView，`data/` 是 BagItemData、BagState、BagEventData。已有必要手写请求适配保留为 BagApi，配置查询保留为 BagItemCatalog，页面挂载辅助为 ui/BagMount；这些有实际用途，不是额外业务层或状态副本。底层 HTTP 仍在 platform/http，既有生成协议不搬入 Model。
 
-这是结合组件式引擎的 MVC 分工，不套用 Web 服务端 MVC 的文件结构，也不额外引入完整的双向绑定或 ViewModel 框架。
+- BagController 继承 BaseController，处理请求、回包校验、失败、查询代数、库存写入顺序与响应去重；先更新 Model，再派发事件。请求队列和奖励边界是背包职责，不上提基类。
+- BagModel 继承 BaseModel，保存当前角色唯一库存与同步/错误状态，提供冻结的只读查询、全量和必要增量更新。它不引用 Controller、View 或网络 API 文件；校验在 data/BagItemData，API 和 Model 共用。
+- BagView 继承现有 BaseView，打开先监听全局事件再立即读 Model；输入调用 Controller 的明确方法，更新后读 Model 展示，关闭只清理本页监听。BagItemView/BagInfoView/BagTabView 对应既有 Cell/详情/页签，没有新增空类。
+- Prefab 保存固定结构、布局、尺寸、字体、图片与组件参数。V 只更新数据、选中态、动态列表和明确的适配/动画，不再创建一套替代 UI。
 
-以英雄页为例，目标文件是 `features/hero/HeroModel.ts`、`HeroService.ts`、`HeroController.ts` 和 `ui/HeroListView.ts`，对应 `assets/prefabs/ui/hero/`。复杂详情需要独立 Controller 时再拆。首层按功能寻找代码，功能内部再区分职责。
+固定入口为 `BagController.instance` 和 `BagModel.instance`。无反射、泛型单例框架、自动模块扫描或多层 BaseObject 继承。新增功能仍按需求 → 协议 → 接口/类型 → Prefab → View 绑定 → 业务推进；现有手写 DTO 尚未自动生成，不提前标记生成器完成。
 
-默认调用顺序：按钮 → View 回调 → Controller → Service → 网络接口；服务端结果 → Service 提交 Model → Controller 收到变更 → View.render。服务端推送由相同功能的 Service 更新同一个 Model。页面关闭后模型仍可接受有效回包，旧 View 不再渲染；已提交的扣费操作不能因为关页就被当作失败或在本地撤销。
+## 基类与监听归属
 
-## UI 必须能由人在 Creator 中维护
+`framework/BaseModel.ts` 只维护 roleKey、version、reset(roleKey)、dispose() 和受保护的 incrementVersion；模块数据由子类持有，不放全局字典，也不强加监听能力。BagState 的 revision 来自该 version，不另存第二个版本计数。
 
-本批只把 HeroSelectLayer 及必要组件做成样板，技术结果与人工修改体验分开记录。新增功能依次经过需求、协议约定、接口/类型生成、Prefab、View 绑定和业务实现；不能依靠运行时补节点来跳过可编辑的界面设计。
+`framework/BaseController.ts` 提供显式 initialize、重复初始化保护、resetSession、会话代次与 isCurrent、重复安全 dispose、自有 EventScope 和统一 emit。没有节点/页面引用、业务协议字段、自动联网或统一奖励队列。应用在 RemakeApp 明确提供 BagController.initialize({account, authorization, api})，注册账号观察者后才随有效角色同步数据；构造函数和第一次访问单例不联网。
 
-- 布局、层级、尺寸、锚点、图片、字体、按钮和滚动区保存在 Prefab；使用编辑器可见的属性绑定。
-- View 启动时明确检查必需绑定，缺失就报告“哪个 Prefab 的哪个字段未绑定”，不静默生成替代界面。
-- 列表使用可编辑 Cell Prefab。允许运行时实例化和渲染列表，不用脚本重建整页的固定结构。
-- 使用明确的 Layout、Widget 与安全区规则适配屏幕，避免到处散落坐标补偿和按名字递归搜索。
-- 必须使用代码的屏幕适配和动态列表排布集中处理，参数暴露在 Inspector，并写明具体控制哪些属性。不得在打开、重开或渲染数据时恢复静态按钮坐标、标题字体、Mask/ScrollView 结构。动态内容高度、选中态、数据文字与动画可以更新。
-- 命名对应实际作用，例如 heroList、upgradeButton、levelLabel；注释解释规则和原因，避免保留批次编号和历史补丁叙述。
+`framework/EventScope.ts` 只收集解除函数并清理，清理异常记录拥有者并继续处理其余函数。BaseController 持有模块生命周期的 Scope，BaseView 持有当前开页期间的 Scope；runClose 的 finally 保证清理，不要求业务调用 super.onClose。清理某页或某模块不影响其他拥有者。
 
-出阵样板的具体节点、代码入口、动态属性边界和用户验收清单见 [出阵页维护指南](formation-ui-authoring.md)。现有阵位用一个小组件绑定位置编号和图文状态，不增加 Manager 或多层基类；已有阵容 Controller/API 的职责保留。
+UIRegistry.createController 和 BaseView.attachController 的 show/close 契约仅留给尚未迁移模块的页面适配器；BagView 没有 createController，BagController 没有 show/close，不可作为窗口 Controller。类型检查与运行时入口都防止误绑定。UIManager/BaseView 继续统一页面加载、开关、返回、缓存、取消和释放，不建立第二套窗口框架。
 
-背包物品列表现在由 SuperScroll（继承 ScrollView）与 SuperContent（继承 Layout）维护，见 [背包列表维护指南](super-scroll-authoring.md)。Content 只绑定一次；滚动方向从布局推导，间距/边距使用原生 Layout 的同一份属性。SuperContent 维护 content 和 Cell 根尺寸，原生 Layout 维护 Cell 位置，ScrollView 维护 content 滚动位置，业务仅提交数据/渲染回调。没有新增列表 Manager，也未同时迁移其他列表。
+## 单一全局事件与数据顺序
 
-Creator 的 Prefab 与 Inspector 支持节点、组件与属性的编辑和保存，布局以此为基础，见官方[Prefab](https://docs.cocos.com/creator/3.8/manual/en/asset/prefab.html)和[Inspector](https://docs.cocos.com/creator/3.8/manual/en/editor/inspector/)。表现与领域分离的取舍参考 [Separated Presentation](https://martinfowler.com/eaaDev/SeparatedPresentation.html)，实际分工以本文为准。
+`framework/EventDispatcher.ts` 由原 TypedEvents 改造，整个背包只用 EventDispatcher.instance。提供 on/once/emit，订阅返回可重复安全调用的解除函数；once 在回调前退订，支持提前取消。没有模块私有派发器或全局 clear。事件名在 BagEvent，类型在 data/BagEventData，通过 TypeScript interface augmentation 接入 EventPayloads，框架无需反向导入业务。其他功能直接监听 BagEvent.Changed，不访问 Controller 内部事件对象。
 
-## UIManager 的具体职责
+先提交数据再通知。batchNotifications 让账号和库存等相关状态同步提交完后再投递；每次 emit 均作为通知交付，不作为事件历史仓库。V 打开仍须主动读 Model。单个监听异常记录事件名与堆栈，不阻断其他监听。事件用于通知，不替代明确的业务方法。
 
-统一接收显式页面 id 和参数，管理 Page、Popup、Hud、Toast 等层，处理返回与遮罩。页面工厂在应用启动时装配依赖，优先直接构造，不引入反射式依赖注入容器或必须理解自定义装饰器才能追踪的业务注册。
+BagModel 区分 idle、loading、ready（允许空）和 error；刷新失败保留上次有效快照并显示失败状态。返回值冻结，外部不能改内部数量。角色会话按 serverId/roleId 管理，退出/换号/换服/过期会 reset，旧会话迟到读写不可提交；同角色内另有查询代数和库存操作顺序，旧 GET 也不能覆盖新奖励。
 
-生命周期只有一套：创建并校验 View → 绑定 Controller → 打开 → 关闭并解除本次订阅 → 按缓存策略复用或销毁。引擎 onLoad/start/onDestroy 与框架钩子的映射写在基础类中，业务不同时在两处启动相同工作。
+全量 replaceAll 与带唯一响应标识的 applyDelta 分开；不按收到事件累加资产。战斗领奖由 CampaignController.claim 将现有请求交给 BagController.runInventoryUpdate，校验后同步提交 AccountService.acceptRole 与 BagModel.replaceAll，再通知全局事件。窗口关闭不取消模块结果处理。批处理仅延后同步通知，不提供回滚；服务端事务、幂等、鉴权、阵容 409 和持久化保持原有规则。
 
-同页并发打开共用一次加载；切页使过时的打开意图失效；失败不能入栈；关闭移除输入与订阅；销毁释放持有资源。资源加载作为独立服务，UIManager 不维护业务 UUID 大表，也不实现账号、养成或战斗规则。
+## Prefab 与通用列表
 
-当前 UIManager 的统一管理意图保留，具体实现按目标审查。当前 HeroListView 仍引用 WireSession、业务列表构造和详情打开；BackpackView 同时读取 GameStore、监听网络和加载子预制。已有 View 命名不代表已经完成上述分层，后续按功能切换拆出 Controller。
+本批保留 BackpackLayer/Cell 及移动脚本的 UUID、现有资源路径和按需加载，不把全部图标改成直接引用。SuperScroll/SuperContent 继续负责通用滚动/布局，不认识协议或奖励。SuperContent 计算范围与 Cell 根尺寸，原生 Layout 维护 Cell 位置，ScrollView 维护滚动位置；背包只提供条目和渲染回调。
+
+缺少必要绑定必须指出 Prefab/节点/字段，不静默生成替代页面。本批未改人工 Prefab 配置。共享根/背景适配、动态页签排列及详情居中仍沿用旧辅助代码，具体控制范围见 [背包维护指南](bag-mvc-maintenance.md)，不宣称整页静态布局全部整改。列表 Inspector 步骤见 [SuperScroll 指南](super-scroll-authoring.md)，出阵指南仍见 [出阵页维护入口](formation-ui-authoring.md)。人工阅读和编辑体验由用户确认，自动化不代签。
+
+## 当前入口与未迁移边界
+
+当前开发入口为 Remake.scene。旧 Main/screenFill 的背包入口已退役并提示使用 Remake，不再条件切换 GameStore/WireSession 或接收新库存。旧 InventoryController、背包开关、BagC/BagM/BagV 缩写脚本及 TypedEvents 文件均已被替代，未留转发别名。
+
+账号仍为 AccountModel/AccountService，英雄仍有 HeroRoster 的 Model/Controller/Service/Presentation，阵容仍为 FormationController，主线与挂机仍为 CampaignController/既有页面状态。本批只修改必要的账号通知和战斗领奖边界。Boot → Main 仍依赖旧登录、WireSession、GameStore、英雄和战斗等，隔离为历史对照入口；不把背包完成称为全项目统一完成。用户确认样板后再逐批迁移、验证、查引用清理，不保留两套长期标准。
 
 ## 后端决定
 
@@ -92,16 +94,13 @@ Creator 的 Prefab 与 Inspector 支持节点、组件与属性的编辑和保�
 
 ## 人如何接手修改
 
-- 调整排版、图片或按钮位置：打开对应 Prefab。
-- 调整点按钮后的流程：找该页 Controller。
-- 查看当前英雄、背包或章节状态：找该功能 Model。
-- 查看客户端请求和回包处理：找该功能 Service 与生成的接口类型。
-- 新增页面：添加 View/Controller，在 app 的显式页面表登记。
-- 修改开关、返回或页面释放：查看 UIManager 的统一契约。
-- 修改服务端升级或发奖：查看对应功能 Service、Rules 与 Repository。
-- 查询表结构和数据变更：查看数据库迁移与该模块 Repository。
+- 排版、图片、按钮、列表参数：对应 Prefab 与 Cell Prefab。
+- 客户端协议处理和业务动作：功能 Controller；HTTP 路径在该功能 API，共用数据校验在 data。
+- 当前数据与查询规则：功能 Model；展示/点击/分类和详情在 View。
+- 开关、返回、释放：UIManager、BaseView；角色会话装配在 RemakeApp。
+- 服务端操作：原有 Controller、Service、Rules、Repository 与迁移 SQL，本次未更换后端分层。
 
-验收要求：能从页面名找到 Prefab、View、Controller、Model、Service 和接口；能从一个请求标识追踪到服务端操作、错误和结果。每个功能入口说明只记录实际文件与关键规则，不复制长篇历史迭代。
+以实际文件和方法追踪一次查询/一次领奖，不以凑齐目录和文件数作为完成标准。背包文件表、调用链、退役边界、运行证据与用户待验收项见 [维护指南](bag-mvc-maintenance.md)。
 
 ## 落地边界
 
@@ -109,9 +108,9 @@ Creator 的 Prefab 与 Inspector 支持节点、组件与属性的编辑和保�
 
 当前退出作用域只撤销自身 addRef，并以 decRef(false) 保留引擎缓存；旧页面尚未全部迁移，不主动释放共享纹理/Spine。Bundle 归属、配置按需加载、主动淘汰及内存预算对应主计划 P2-04–P2-09，不能因 ResourcePool 存在就视为全部完成。后续进度以 restructuring-plan.md 与 development-progress.md 顶部快照为准。
 
-先完成新架构下的登录、主城和一场战斗切片，再接入完整主循环。先用一个功能证明分层和人工修改体验，再调整框架；不在没有具体功能时一次生成大量基类、Manager 和空目录。
+本批先交付背包标准模块样板，等待用户检查代码阅读方式与 Prefab 修改体验，再扩大模块迁移。已有登录、主城和基础战斗保留；不在没有具体功能时增加基类、Manager 和空目录。
 
-英雄列表采用已有 View 的数据源注入作为兼容接缝：HeroRosterController 在 UIManager 开页前注入 HeroRosterPresentation，展示读取独立 Model，Service 通过 AccountService 的会话能力访问新 API。旧 Boot 不注入时仍使用原路径；新增功能不继续写 GameStore/WireSession。列表和格子 Prefab 保持原 UUID，重做分支隐藏未接入的详情/养成入口。
+以下是尚未迁移的英雄历史实现，不是新架构标准：英雄列表采用已有 View 的数据源注入作为兼容接缝：HeroRosterController 在 UIManager 开页前注入 HeroRosterPresentation，展示读取独立 Model，Service 通过 AccountService 的会话能力访问新 API。旧 Boot 不注入时仍使用原路径；新增功能不继续写 GameStore/WireSession。列表和格子 Prefab 保持原 UUID，重做分支隐藏未接入的详情/养成入口。
 
 会话根与玩法页分开管理：RemakeNavigation 保留主城根和共享顶底栏，玩法内容由统一 UIManager 创建、关闭和退订；退出会话时关闭玩法和根。HomeFeatureNavigation 只处理功能打开/取消/返回意图，LoginEntry 继续负责“资源就绪后停登录，点击开始才进主城”。
 

@@ -8,10 +8,11 @@ import { AccountService, SessionChanged } from "../assets/scripts/features/accou
 import { AccountController } from "../assets/scripts/features/account/AccountController";
 import type { AccountActions } from "../assets/scripts/features/account/AccountController";
 import { ServerSelection } from "../assets/scripts/features/account/ServerSelection";
-import { InventoryApi, readInventory } from "../assets/scripts/features/backpack/InventoryApi";
-import { ItemCatalog } from "../assets/scripts/features/backpack/ItemCatalog";
-import { InventoryController } from "../assets/scripts/features/backpack/InventoryController";
-import type { InventorySource } from "../assets/scripts/features/backpack/InventoryController";
+import { BagApi } from "../assets/scripts/features/Bag/BagApi";
+import { readBagItems } from "../assets/scripts/features/Bag/data/BagItemData";
+import { BagController } from "../assets/scripts/features/Bag/BagController";
+import { BagModel } from "../assets/scripts/features/Bag/BagModel";
+import { BagItemCatalog } from "../assets/scripts/features/Bag/BagItemCatalog";
 import { CampaignApi, readCampaignReport } from "../assets/scripts/features/battle/CampaignApi";
 import type { CampaignReport, CampaignState } from "../assets/scripts/features/battle/CampaignApi";
 import { CampaignController } from "../assets/scripts/features/battle/CampaignController";
@@ -69,45 +70,6 @@ async function checkLoginAndWorlds() {
   controller.close();
 }
 
-async function checkInventory() {
-  const model = new AccountModel();
-  const service = new AccountService(model,{ developmentLogin:async () => ({ session,role }),currentRole:async () => role },
-    { read:() => null,write:() => {},clear:() => {} });
-  await service.login("night_player");
-  const catalog = new ItemCatalog(JSON.parse(readFileSync("client/assets/resources/config/item.json","utf8")),
-    JSON.parse(readFileSync("client/assets/resources/config/language.json","utf8")));
-  let response: unknown = [{ itemId:900101,quantity:50 },{ itemId:900102,quantity:2 }], status = 200;
-  let late: ReturnType<typeof deferred<unknown>> | null = null;
-  const api = new InventoryApi(new JsonClient("http://test",async request => {
-    assert.equal(request.headers.Authorization,"Bearer "+session.accessToken);
-    return { status,data:late ? await late.promise : response };
-  }));
-  let source!:InventorySource, renders = 0;
-  const controller = new InventoryController(model,service,api,catalog,{ useInventory:value => { source = value; },refreshInventory:() => { renders++; } });
-  controller.show(); await settle();
-  assert.equal(source.rows("item").length,2); assert.equal(source.rows("equip").length,0);
-  assert.equal(source.face(source.rows("item")[0]).title,"英雄经验");
-  assert.equal(source.face(source.rows("item")[0]).icon,"ui/bag/backpack_900101");
-  assert.throws(() => readInventory([{ itemId:1,quantity:1 },{ itemId:1,quantity:2 }]),/无效/);
-  assert.throws(() => readInventory([{ itemId:1,quantity:"2" }]),/无效/);
-  status = 503; await controller.refresh(); assert(source.failed()); assert.equal(source.rows("item").length,2);
-  assert(source.message().includes("显示上次库存"),"failed refresh must identify the retained snapshot");
-  status = 200; source.retry(); await settle(); assert(!source.failed());
-  late = deferred<unknown>(); const pending = controller.refresh();
-  assert.equal(source.rows("item").length,2,"pending same-role refresh cannot temporarily shrink the list");
-  controller.close(); const closedRenders = renders;
-  late.resolve(response); await pending; assert.equal(renders,closedRenders);
-  assert.equal(source.rows("item").length,0);
-  late=null;
-  let second!:InventorySource;
-  const switched=new InventoryController(model,service,api,catalog,{useInventory:value=>{second=value;},refreshInventory:()=>{}});
-  switched.show();await settle();assert.equal(second.rows("item").length,2);
-  late=deferred<unknown>();const switching=switched.refresh();
-  service.logout();assert.equal(second.rows("item").length,0,"identity change must immediately clear retained inventory");
-  late.resolve(response);await switching;
-  assert.equal(second.rows("item").length,0,"late reply cannot restore the previous role's inventory");switched.close();
-}
-
 async function checkCampaign() {
   assert.deepEqual(readCampaignReport(report),report);
   assert.throws(() => readCampaignReport({ ...report,hits:[{ ...report.hits[0],remainingHp:1 }] }),/血量/);
@@ -116,6 +78,7 @@ async function checkCampaign() {
   const service = new AccountService(account,{ developmentLogin:async () => ({ session,role:profile }),currentRole:async () => profile },
     { read:() => null,write:() => {},clear:() => {} });
   await service.login("night_player");
+  const bag = new BagController(new BagModel()); bag.initialize({account,authorization:service,api:{list:async()=>[]}}); const stopBag = () => bag.dispose();
   let state = { ...initialState }, requests = 0, claims = 0;
   const api = new CampaignApi(new JsonClient("http://test",async request => {
     assert.equal(request.headers.Authorization,"Bearer "+session.accessToken);
@@ -136,17 +99,17 @@ async function checkCampaign() {
     replay:async value => { assert.deepEqual(value,report);plays++;await playback.promise; },
     showResult:async (_value,callback) => { results++;confirm = callback; },dismissResult:() => {},nextSpeed:() => {},skipReplay:() => playback.resolve(),
   };
-  const controller = new CampaignController(account,service,api,screen,() => {});
+  const controller = new CampaignController(account,service,api,screen,() => {},bag);
   controller.show(); await settle(); assert.equal(phase,"idle");
   actions.fight();actions.fight();await settle();assert.equal(requests,1);assert.equal(plays,1);assert.equal(results,0);
   controller.close(); await settle(); assert.equal(results,0,"closed replay cannot open settlement");
   playback = deferred<void>();
-  const reopened = new CampaignController(account,service,api,screen,() => {});
+  const reopened = new CampaignController(account,service,api,screen,() => {},bag);
   reopened.show();await settle();assert.equal(plays,2,"pending server battle resumes without another challenge");
   playback.resolve();await settle();assert.equal(results,1);
   confirm();confirm();await settle();await settle();
   assert.equal(claims,1);assert.equal(account.snapshot.role!.gold,4000);assert.equal(phase,"idle");
-  assert.equal(requests,1);reopened.close();
+  assert.equal(requests,1);reopened.close();stopBag();
   // A profile refresh that completes after logout cannot resurrect identity.
   const pendingRole = deferred<typeof role>();
   const racingModel = new AccountModel();
@@ -183,7 +146,7 @@ function checkVisualGeometry() {
   assert(cell.some((row:any) => row.button && row.caption && row.backgrounds));
 }
 async function main() {
-  await checkLoginAndWorlds();await checkInventory();await checkCampaign();checkVisualGeometry();
+  await checkLoginAndWorlds();await checkCampaign();checkVisualGeometry();
   console.log("remake-playable-check passed: world selection, Start gate, inventory catalog/read/retry, authoritative battle replay/claim/resume, identity races and shared geometry/transition cancellation");
 }
 void main().catch(error => { console.error(error);process.exitCode = 1; });

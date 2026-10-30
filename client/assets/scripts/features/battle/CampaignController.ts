@@ -1,6 +1,7 @@
 import { AccountModel } from "../account/AccountModel";
 import { AccountService, SessionChanged } from "../account/AccountService";
 import { CampaignApi } from "./CampaignApi";
+import { BagController } from "../Bag/BagController";
 import type { CampaignState, CampaignReport } from "./CampaignApi";
 export type CampaignPhase = "loading" | "idle" | "formation" | "challenging" | "replaying" | "result" | "claiming" | "error";
 export interface CampaignActions {
@@ -34,7 +35,8 @@ export class CampaignController {
     private report: CampaignReport | null = null;
     private request: string | null = null;
     private disposers: Array<() => void> = [];
-    constructor(private readonly account: AccountModel, private readonly service: AccountService, private readonly api: CampaignApi, private readonly view: CampaignScreen, private readonly notice: (text: string) => void) { }
+    constructor(private readonly account: AccountModel, private readonly service: AccountService, private readonly api: CampaignApi, private readonly view: CampaignScreen, private readonly notice: (text: string) => void,
+        private readonly bag: BagController = BagController.instance) { }
     show(): void {
         if (this.closed || this.disposers.length)
             return;
@@ -110,8 +112,16 @@ export class CampaignController {
         const epoch = ++this.epoch, id = this.report.id;
         this.paint("claiming");
         try {
-            await this.service.authenticated(token => this.api.claim(token, id));
-            await this.service.refreshRole();
+            await this.bag.runInventoryUpdate("campaign-claim:" + id,
+                () => this.service.authenticated(token => this.api.claim(token, id)),
+                result => {
+                    if (result.battle.id !== id) throw new Error("战斗结算响应与请求不一致");
+                    return result.inventory;
+                },
+                result => {
+                    this.service.acceptRole(result.role);
+                    if (this.accepts(epoch) && this.state) this.state = { ...this.state, stageId: result.stageId, pending: null };
+                });
             if (!this.accepts(epoch))
                 return;
             this.report = null;

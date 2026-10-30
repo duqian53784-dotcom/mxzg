@@ -1,8 +1,8 @@
 import { JsonClient } from "../../platform/http/JsonClient";
 import { readRole } from "../account/AccountApi";
 import type { RoleProfile } from "../account/AccountModel";
-import { readInventory } from "../backpack/InventoryApi";
-import type { InventoryItem } from "../backpack/InventoryApi";
+import { readBagItems } from "../Bag/data/BagItemData";
+import type { BagItemData } from "../Bag/data/BagItemData";
 export interface CampaignUnit {
     id: string;
     ally: boolean;
@@ -47,7 +47,7 @@ export interface CampaignState {
 export interface CampaignSettlement {
     battle: CampaignReport;
     role: RoleProfile;
-    inventory: readonly InventoryItem[];
+    inventory: readonly BagItemData[];
     stageId: number;
 }
 function object(value: unknown): Record<string, unknown> {
@@ -110,6 +110,6 @@ export class CampaignApi {
     async challenge(token: string, requestId: string): Promise<CampaignReport> { return readCampaignReport(await this.http.request("/api/v1/campaign/battles", { requestId }, token)); }
     async claim(token: string, id: string): Promise<CampaignSettlement> {
         const row = object(await this.http.request("/api/v1/campaign/battles/" + encodeURIComponent(id) + "/claim", {}, token));
-        return { battle: readCampaignReport(row.battle), role: readRole(row.role), inventory: readInventory(row.inventory), stageId: integer(row.stageId, 1) };
+        return { battle: readCampaignReport(row.battle), role: readRole(row.role), inventory: readBagItems(row.inventory), stageId: integer(row.stageId, 1) };
     }
 }

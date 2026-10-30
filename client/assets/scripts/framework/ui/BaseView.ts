@@ -1,6 +1,7 @@
 import { _decorator, Component } from "cc";
 import { requestViewClose } from "./ViewClose";
 import type { ViewController } from "./UIRegistry";
+import { EventScope } from "../EventScope";
 
 const { ccclass } = _decorator;
 
@@ -23,10 +24,17 @@ export class BaseView<TArgs = unknown> extends Component {
   private unbound = false;
   private disposed = false;
   private controller: ViewController | null = null;
+  private readonly eventScope = new EventScope(this.constructor.name);
+
+  /** Views register their own event/button disposers; closing never clears another owner's listeners. */
+  protected ownListener(stop: () => void): void { this.eventScope.add(stop); }
 
   /** UIManager attaches the application-created controller before opening the View. */
   attachController(controller: ViewController): void {
     if (this.created || this.disposed || this.controller) throw new Error("Controller must be attached once before View creation");
+    if (typeof controller.show !== "function" || typeof controller.close !== "function") {
+      throw new Error("BaseView.attachController 只接受页面生命周期适配器；模块 BaseController 必须由应用管理");
+    }
     this.controller = controller;
   }
 
@@ -113,8 +121,11 @@ export class BaseView<TArgs = unknown> extends Component {
   runClose(): void {
     if (!this.shown) return;
     this.shown = false;
-    this.controller?.close();
-    this.onClose();
+    try { this.controller?.close(); }
+    finally {
+      try { this.onClose(); }
+      finally { this.eventScope.clear(); }
+    }
   }
 
   runUnbind(): void {

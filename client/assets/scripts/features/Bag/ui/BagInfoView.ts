@@ -1,6 +1,6 @@
 import { _decorator, Button, Component, Label, Node, Sprite, UITransform } from "cc";
 import { GameLog } from "../../../core/GameLog";
-import { BagFace } from "../../../module/bag/bagBoard";
+import { BagFace } from "../data/BagItemData";
 import { positiveUiSize } from "../../../ui/visibleFit";
 import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
 
@@ -10,8 +10,8 @@ const { ccclass, property } = _decorator;
  * BackpackInfoLayer。使用和来源只读，不发 5004–5009。
  * 关闭只收起这张详情，不关背包页。
  */
-@ccclass("BackpackInfoView")
-export class BackpackInfoView extends Component {
+@ccclass("BagInfoView")
+export class BagInfoView extends Component {
   @property(Node)
   bg: Node | null = null;
 

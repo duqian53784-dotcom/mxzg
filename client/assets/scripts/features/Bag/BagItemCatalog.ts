@@ -1,11 +1,8 @@
 import type { BagTabKind } from "../../config/gameCatalog";
-import type { BagFace } from "../../module/bag/bagBoard";
+import type { BagItemDisplayData } from "./data/BagItemData";
+
 type Row = Record<string, unknown>;
-export interface ItemFace extends BagFace {
-    category: BagTabKind;
-    wallet: boolean;
-}
-export class ItemCatalog {
+export class BagItemCatalog {
     private items = new Map<number, Row>();
     private words = new Map<number, string>();
     constructor(items: {
@@ -21,7 +18,7 @@ export class ItemCatalog {
                 this.words.set(row.key, row.value);
     }
     get greeting(): string { return this.words.get(5788) || "欢迎光临～"; }
-    face(id: number, quantity: number): ItemFace {
+    face(id: number, quantity: number): BagItemDisplayData {
         const row = this.items.get(id);
         const type = row?.type;
         const category: BagTabKind = [14, 17, 22, 26].includes(Number(type)) ? "equip" : [7, 9].includes(Number(type)) ? "shard" : type === 8 ? "spirit" : "item";

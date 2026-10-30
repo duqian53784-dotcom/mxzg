@@ -2189,17 +2189,17 @@ function checkLog(): void {
   log.warn("T", "mirrored");
   assert(log.recent()[log.recent().length - 1].message === "mirrored", "mirror still buffers");
   log.minLevel = "debug";
-  log.openView("BackpackView", "BackpackLayer", { ms: 12, tag: "MainApp" });
+  log.openView("BagView", "BackpackLayer", { ms: 12, tag: "MainApp" });
   const opened = log.recent()[log.recent().length - 1];
   assert(
     opened.tag === "MainApp" &&
       opened.level === "info" &&
-      opened.message === "打开界面 BackpackView ui BackpackLayer 耗时 12ms",
+      opened.message === "打开界面 BagView ui BackpackLayer 耗时 12ms",
     "opening a view logs name, prefab, and duration"
   );
   const openedText = log.format(opened);
   assert(
-    openedText.indexOf("[mxzg][info][MainApp] ") === 0 && openedText.indexOf(" 打开界面 BackpackView ui BackpackLayer 耗时 12ms") > 0,
+    openedText.indexOf("[mxzg][info][MainApp] ") === 0 && openedText.indexOf(" 打开界面 BagView ui BackpackLayer 耗时 12ms") > 0,
     "open line keeps the mxzg info source and clock"
   );
   const plainInfo = log.recent()[0];
@@ -2241,9 +2241,9 @@ function checkLog(): void {
   beginPageOpen("skeleton-bag", true, "MainApp");
   markPageShown("skeleton-bag");
   assert(GameLog.shared.recent()[GameLog.shared.recent().length - 1] === plain, "prefab page waits until the shell is mounted");
-  markPageContent("skeleton-bag", "BackpackView", "BackpackLayer");
+  markPageContent("skeleton-bag", "BagView", "BackpackLayer");
   const bag = GameLog.shared.recent()[GameLog.shared.recent().length - 1];
-  assert(bag.message.indexOf("打开界面 BackpackView ui BackpackLayer 耗时 ") === 0, "prefab page logs once the view is mounted");
+  assert(bag.message.indexOf("打开界面 BagView ui BackpackLayer 耗时 ") === 0, "prefab page logs once the view is mounted");
   beginPageOpen("skeleton-race", true, "MainApp");
   const stale = pageOpenToken("skeleton-race");
   beginPageOpen("skeleton-race", true, "MainApp");
@@ -27582,12 +27582,12 @@ function checkCityHub(): void {
   const bagPaths = prefabChildPaths(bagLayer);
   assert(
     bagPaths.includes("spr_box/BagScroll/view/content") && bagScrollWired(bagLayer) &&
-      bagFill.includes('getComponent("BackpackView")') && bagFill.includes("bag.runOpen()") &&
+      bagFill.includes("历史入口背包已退役") && !bagFill.includes("bag.runOpen()") &&
       !bagFill.includes("content.parent") && !bagFill.includes("content.setPosition") && !bagFill.includes("removeComponent"),
     "legacy bag uses the shared authored hierarchy and view, without repairing or resetting scroll"
   );
   const bagBoardSrc = readFileSync(join(process.cwd(), "client", "assets", "scripts", "module", "bag", "bagBoard.ts"), "utf8");
-  const bagViewSrc = readFileSync(join(process.cwd(), "client", "assets", "scripts", "features", "backpack", "ui", "BackpackView.ts"), "utf8");
+  const bagViewSrc = readFileSync(join(process.cwd(), "client", "assets", "scripts", "features", "Bag", "ui", "BagView.ts"), "utf8");
   assert(bagFrameFits(bagLayer) && bagBoardSrc.includes("BAG_MIN_SLOTS = 20") && bagViewSrc.includes("bagSlotCount(rows.length)") &&
     !bagViewSrc.includes("bagSlotPosition") && !bagViewSrc.includes("prepareScroll") && !bagBoardSrc.includes("BAG_PITCH"),
     "bag retains its empty-slot policy while all item geometry belongs to Inspector components");
@@ -28242,13 +28242,13 @@ function bagFrameFits(file: string): boolean {
   const bgUi = uiOf(bg);
   const boxUi = uiOf(box);
   const plateUi = uiOf(plate);
-  if (!bg || !box || !plate || !portrait || !bgUi || !boxUi || !plateUi) return false;
+  if (!bg || !box || !portrait || !bgUi || !boxUi || (plate && !plateUi)) return false;
   const bgSize = bgUi._contentSize;
   const bgAnchor = bgUi._anchorPoint;
   const boxSize = boxUi._contentSize;
   const boxAnchor = boxUi._anchorPoint;
-  const plateSize = plateUi._contentSize;
-  if (!bgSize || !bgAnchor || !boxSize || !boxAnchor || !plateSize || !bg._lpos || !box._lpos || !plate._lpos || !portrait._lpos) return false;
+  const plateSize = plateUi?._contentSize;
+  if (!bgSize || !bgAnchor || !boxSize || !boxAnchor || !bg._lpos || !box._lpos || !portrait._lpos) return false;
   const bgTop = (bg._lpos.y || 0) + (1 - bgAnchor.y) * bgSize.height;
   if (!near(bg._lpos.y, -14.25) || !near(bgSize.width, 640) || !near(bgSize.height, 734.4) || !near(bgAnchor.y, 0) || !near(bgTop, 720.15)) return false;
   if (!near(box._lpos.y, 615.75) || !near(box._lpos.x, 320) || !near(boxSize.width, 520) || !near(boxSize.height, 565) || !near(boxAnchor.y, 1)) return false;
@@ -28259,7 +28259,7 @@ function bagFrameFits(file: string): boolean {
   const innerRight = 640 - 59;
   const innerBottom = (bg._lpos.y || 0) + 59;
   if (boxLeft < innerLeft - 0.5 || boxRight > innerRight + 0.5 || boxBottom < innerBottom - 0.5) return false;
-  if (!near(plate._lpos.y, 352.95) || !near(plateSize.width, 640) || !near(plateSize.height, 734.4)) return false;
+  if (plate && (!plate._lpos || !plateSize || !near(plate._lpos.y, 352.95) || !near(plateSize.width, 640) || !near(plateSize.height, 734.4))) return false;
   return near(portrait._lpos.y, 748);
 }
 

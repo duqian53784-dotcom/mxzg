@@ -9,7 +9,7 @@
 - 场景不再直接引用主城 Prefab；主城组合入口位于 assets/bundles/remake-home，点击开始后通过 HomeResources 按需加载。修改后须重新打开 Remake.scene，避免使用旧场景内存中的引用。
 - 使用 backend 下的新 Java 服务，双击 scripts/start-remake-backend.bat 启动，默认地址 http://127.0.0.1:18080。
 - 登录与角色资料页面使用 Prefab 切换，均在同一场景中；新增 UI 页面不需要新增场景。
-- 默认账号 player_1，右上角“开发账号”可修改。登录后复用已有 CityHub 地图与 CityChrome 顶底栏，显示新后端真实角色资料；右上侧“账号”可查看角色 ID 并退出。英雄、主线等业务尚未接入新后端，点击提示暂未开放。
+- 默认账号 player_1，右上角“开发账号”可修改。登录后复用已有 CityHub 地图与 CityChrome 顶底栏，显示新后端真实角色资料；右上侧“账号”可查看角色 ID 并退出。英雄读取、背包分类/详情、出阵查询/版本保存和基础主线战斗/领奖已接新后端；完整技能、养成和服务端挂机收益未完成。背包采用会话级 BagController/BagModel，BagView 只负责展示。
 - 当前登录页是 prefabs/ui/account/AccountLogin；prefabs/ui/login 是共用启动/选服组件，两个旧登录入口已隔离到 prefabs/ui/legacy-login，只给旧 Boot 对照使用。
 
 ## legacy/Boot.scene：旧游戏启动入口
@@ -19,7 +19,7 @@
 - Canvas 挂载 Boot，负责旧资源加载、登录、角色同步与主城预加载。
 - 使用旧服务器和 WebSocket 桥，对应 scripts/start-local-all 启服脚本。
 - 登录成功后加载名为 Main 的场景，并给其 Canvas 添加 MainApp。
-- 对照或回归已有游戏页面时，从此场景开始预览。
+- 只用于旧链路对照，不是当前开发验收入口。其背包已经退役，点击提示使用 Remake；其余 WireSession/GameStore 历史依赖尚未迁移，不代表全项目统一完成。
 
 ## legacy/Main.scene：旧主城承载场景
 

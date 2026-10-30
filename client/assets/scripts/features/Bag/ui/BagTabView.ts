@@ -4,8 +4,8 @@ import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
 const { ccclass, property } = _decorator;
 
 /** BackpackTabButton。标题和按钮在预制上，选中只换图。 */
-@ccclass("BackpackTabButtonView")
-export class BackpackTabButtonView extends Component {
+@ccclass("BagTabView")
+export class BagTabView extends Component {
   @property(Label)
   title: Label | null = null;
 

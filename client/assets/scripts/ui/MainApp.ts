@@ -42,8 +42,6 @@ import { installGmHotkey, openGmDebug, uninstallGmHotkey } from "../features/gm/
 import { attachPagePrefabShell, HANG_PROBE_EVENT, mountHangBattleShell, USE_PAGE_PREFAB_SHELL } from "./pagePrefabShell";
 import { pagePrefabShell } from "./prefabShellMap";
 import { beginPageOpen } from "../framework/ui/UIOpenLog";
-import { BackpackView } from "../features/backpack/ui/BackpackView";
-import { useBackpackView } from "../features/backpack/config/BackpackFeatureFlag";
 import { useBattleView } from "../features/battle/config/BattleFeatureFlag";
 import { BattleHangView } from "../features/battle/ui/BattleHangView";
 import { useCityView } from "../features/city/config/CityFeatureFlag";
@@ -301,14 +299,7 @@ export class MainApp extends Component {
       return;
     }
     if (id === "bag") {
-      if (useBackpackView() && this.panels?.current === "bag") {
-        UIManager.instance.close();
-        this.refreshChrome();
-        return;
-      }
-      arm();
-      this.openChild(id);
-      if (fromBar && !this.shell?.barSlideWaiting()) this.sealBarSlide();
+      UIManager.instance.toast("历史入口背包已退役，请使用 Remake.scene");
       return;
     }
     if (id === "hero" && useHeroView()) {
@@ -376,13 +367,8 @@ export class MainApp extends Component {
     ) {
       return;
     }
-    if (id === "bag" && useBackpackView()) {
-      this.shell?.holdBarSlide();
-      void UIManager.instance.open(BackpackView).catch((err) => {
-        this.shell?.dropWaitingBarSlide("bag");
-        if (isOpenCancelled(err)) return;
-        GameLog.shared.error("MainApp", "背包页没有打开 " + messageOf(err));
-      });
+    if (id === "bag") {
+      UIManager.instance.toast("历史入口背包已退役，请使用 Remake.scene");
       return;
     }
     if (id === "hero" && useHeroView()) {
@@ -693,7 +679,6 @@ export class MainApp extends Component {
       "prefabs/ui/hero/HeroListLayer",
       "prefabs/ui/hero/HeroListHeroLayer",
       "prefabs/ui/hero/HeroIconCell",
-      "prefabs/ui/backpack/BackpackLayer",
     ];
     for (let i = 0; i < paths.length; i++) {
       const path = paths[i];

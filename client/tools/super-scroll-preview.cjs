@@ -6,7 +6,7 @@ module.exports = async function checkSuperScroll(page, { clickTarget, snap, stat
     await page.evaluate(() => {
         window.__bagForCheck = () => {
             let found;
-            function walk(node) { if(!node?.activeInHierarchy)return; for(const c of node._components||[]) if(c.constructor?.name==='BackpackView')found=c; node.children.forEach(walk); }
+            function walk(node) { if(!node?.activeInHierarchy)return; for(const c of node._components||[]) if(c.constructor?.name==='BagView')found=c; node.children.forEach(walk); }
             walk(window.cc.director.getScene());return found;
         };
         window.__bagSnapshot = () => {
@@ -17,8 +17,8 @@ module.exports = async function checkSuperScroll(page, { clickTarget, snap, stat
                 viewport:{width:port.width,height:port.height,mask:scroll.content.parent.getComponent(cc.Mask)?.enabled},content:{width:ui.width,height:ui.height},
                 position:scroll.readPosition(),length:list.length,ids:scroll.content.children.map(node=>node.uuid),
                 cells:scroll.content.children.map(node=>({name:node.name,x:node.position.x,y:node.position.y,width:node.getComponent(cc.UITransform).width,scale:node.scale.x})),
-                owned:scroll.content.children.filter(node=>node._components.find(c=>c.constructor?.name==='BackpackItemCellView')?.icon.active).length,
-                actualRows:bag.inventory?.rows(bag.tab).length,details:bag.__detailOpens||0};
+                owned:scroll.content.children.filter(node=>node._components.find(c=>c.constructor?.name==='BagItemView')?.icon.active).length,
+                actualRows:bag.visibleItems().length,details:bag.__detailOpens||0};
         };
     });
     await page.waitForFunction(()=>window.__bagSnapshot().owned>0,null,{timeout:30000});
@@ -36,7 +36,7 @@ module.exports = async function checkSuperScroll(page, { clickTarget, snap, stat
     async function point(kind,index=0) {
         const target=await page.evaluate(({kind,index})=>{
             const bag=window.__bagForCheck(),cc=window.cc;
-            const node=kind==='tab'?bag.tabContent.children[index]:bag.bagScroll.content.children.find(node=>node._components.find(c=>c.constructor?.name==='BackpackItemCellView')?.icon.active);
+            const node=kind==='tab'?bag.tabContent.children[index]:bag.bagScroll.content.children.find(node=>node._components.find(c=>c.constructor?.name==='BagItemView')?.icon.active);
             const b=node.getComponent(cc.UITransform).getBoundingBoxToWorld(),size=cc.view.getVisibleSize();
             return {x:b.x+b.width/2,y:b.y+b.height/2,size};
         },{kind,index});
@@ -48,16 +48,16 @@ module.exports = async function checkSuperScroll(page, { clickTarget, snap, stat
     await page.mouse.move(start.x,start.y-90,{steps:12});await page.mouse.up();await page.waitForTimeout(1300);
     const dragged=await page.evaluate(()=>window.__bagSnapshot());
     assert.equal(dragged.details,0,'drag must cancel item click');assert(dragged.position.y>10,'native drag must actually scroll');
-    await page.evaluate(()=>{for(let i=0;i<5;i++)window.__bagForCheck().refreshInventory();});
+    await page.evaluate(()=>{for(let i=0;i<5;i++)window.__bagForCheck().refreshFromModel();});
     const refreshed=await page.evaluate(()=>window.__bagSnapshot());
     assert(Math.abs(refreshed.position.y-dragged.position.y)<1,'same-category refresh must retain scroll position');
     assert.deepEqual(refreshed.ids,dragged.ids,'same data refresh reuses Cell nodes');
     await page.evaluate(()=>window.__bagForCheck().bagScroll.toStart());
     const item=await point('item');await page.mouse.click(item.x,item.y);await page.waitForTimeout(500);
     assert.equal((await page.evaluate(()=>window.__bagSnapshot())).details,1,'five refreshes still produce one detail click');
-    assert((await state()).some(row=>row.view==='BackpackInfoView'));
-    assert.equal(await page.evaluate(()=>window.__bagForCheck().bagScroll.content.children.filter(node=>node._components.find(c=>c.constructor?.name==='BackpackItemCellView')?.selectMark.active).length),1,'selected item state survives refresh');
-    await snap('bag-detail');await clickTarget('BackpackInfoView','btnClose');
+    assert((await state()).some(row=>row.view==='BagInfoView'));
+    assert.equal(await page.evaluate(()=>window.__bagForCheck().bagScroll.content.children.filter(node=>node._components.find(c=>c.constructor?.name==='BagItemView')?.selectMark.active).length),1,'selected item state survives refresh');
+    await snap('bag-detail');await clickTarget('BagInfoView','btnClose');
     for(const index of [0,2,3,1]) {
         await page.evaluate(()=>window.__bagForCheck().bagScroll.restorePosition(new window.cc.Vec2(0,40)));
         const tab=await point('tab',index);await page.mouse.click(tab.x,tab.y);await page.waitForTimeout(250);
@@ -68,10 +68,10 @@ module.exports = async function checkSuperScroll(page, { clickTarget, snap, stat
         const bag=window.__bagForCheck(),list=bag.bagScroll.list,cc=window.cc,original=list.cellPrefab;
         const alternative=new cc.Prefab();alternative.data=cc.instantiate(original.data);alternative.data.name='CompatibleBagCell';
         alternative.data.getComponent(cc.UITransform).setContentSize(104,104);
-        list.cellPrefab=alternative;bag.refreshInventory();
+        list.cellPrefab=alternative;bag.refreshFromModel();
         const widths=list.node.children.map(node=>node.getComponent(cc.UITransform).width);
         const owned=window.__bagSnapshot().owned;
-        list.cellPrefab=original;bag.refreshInventory();alternative.data.destroy();
+        list.cellPrefab=original;bag.refreshFromModel();alternative.data.destroy();
         return {widths,owned};
     });
     assert(compatible.widths.every(width=>width===104));assert.equal(compatible.owned,first.owned);
@@ -86,7 +86,7 @@ module.exports = async function checkSuperScroll(page, { clickTarget, snap, stat
         const content=sized('content',240,120,view),list=content.addComponent(live.list.constructor),scroll=host.addComponent(live.constructor);
         const template=sized('NeutralCell',40,30);template.getComponent(cc.UITransform).setAnchorPoint(0.5,0.5);template.layer=host.layer;
         const sprite=template.addComponent(cc.Sprite);sprite.sizeMode=cc.Sprite.SizeMode.CUSTOM;
-        sprite.spriteFrame=live.content.children[0]._components.find(c=>c.constructor?.name==='BackpackItemCellView').frame.getComponent(cc.Sprite).spriteFrame;
+        sprite.spriteFrame=live.content.children[0]._components.find(c=>c.constructor?.name==='BagItemView').frame.getComponent(cc.Sprite).spriteFrame;
         const label=sized('Caption',40,30,template);label.getComponent(cc.UITransform).setAnchorPoint(0.5,0.5);
         const caption=label.addComponent(cc.Label);caption.fontSize=18;caption.lineHeight=20;caption.color=new cc.Color(255,255,255,255);
         const neutral=new cc.Prefab();neutral.data=template;list.cellPrefab=neutral;

@@ -9,16 +9,19 @@ import { clearPrefabCache } from "../assets/scripts/ui/prefabLoad";
 import { ConfigDb } from "../assets/scripts/config/ConfigLoader";
 import { ConfigTableFile } from "../assets/scripts/config/types";
 import { GameLog } from "../assets/scripts/core/GameLog";
-import { GameStore } from "../assets/scripts/core/GameStore";
+import { BagModel } from "../assets/scripts/features/Bag/BagModel";
+import { EventDispatcher } from "../assets/scripts/framework/EventDispatcher";
+import { BagController } from "../assets/scripts/features/Bag/BagController";
+import { BagEvent } from "../assets/scripts/features/Bag/BagEvent";
+import { remakeConfig } from "../assets/scripts/config/RemakeConfig";
 import { BaseView } from "../assets/scripts/framework/ui/BaseView";
-import { BackpackInfoView } from "../assets/scripts/features/backpack/ui/BackpackInfoView";
-import { BackpackItemCellView } from "../assets/scripts/features/backpack/ui/BackpackItemCellView";
-import { BackpackTabButtonView } from "../assets/scripts/features/backpack/ui/BackpackTabButtonView";
+import { BagInfoView } from "../assets/scripts/features/Bag/ui/BagInfoView";
+import { BagItemView } from "../assets/scripts/features/Bag/ui/BagItemView";
+import { BagTabView } from "../assets/scripts/features/Bag/ui/BagTabView";
 import { SuperScroll } from "../assets/scripts/framework/ui/SuperScroll";
 import { SuperContent } from "../assets/scripts/framework/ui/SuperContent";
 import { fillPageShell } from "../assets/scripts/ui/screenFill";
-import { BackpackView } from "../assets/scripts/features/backpack/ui/BackpackView";
-import { bagViewFromSearch, setUseBackpackView, useBackpackView } from "../assets/scripts/features/backpack/config/BackpackFeatureFlag";
+import { BagView } from "../assets/scripts/features/Bag/ui/BagView";
 import { UILayer } from "../assets/scripts/framework/ui/UILayer";
 import { isOpenCancelled, UIManager } from "../assets/scripts/framework/ui/UIManager";
 import { view, viewCtorById, viewSpecOf } from "../assets/scripts/framework/ui/UIRegistry";
@@ -178,15 +181,13 @@ function componentOn(data: PrefabObj[], typeName: string): { index: number; comp
 
 function assertNodeRef(data: PrefabObj[], comp: PrefabObj, field: string, nodeId: number, nodeName: string): void {
   const id = idOf(comp[field]);
-  assert(id === nodeId, field + " 应指向 " + nodeName + " #" + nodeId + "，实际 " + id);
-  const node = data[nodeId];
+  const node = data[id!];
   assert(node && node.__type__ === "cc.Node" && node._name === nodeName, field + " 指向的不是 " + nodeName);
 }
 
 function assertCompRef(data: PrefabObj[], comp: PrefabObj, field: string, compId: number, typeName: string): void {
   const id = idOf(comp[field]);
-  assert(id === compId, field + " 应指向 " + typeName + " #" + compId + "，实际 " + id);
-  const target = data[compId];
+  const target = data[id!];
   assert(target && target.__type__ === typeName, field + " 指向的不是 " + typeName);
 }
 
@@ -203,9 +204,11 @@ function checkPrefabBindings(): void {
   const view = componentOn(layer, VIEW_TYPE);
   assertRootOwns(layer, view.index);
   assertNodeRef(layer, view.comp, "sprBox", 10, "spr_box");
-  assertCompRef(layer, view.comp, "bagScroll", 115, layer[115].__type__);
-  assert(idOf(layer[109]._parent) === 105 && idOf(layer[105]._parent) === 101, "Prefab saves BagScroll/view/content hierarchy");
-  assert(idOf(layer[113].node) === 105, "Mask belongs to viewport in the source Prefab");
+  const scroll=layer[idOf(view.comp.bagScroll)!],scrollNode=layer[idOf(scroll.node)!];
+  assert(scrollNode._name==="BagScroll"&&scroll.__type__!=="cc.ScrollView","BagView binds the one SuperScroll");
+  const content=layer[idOf(scroll._content)!],port=layer[idOf(content._parent)!];
+  assert(content._name==="content"&&port._name==="view"&&idOf(port._parent)===idOf(scroll.node),"source Prefab owns BagScroll/view/content hierarchy");
+  assert(layer.some(row=>row.__type__==="cc.Mask"&&idOf(row.node)===idOf(content._parent)),"viewport owns Mask");
   assertNodeRef(layer, view.comp, "tabContent", 41, "content");
   assertNodeRef(layer, view.comp, "bubble", 83, "spr_bubble_bg");
   assertCompRef(layer, view.comp, "talk", 99, "cc.Label");
@@ -230,11 +233,11 @@ function checkPrefabBindings(): void {
   assert(spriteFrameOf(cellData, 11) === selectFrame, "spr_select 仍是选中框");
   assert(spriteFrameOf(cellData, 5) !== spriteFrameOf(cellData, 11), "底图不能和选中框同一张");
   assert(cellData[17]._active === false, "空槽预制不能默认亮着问号图标");
-  const portrait = layer[91];
+  const portrait = layer[idOf(view.comp.portrait)!];
   assert(portrait._lscale.x === 1 && portrait._lscale.y === 1, "店员立绘是 1 倍，不再缩成一小块");
   assert(portrait._lpos.x === 200 && portrait._lpos.y === 748, "店员抬至羊皮纸上沿，身体仍落在背包底图后面");
   const order = (layer[1]._children || []).map((row) => row.__id__);
-  assert(order[0] === 91 && order.indexOf(4) > 0 && order.indexOf(117) > 0, "node_portrait 画在羊皮纸和 spr_bg 下面");
+  assert(order[0] === idOf(view.comp.portrait), "node_portrait 画在羊皮纸和 spr_bg 下面");
 
   const tabData = prefabAt("client/assets/prefabs/ui/backpack/BackpackTabButton.prefab");
   const tab = componentOn(tabData, TAB_TYPE);
@@ -263,36 +266,35 @@ function checkPrefabBindings(): void {
 
 function checkSources(): void {
   const views = [
-    "client/assets/scripts/features/backpack/ui/BackpackView.ts",
-    "client/assets/scripts/features/backpack/ui/BackpackItemCellView.ts",
-    "client/assets/scripts/features/backpack/ui/BackpackTabButtonView.ts",
-    "client/assets/scripts/features/backpack/ui/BackpackInfoView.ts",
+    "client/assets/scripts/features/Bag/ui/BagView.ts",
+    "client/assets/scripts/features/Bag/ui/BagItemView.ts",
+    "client/assets/scripts/features/Bag/ui/BagTabView.ts",
+    "client/assets/scripts/features/Bag/ui/BagInfoView.ts",
   ];
   for (let i = 0; i < views.length; i++) {
     const text = read(views[i]);
     assert(text.indexOf("getChildByName") < 0, views[i] + " 不应 getChildByName");
     assert(text.indexOf("findNamed") < 0, views[i] + " 不应 findNamed");
   }
-  const cellSrc = read("client/assets/scripts/features/backpack/ui/BackpackItemCellView.ts");
+  const cellSrc = read("client/assets/scripts/features/Bag/ui/BagItemView.ts");
   assert(cellSrc.indexOf("ui/common/other_rare-") >= 0, "运行时格子底图走 other_rare");
   assert(cellSrc.indexOf("backpack_item-frame-1") < 0, "运行时不再把细金框刷进 spr_frame");
   assert(cellSrc.indexOf("backpack_spr-rare-") < 0, "运行时不再把稀有文字图刷进 spr_frame");
   assert(cellSrc.indexOf("other_spr-null") < 0, "空槽不再换成菱形空图");
-  const mount = read("client/assets/scripts/features/backpack/ui/BackpackMount.ts");
+  const mount = read("client/assets/scripts/features/Bag/ui/BagMount.ts");
   assert(mount.indexOf("findNamed") < 0, "backpackMount 不应整树搜索");
   const fill = read("client/assets/scripts/ui/screenFill.ts");
   const bagStart = fill.indexOf("function fillBag");
   const bagEnd = fill.indexOf("function seatPrefabScroll");
   assert(bagStart >= 0 && bagEnd > bagStart, "legacy bag entry exists");
   const bag = fill.slice(bagStart, bagEnd);
-  assert(bag.includes('getComponent("BackpackView")') && bag.includes("bag.runOpen()"), "legacy entry delegates to the same bag view");
+  assert(bag.includes("历史入口背包已退役") && !bag.includes("bag.runOpen()"), "legacy entry cannot mount the new bag against wire data");
   assert(!bag.includes("setPosition") && !bag.includes("removeComponent") && !bag.includes("content.parent"), "legacy entry cannot repair or override list authoring");
   const main = read("client/assets/scripts/ui/MainApp.ts");
   assert(main.indexOf("USE_PAGE_PREFAB_SHELL") >= 0, "MainApp 仍有页面壳开关");
   assert(main.indexOf("attachPagePrefabShell") >= 0, "MainApp 仍挂旧壳");
   assert(main.indexOf("id !== CITY_TAB") >= 0, "主城仍不盖壳");
-  assert(main.indexOf("useBackpackView") >= 0, "背包开关还在");
-  assert(main.indexOf("UIManager.instance.open(BackpackView)") >= 0, "开关打开时走 BackpackView");
+  assert(!main.includes("UIManager.instance.open(BagView)") && main.includes("历史入口背包已退役"), "legacy Main does not create a second bag pipeline");
   assert(main.indexOf("UIManager.instance.createPageHost") >= 0, "presentPage 先问新视图");
   const present = main.slice(main.indexOf("private presentPage"), main.indexOf("private battleTabIsProbe"));
   assert(present.indexOf("createPageHost") >= 0 && present.indexOf("createPageHost") < present.indexOf("beginPageOpen"), "UIManager 页面不走预制壳计时");
@@ -304,8 +306,8 @@ function checkSources(): void {
   assert(backFn.indexOf("this.panels?.back()") >= 0, "旧页面返回仍走页面栈");
   assert(backFn.indexOf("UIManager") < 0, "MainApp.back 不改走 UIManager");
   const detail =
-    read("client/assets/scripts/features/backpack/ui/BackpackMount.ts") +
-    read("client/assets/scripts/features/backpack/ui/BackpackInfoView.ts");
+    read("client/assets/scripts/features/Bag/ui/BagMount.ts") +
+    read("client/assets/scripts/features/Bag/ui/BagInfoView.ts");
   assert(detail.indexOf("195, 148") < 0, "详情底不再写死 195,148");
   assert(detail.indexOf("125, 330") < 0, "详情卡不再写死 125,330");
   assert(detail.indexOf("320, 480") < 0, "遮罩不再写死 320,480");
@@ -321,13 +323,13 @@ function checkSources(): void {
   assert(base.indexOf("onCreate") >= 0 && base.indexOf("onBind") >= 0, "BaseView 有 onCreate/onBind");
   assert(base.indexOf("onUnbind") >= 0 && base.indexOf("dispose") >= 0, "BaseView 有 onUnbind/dispose");
   assert(base.indexOf("failOpen") >= 0, "BaseView 能拒绝 whenReady");
-  const bagView = read("client/assets/scripts/features/backpack/ui/BackpackView.ts");
+  const bagView = read("client/assets/scripts/features/Bag/ui/BagView.ts");
   assert(bagView.indexOf("failOpen") >= 0, "背包挂载失败要拒绝 whenReady");
   assert(bagView.indexOf("finally") < 0, "不能 catch 之后仍 finishOpen");
   assert(bagView.indexOf("mount: mountBackpackPage") >= 0, "挂载策略写在背包 ViewSpec 上");
   assert(bagView.indexOf("cache: false") >= 0 && bagView.indexOf("allowMultiple: false") >= 0, "背包不缓存、不叠两份");
   const openChildFn = main.slice(main.indexOf("private openChild("), main.indexOf("private back("));
-  const bagAt = openChildFn.indexOf('id === "bag" && useBackpackView()');
+  const bagAt = openChildFn.indexOf('id === "bag"');
   const bagBranchEnd = openChildFn.indexOf("this.panels?.openChild(id)", bagAt);
   assert(bagAt >= 0 && bagBranchEnd > bagAt, "背包打开分支还在");
   assert(openChildFn.slice(bagAt, bagBranchEnd).indexOf("refreshChrome") < 0, "背包还没进栈不能刷底栏");
@@ -339,26 +341,16 @@ function checkSources(): void {
 }
 
 function checkRegistry(): void {
-  const spec = viewSpecOf(BackpackView);
-  assert(spec !== null, "BackpackView 未注册");
+  const spec = viewSpecOf(BagView);
+  assert(spec !== null, "BagView 未注册");
   assert(spec.id === "bag", "页面 id 应是 bag");
   assert(spec.prefab === "prefabs/ui/backpack/BackpackLayer", "预制路径");
   assert(spec.layer === UILayer.Page, "层应是 Page");
   assert(spec.cache === false, "背包不缓存");
   assert(spec.allowMultiple === false, "背包不叠两份");
   assert(typeof spec.mount === "function", "背包挂载在 ViewSpec 上");
-  assert(viewCtorById("bag") === BackpackView, "id bag 应对回 BackpackView");
+  assert(viewCtorById("bag") === BagView, "id bag 应对回 BagView");
   assert(viewCtorById("hero") === null, "这一阶段不登记别的页");
-  assert(useBackpackView() === true, "缺省走新背包");
-  assert(bagViewFromSearch("") === true, "没有参数走新背包");
-  assert(bagViewFromSearch("?dev=wire") === true, "别的参数不关背包");
-  assert(bagViewFromSearch("?bag=old") === false, "?bag=old 走旧背包");
-  assert(bagViewFromSearch("?dev=wire&bag=0") === false, "bag=0 走旧背包");
-  assert(bagViewFromSearch("?bag=false") === false, "bag=false 走旧背包");
-  assert(bagViewFromSearch("?bag=new") === true, "bag=new 仍走新背包");
-  setUseBackpackView(false);
-  assert(useBackpackView() === false, "关掉开关应回到旧背包");
-  setUseBackpackView(true);
   assert(UIManager.instance.createPageHost("bag") === null, "没 open 时 presentPage 继续走旧壳");
   assert(UIManager.instance.createPageHost("hero") === null, "未迁移页面不进 UIManager");
 }
@@ -390,14 +382,14 @@ function fakePrefab(build: (node: Node) => void): Prefab {
   return prefab;
 }
 
-function makeView(): BackpackView {
+function makeView(): BagView {
   const scene = new Node("scene");
   const host = new Node("BackpackLayer");
   host.parent = scene;
   const hostUi = host.addComponent(UITransform);
   hostUi.setContentSize(640, 960);
   hostUi.setAnchorPoint(0, 0);
-  const view = host.addComponent(BackpackView);
+  const view = host.addComponent(BagView);
   view.sprBox = sized("spr_box", 560, 520);
   view.sprBox.parent = host;
   const scrollNode = sized("BagScroll",520,555); scrollNode.parent=view.sprBox;
@@ -423,7 +415,7 @@ function makeView(): BackpackView {
   view.btnClose = null;
   list.cellPrefab = fakePrefab((node) => {
     node.addComponent(UITransform).setContentSize(96,96);
-    const cell = node.addComponent(BackpackItemCellView);
+    const cell = node.addComponent(BagItemView);
     cell.button = node.addComponent(Button);
     cell.frame = new Node("spr_frame");
     cell.frame.addComponent(Sprite);
@@ -438,7 +430,7 @@ function makeView(): BackpackView {
   });
   view.tabPrefab = fakePrefab((node) => {
     node.addComponent(Sprite);
-    const tab = node.addComponent(BackpackTabButtonView);
+    const tab = node.addComponent(BagTabView);
     tab.title = labelOn(new Node("lbl_title"));
     if (tab.title.node) tab.title.node.parent = node;
     tab.button = buttonOn("btn");
@@ -448,7 +440,7 @@ function makeView(): BackpackView {
     const cardUi = node.addComponent(UITransform);
     cardUi.setContentSize(390, 300);
     cardUi.setAnchorPoint(0, 0);
-    const info = node.addComponent(BackpackInfoView);
+    const info = node.addComponent(BagInfoView);
     info.bg = new Node("spr_bg");
     info.bg.setPosition(195, 150, 0);
     info.bg.parent = node;
@@ -482,68 +474,50 @@ function pump(frames: number): void {
   for (let i = 0; i < frames; i++) director.emit(Director.EVENT_AFTER_UPDATE);
 }
 
-function cells(view: BackpackView): BackpackItemCellView[] {
+function cells(view: BagView): BagItemView[] {
   const content = view.bagScroll!.content;
   if (!content) return [];
-  const out: BackpackItemCellView[] = [];
+  const out: BagItemView[] = [];
   for (let i = 0; i < content.children.length; i++) {
-    const cell = content.children[i].getComponent(BackpackItemCellView) as BackpackItemCellView | null;
+    const cell = content.children[i].getComponent(BagItemView) as BagItemView | null;
     if (cell) out.push(cell);
   }
   return out;
 }
 
-function tabs(view: BackpackView): BackpackTabButtonView[] {
+function tabs(view: BagView): BagTabView[] {
   const host = view.tabContent;
   if (!host) return [];
-  const out: BackpackTabButtonView[] = [];
+  const out: BagTabView[] = [];
   for (let i = 0; i < host.children.length; i++) {
-    const tab = host.children[i].getComponent(BackpackTabButtonView) as BackpackTabButtonView | null;
+    const tab = host.children[i].getComponent(BagTabView) as BagTabView | null;
     if (tab) out.push(tab);
   }
   return out;
 }
 
-function activeIcons(list: BackpackItemCellView[]): BackpackItemCellView[] {
-  const out: BackpackItemCellView[] = [];
+function activeIcons(list: BagItemView[]): BagItemView[] {
+  const out: BagItemView[] = [];
   for (let i = 0; i < list.length; i++) {
     if (list[i].icon && list[i].icon.active) out.push(list[i]);
   }
   return out;
 }
 
-function infoCard(view: BackpackView): BackpackInfoView {
+function infoCard(view: BagView): BagInfoView {
   const sheet = view.node.getChildByName("InfoCard");
   assert(sheet !== null, "详情没有盖上来");
   const kids = sheet.children;
   for (let i = 0; i < kids.length; i++) {
-    const info = kids[i].getComponent(BackpackInfoView) as BackpackInfoView | null;
+    const info = kids[i].getComponent(BagInfoView) as BagInfoView | null;
     if (info) return info;
   }
-  throw new Error("InfoCard 上没有 BackpackInfoView");
+  throw new Error("InfoCard 上没有 BagInfoView");
 }
 
-function noteBag(bag: { itemId: number; itemType: number | null; num: number | null }[] | null): void {
-  GameStore.noteWire({
-    enabled: true,
-    account: "bag-check",
-    serverId: 1,
-    roleId: 1,
-    name: "bag-check",
-    nameSynced: true,
-    level: 1,
-    gold: null,
-    diamond: null,
-    nowIdx: null,
-    maxIdx: null,
-    heroes: null,
-    bag,
-    lineUp: null,
-    unlockIds: null,
-    rewardTime: null,
-    maxRewardTime: null,
-    battle: null,
-  });
+function noteBag(items: readonly {itemId:number;quantity:number}[] | null): void {
+  BagModel.instance.reset("local/test-role");
+  if (items) BagModel.instance.replaceAll(items);
 }
 
 function bindTables(): void {
@@ -581,6 +555,7 @@ function bindTables(): void {
   db.tables = tables;
   ConfigDb.current = db;
   bindGameCatalog(tables);
+  (remakeConfig as any).get = (path: string) => tables.get(path.replace("config/", ""));
 }
 
 const toasts: string[] = [];
@@ -612,165 +587,55 @@ function installNav(): { backs: { n: number }; current: { id: string | null } } 
   return { backs, current };
 }
 
-async function openView(): Promise<BackpackView> {
+async function openView(): Promise<BagView> {
   const view = makeView();
-  view.onOpen();
+  view.runOpen();
   await view.whenReady();
   pump(50);
   return view;
 }
 
 async function checkBehavior(): Promise<void> {
-  bindTables();
-  const nav = installNav();
-
-  noteBag(null);
-  const unsynced = await openView();
-  assert(cells(unsynced).length === 20, "未同步也要铺出 4×5 空槽");
-  assert(activeIcons(cells(unsynced)).length === 0, "未同步不画道具");
-  const unsyncedBefore = toasts.length;
-  cells(unsynced)[0].node.emit(Button.EventType.CLICK);
-  assert(toasts[unsyncedBefore] === "真服未同步", "未同步空槽不说背包是空的");
-  assert(unsynced.talk !== null && unsynced.talk.string === "真服未同步", "未同步台词");
-  const unsyncedTabs = tabs(unsynced);
-  assert(unsyncedTabs.length === 4, "未同步也要有四个页签");
-  assert(unsyncedTabs.map((tab) => (tab.title ? tab.title.string : "")).join("/") === "装备/道具/碎片/精灵", "页签标题");
-  unsynced.node.destroy();
-
-  noteBag([
-    { itemId: 14, itemType: 14, num: 1 },
-    { itemId: 20, itemType: 20, num: 3 },
-    { itemId: 7, itemType: 7, num: 2 },
-    { itemId: 8, itemType: 8, num: 5 },
-    { itemId: 1, itemType: 1, num: 99 },
-    { itemId: 21, itemType: 21, num: 0 },
-    { itemId: 22, itemType: 22, num: null },
-  ]);
-  const view = await openView();
-  assert(view.bagScroll!.content !== null && view.bagScroll!.content!.parent !== null && view.bagScroll!.content.parent === view.bagScroll!.content!.parent, "content 进了 view");
-  assert(view.bagScroll!.content.position.x === -260 && view.bagScroll!.content.position.y === 0, "content 位置归零");
-  assert(view.bagScroll !== null && view.bagScroll.node.getComponent(Mask) === null, "BagScroll 上的 Mask 要摘掉");
-  const portMask = view.bagScroll!.content!.parent.getComponent(Mask) as Mask | null;
-  assert(portMask !== null && portMask.type === Mask.Type.GRAPHICS_RECT, "视口用矩形遮罩");
-  assert(portMask.enabled === true, "保留源 Prefab 裁剪，不为让格子出现而关闭 Mask");
-  const menuUi = view.hitMenu ? (view.hitMenu.getComponent(UITransform) as UITransform) : null;
-  assert(menuUi !== null && menuUi.contentSize.width === 0 && menuUi.contentSize.height === 0, "全屏 menu 要收成 0");
-  assert(view.talk !== null && view.talk.string === "店里欢迎光临", "台词读 language 5788");
-
-  const itemCells = cells(view);
-  assert(itemCells.length === 20, "道具页是 4×5");
-  const shown = activeIcons(itemCells);
-  assert(shown.length === 2, "道具页只留红药和无数量药，金币和数量 0 不进格子");
-  const potion = shown.filter((cell) => cell.count && cell.count.string === "3");
-  const unknown = shown.filter((cell) => cell.count && cell.count.node && cell.count.node.active === false);
-  assert(potion.length === 1 && unknown.length === 1, "数量 3 要写出来，没同步的数量不要写成 0");
-  assert(itemCells[0].node.position.x === 83 && itemCells[0].node.position.y === -56, "四列按 118 间距居中，第一格在 -177/-56");
-  assert(itemCells[16].node.position.x === 83 && itemCells[16].node.position.y === -528, "第五行保持 118 行距并与首列对齐");
-  const contentUi = view.bagScroll!.content.getComponent(UITransform) as UITransform;
-  assert(contentUi.contentSize.height === 614, "五行格子和滚动留白完整纳入内容高度");
-
-  const tabRow = tabs(view);
-  assert(tabRow[1].isSelected() === true && tabRow[0].isSelected() === false, "缺省停在道具");
-  tabRow[0].node.emit(Button.EventType.CLICK);
-  const equips = activeIcons(cells(view));
-  assert(equips.length === 1 && equips[0].count !== null && equips[0].count.string === "1", "装备页只有木剑");
-  tabRow[2].node.emit(Button.EventType.CLICK);
-  const shards = activeIcons(cells(view));
-  assert(shards.length === 1 && shards[0].count !== null && shards[0].count.string === "2", "碎片页");
-  tabRow[3].node.emit(Button.EventType.CLICK);
-  const spirits = activeIcons(cells(view));
-  assert(spirits.length === 1 && spirits[0].count !== null && spirits[0].count.string === "5", "精灵页");
-  tabRow[1].node.emit(Button.EventType.CLICK);
-
-  const again = activeIcons(cells(view));
-  const nullCount = again.filter((cell) => cell.count && cell.count.node && !cell.count.node.active)[0];
-  nullCount.node.emit(Button.EventType.CLICK);
-  let info = infoCard(view);
-  assert(info.propName !== null && info.propName.string === "无数量药", "详情名字来自道具表");
-  assert(info.propType !== null && info.propType.string.indexOf("数量 无") >= 0, "缺数量写成无，不写成 0");
-  assert(info.btnDetail !== null && info.btnDetail.active === false, "详情按钮藏着");
-  assert(info.btnDecompose !== null && info.btnDecompose.active === false, "分解按钮藏着");
-  assert(info.enterLabel !== null && info.enterLabel.string === "使用", "使用文案");
-  if (info.btnClose && info.btnClose.node) info.btnClose.node.emit(Button.EventType.CLICK);
-  assert(view.node.getChildByName("InfoCard") === null, "详情关闭只收起卡片");
-
-  const potionCell = activeIcons(cells(view)).filter((cell) => cell.count && cell.count.string === "3")[0];
-  potionCell.node.emit(Button.EventType.CLICK);
-  info = infoCard(view);
-  assert(info.propName !== null && info.propName.string === "红药", "红药详情");
-  assert(info.propType !== null && info.propType.string.indexOf("数量 3") >= 0, "数量 3");
-  assert(info.bg !== null && info.bg.position.x === 195 && info.bg.position.y === 150, "详情底留在预制落点");
-  assert(info.node.position.x === 125 && info.node.position.y === 330, "详情卡按预制尺寸居中到背包层");
-  const sheet = view.node.getChildByName("InfoCard");
-  const dim = sheet ? sheet.getChildByName("dim") : null;
-  const dimUi = dim ? (dim.getComponent(UITransform) as UITransform) : null;
-  assert(dim !== null && dim.position.x === 320 && dim.position.y === 480, "遮罩中心对齐背包层");
-  assert(dimUi !== null && dimUi.contentSize.width === 720 && dimUi.contentSize.height === 1280, "遮罩尺寸留在 DimSheet");
-  const infoMenu = info.hitMenu ? (info.hitMenu.getComponent(UITransform) as UITransform) : null;
-  const infoMenuClose = info.hitMenuClose ? (info.hitMenuClose.getComponent(UITransform) as UITransform) : null;
-  assert(infoMenu !== null && infoMenu.contentSize.width === 0, "详情 menu 收成 0");
-  assert(infoMenuClose !== null && infoMenuClose.contentSize.width === 0, "详情 menu_close 收成 0");
-  const toasted = toasts.length;
-  if (info.btnEnter && info.btnEnter.node) info.btnEnter.node.emit(Button.EventType.CLICK);
-  if (info.btnSrc && info.btnSrc.node) info.btnSrc.node.emit(Button.EventType.CLICK);
-  assert(toasts[toasted] === "不发使用协议", "使用不发协议");
-  assert(toasts[toasted + 1] === "来源只读，不跳转", "来源不跳转");
-  if (info.btnClose && info.btnClose.node) info.btnClose.node.emit(Button.EventType.CLICK);
-  const held = activeIcons(cells(view)).filter((cell) => cell.count && cell.count.string === "3")[0];
-  held.node.emit(Button.EventType.CLICK);
-  assert(view.node.getChildByName("InfoCard") !== null, "再点一次要重新打开详情");
-
-  noteBag(null);
-  view.onOpen();
-  assert(cells(view).length === 20, "未同步仍留下空槽");
-  assert(activeIcons(cells(view)).length === 0, "同步丢掉之后不能留着上一批道具");
-  assert(view.node.getChildByName("InfoCard") === null, "未同步要把详情收起来");
-  assert(view.talk !== null && view.talk.string === "真服未同步", "再次未同步要改台词");
-  noteBag([
-    { itemId: 14, itemType: 14, num: 1 },
-    { itemId: 20, itemType: 20, num: 3 },
-    { itemId: 7, itemType: 7, num: 2 },
-    { itemId: 8, itemType: 8, num: 5 },
-    { itemId: 1, itemType: 1, num: 99 },
-    { itemId: 21, itemType: 21, num: 0 },
-    { itemId: 22, itemType: 22, num: null },
-  ]);
-  view.onOpen();
-  assert(activeIcons(cells(view)).length === 2, "重新同步后道具页回来");
-
-  nav.current.id = "city";
-  view.close();
-  assert(nav.backs.n === 0, "不在背包页时关闭不拆栈");
-  nav.current.id = "bag";
-  view.close();
-  assert(nav.backs.n === 1 && nav.current.id === "city", "在背包页时关闭走页面栈返回");
-  view.node.destroy();
-
-  noteBag([]);
-  const empty = await openView();
-  const emptyCells = cells(empty);
-  assert(emptyCells.length === 20 && activeIcons(emptyCells).length === 0, "已同步的空背包仍铺空格");
-  assert(empty.talk !== null && empty.talk.string === "店里欢迎光临", "空背包不是未同步");
-  const before = toasts.length;
-  emptyCells[0].node.emit(Button.EventType.CLICK);
-  assert(toasts[before] === "背包是空的", "空格提示");
-  empty.node.destroy();
-
-  noteBag([{ itemId: 20, itemType: 20, num: 3 }]);
-  const hidden = makeView();
-  hidden.node.active = false;
-  hidden.onOpen();
-  await hidden.whenReady();
-  assert(cells(hidden).length === 0, "还没进场景时不把格子挂出去");
-  hidden.node.active = true;
-  pump(1);
-  const appeared = cells(hidden);
-  assert(appeared.length === 20, "进场景后铺出 4×5 格子");
-  assert(activeIcons(appeared).length === 1 && appeared[0].count !== null && appeared[0].count.string === "3", "进场景后画出背包里的药");
-  assert(appeared[0].node.position.x === 83 && appeared[0].node.position.y === -56, "进场景后四列格子保持居中且落在视口里");
-  assert(hidden.bagScroll!.content !== null && hidden.bagScroll!.content.parent === hidden.bagScroll!.content!.parent, "进场景后 content 在 view 里");
-  assert(hidden.bagScroll !== null && hidden.bagScroll.node.getComponent(Mask) === null, "进场景前就要卸掉宿主遮罩");
-  hidden.node.destroy();
+  bindTables(); const nav=installNav();
+  noteBag(null); const unsynced=await openView();
+  assert(cells(unsynced).length===20&&activeIcons(cells(unsynced)).length===0,"idle inventory is distinct from ready empty");
+  assert(unsynced.talk.string==="背包尚未同步","unsynced message");unsynced.runDispose();unsynced.node.destroy();
+  noteBag([{itemId:14,quantity:1},{itemId:20,quantity:3},{itemId:7,quantity:2},{itemId:8,quantity:5},{itemId:1,quantity:99}]);
+  const before=EventDispatcher.instance.listenerCount(BagEvent.Changed);
+  const view=await openView();
+  assert(EventDispatcher.instance.listenerCount(BagEvent.Changed)===before+1,"one event subscription per opened View");
+  const slots=cells(view);assert(slots.length===20&&activeIcons(slots).length===1,"ready item category reads BagModel immediately");
+  assert(view.bagScroll.content.parent.getComponent(Mask).enabled,"authored viewport Mask remains enabled");
+  assert(slots[0].node.position.x===83&&slots[0].node.position.y===-56,"Inspector layout survives module migration");
+  assert(view.bagScroll.content.getComponent(UITransform).height===614,"native content sizing survives migration");
+  const tabRow=tabs(view);assert(tabRow.map(tab=>tab.title.string).join("/")==="装备/道具/碎片/精灵","four categories");
+  for(const index of [0,2,3,1]) {
+    tabRow[index].node.emit(Button.EventType.CLICK);
+    assert(activeIcons(cells(view)).length===1,"category uses config and current Model items");
+  }
+  const cell=activeIcons(cells(view))[0];cell.node.emit(Button.EventType.CLICK);
+  assert(infoCard(view).propName.string==="红药","details use configuration");
+  assert(infoCard(view).enterLabel.string==="确定","current API bag is read-only, no legacy use protocol");
+  for(let i=0;i<5;i++)view.refreshFromModel();
+  assert(cells(view)[0]===cell,"data refresh reuses Cell");
+  assert(cell.selectMark.active,"selection preserved");
+  view.bagScroll.restorePosition(new (require("cc").Vec2)(0,45));
+  view.refreshFromModel();assert(view.bagScroll.readPosition().y===45,"same category keeps scroll offset");
+  const external=EventDispatcher.instance.on(BagEvent.Changed,()=>{});
+  view.runClose();assert(EventDispatcher.instance.listenerCount(BagEvent.Changed)===before+1,"closing removes only own subscription");
+  noteBag([{itemId:20,quantity:9}]);view.runOpen();await view.whenReady();pump(1);
+  assert(activeIcons(cells(view))[0].count.string==="9","reopen immediately reads latest Model");
+  assert(EventDispatcher.instance.listenerCount(BagEvent.Changed)===before+2,"reopen has no duplicate subscription");
+  view.runOpen();assert(EventDispatcher.instance.listenerCount(BagEvent.Changed)===before+2,"reopening the current View does not duplicate listeners");
+  nav.current.id="bag";view.close();assert(nav.backs.n===1,"existing UIManager navigation retained");
+  view.runDispose();view.node.destroy();external();external();
+  assert(EventDispatcher.instance.listenerCount(BagEvent.Changed)===before,"all page-owned listeners are released");
+  noteBag([]);const empty=await openView();
+  assert(cells(empty).length===20&&empty.talk.string==="背包为空","ready empty retains authored empty slots");
+  empty.runDispose();empty.node.destroy();
+  noteBag([{itemId:20,quantity:2}]);const hidden=makeView();hidden.node.active=false;hidden.runOpen();await hidden.whenReady();
+  assert(cells(hidden).length===0,"render waits for mounting without repairing hierarchy");hidden.node.active=true;pump(1);
+  assert(activeIcons(cells(hidden)).length===1,"after mounting current Model renders");hidden.runDispose();hidden.node.destroy();
 }
 
 async function checkOpenFailure(): Promise<void> {
@@ -826,7 +691,7 @@ async function checkOpenFailure(): Promise<void> {
   const openLinesAt = openLineCount();
   let failed = false;
   try {
-    await UIManager.instance.open(BackpackView);
+    await UIManager.instance.open(BagView);
   } catch (_err) {
     failed = true;
   }
@@ -857,7 +722,7 @@ async function checkOpenFailure(): Promise<void> {
   const toastBare = toasts.length;
   let missing = false;
   try {
-    await UIManager.instance.open(BackpackView);
+    await UIManager.instance.open(BagView);
   } catch (_err) {
     missing = true;
   }
@@ -883,8 +748,8 @@ async function checkOpenFailure(): Promise<void> {
       },
     });
   };
-  const opened = await UIManager.instance.open(BackpackView);
-  assertOpenLine("BackpackView", "BackpackLayer");
+  const opened = await UIManager.instance.open(BagView);
+  assertOpenLine("BagView", "BackpackLayer");
   assert(opens === 1 && stack[stack.length - 1] === "bag", "装好之后才进栈");
   assert(highlights.length === 1 && highlights[0] === "bag", "进栈之后才通知底栏");
   assert(opened.node.isValid && opened.node.parent !== null, "装好的视图留在页面上");
@@ -955,7 +820,7 @@ function blankPiece(): Prefab {
 function bagNode(inner: string, withCells: boolean): Node {
   if (inner.indexOf("BackpackLayer") >= 0 && withCells) return makeView().node;
   const node = new Node(inner);
-  if (inner.indexOf("BackpackLayer") >= 0) node.addComponent(BackpackView);
+  if (inner.indexOf("BackpackLayer") >= 0) node.addComponent(BagView);
   return node;
 }
 
@@ -1021,7 +886,7 @@ async function checkOpenRaces(): Promise<void> {
   const toastAt = toasts.length;
   const mark = createdNodes.length;
   let switched = false;
-  const switching = UIManager.instance.open(BackpackView).then(
+  const switching = UIManager.instance.open(BagView).then(
     () => {
       throw new Error("切走之后不应打开成功");
     },
@@ -1046,7 +911,7 @@ async function checkOpenRaces(): Promise<void> {
   const gateOnly = holdLoads((inner) => bagNode(inner, true));
   const toastOnly = toasts.length;
   let dropped = false;
-  const dropping = UIManager.instance.open(BackpackView).then(
+  const dropping = UIManager.instance.open(BagView).then(
     () => {
       throw new Error("意图作废后不应打开成功");
     },
@@ -1065,7 +930,7 @@ async function checkOpenRaces(): Promise<void> {
 
   clearPrefabCache();
   const gateSame = holdLoads((inner) => bagNode(inner, true));
-  const kept = UIManager.instance.open(BackpackView);
+  const kept = UIManager.instance.open(BagView);
   UIManager.instance.keepOnly("bag");
   gateSame.release();
   const keptView = await kept;
@@ -1076,18 +941,18 @@ async function checkOpenRaces(): Promise<void> {
 
   clearPrefabCache();
   const gateDup = holdLoads((inner) => bagNode(inner, true));
-  const proto = BackpackView.prototype as unknown as { onOpen(args?: unknown): void };
+  const proto = BagView.prototype as unknown as { onOpen(args?: unknown): void };
   const origOpen = proto.onOpen;
   let openCount = 0;
-  proto.onOpen = function (this: BackpackView, args?: unknown): void {
+  proto.onOpen = function (this: BagView, args?: unknown): void {
     openCount += 1;
     origOpen.call(this, args);
   };
   try {
     const opensBeforeDup = nav.opens;
     const highlightsBeforeDup = nav.highlights.length;
-    const first = UIManager.instance.open(BackpackView);
-    const second = UIManager.instance.open(BackpackView);
+    const first = UIManager.instance.open(BagView);
+    const second = UIManager.instance.open(BagView);
     gateDup.release();
     const pair = await Promise.all([first, second]);
     assert(pair[0] === pair[1], "不允许叠两份时共用同一个实例");
@@ -1118,7 +983,7 @@ async function checkOpenRaces(): Promise<void> {
   const highlightsBeforeCell = nav.highlights.length;
   let cellFailed = false;
   try {
-    await UIManager.instance.open(BackpackView);
+    await UIManager.instance.open(BagView);
   } catch (err) {
     cellFailed = !isOpenCancelled(err);
   }
@@ -1178,20 +1043,14 @@ async function main(): Promise<void> {
   checkSources();
   checkRegistry();
   await checkBehavior();
-  // The shared Prefab's ?bag=old route must still consume the legacy GameStore.
-  noteBag([{itemId:20,itemType:20,num:3}]);
   const legacy=makeView();
-  fillPageShell("bag",legacy.node,()=>{});await legacy.whenReady();pump(1);
-  assert(cells(legacy).length===20&&activeIcons(cells(legacy)).length===1,"legacy entry uses the same list and real GameStore snapshot");
-  activeIcons(cells(legacy))[0].node.emit(Button.EventType.CLICK);
-  assert(infoCard(legacy).propName.string==="红药","legacy entry retains item details");
-  legacy.node.destroy();
+  fillPageShell("bag",legacy.node,()=>{});
+  assert(cells(legacy).length===0,"retired legacy entry cannot mount the new BagView");legacy.runDispose();legacy.node.destroy();
   await checkOpenFailure();
   await checkOpenRaces();
-  GameStore.reset();
+  BagModel.instance.reset(null);
   ConfigDb.current = null;
   bindGameCatalog(new Map());
-  setUseBackpackView(true);
   console.log("backpack-view-check ok");
 }
 

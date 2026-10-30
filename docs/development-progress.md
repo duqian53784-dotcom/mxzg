@@ -4,17 +4,45 @@
 
 ## 当前快照（优先阅读）
 
-- 最新范围：本批只做 SuperScroll/SuperContent 并接入 BackpackLayer 物品列表，不迁移其他列表或扩展玩法。后续不构建 H5 或其他任何包，等用户需要时再执行；本机 Creator 预览优先。下方其他批次的“下一步”均为历史记录。
-- 本批修改入口见 [背包列表维护指南](super-scroll-authoring.md)，代码/运行证据与人工体验分别记录；**人工修改体验待用户亲手验收**。出阵样板也仍待用户人工确认，不因继续下一批而自动验收。客户端完整检查最新 **25/25**，严格类型检查通过；24/24 和 23/23 为先前记录。
+- 最新范围：背包标准模块，使用 features/Bag、完整类名、BaseModel/BaseController、单一全局 EventDispatcher 和 EventScope；在现有未提交工作上整理，不扩展其他模块/玩法。
+- 技术结果：26/26 检查、Creator 3.8.8 strict 与类型负向断言通过；7456 + 18080 真实 MVC 和列表流程通过，浏览器错误 0。无包构建、数据库修改、提交推送或发布。
+- 修改入口见 [背包标准模块指南](bag-mvc-maintenance.md)，证据见 [bag-standard-20261030](validation/bag-standard-20261030/README.md)。架构/需求/路线只将完整名称及全局事件方案作为当前标准；下方缩写方案为已被替代的历史批次。
+- **人工代码阅读和 Prefab/Inspector 修改体验待用户验收**；出阵与旧列表的人工体验也不自动代签。先交完整样板，暂不继续迁移其他模块。
 
-## 2026-10-30 SuperScroll 背包列表样板（当前批次）
+## 2026-10-30 背包标准模块（当前批次，代码完成待人工验收）
+
+- 基线 main / d7ea90a0 + 上一批未提交修改；先保存当前差异及背包源文件副本，不重置现有人工工作。源 Prefab、SuperScroll/SuperContent、资源路径和 UUID 绑定不改；10 个移动脚本的 meta UUID 逐一核对保留，目录实际大小写及导入统一 features/Bag。
+- UI 为 BagView/BagItemView/BagInfoView/BagTabView；库存、状态和事件参数进入 data。BagModel 不再从 API 文件取校验；readBagItems 在 data/BagItemData，网络适配与 Model 共用。现有 BagApi、BagItemCatalog、ui/BagMount 明确保留为 HTTP、配置与挂载辅助，不是平行状态或新增转发层。
+- BaseModel 只负责角色、版本、reset/dispose 与版本递增；BagModel 保存唯一库存与缓存只读快照。BaseController 只负责显式初始化、会话代次、resetSession/dispose、Scope 和 emit；请求队列/旧查询拒绝/响应去重仍在 BagController。
+- 原 TypedEvents 改为唯一 EventDispatcher.instance，BagController 私有事件实例已移除。on/once/emit 类型化，once 回调前解除，可提前取消；错误含事件/拥有者与堆栈，单个监听异常不阻断其他监听。批处理保留相关 Model 全部提交后通知，不以事件存历史。
+- EventScope 只收集退订；BaseController 拥有模块 Scope，BaseView.runClose 的 finally 清理本次开页 Scope，不依赖 super.onClose。BagView 先监听再读 Model。背包注册无 createController，BagController 不提供 show/close，类型及运行时禁止把模块 Controller 当页面适配器。
+- 初始化重复调用、dispose 重复调用、销毁后重新初始化、空角色非有效会话、同角色查询乱序、串行库存更新、同步事件回调重复请求、旧会话 401/迟到读写、全量/增量/错误及重复奖励均有业务检查。错误事件名/参数与将模块 Controller 赋给页面 Controller 的代码纳入 Creator strict 负向断言。
+- 真实本机运行：闭页查询/立即开页/事件刷新/三轮开关与外部订阅保留，关战斗与背包页期间领奖后钱包库存一致，交付真实迟到 GET 不回滚，重复实际领取不重复提交；退出、换号及同账号换服库存隔离通过，浏览器错误 0。
+- 真实列表回归：四分类、详情、拖动不误触、刷新一次点击、滚动保留/缩短限制、104×104 兼容 Cell、切页重开；中性夹具覆盖横/竖/两种网格、0/1/3/18 条和非中心锚点。测试浏览器夹具不写玩家库存，不改源 Prefab。首次列表尝试因工具固定两秒等待遇到冷加载失败，改为等待真实 View 挂载后重新通过，失败记录保留。
+- 检查工具的旧脚本路径已更新；已删除的缩写类、旧 InventoryController、背包开关和兼容链不留别名。旧协议类型与位置保持原样，未为命名迁移改协议。旧入口与其他页面状态仍明确隔离。
+- 未迁移：AccountModel/AccountService、HeroRoster 多层实现、FormationController、CampaignController/挂机状态，以及 Boot/Main 的其他旧网络/状态依赖。全项目统一保持未完成；当前 H5 包未重建/未验收此源码，历史 H5 不能替代。人工阅读和编辑体验等待用户亲手确认。
+
+## 2026-10-30 背包缩写 MVC（历史方案，命名与事件机制已被替代）
+
+- 起始 HEAD `d7ea90a0`（main）。发现 BackpackView 已有人工格式修改，先保留副本并在原文件基础上改名，未回退人工修改；本批不改源 Prefab，保留 Creator 已保存的重排索引与已删除装饰节点。当前改动留在工作区，未提交/推送。
+- BagC/BagM 是角色会话级模块，应用只绑定一次；Model 为唯一库存、只读且冻结，区分 idle/loading/ready-empty/error。BagV 开页先监听再读 M，关闭通过 BaseView.ownListener 清理自己的事件和点击，不请求另一份数据。
+- TypedEvents 与 BagEvent 提供有类型事件；库存查询代数、会话代数、串行写入、全量/增量分离和响应标识去重已检查。账号旧资料 GET 不能回滚权威领奖钱包，旧账号 401 不使新账号退出。
+- 战斗领奖通过 BagC.runInventoryUpdate 接原 CampaignApi，先提交账号和库存再通知；背包或战斗页关闭时仍完成当前角色有效结果，过时角色结果丢弃。服务器接口、持久化、鉴权、阵容 409 和奖励幂等未删除或改传输方式。
+- 删除旧 InventoryController、BackpackFeatureFlag；BackpackView 改名 BagV 并保留脚本 UUID。旧 Main/screenFill 背包入口退役并明确提示 Remake，不再兼容新库存与旧 GameStore/WireSession。共享 Prefab、Cell、图标和资源边界保留；移除 bagBoard 已无引用的旧辅助逻辑和对应已解决依赖例外。
+- 用户完成导入刷新后，实际运行验证：页面从未打开时查询成功、打开无新增查询且立即显示、打开期间一次 loading/ready 各刷新一次、三轮开关订阅不累积、详情正常；真实结算回包延迟到切出战斗后交付，库存/钱包仍同步提交，重复真实领取不重复广播。
+- 迟到 GET 的早期探针曾被真实传输超时取消，不能作为迟到回包证据。最终探针在结算前捕获真实 GET，断言领取后其仍未结束，再交付原始响应并核对返回 false、库存不回滚；最终日志无该超时。旧读/写跨会话的可控延迟、取消和旧 401 另有业务检查；实际页面也通过退出、换号、同账号换服清理与新角色独立库存。
+- SuperScroll 回归实际通过：四分类、真实库存/详情、拖动不误触、刷新一次点击、滚动保留、兼容 104×104 Cell、切页重开；隔离中性夹具覆盖横/竖/两种网格、0/1/3/18 条、缩短限制和非中心锚点。未把测试库存写入玩家数据。
+- `bag-mvc-check`、既有 backpack/remake-playable/super-scroll/legacy 与全量 26 组通过；strict 通过。运行脚本早期还暴露了固定等待/按 View 后缀识别新 BagV 的测试定位问题，已修复工具并重新验收，未隐藏为运行成功。最终证据与源码哈希见 [bag-mvc-20261030](validation/bag-mvc-20261030/README.md)。
+- 未迁移：AccountModel/AccountService、HeroRoster 的多层实现、FormationController、CampaignController/挂机状态，以及 Boot/Main 的其他 WireSession/GameStore 依赖。全项目统一保持进行中，只有背包本批技术链完成。后端仍是本地 H2；无后端/数据库代码改动，不宣称正式 MySQL 验收。
+
+## 2026-10-30 SuperScroll 背包列表样板（历史批次）
 
 - 开始时 main 已有上一批出阵页与工具/文档的未提交修改，基线 HEAD 为 `9c7732ae`；本批保留这些工作，没有回退或清理。没有更改数据库、后端协议或重新构建任何包。
 - 新增的运行组件仅 SuperScroll 与 SuperContent，分别继承原生 ScrollView/Layout。Content 只填一次；布局类型/网格方向/列行数/间距/边距/Cell Prefab/显式尺寸覆盖在 SuperContent Inspector，原生派生字段隐藏，避免重复维护。没有新增 Manager、多层基类或虚拟列表框架。
 - Backpack Prefab 结构已固定为 `BackpackLayer/spr_box/BagScroll/view/content`；Mask 保存到 view。BackpackView 不再执行 prepareScroll、重挂父子节点、补/关闭 Mask、计算格子坐标或 content 尺寸/归零位置。Cell 根尺寸与 content 范围由 SuperContent 计算，Cell 位置由原生 Layout 计算，滚动位置由 ScrollView 控制。
 - 默认 4 列、96×96 自然 Cell、22/22 间距、左/右/上/下边距 35/35/8/38；20 个槽的范围为 520×614，viewport 为 520×555。空槽最少 20、按四个补齐仍由背包提供展示条目，与 Inspector 列数独立；bagBoard 的旧坐标/高度公式已移除。
 - 同分类刷新复用节点并保留位置，内容缩短会限制范围，切换分类回到起点。库存请求期间保留上次真实快照，失败明确提示显示上次库存；换号/退出/关闭仍清空并拒绝迟到回包。Cell 显式绑定 Button，每次 show 解绑旧点击，图标/边框异步加载按展示版本丢弃迟到结果。
-- 共享 Prefab/Cell UUID 和功能资源加载边界保留。旧 `?bag=old` 的 fillBag 调用同一个 BackpackView，继续读取 GameStore/WireSession；其数据/详情行为和失败/取消路径有检查。旧生成器检测到 SuperContent 后拒绝覆盖人工 Prefab。
+- 当时共享 Prefab/Cell UUID 和功能资源加载边界保留，旧 `?bag=old` 的 fillBag 仍读旧数据；此兼容链现已由后续 MVC 批次退役，以本文顶部为准。旧生成器检测到 SuperContent 后拒绝覆盖人工 Prefab。
 - 编辑器预览使用 previewCount 生成无业务数据的 Cell，设 0 清理。节点为 DontSave/EditorOnly，参数为 editorOnly，运行模式不生成样例；未向服务器写测试库存。编辑器预览生成/清理和边界通过组件检查，实际 Inspector 编辑体验仍由用户确认。
 - 用户完成导入刷新后，临时源 Prefab 的 3 列、30/18 间距、左/右/上/下 24/24/18/26 边距在实际 7456 预览及切页重开生效；分类、拖动、刷新、详情和兼容 Cell 均通过，错误 0。随后源参数已恢复默认，用户再次完成导入刷新，默认四列流程也通过。临时探针已撤回，不覆盖并发人工修改。
 - 原生引擎验证覆盖竖向、横向、网格竖滚/横滚，0/1/3/18 条、不足一屏/超过一屏、刷新和缩短限制；真实背包覆盖库存、四分类、选中、详情、滑动不误触、重复刷新仅一次点击、兼容 104×104 Cell 与切页重开。通用夹具与玩家列表分离，只存在于独立测试浏览器。

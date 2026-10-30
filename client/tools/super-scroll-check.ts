@@ -4,7 +4,7 @@ import { Button, Label, Mask, Node, Prefab, resources, Sprite, SpriteFrame, UITr
 import { setEditorContext } from "./cc-env";
 import { SuperAxis, SuperContent, SuperLayout } from "../assets/scripts/framework/ui/SuperContent";
 import { SuperScroll } from "../assets/scripts/framework/ui/SuperScroll";
-import { BackpackItemCellView } from "../assets/scripts/features/backpack/ui/BackpackItemCellView";
+import { BagItemView } from "../assets/scripts/features/Bag/ui/BagItemView";
 
 function node(name: string, width: number, height: number, parent?: Node): Node {
     const result = new Node(name); const ui = result.addComponent(UITransform);
@@ -79,7 +79,7 @@ function checkLayouts(): void {
 }
 
 function checkCellReuse(): void {
-    const root=node("BackpackItemCell",96,96), cell=root.addComponent(BackpackItemCellView) as BackpackItemCellView;
+    const root=node("BackpackItemCell",96,96), cell=root.addComponent(BagItemView) as BagItemView;
     cell.button=root.addComponent(Button);cell.frame=node("frame",96,96,root);cell.frame.addComponent(Sprite);
     cell.icon=node("icon",64,64,root);cell.icon.addComponent(Sprite);cell.count=node("count",96,24,root).addComponent(Label);
     cell.selectMark=node("selected",96,96,root);
@@ -88,8 +88,8 @@ function checkCellReuse(): void {
     try {
         let old=0,current=0;
         const face=(icon:string)=>({icon,frame:"frame/"+icon,title:icon,typeLine:"",body:"",fallback:""});
-        cell.show({itemId:1,itemType:1,num:1},false,()=>old++,face("A"));
-        for(let i=0;i<5;i++) cell.show({itemId:2,itemType:2,num:2},true,()=>current++,face("B"));
+        cell.show({itemId:1,quantity:1},false,()=>old++,face("A"));
+        for(let i=0;i<5;i++) cell.show({itemId:2,quantity:2},true,()=>current++,face("B"));
         root.emit(Button.EventType.CLICK);assert.equal(old,0);assert.equal(current,1,"a refresh cannot duplicate click callbacks");
         const b=new SpriteFrame(),a=new SpriteFrame();
         pending.filter(row=>row.path==="B/spriteFrame").forEach(row=>row.done(null,b));
@@ -98,7 +98,7 @@ function checkCellReuse(): void {
         cell.show(null,false,null);root.emit(Button.EventType.CLICK);assert.equal(current,1);assert.equal(cell.button.interactable,false);
         pending.filter(row=>row.path==="B/spriteFrame").forEach(row=>row.done(null,b));
         assert.equal(cell.icon.active,false,"late responses cannot revive an empty cell");
-        cell.show({itemId:3,itemType:3,num:1},false,null,face("C"));cell.onDestroy();
+        cell.show({itemId:3,quantity:1},false,null,face("C"));cell.onDestroy();
         pending.filter(row=>row.path==="C/spriteFrame").forEach(row=>row.done(null,a));
         assert.equal((cell.icon.getComponent(Sprite) as Sprite).spriteFrame,null,"destroy cancels pending paints");
     } finally {resources.load=original;}

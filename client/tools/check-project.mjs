@@ -28,6 +28,7 @@ const suites = [
   ["architecture", "python", "tools/project_audit.py"],
   ["bindings", "python", "client/tools/check_script_type_ids.py"],
   ["backpack", "ts", "client/tools/backpack-view-check.ts"],
+  ["bag-mvc", "ts", "client/tools/bag-mvc-check.ts"],
   ["super-scroll", "ts", "client/tools/super-scroll-check.ts"],
   ["hero", "ts", "client/tools/hero-view-check.ts"],
   ["city", "ts", "client/tools/city-view-check.ts"],

@@ -1,4 +1,5 @@
 import { AccountModel } from "./AccountModel";
+import type { RoleProfile } from "./AccountModel";
 import { readSession } from "./AccountApi";
 import type { AccountGateway, AccountSession, LoginResult } from "./AccountApi";
 import { HttpFailure } from "../../platform/http/JsonClient";
@@ -21,6 +22,7 @@ export interface AccountAuthorization {
 export class AccountService implements AccountAuthorization {
   private operation = 0;
   private session: AccountSession | null = null;
+  private profileRevision = 0;
   constructor(private readonly model: AccountModel, private readonly api: AccountGateway,
     private readonly store: SessionStore, private readonly now: () => number = Date.now) {}
 
@@ -75,8 +77,19 @@ export class AccountService implements AccountAuthorization {
   /** Refresh wallet/profile after an authoritative settlement, without reopening the session root. */
   async refreshRole(): Promise<void> {
     const operation = this.operation;
+    const revision = this.profileRevision;
     const role = await this.authenticated(token => this.api.currentRole(token));
     if (operation !== this.operation) throw new SessionChanged();
+    if (revision !== this.profileRevision) return;
+    this.model.replace({ busy: false, role, error: "" });
+  }
+
+  /** Validated authoritative role payload; notifications can be batched with other module commits. */
+  acceptRole(role: RoleProfile): void {
+    const current = this.model.snapshot.role;
+    if (!this.session || this.model.snapshot.busy || !current || current.id !== role.id ||
+      (current.serverId && role.serverId && current.serverId !== role.serverId)) throw new SessionChanged();
+    this.profileRevision++;
     this.model.replace({ busy: false, role, error: "" });
   }
 

@@ -5,6 +5,7 @@ import type { BaseView } from "./BaseView";
 /** 把预制挂进页面宿主。背包的店内底图放在自己的挂载里，不写进 UIManager。 */
 export type ViewMount = (host: Node, prefab: Prefab) => Node | Promise<Node>;
 
+/** Existing page-lifetime adapter for unmigrated features. Module BaseController is application-owned. */
 export interface ViewController {
   show(): void;
   close(): void;
@@ -29,7 +30,7 @@ export interface ViewSpec {
   mount?: ViewMount;
   /** Application-supplied loader; scene-bound Prefabs need no business UUID fallback. */
   load?: () => Promise<Prefab>;
-  /** Explicit application composition. The framework knows only this lifecycle contract. */
+  /** Page-lifetime adapter only. Never supply a module BaseController here. BagView has no factory. */
   createController?: (view: BaseView<unknown>) => ViewController;
 }
 

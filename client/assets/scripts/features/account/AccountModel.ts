@@ -1,3 +1,5 @@
+import { publishNotification } from "../../framework/EventDispatcher";
+
 export interface RoleProfile {
   readonly id: string;
   readonly nickname: string;
@@ -27,6 +29,7 @@ export class AccountModel {
 
   replace(state: AccountState): void {
     this.state = Object.freeze({ ...state, role: state.role ? Object.freeze({ ...state.role }) : null });
-    for (const listener of this.listeners) listener(this.state);
+    publishNotification(this.notify);
   }
+  private notify = (): void => { for (const listener of Array.from(this.listeners)) listener(this.state); };
 }

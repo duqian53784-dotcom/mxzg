@@ -8,11 +8,11 @@
 - 内容组件：[SuperContent.ts](../client/assets/scripts/framework/ui/SuperContent.ts)，同目录。两个组件分别继承原生 ScrollView、Layout，没有另建拖动/惯性/回弹或列表框架。
 - 页面：[BackpackLayer.prefab](../client/assets/prefabs/ui/backpack/BackpackLayer.prefab)，磁盘位置 `F:\project\mxzg\client\assets\prefabs\ui\backpack\BackpackLayer.prefab`。
 - Cell：[BackpackItemCell.prefab](../client/assets/prefabs/ui/backpack/BackpackItemCell.prefab)，磁盘位置 `F:\project\mxzg\client\assets\prefabs\ui\backpack\BackpackItemCell.prefab`。
-- 背包业务展示：[BackpackView.ts](../client/assets/scripts/features/backpack/ui/BackpackView.ts)；格子展示：[BackpackItemCellView.ts](../client/assets/scripts/features/backpack/ui/BackpackItemCellView.ts)；真实库存及请求：[InventoryController.ts](../client/assets/scripts/features/backpack/InventoryController.ts)、[InventoryApi.ts](../client/assets/scripts/features/backpack/InventoryApi.ts)。本批没有改后端协议。
+- 背包业务展示：[BagView.ts](../client/assets/scripts/features/Bag/ui/BagView.ts)；格子展示：[BagItemView.ts](../client/assets/scripts/features/Bag/ui/BagItemView.ts)；真实库存及请求：[BagController.ts](../client/assets/scripts/features/Bag/BagController.ts)、[BagModel.ts](../client/assets/scripts/features/Bag/BagModel.ts)、[BagApi.ts](../client/assets/scripts/features/Bag/BagApi.ts)。本批没有改后端协议。
 
 以下均相对 BackpackLayer 根节点：
 
-1. `spr_box/BagScroll`：SuperScroll，**Content 只需拖一次**，指向下面的 content。BackpackView.bagScroll 已绑定这个组件，不再重复填写 content、viewport 或 Cell Prefab。
+1. `spr_box/BagScroll`：SuperScroll，**Content 只需拖一次**，指向下面的 content。BagView.bagScroll 已绑定这个组件，不再重复填写 content、viewport 或 Cell Prefab。
 2. `spr_box/BagScroll/view`：UITransform 与矩形 Mask，决定裁剪范围，配置保存在 Prefab。
 3. `spr_box/BagScroll/view/content`：SuperContent。它本身就是原生 Layout 的子类，**不应再额外挂一份 Layout**；Cell Prefab 和全部排列参数在这里填。
 
@@ -27,7 +27,7 @@
 - **间距与边距**：`spacingX/spacingY` 为格子外缘之间的空隙；`paddingLeft/Right/Top/Bottom` 为内容四边留白。它们直接使用原生 Layout 的同一份属性，不另存一套同名参数。
 - **Cell**：拖 `Cell Prefab / cellPrefab`。默认读取其根 UITransform 的尺寸，保留原始缩放，不自动把格子挤小。开启 `覆盖 Cell 尺寸 / overrideCellSize` 后，才使用 `explicitCellSize` 覆盖实例的根尺寸；内部图片、字体和位置仍由 Cell Prefab 决定。
 
-交付默认：Grid、竖滚、4 列；横纵间距均 22；左/右/上/下边距为 **35/35/8/38**；Cell 自然尺寸为 **96×96**，覆盖开关关闭。因此相邻格子中心距离为 118。这都是可编辑的默认值，没有保存在 BackpackView 的坐标公式里。
+交付默认：Grid、竖滚、4 列；横纵间距均 22；左/右/上/下边距为 **35/35/8/38**；Cell 自然尺寸为 **96×96**，覆盖开关关闭。因此相邻格子中心距离为 118。这都是可编辑的默认值，没有保存在 BagView 的坐标公式里。
 
 切换方向时，不要再找原生 Horizontal/Vertical 开关：SuperScroll 已隐藏这些派生设置并统一从 SuperContent 同步。原生惯性、回弹、刹车与回弹时长仍可在 SuperScroll Inspector 调整。拖动取消子节点点击始终启用，以避免滑动时弹详情。
 
@@ -49,7 +49,7 @@ content 不要挂启用的 Widget，也不要另挂 Layout；Cell 根 Widget 或
 
 1. 在 Creator 中打开 BackpackLayer.prefab，选中 content。
 2. 展开 SuperContent 的 **编辑器预览**，将 `编辑器预览数量 / previewCount` 改为 8，查看 Cell 静态外观及间距；改成 24，或缩小 view 高度，查看裁剪。
-3. 改列数、方向、间距、边距或 Cell Prefab，预览会按新配置重排。预览不请求服务器，不调用 BackpackItemCellView.show，不生成物品 ID、数量或奖励。
+3. 改列数、方向、间距、边距或 Cell Prefab，预览会按新配置重排。预览不请求服务器，不调用 BagItemView.show，不生成物品 ID、数量或奖励。
 4. 将数量改回 **0** 清理，并恢复空内容的最小范围。禁用/离开组件时也会清理生成节点；正式运行需要组件启用。
 
 修改 Cell 原文件后若编辑器仍显示旧样例，可将数量设 0 后再设回以重建；游戏预览也应等资源导入完成后刷新。
@@ -65,7 +65,7 @@ content 不要挂启用的 Widget，也不要另挂 Layout；Cell 根 Widget 或
 ```ts
 const list = this.bagScroll.list;
 list.setData(entries, (node, entry, index) => {
-    const cell = node.getComponent(BackpackItemCellView)!;
+    const cell = node.getComponent(BagItemView)!;
     cell.show(entry.item, entry.selected, entry.onTap, entry.face);
 });
 list.refresh(3); // 重新渲染第 4 条；越界会明确报错
@@ -83,15 +83,15 @@ this.bagScroll.restorePosition(position);
 
 背包分类切换回到起点，同分类刷新保留位置。库存请求期间保留上次已接受的真实数据；失败时明确提示显示上次库存，换号/退出/关闭立即清空，迟到回包不会恢复前一角色的数据。
 
-Cell 按索引复用，换 Prefab 时重建。BackpackItemCellView 每次 show 先解绑上次点击，空槽也会正确清除回调；图标/边框加载带展示版本，旧请求的迟到结果不能盖回新物品或重新亮起空槽。
+Cell 按索引复用，换 Prefab 时重建。BagItemView 每次 show 先解绑上次点击，空槽也会正确清除回调；图标/边框加载带展示版本，旧请求的迟到结果不能盖回新物品或重新亮起空槽。
 
 ## 换一个兼容的 Cell
 
 通用组件仅要求等尺寸、active、有根 UITransform、正缩放且无旋转的 Cell，根不使用竞争尺寸/位置的 Widget。它不要求业务组件。
 
-接到**背包**时，还必须保留 BackpackItemCellView 及 `button/frame/icon/count/selectMark` 绑定，frame/icon 有 Sprite。可以复制现有 Cell 制作变体再拖到 SuperContent.cellPrefab；不需要改背包列表逻辑。缺字段会报具体节点/字段，不能用普通图片 Prefab 冒充已兼容的背包 Cell。
+接到**背包**时，还必须保留 BagItemView 及 `button/frame/icon/count/selectMark` 绑定，frame/icon 有 Sprite。可以复制现有 Cell 制作变体再拖到 SuperContent.cellPrefab；不需要改背包列表逻辑。缺字段会报具体节点/字段，不能用普通图片 Prefab 冒充已兼容的背包 Cell。
 
-旧 `?bag=old` 的共享 Prefab 入口已改为调用同一个 BackpackView，继续使用其 GameStore/WireSession 数据源，不再重挂层级、补 Mask 或使用另一套格子坐标。旧生成器 `gen_backpack_cells.py` 检测到已人工维护的 SuperContent 页面会拒绝覆盖；日常应编辑 Prefab，不再运行这个历史生成器重建样式。
+2026-10-30 MVC 迁移后旧 `?bag=old`/Main 背包入口已退役，只提示使用 Remake；BagView 不再读取 GameStore/WireSession。运行数据只有 BagModel，业务入口只有 BagController，见 [MVC 维护指南](bag-mvc-maintenance.md)。旧生成器 `gen_backpack_cells.py` 检测到已人工维护的 SuperContent 页面会拒绝覆盖；日常应编辑 Prefab，不再运行这个历史生成器重建样式。
 
 ## 本机验收与边界
 

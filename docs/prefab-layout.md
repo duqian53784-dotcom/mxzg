@@ -1,5 +1,7 @@
 # Prefab / 资源目录约定（P0）
 
+> 历史记录：客户端当前标准以 [architecture.md](architecture.md) 和 [背包标准模块样板](bag-mvc-maintenance.md) 为准。背包已迁入 features/Bag，采用完整名称、BaseModel/BaseController 和单一全局 EventDispatcher；下方旧目录/开关/分层不再作为现行要求。指定核心流程的正式服视觉、交互和规则对照目标继续有效。
+
 - **素材**（图/音/字）：`client/assets/resources/`（`ui/`、`audio/`、`font/` 等）
 - 全屏 `map-bg` / `promotion-bg` 批次的文件对照见 [`asset-batch-map-bg.md`](asset-batch-map-bg.md)。页面 `Bg` 已换成实图；哪些页仍用 win-bg 染色、哪些只是内卡染色，见 [`prefab-common-and-tidy.md`](prefab-common-and-tidy.md)。下文有的小节还停在旧的 win-bg 染色描述，以那份实扫为准。`battle-scene` 已在 `resources/ui/battle/`。战斗表现壳见 [`battle-prefab-layout.md`](battle-prefab-layout.md)。BattlePage 由 `USE_BATTLE_PREFAB` 挂进真服进战，不改 Boot。WireBattlePage 仍未接。
 - **界面 Prefab**：`client/assets/prefabs/ui/`（与素材分目录，勿把 Prefab 和 PNG 放同一层）

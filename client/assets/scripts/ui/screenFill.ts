@@ -976,7 +976,7 @@ function applyParchmentFit(view: Node): boolean {
   return true;
 }
 
-/** BackpackView 只走 mountCcbiView，不进 fillBag。列表窗在这里用同一套缩放。 */
+/** BagView 只走 mountCcbiView，不进 fillBag。列表窗在这里用同一套缩放。 */
 export function seatParchmentList(view: Node): void {
   if (view.name !== "BackpackLayer" && view.name !== "HeroListLayer") return;
   fitParchmentWindow(view);
@@ -1178,14 +1178,8 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
 }
 
 function fillBag(view: Node): void {
-  silenceBigMenus(view);
-  hideDebugBubble(view);
-  fitParchmentWindow(view);
-  const bag = view.getComponent("BackpackView") as import("../features/backpack/ui/BackpackView").BackpackView | null;
-  if (!bag) throw new Error("assets/prefabs/ui/backpack/BackpackLayer.prefab: 缺少 BackpackView");
-  bag.runOpen();
-  void bag.whenReady().catch(error => GameLog.shared.warn("Bag", messageOf(error)));
-  view.once(Node.EventType.NODE_DESTROYED, () => bag.runDispose());
+  // Historical Boot/Main never mounts the new role-session bag against GameStore/WireSession.
+  flashToast(view, "历史入口背包已退役，请使用 Remake.scene");
 }
 
 /**

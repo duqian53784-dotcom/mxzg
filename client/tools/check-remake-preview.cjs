@@ -138,7 +138,7 @@ const formationExpected = process.env.MXZG_FORMATION_EXPECT ? JSON.parse(readFil
                     if (!n?.activeInHierarchy)
                         return;
                     for (const c of n._components || []) {
-                        if (c.constructor?.name.endsWith('View'))
+                        if (c.constructor?.name.endsWith('View') || c.constructor?.name === 'BagView')
                             out.push({ view: c.constructor.name, node: n.name, text: c.statusLabel?.string, phase: c.last?.phase, stage: c.last?.state?.stageId });
                     }
                     for (const child of n.children)
@@ -147,6 +147,18 @@ const formationExpected = process.env.MXZG_FORMATION_EXPECT ? JSON.parse(readFil
                 walk(window.cc.director.getScene());
                 return out;
             });
+        }
+        async function waitForView(className) {
+            await page.waitForFunction(className => {
+                let found = false;
+                function walk(node) {
+                    if (!node?.activeInHierarchy || found) return;
+                    if ((node._components || []).some(c => c.constructor?.name === className)) found = true;
+                    node.children.forEach(walk);
+                }
+                walk(window.cc.director.getScene());
+                return found;
+            }, className, { timeout: 30000 });
         }
         async function waitForCampaign(stage, phase) {
             await page.waitForFunction(({ stage, phase }) => {
@@ -178,19 +190,25 @@ const formationExpected = process.env.MXZG_FORMATION_EXPECT ? JSON.parse(readFil
         await input.press('Tab');
         await clickTarget('AccountLoginView', 'developerButton');
         await clickTarget('AccountLoginView', 'loginButton');
-        await page.waitForTimeout(6500);
+        await waitForView('RemakeHomeView');
         if (!(await state()).some(v => v.view === 'RemakeHomeView'))
             throw Error('home absent');
         await snap('home');
+        if (process.argv.includes('--bag-mvc')) {
+            await require('./bag-mvc-preview.cjs')(page,{clickTarget,snap,state,prefix:shotPrefix});
+            if (errors.length) throw Error('browser runtime errors');
+            console.log('PASS bag-mvc preview; runtime errors: 0');
+            return;
+        }
         if (!process.argv.includes('--direct-battle')) {
         await clickTarget('CityChromeShell', 'tabHero');
-        await page.waitForTimeout(2000);
+        await waitForView('HeroListView');
         if (!(await state()).some(v => v.view === 'HeroListView'))
             throw Error('hero absent');
         await snap('hero');
         await clickTarget('CityChromeShell', 'tabBag');
-        await page.waitForTimeout(2000);
-        if (!(await state()).some(v => v.view === 'BackpackView'))
+        await waitForView('BagView');
+        if (!(await state()).some(v => v.view === 'BagView'))
             throw Error('bag absent');
         await snap('bag');
         if (process.argv.includes('--backpack-list')) {
@@ -324,7 +342,7 @@ const formationExpected = process.env.MXZG_FORMATION_EXPECT ? JSON.parse(readFil
             throw Error('claim did not advance');
         await clickTarget('CityChromeShell', 'tabBag');
         await page.waitForTimeout(1000);
-        await clickTarget('BackpackItemCellView');
+        await clickTarget('BagItemView');
         await page.waitForTimeout(600);
         await snap('item-detail');
         await page.reload();

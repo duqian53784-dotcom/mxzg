@@ -35,11 +35,11 @@ import { ServerPickerView } from "../../features/account/ui/ServerPickerView";
 import { CampaignApi } from "../../features/battle/CampaignApi";
 import { slideFeaturePage } from "./PageTransition";
 import { createFeatureResourceScope, loadFeaturePage } from "./FeatureResources";
-import { BackpackView } from "../../features/backpack/ui/BackpackView";
-import { mountBackpackPage } from "../../features/backpack/ui/BackpackMount";
-import { InventoryController } from "../../features/backpack/InventoryController";
-import { InventoryApi } from "../../features/backpack/InventoryApi";
-import { ItemCatalog } from "../../features/backpack/ItemCatalog";
+import { BagView } from "../../features/Bag/ui/BagView";
+import { BagController } from "../../features/Bag/BagController";
+import { mountBackpackPage } from "../../features/Bag/ui/BagMount";
+import { BagApi } from "../../features/Bag/BagApi";
+import { BagItemCatalog } from "../../features/Bag/BagItemCatalog";
 import { CampaignController } from "../../features/battle/CampaignController";
 import { CampaignView } from "../../features/battle/ui/CampaignView";
 import { mountCampaignPage } from "../../features/battle/ui/CampaignMount";
@@ -60,6 +60,7 @@ export class RemakeApp extends Component {
   @property apiBaseUrl = "http://127.0.0.1:18080";
   private navigation: RemakeNavigation | null = null;
   private offAccount: (() => void) | null = null;
+  private bagModule: BagController | null = null;
   private unregisterViews: Array<() => void> = [];
   private requestedRoute = "";
   private alive = false;
@@ -90,6 +91,8 @@ export class RemakeApp extends Component {
       write: session => storage.setItem(SESSION_KEY, JSON.stringify(session)),
       clear: () => storage.removeItem(SESSION_KEY),
     });
+    BagController.instance.initialize({ account: model, authorization: service, api: new BagApi(http) });
+    this.bagModule = BagController.instance;
     const ui = UIManager.instance;
     const entry = new LoginEntry();
     let homeView: RemakeHomeView | null = null;
@@ -127,7 +130,10 @@ export class RemakeApp extends Component {
           if (!this.alive || isOpenCancelled(error)) return;
           model.replace({ ...model.snapshot, error: error instanceof Error ? error.message : "选服界面加载失败" });
         });
-      } }, async () => { await service.authenticated(token => campaignApi.initialize(token)); }),
+      } }, async () => {
+        await service.authenticated(token => campaignApi.initialize(token));
+        await BagController.instance.refresh(true);
+      }),
     }));
     this.unregisterViews.push(registerView(RemakeHomeView, {
       id: "remake-home", prefab: "bundles/remake-home/RemakeHome", layer: UILayer.Page,
@@ -156,7 +162,7 @@ export class RemakeApp extends Component {
         } catch (error) { rosterService.dispose(); throw error; }
       },
     }));
-    const itemCatalog = () => new ItemCatalog(remakeConfig.get<{rows:Record<string,unknown>[]}>("config/item")!,
+    const itemCatalog = () => new BagItemCatalog(remakeConfig.get<{rows:Record<string,unknown>[]}>("config/item")!,
       remakeConfig.get<{rows:Record<string,unknown>[]}>("config/language")!);
     const loadFeature = (group: "bag" | "campaign" | "formation") => {
       if (!this.featureResources) this.featureResources = createFeatureResourceScope();
@@ -171,10 +177,9 @@ export class RemakeApp extends Component {
     const chooseFormation = () => new Promise<boolean>((resolve,reject)=>{
       void ui.openById("remake-formation",{complete:resolve}).catch(reject);
     });
-    this.unregisterViews.push(registerView(BackpackView, {
+    this.unregisterViews.push(registerView(BagView, {
       id:"bag",prefab:"prefabs/ui/backpack/BackpackLayer",layer:UILayer.Page,cache:false,allowMultiple:false,
       mount:mountBackpackPage,load:() => loadFeature("bag"),
-      createController:view => new InventoryController(model,service,new InventoryApi(http),itemCatalog(),view as BackpackView),
     }));
     this.unregisterViews.push(registerView(CampaignView, {
       id:"remake-campaign",prefab:"prefabs/ui/battle/BattlePanelLayer",layer:UILayer.Page,cache:false,allowMultiple:false,
@@ -319,6 +324,7 @@ export class RemakeApp extends Component {
     UIManager.instance.closeById("server-picker");
     UIManager.instance.closeById("remake-formation");
     this.navigation?.dispose(); this.navigation = null;
+    this.bagModule?.dispose(); this.bagModule = null;
     this.homeResources?.dispose(); this.homeResources = null;
     this.heroResources?.dispose(); this.heroResources = null;
     this.featureResources?.dispose(); this.featureResources = null;

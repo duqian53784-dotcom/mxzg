@@ -1,5 +1,7 @@
 # mxzg 项目结构与 UI 迁移规范
 
+> 历史记录：客户端当前标准以 [architecture.md](architecture.md) 和 [背包标准模块样板](bag-mvc-maintenance.md) 为准。背包已迁入 features/Bag，采用完整名称、BaseModel/BaseController 和单一全局 EventDispatcher；下方旧目录/开关/分层不再作为现行要求。指定核心流程的正式服视觉、交互和规则对照目标继续有效。
+
 > 适用项目：Cocos Creator 3.8.8 / TypeScript
 >
 > 参考项目：`mxzg-h5-jp`（Cocos2d-x Lua + CCBI）
