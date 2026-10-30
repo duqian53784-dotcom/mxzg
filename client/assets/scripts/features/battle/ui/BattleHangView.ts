@@ -117,7 +117,7 @@ export class BattleHangView extends BaseView {
     this.opened = true;
     this.openedAt = Date.now();
     this.beginOpen();
-    void this.start();
+    void this.initialize();
   }
 
   onClose(): void {
@@ -133,7 +133,7 @@ export class BattleHangView extends BaseView {
     }
   }
 
-  private async start(): Promise<void> {
+  private async initialize(): Promise<void> {
     try {
       this.hidePlaceholders();
       this.silenceMenu();

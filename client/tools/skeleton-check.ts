@@ -27857,8 +27857,10 @@ function checkCityHub(): void {
       talkAt.x === HANG_LOOT_BUBBLE_X + 68 &&
       talkAt.y === hangLootBubbleY() + 100 &&
       talkAt.y > hangLootBubbleY() &&
-      talkAt.y + 40 < hangAllyFloorPoint(4).y &&
-      talkAt.x - 100 > hangAllyFloorPoint(4).x,
+      // Rectangles do not overlap when either axis has clearance. The formation
+      // now has four rows; the bubble clears its lowest row horizontally.
+      (talkAt.y + 40 < hangAllyFloorPoint(4).y ||
+        talkAt.x - 100 > hangAllyFloorPoint(4).x + 80),
     "hang talk cycles herotalk by level and sits above the loot, clear of the upper ally"
   );
   const talkSrc = readFileSync(uiSource("idleHangTalk.ts"), "utf8");
@@ -27931,16 +27933,18 @@ function checkCityHub(): void {
     clockSrc.indexOf("EVENT_AFTER_UPDATE") >= 0 && clockSrc.indexOf("armBattleDelay") >= 0 && clockSrc.indexOf("requestAnimationFrame") >= 0,
     "battle beats arm on the director frame and fall back to animation frames"
   );
-  assert(!!ancientShell && !ancientShell.fight && ancientShell.path.indexOf("AncientLayer") >= 0, "unrouted ancient building opens its prefab shell");
+  assert(ancientShell === null, "removed ancient building cannot open an unplanned prefab");
   assert(pagePrefabShell("shop") === null && pagePrefabShell("main_country_war") === null && pagePrefabShell("main_blessingpool") === null, "p5 screens stay without a new prefab shell");
   assert(pagePrefabShell("city") === null, "city page is the city hub, not a prefab shell");
   assert(isP1ProgressStatus("账号 mock") && isP1ProgressStatus("进入主城…") && !isP1ProgressStatus("服未启动，请检查启动 bat"), "login errors open ErrorLayer and progress stays on the form");
-  const shellIds = ["mainline", "hero", "summon", "smith", "bag", "mail", "arena", "tower", "main_ancient", "main_hero_make", "main_altar", "main_magic_cube"];
+  const shellIds = ["mainline", "hero", "hero-detail", "summon", "bag", "mail", "idle"];
+  for (const removed of ["smith", "arena", "tower", "main_hero_make", "main_altar", "main_magic_cube"])
+    assert(pagePrefabShell(removed) === null, "removed shell stays inaccessible " + removed);
   for (let si = 0; si < shellIds.length; si++) {
     const spec = pagePrefabShell(shellIds[si]);
     assert(!!spec && existsSync(join(process.cwd(), "client", "assets", spec.path + ".prefab")), "shell prefab exists " + shellIds[si]);
   }
-  assert(existsSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "login", "UserLoginLayer.prefab")), "p1 user login prefab exists");
+  assert(existsSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "legacy-login", "UserLoginLayer.prefab")), "legacy user login prefab exists");
   assert(existsSync(join(process.cwd(), "client", "assets", "prefabs", "ui", "login", "ChooseServerLayer.prefab")), "p1 choose server prefab exists");
   assert(!existsSync(uiSource("MainlinePage.ts")), "code mainline page is not mounted");
   assert(
@@ -28010,7 +28014,7 @@ function checkCityHub(): void {
   );
   assert(battleSlotPath("enemy", 0) === "LayerField/EnemySlots/Slot_E0", "enemy front slot");
   assert(battleSlotPath("ally", 5) === "LayerField/AllySlots/Slot_A5", "ally back slot");
-  assert(battleSlotPath("ally", 6) === null && battleHpPath("enemy", 3) === null, "back row has slots and no hp bar");
+  assert(battleSlotPath("ally", 6) === null && battleHpPath("enemy", 3) === "LayerHud/HpBars/EnemyHp_3" && battleHpPath("enemy", 6) === null, "all six battle slots have hp bars");
   assert(battleHpPath("ally", 0) === "LayerHud/HpBars/AllyHp_0", "ally hp bar");
   assert(battleVfxPath("skill") === "LayerVfx/VfxSkill" && battleVfxPath("hit") === "LayerVfx/VfxHit" && battleVfxPath("screen") === "LayerVfx/VfxScreen", "vfx attach points");
   const fullHp = hpFillLayout(1);

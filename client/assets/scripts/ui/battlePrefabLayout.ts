@@ -43,7 +43,7 @@ export function battleSlotPath(side: BattleSlotSide, index: number): string | nu
 }
 
 export function battleHpPath(side: BattleSlotSide, index: number): string | null {
-  if (!slotIndex(index, 2)) return null;
+  if (!slotIndex(index, 5)) return null;
   const name = side === "ally" ? "AllyHp_" : "EnemyHp_";
   return "LayerHud/HpBars/" + name + index;
 }

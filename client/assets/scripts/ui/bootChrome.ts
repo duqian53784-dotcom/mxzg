@@ -10,19 +10,20 @@ import { mountNamedSpine } from "./battleSpine";
 import { findNode, loadPrefab, spawnPrefab } from "./prefabLoad";
 import { bindVisibleRefresh, fitVisibleRoot } from "./visibleFit";
 import { createButton, createLabel, place, setText, uiNode } from "./UiKit";
+import { loginLayout } from "../features/account/ui/LoginLayout";
 
 /** 登陆界面人物簇。spine/jiemian，动作 stand。 */
 const BOOT_CAST_STEM = "jiemian";
 const BOOT_CAST_CLIP = "stand";
 
 /** LoadingLayer / UpdateLayer 的底图。logo 阶段用同一张，不再另铺黑底。 */
-export const LOADING_BG_FRAME = "ui/login/bg-loading";
+export const LOADING_BG_FRAME = "ui/maps/map-bg-loading";
 /**
- * 768×1300 做 cover。高比 1280/1300 大于宽比，绘制尺寸仍是 756×1280。
- * 设计宽改成 640 不改这张图。和 LoadingLayer 预制里 Bg 的 contentSize 一致。
+ * 和登录页共用 768×1300 底图与 cover 规则，人物也走同一套宽度适配。
+ * 和 LoadingLayer 预制里 Bg 的 contentSize 一致。
  */
-export const LOADING_BG_DRAW_W = 756;
-export const LOADING_BG_DRAW_H = 1280;
+export const LOADING_BG_DRAW_W = 768;
+export const LOADING_BG_DRAW_H = 1300;
 
 export const LOADING_PREFAB_PATH = "prefabs/ui/login/LoadingLayer";
 export const UPDATE_PREFAB_PATH = "prefabs/ui/login/UpdateLayer";
@@ -296,8 +297,7 @@ export class BootChrome {
     if (!root) return;
     const host = uiNode("BootCast");
     host.addComponent(UITransform).setContentSize(720, 972);
-    place(host, root, 0, 36);
-    host.setScale(0.7, 0.7, 1);
+    place(host, root, 0, 0);
     const bg = root.getChildByName("Bg");
     if (bg) host.setSiblingIndex(bg.getSiblingIndex() + 1);
     mountNamedSpine(host, BOOT_CAST_STEM, BOOT_CAST_CLIP, {
@@ -364,13 +364,17 @@ export class BootChrome {
 export function fitLoadingBackdrop(root: Node): void {
   if (!root.isValid) return;
   const box = fitVisibleRoot(root);
+  const layout = loginLayout(box.width, box.height);
+  const cast = root.getChildByName("BootCast");
+  if (cast) {
+    cast.setScale(layout.castScale, layout.castScale, 1);
+    cast.setPosition(0, layout.castY, 0);
+  }
   const bg = root.getChildByName("Bg");
   if (!bg) return;
   const ui = bg.getComponent(UITransform);
-  const width = ui && ui.contentSize.width > 0 ? ui.contentSize.width : LOADING_BG_DRAW_W;
-  const height = ui && ui.contentSize.height > 0 ? ui.contentSize.height : LOADING_BG_DRAW_H;
-  const cover = Math.max(box.width / width, box.height / height);
-  if (cover > 0) bg.setScale(cover, cover, 1);
+  if (ui) ui.setContentSize(layout.backgroundWidth, layout.backgroundHeight);
+  bg.setScale(1, 1, 1);
 }
 
 function placeAbove(parent: Node, node?: Node | null): void {

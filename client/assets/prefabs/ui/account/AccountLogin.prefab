@@ -402,6 +402,9 @@
       },
       {
         "__id__": 24
+      },
+      {
+        "__id__": 147
       }
     ],
     "_prefab": {
@@ -3647,7 +3650,13 @@
     "developerButton": {
       "__id__": 62
     },
-    "_id": ""
+    "_id": "",
+    "serverButton": {
+      "__id__": 147
+    },
+    "serverLabel": {
+      "__id__": 19
+    }
   },
   {
     "__type__": "cc.CompPrefabInfo",
@@ -3694,5 +3703,69 @@
     "fileId": "upEbSLXuMe0R5A8n0gWlYQ",
     "instance": null,
     "targetOverrides": null
+  },
+  {
+    "__type__": "cc.Button",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 15
+    },
+    "_enabled": true,
+    "__prefab": null,
+    "clickEvents": [],
+    "_interactable": true,
+    "_transition": 0,
+    "_normalColor": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_hoverColor": {
+      "__type__": "cc.Color",
+      "r": 211,
+      "g": 211,
+      "b": 211,
+      "a": 255
+    },
+    "_pressedColor": {
+      "__type__": "cc.Color",
+      "r": 200,
+      "g": 200,
+      "b": 200,
+      "a": 255
+    },
+    "_disabledColor": {
+      "__type__": "cc.Color",
+      "r": 124,
+      "g": 124,
+      "b": 124,
+      "a": 255
+    },
+    "_normalSprite": {
+      "__uuid__": "20ff83b4-04b7-4482-8d1e-eba9a106575b@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "_hoverSprite": {
+      "__uuid__": "20ff83b4-04b7-4482-8d1e-eba9a106575b@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "_pressedSprite": {
+      "__uuid__": "c899007e-dae7-431c-9412-7b8a4466583a@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "_disabledSprite": {
+      "__uuid__": "20ff83b4-04b7-4482-8d1e-eba9a106575b@f9941",
+      "__expectedType__": "cc.SpriteFrame"
+    },
+    "_duration": 0.1,
+    "_zoomScale": 1.05,
+    "_target": {
+      "__id__": 27
+    },
+    "_id": ""
   }
 ]

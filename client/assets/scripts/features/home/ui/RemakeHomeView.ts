@@ -28,12 +28,13 @@ export class RemakeHomeView extends BaseView implements HomeView {
   private actions: HomeActions | null = null;
   private closed = false;
   private extraUnbind: Array<() => void> = [];
-  private currentFeature: "city" | "hero" = "city";
+  private currentFeature: "city" | "hero" | "bag" | "battle" = "city";
 
   get featureHost(): Node | null { return this.cityHost; }
+  get cityContent(): Node | null { return this.city?.node || null; }
 
   /** The shared chrome/account tools stay on the root; only city content is hidden. */
-  showFeature(id: "city" | "hero"): void {
+  showFeature(id: "city" | "hero" | "bag" | "battle"): void {
     if (this.closed) return;
     this.currentFeature = id;
     if (this.city?.node.isValid) this.city.node.active = id === "city";
@@ -142,7 +143,7 @@ export class RemakeHomeView extends BaseView implements HomeView {
     this.chrome.setCityExtras(false);
     this.chrome.setTabs(["city", "hero", "bag", "battle", "dungeon", "clan", "fetter"].map(id => ({
       id, text: "", state: id === this.currentFeature ? "selected" :
-        id === "city" || (id === "hero" && this.actions?.heroAvailable) ? "open" : "locked",
+        id === "city" || this.actions?.availableFeatures?.includes(id) || (id === "hero" && this.actions?.heroAvailable) ? "open" : "locked",
     })));
     this.city?.refreshLocks();
   }

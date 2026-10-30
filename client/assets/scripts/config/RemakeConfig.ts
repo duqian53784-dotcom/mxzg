@@ -9,6 +9,7 @@ export const REMAKE_CONFIG_GROUPS = {
   city: ["config/opencondition", "config/system_gate", "config/maincity/maincitypos",
     "config/maincity/createmaincitybtn", "config/maincity/maincityeffect"],
   hero: ["config/herotype", "config/item"],
+  inventory: ["config/item", "config/language"],
 } as const;
 
 export function validateRemakeConfig(path: string, value: unknown): void {
@@ -25,6 +26,7 @@ export const prepareStartupConfig = (progress?: (done: number, total: number) =>
   remakeConfig.prepare(REMAKE_CONFIG_GROUPS.startup, progress);
 export const prepareCityConfig = () => remakeConfig.prepare(REMAKE_CONFIG_GROUPS.city);
 export const prepareHeroConfig = () => remakeConfig.prepare(REMAKE_CONFIG_GROUPS.hero);
+export const prepareInventoryConfig = () => remakeConfig.prepare(REMAKE_CONFIG_GROUPS.inventory);
 
 export function readCityGates(): GateSnapshot | null {
   const open = remakeConfig.get<ConfigTableFile<OpenConditionRow>>("config/opencondition");

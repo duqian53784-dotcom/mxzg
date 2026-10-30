@@ -57,6 +57,12 @@ export class BackpackInfoView extends Component {
   private onClose: (() => void) | null = null;
   private toast: ((text: string) => void) | null = null;
   private wired = false;
+  private readOnly = false;
+
+  setReadOnly(value: boolean): void {
+    this.readOnly = value;
+    if (this.enterLabel) this.enterLabel.string = value ? "确定" : "使用";
+  }
 
   show(face: BagFace, onClose: () => void, toast: (text: string) => void): void {
     this.onClose = onClose;
@@ -88,6 +94,7 @@ export class BackpackInfoView extends Component {
       if (this.onClose) this.onClose();
     });
     this.listen(this.btnEnter, () => {
+      if (this.readOnly) { this.onClose?.(); return; }
       GameLog.shared.info("Bag", "背包使用停用，不发 5004–5009");
       if (this.toast) this.toast("不发使用协议");
     });

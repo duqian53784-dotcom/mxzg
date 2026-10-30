@@ -10,12 +10,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/development")
 @Profile("local & !production")
 public class DevelopmentLoginController {
-    public record LoginRequest(String account) {}
+    public record LoginRequest(String account, String serverId) {}
     private final DevelopmentLoginService login;
     public DevelopmentLoginController(DevelopmentLoginService login) { this.login = login; }
 
     @PostMapping("/login")
     public DevelopmentLoginService.LoginResult login(@RequestBody LoginRequest request) {
-        return login.login(request.account());
+        return login.login(request.account(), request.serverId());
     }
 }

@@ -25,6 +25,7 @@ const { ccclass } = _decorator;
 @view({
   id: "life",
   prefab: "prefabs/test/Life",
+  load: () => loadTestPrefab("test/Life"),
   layer: UILayer.Page,
   cache: true,
   allowMultiple: false,
@@ -66,6 +67,7 @@ class LifeView extends BaseView {
 @view({
   id: "multi",
   prefab: "prefabs/test/Multi",
+  load: () => loadTestPrefab("test/Multi"),
   layer: UILayer.Page,
   cache: false,
   allowMultiple: true,
@@ -77,6 +79,19 @@ class MultiView extends BaseView {
   onOpen(): void {
     MultiView.opens += 1;
   }
+}
+
+/** Test fixtures use the injected loader; they are deliberately outside the shipped Prefab plan. */
+function loadTestPrefab(path: string): Promise<Prefab> {
+  return new Promise((resolve, reject) => {
+    assetManager.loadBundle("test", (error, bundle) => {
+      if (error || !bundle) { reject(error || new Error("test bundle missing")); return; }
+      bundle.load(path, Prefab, (failure, asset) => {
+        if (failure || !asset) reject(failure || new Error("test prefab missing"));
+        else resolve(asset);
+      });
+    });
+  });
 }
 
 const CELL_UUID = "c4e8a1b2-7d33-4f61-9a20-6b5e0d4c8f11";
@@ -214,7 +229,7 @@ function checkPrefabBindings(): void {
   assert(cellData[17]._active === false, "空槽预制不能默认亮着问号图标");
   const portrait = layer[91];
   assert(portrait._lscale.x === 1 && portrait._lscale.y === 1, "店员立绘是 1 倍，不再缩成一小块");
-  assert(portrait._lpos.x === 200 && portrait._lpos.y === 600, "店员立绘落在背包底图后面");
+  assert(portrait._lpos.x === 200 && portrait._lpos.y === 748, "店员抬至羊皮纸上沿，身体仍落在背包底图后面");
   const order = (layer[1]._children || []).map((row) => row.__id__);
   assert(order[0] === 91 && order.indexOf(4) > 0 && order.indexOf(117) > 0, "node_portrait 画在羊皮纸和 spr_bg 下面");
 
@@ -649,10 +664,10 @@ async function checkBehavior(): Promise<void> {
   const potion = shown.filter((cell) => cell.count && cell.count.string === "3");
   const unknown = shown.filter((cell) => cell.count && cell.count.node && cell.count.node.active === false);
   assert(potion.length === 1 && unknown.length === 1, "数量 3 要写出来，没同步的数量不要写成 0");
-  assert(itemCells[0].node.position.x === -168 && itemCells[0].node.position.y === -56, "第一格位置");
-  assert(itemCells[16].node.position.x === -168 && itemCells[16].node.position.y === -472, "第五行第一格");
+  assert(itemCells[0].node.position.x === -177 && itemCells[0].node.position.y === -56, "四列按 118 间距居中，第一格在 -177/-56");
+  assert(itemCells[16].node.position.x === -177 && itemCells[16].node.position.y === -528, "第五行保持 118 行距并与首列对齐");
   const contentUi = view.bagContent.getComponent(UITransform) as UITransform;
-  assert(contentUi.contentSize.height === 544, "五行内容高度");
+  assert(contentUi.contentSize.height === 614, "五行格子和滚动留白完整纳入内容高度");
 
   const tabRow = tabs(view);
   assert(tabRow[1].isSelected() === true && tabRow[0].isSelected() === false, "缺省停在道具");
@@ -752,7 +767,7 @@ async function checkBehavior(): Promise<void> {
   const appeared = cells(hidden);
   assert(appeared.length === 20, "进场景后铺出 4×5 格子");
   assert(activeIcons(appeared).length === 1 && appeared[0].count !== null && appeared[0].count.string === "3", "进场景后画出背包里的药");
-  assert(appeared[0].node.position.x === -168 && appeared[0].node.position.y === -56, "进场景后第一格落在视口里");
+  assert(appeared[0].node.position.x === -177 && appeared[0].node.position.y === -56, "进场景后四列格子保持居中且落在视口里");
   assert(hidden.bagContent !== null && hidden.bagContent.parent === hidden.bagPort, "进场景后 content 在 view 里");
   assert(hidden.bagScroll !== null && hidden.bagScroll.getComponent(Mask) === null, "进场景前就要卸掉宿主遮罩");
   hidden.node.destroy();

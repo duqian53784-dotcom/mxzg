@@ -49,6 +49,9 @@
       },
       {
         "__id__": 192
+      },
+      {
+        "__id__": 193
       }
     ],
     "_prefab": {
@@ -4743,22 +4746,93 @@
       "__id__": 191
     },
     "_id": "",
-    "btnBattle": { "__id__": 46 },
-    "btnLineup": { "__id__": 60 },
-    "btnSpeed": { "__id__": 74 },
-    "battleTitle": { "__id__": 52 },
-    "lineupTitle": { "__id__": 66 },
-    "speedTitle": { "__id__": 80 },
-    "clockLabel": { "__id__": 156 },
-    "goldLabel": { "__id__": 162 },
-    "soulsLabel": { "__id__": 168 },
-    "expLabel": { "__id__": 174 },
-    "bubbleLabel": { "__id__": 190 },
-    "worldMap": { "__id__": 11 },
-    "mapLabel": { "__id__": 23 },
-    "worldIcon": { "__id__": 29 },
-    "missionName": { "__id__": 97 },
-    "hitMenu": { "__id__": 35 },
-    "chipPrefab": { "__uuid__": "4d270a16-c38e-45b9-f277-80e134c3b2a6", "__expectedType__": "cc.Prefab" }
+    "btnBattle": {
+      "__id__": 46
+    },
+    "btnLineup": {
+      "__id__": 60
+    },
+    "btnSpeed": {
+      "__id__": 74
+    },
+    "battleTitle": {
+      "__id__": 52
+    },
+    "lineupTitle": {
+      "__id__": 66
+    },
+    "speedTitle": {
+      "__id__": 80
+    },
+    "clockLabel": {
+      "__id__": 156
+    },
+    "goldLabel": {
+      "__id__": 162
+    },
+    "soulsLabel": {
+      "__id__": 168
+    },
+    "expLabel": {
+      "__id__": 174
+    },
+    "bubbleLabel": {
+      "__id__": 190
+    },
+    "worldMap": {
+      "__id__": 11
+    },
+    "mapLabel": {
+      "__id__": 23
+    },
+    "worldIcon": {
+      "__id__": 29
+    },
+    "missionName": {
+      "__id__": 97
+    },
+    "hitMenu": {
+      "__id__": 35
+    },
+    "chipPrefab": {
+      "__uuid__": "4d270a16-c38e-45b9-f277-80e134c3b2a6",
+      "__expectedType__": "cc.Prefab"
+    }
+  },
+  {
+    "__type__": "7c6edyPbvtfdLBRV4SIZKfT",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": null,
+    "_id": "",
+    "fightButton": {
+      "__id__": 46
+    },
+    "growButton": {
+      "__id__": 60
+    },
+    "speedButton": {
+      "__id__": 74
+    },
+    "stageLabel": {
+      "__id__": 102
+    },
+    "statusLabel": {
+      "__id__": 156
+    },
+    "goldLabel": {
+      "__id__": 162
+    },
+    "heroExpLabel": {
+      "__id__": 168
+    },
+    "roleExpLabel": {
+      "__id__": 174
+    }
   }
 ]

@@ -199,6 +199,11 @@ export function bindVisibleRefresh(owner: Node, apply: () => void): void {
 }
 
 function centerOnCanvas(node: Node): void {
+  let moving: Node | null = node;
+  while (moving) {
+    if ((moving as Node & { mxzgPageAnimating?: boolean }).mxzgPageAnimating) return;
+    moving = moving.parent;
+  }
   const canvas = findCanvas(node);
   const parent = node.parent;
   if (!canvas || !parent) {

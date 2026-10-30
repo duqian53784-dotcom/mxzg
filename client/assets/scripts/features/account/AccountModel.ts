@@ -4,6 +4,7 @@ export interface RoleProfile {
   readonly level: number;
   readonly gold: number;
   readonly diamonds: number;
+  readonly serverId?: string;
 }
 
 export interface AccountState {

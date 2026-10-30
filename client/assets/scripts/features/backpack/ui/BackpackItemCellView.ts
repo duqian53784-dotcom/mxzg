@@ -2,6 +2,7 @@ import { _decorator, Button, Component, Label, Node } from "cc";
 import { StoreBagItem } from "../../../core/GameStore";
 import { itemIconResource, itemProfile } from "../../../config/gameCatalog";
 import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
+import type { BagFace } from "../../../module/bag/bagBoard";
 
 const { ccclass, property } = _decorator;
 
@@ -22,7 +23,7 @@ export class BackpackItemCellView extends Component {
   @property(Node)
   selectMark: Node | null = null;
 
-  show(item: StoreBagItem | null, selected: boolean, onTap: (() => void) | null): void {
+  show(item: StoreBagItem | null, selected: boolean, onTap: (() => void) | null, face?: BagFace): void {
     if (this.selectMark) this.selectMark.active = selected;
     if (!item) {
       if (this.frame) {
@@ -35,11 +36,11 @@ export class BackpackItemCellView extends Component {
         this.count.string = "";
       }
     } else {
-      const profile = itemProfile(item.itemType, item.itemId);
-      if (this.frame) paintSpritePaths(this.frame, [rareFrame(profile ? profile.rare : 0)]);
+      const profile = face ? null : itemProfile(item.itemType, item.itemId);
+      if (this.frame) paintSpritePaths(this.frame, [face?.frame || rareFrame(profile ? profile.rare : 0)]);
       if (this.icon) {
         this.icon.active = true;
-        const path = itemIconResource(item.itemType, item.itemId);
+        const path = face?.icon || itemIconResource(item.itemType, item.itemId);
         if (path) paintSpritePaths(this.icon, [path, "ui/bag/backpack_spr-default"]);
         else if (item.itemId) paintSpritePaths(this.icon, ["ui/bag/backpack_" + item.itemId, "ui/bag/backpack_spr-default"]);
         else paintSpritePaths(this.icon, ["ui/bag/backpack_spr-default"]);

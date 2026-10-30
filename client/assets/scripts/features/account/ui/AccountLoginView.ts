@@ -2,6 +2,7 @@ import { _decorator, Button, EditBox, Label, Node } from "cc";
 import { BaseView } from "../../../framework/ui/BaseView";
 import type { AccountActions, AccountView } from "../AccountController";
 import type { AccountState } from "../AccountModel";
+import type { GameServer } from "../ServerSelection";
 
 const { ccclass, property } = _decorator;
 
@@ -15,6 +16,8 @@ export class AccountLoginView extends BaseView implements AccountView {
   @property(Label) profileLabel: Label | null = null;
   @property(Node) developerPanel: Node | null = null;
   @property(Button) developerButton: Button | null = null;
+  @property(Button) serverButton: Button | null = null;
+  @property(Label) serverLabel: Label | null = null;
 
   bind(actions: AccountActions): () => void {
     for (const name of ["accountInput", "loginButton", "restoreButton", "logoutButton", "statusLabel", "profileLabel"]) {
@@ -30,11 +33,14 @@ export class AccountLoginView extends BaseView implements AccountView {
     this.restoreButton!.node.on(Button.EventType.CLICK, restore);
     this.logoutButton!.node.on(Button.EventType.CLICK, logout);
     this.developerButton?.node.on(Button.EventType.CLICK, toggleDeveloper);
+    const chooseServer = () => actions.chooseServer?.();
+    this.serverButton?.node.on(Button.EventType.CLICK, chooseServer);
     return () => {
       this.loginButton!.node.off(Button.EventType.CLICK, login);
       this.restoreButton!.node.off(Button.EventType.CLICK, restore);
       this.logoutButton!.node.off(Button.EventType.CLICK, logout);
       this.developerButton?.node.off(Button.EventType.CLICK, toggleDeveloper);
+      this.serverButton?.node.off(Button.EventType.CLICK, chooseServer);
     };
   }
 
@@ -45,7 +51,12 @@ export class AccountLoginView extends BaseView implements AccountView {
     this.accountInput!.node.active = !state.role;
     this.logoutButton!.interactable = !state.busy;
     if (this.developerButton) this.developerButton.interactable = !state.busy;
+    if (this.serverButton) this.serverButton.interactable = !state.busy;
     this.statusLabel!.string = state.busy ? "正在连接服务器…" : state.error || "";
     this.profileLabel!.string = state.role ? `当前角色：${state.role.nickname}` : "仅供本机联调 · 暂未接入正式渠道账号";
   }
+  renderServer(server: GameServer | null): void {
+    if (this.serverLabel) this.serverLabel.string = server ? `${server.regionName} · ${server.name}  ▾` : "正在获取区服…";
+  }
+  prepareAccount(account: string): void { if (this.accountInput) this.accountInput.string = account; }
 }

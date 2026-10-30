@@ -10,6 +10,8 @@ const output = resolve(root, "client/temp/project-checks");
 const suites = [
   ["account", "ts", "client/tools/account-check.ts"],
   ["hero-roster", "ts", "client/tools/hero-roster-check.ts"],
+  ["remake-playable", "ts", "client/tools/remake-playable-check.ts"],
+  ["campaign-rules", "python", "tools/export_campaign_rules.py"],
   ["remake-navigation", "ts", "client/tools/remake-navigation-check.ts"],
   ["feature-navigation", "ts", "client/tools/feature-navigation-check.ts"],
   ["login-presentation", "ts", "client/tools/login-presentation-check.ts"],
@@ -30,7 +32,7 @@ const suites = [
 ];
 const args = process.argv.slice(2);
 if (args.includes("--help")) {
-  console.log("node client/tools/check-project.mjs [--suite account|hero-roster|remake-navigation|feature-navigation|login-presentation|home-presentation|startup|resources|home-bundle|resource-audit|config-groups|prefab-plan|architecture|bindings|backpack|hero|city|battle|legacy]");
+  console.log("node client/tools/check-project.mjs [--suite " + suites.map(([id]) => id).join("|") + "]");
   process.exit(0);
 }
 if (args.length && (args.length !== 2 || args[0] !== "--suite" || !suites.some(([id]) => id === args[1]))) {

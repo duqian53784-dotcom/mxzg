@@ -127,8 +127,9 @@ export class UIManager {
   }
 
   /** 常驻层的父节点。Page 不看这里。 */
-  setResidentHost(id: string, provider: () => Node | null): void {
+  setResidentHost(id: string, provider: () => Node | null): () => void {
     this.residentHosts.set(id, provider);
+    return () => { if (this.residentHosts.get(id) === provider) this.residentHosts.delete(id); };
   }
 
   /** 按注册 id 打开。没登记就失败。 */

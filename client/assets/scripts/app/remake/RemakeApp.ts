@@ -29,7 +29,20 @@ import { HeroCatalog } from "../../features/hero/HeroCatalog";
 import { HeroRosterModel } from "../../features/hero/HeroRosterModel";
 import { HeroRosterService } from "../../features/hero/HeroRosterService";
 import { HeroRosterController } from "../../features/hero/HeroRosterController";
-import { HomeFeatureNavigation } from "./HomeFeatureNavigation";
+import { HomeFeatureNavigation, REMAKE_FEATURE_ROUTES } from "./HomeFeatureNavigation";
+import { ServerSelection } from "../../features/account/ServerSelection";
+import { ServerPickerView } from "../../features/account/ui/ServerPickerView";
+import { CampaignApi } from "../../features/battle/CampaignApi";
+import { slideFeaturePage } from "./PageTransition";
+import { createFeatureResourceScope, loadFeaturePage } from "./FeatureResources";
+import { BackpackView } from "../../features/backpack/ui/BackpackView";
+import { mountBackpackPage } from "../../features/backpack/ui/BackpackMount";
+import { InventoryController } from "../../features/backpack/InventoryController";
+import { InventoryApi } from "../../features/backpack/InventoryApi";
+import { ItemCatalog } from "../../features/backpack/ItemCatalog";
+import { CampaignController } from "../../features/battle/CampaignController";
+import { CampaignView } from "../../features/battle/ui/CampaignView";
+import { mountCampaignPage } from "../../features/battle/ui/CampaignMount";
 
 const { ccclass, property } = _decorator;
 const SESSION_KEY = "mxzg.remake.developmentSession";
@@ -57,6 +70,7 @@ export class RemakeApp extends Component {
   private homeResources: ResourceScope<Prefab> | null = null;
   private heroResources: ResourceScope<Prefab> | null = null;
   private features: HomeFeatureNavigation | null = null;
+  private featureResources: ResourceScope<Prefab> | null = null;
 
   start(): void {
     if (!this.loginPrefab || !this.loadingPrefab || !this.pageHost || !this.startupHost) throw new Error("Remake 场景未绑定页面/加载 Prefab 或启动宿主，请重新打开已更新的 Remake.scene");
@@ -64,6 +78,10 @@ export class RemakeApp extends Component {
     const http = new JsonClient(this.apiBaseUrl, createXhrAdapter());
     const api = new AccountApi(http);
     const storage = sys.localStorage;
+    let savedServer: string | null = null;
+    try { savedServer = storage.getItem("mxzg.remake.selectedServer"); } catch { }
+    const servers = new ServerSelection(http, id => storage.setItem("mxzg.remake.selectedServer", id), savedServer);
+    const campaignApi = new CampaignApi(http);
     const service = new AccountService(model, api, {
       read: () => { const saved = storage.getItem(SESSION_KEY); return saved ? readSession(JSON.parse(saved)) : null; },
       write: session => storage.setItem(SESSION_KEY, JSON.stringify(session)),
@@ -74,23 +92,39 @@ export class RemakeApp extends Component {
     let homeView: RemakeHomeView | null = null;
     let syncRoute = () => {};
     this.navigation = new RemakeNavigation(ui, this.pageHost, {
-      parent: id => id === "hero" && this.navigation?.current === "remake-home" ? homeView?.featureHost || null : null,
-      changed: id => homeView?.showFeature(id === "hero" ? "hero" : "city"),
-    });
+      parent: id => Object.values(REMAKE_FEATURE_ROUTES).includes(id) ? homeView?.featureHost || null : null,
+      content: () => homeView?.cityContent || null,
+      changed: id => homeView?.showFeature(id === "remake-campaign" ? "battle" : id === "hero" || id === "bag" ? id : "city"),
+    },slideFeaturePage);
     const features = this.features = new HomeFeatureNavigation(ui, {
       current: () => this.navigation?.current || null,
       authorized: () => this.alive && this.started && !model.snapshot.busy && !!model.snapshot.role && entry.route(true) === "remake-home",
       notice: text => homeView?.showNotice(text),
     });
     ui.install(this.navigation, { showToast: text => console.warn("[RemakeUI] " + text) });
+    this.unregisterViews.push(ui.setResidentHost("remake-modal", () => this.pageHost));
+    this.unregisterViews.push(registerView(ServerPickerView, {
+      id: "server-picker", prefab: "prefabs/ui/login/ChooseServerLayer", layer: UILayer.Popup,
+      cache: false, allowMultiple: false, hostId: "remake-modal",
+      load: () => {
+        if (!this.featureResources) this.featureResources = createFeatureResourceScope();
+        return loadFeaturePage(this.featureResources,"servers");
+      },
+    }));
     // All business composition lives here. The UI framework imports no account/home classes.
     this.unregisterViews.push(registerView(AccountLoginView, {
       id: "remake-login", prefab: "prefabs/ui/account/AccountLogin", layer: UILayer.Page,
       cache: false, allowMultiple: false, load: async () => this.loginPrefab!,
       createController: view => new AccountController(model, service, view as AccountLoginView, () => {
+        ui.closeById("server-picker");
         entry.confirm();
         syncRoute();
-      }),
+      }, { selection: servers, openPicker: () => {
+        void ui.openById("server-picker", servers).catch(error => {
+          if (!this.alive || isOpenCancelled(error)) return;
+          model.replace({ ...model.snapshot, error: error instanceof Error ? error.message : "选服界面加载失败" });
+        });
+      } }, async () => { await service.authenticated(token => campaignApi.initialize(token)); }),
     }));
     this.unregisterViews.push(registerView(RemakeHomeView, {
       id: "remake-home", prefab: "bundles/remake-home/RemakeHome", layer: UILayer.Page,
@@ -117,6 +151,25 @@ export class RemakeApp extends Component {
         try {
           return new HeroRosterController(roster, rosterService, catalog, view as HeroListView, text => homeView?.showNotice(text));
         } catch (error) { rosterService.dispose(); throw error; }
+      },
+    }));
+    const itemCatalog = () => new ItemCatalog(remakeConfig.get<{rows:Record<string,unknown>[]}>("config/item")!,
+      remakeConfig.get<{rows:Record<string,unknown>[]}>("config/language")!);
+    const loadFeature = (group: "bag" | "campaign") => {
+      if (!this.featureResources) this.featureResources = createFeatureResourceScope();
+      return loadFeaturePage(this.featureResources,group);
+    };
+    this.unregisterViews.push(registerView(BackpackView, {
+      id:"bag",prefab:"prefabs/ui/backpack/BackpackLayer",layer:UILayer.Page,cache:false,allowMultiple:false,
+      mount:mountBackpackPage,load:() => loadFeature("bag"),
+      createController:view => new InventoryController(model,service,new InventoryApi(http),itemCatalog(),view as BackpackView),
+    }));
+    this.unregisterViews.push(registerView(CampaignView, {
+      id:"remake-campaign",prefab:"prefabs/ui/battle/BattlePanelLayer",layer:UILayer.Page,cache:false,allowMultiple:false,
+      mount:mountCampaignPage,load:() => loadFeature("campaign"),
+      createController:view => {
+        (view as CampaignView).configure(itemCatalog(),() => model.snapshot.role?.level || 1);
+        return new CampaignController(model,service,campaignApi,view as CampaignView,text => homeView?.showNotice(text));
       },
     }));
     this.alive = true;
@@ -162,6 +215,7 @@ export class RemakeApp extends Component {
     };
     this.offAccount = model.subscribe(syncRoute);
     void this.boot(async () => {
+      await servers.load();
       await service.restore();
     }, async () => {
       const route = entry.route(!!model.snapshot.role);
@@ -250,9 +304,11 @@ export class RemakeApp extends Component {
     this.startupResources?.dispose(); this.startupResources = null;
     this.offAccount?.(); this.offAccount = null;
     this.features?.dispose(); this.features = null;
+    UIManager.instance.closeById("server-picker");
     this.navigation?.dispose(); this.navigation = null;
     this.homeResources?.dispose(); this.homeResources = null;
     this.heroResources?.dispose(); this.heroResources = null;
+    this.featureResources?.dispose(); this.featureResources = null;
     for (const unregister of this.unregisterViews.splice(0)) unregister();
   }
 }

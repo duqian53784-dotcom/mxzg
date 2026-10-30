@@ -24,7 +24,10 @@ export class AccountService implements AccountAuthorization {
   constructor(private readonly model: AccountModel, private readonly api: AccountGateway,
     private readonly store: SessionStore, private readonly now: () => number = Date.now) {}
 
-  async login(account: string): Promise<boolean> {
+  get accountName(): string { return this.session?.account || this.model.snapshot.role?.nickname || ""; }
+  get hasSession(): boolean { return !!this.session; }
+
+  async login(account: string, serverId?: string): Promise<boolean> {
     const normalized = account.trim().toLowerCase();
     const operation = ++this.operation;
     // A new identity attempt must not restore a previous account after a failure.
@@ -36,9 +39,9 @@ export class AccountService implements AccountAuthorization {
     }
     this.model.replace({ busy: true, role: null, error: "" });
     try {
-      const result = await this.api.developmentLogin(normalized);
+      const result = await this.api.developmentLogin(normalized, serverId);
       if (operation !== this.operation) return false;
-      this.accept(result);
+      this.accept({ ...result, session: { ...result.session, account: normalized } });
       return true;
     } catch (error) { return this.fail(operation, error); }
   }
@@ -67,6 +70,14 @@ export class AccountService implements AccountAuthorization {
 
   logout(): void {
     this.invalidate("");
+  }
+
+  /** Refresh wallet/profile after an authoritative settlement, without reopening the session root. */
+  async refreshRole(): Promise<void> {
+    const operation = this.operation;
+    const role = await this.authenticated(token => this.api.currentRole(token));
+    if (operation !== this.operation) throw new SessionChanged();
+    this.model.replace({ busy: false, role, error: "" });
   }
 
   private invalidate(error: string): void {

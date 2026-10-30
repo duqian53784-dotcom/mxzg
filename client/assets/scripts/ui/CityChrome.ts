@@ -11,7 +11,7 @@ import {
   tintSprite,
 } from "./prefabLoad";
 import { createButton, createLabel, paintRect, place, setText, uiNode } from "./UiKit";
-import { TAB_REST_SIZE, tabPaintState, tabVisualScale } from "./cityTabScale";
+import { TAB_REST_SIZE, tabPaintState, tabVisualScale, cityTabLayout } from "./cityTabScale";
 import { widthSqueeze } from "./visibleChrome";
 import { assignContentSize, bindVisibleRefresh, fitVisibleRoot, squeezeWideNode, stretchBar, uiSize } from "./visibleFit";
 
@@ -401,6 +401,14 @@ export function layoutCityTab(button: Node, visibleW: number): void {
   prepareCityTab(button);
   if (visibleW > 0) mark.mxzgTabWidth = visibleW;
   const width = mark.mxzgTabWidth && mark.mxzgTabWidth > 0 ? mark.mxzgTabWidth : visibleW;
+  const names = ["TabCity","TabHero","TabBag","TabBattle","TabDungeon","TabClan","TabFetter"];
+  const index = names.indexOf(button.name);
+  if (index >= 0 && width > 0) {
+    const layout = cityTabLayout(width,index,mark.mxzgTabSelected === true);
+    button.setPosition(layout.x,layout.y,button.position.z);
+    button.setScale(layout.scale,layout.scale,1);
+    return;
+  }
   const restY = mark.mxzgTabRestY !== undefined ? mark.mxzgTabRestY : 0;
   if (!mark.mxzgDesign) {
     const pos = button.position;

@@ -4,7 +4,8 @@
  * 星用已有星星图：表上没有星级列，胜利画 3 颗，失败不画。
  * 奖励读 chapterreward.first_reward。加载失败返回 null，调用方仍用代码结算。
  */
-import { BlockInputEvents, Color, HorizontalTextAlignment, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform, VerticalTextAlignment } from "cc";
+import { BlockInputEvents, Color, HorizontalTextAlignment, Label, Node, Overflow, resources, Sprite, SpriteFrame, UITransform, VerticalTextAlignment, view as gameView } from "cc";
+import { bindVisibleRefresh, fitVisibleRoot } from "./visibleFit";
 import { itemIconResource } from "../config/gameCatalog";
 import { chapterClearReward } from "../config/rosterCatalog";
 import { messageOf } from "../core/errors";
@@ -23,6 +24,9 @@ export interface BattleEndOptions {
   stageId?: number;
   /** 胜利才出现。点了先关结算，再由调用方开下一关。 */
   onNext?: () => void;
+  roleLevel?: number;
+  rewards?: { itemType: number; num: number; icon: string }[];
+  confirmText?: string;
 }
 
 /**
@@ -52,7 +56,7 @@ export async function mountBattleEnd(
     hideShellText(view, "UILabelTTF_1");
     hideShellText(view, "lbl_hero_nums");
     hideShellText(view, "lbl_role_exp_num");
-    paintRoleLevel(view);
+    paintRoleLevel(view, options?.roleLevel);
     const fail = findDescendant(view, "lbl_faild");
     if (fail) {
       if (win === false) {
@@ -66,11 +70,11 @@ export async function mountBattleEnd(
     }
     const timer = findDescendant(view, "lbl_time");
     if (timer) timer.active = false;
-    paintStars(view, win === true);
-    paintClearRewards(view, win === true ? options && options.stageId : undefined);
+    paintStars(view, win === true && options?.rewards === undefined);
+    paintClearRewards(view, win === true ? options && options.stageId : undefined, options?.rewards);
     const confirm = findDescendant(view, "btn_confirm");
     if (confirm) {
-      caption(confirm, "回挂机");
+      caption(confirm, options?.confirmText || "回挂机");
       liftNode(confirm, view);
       bindTap(confirm, onClose);
     } else {
@@ -95,12 +99,47 @@ export async function mountBattleEnd(
     const host = shell && shell.isValid && shell.active ? shell : parent;
     hold.parent = host;
     hold.setSiblingIndex(Math.max(0, host.children.length - 1));
+    if (options?.rewards !== undefined) bindVisibleRefresh(hold, () => {
+      if (hold.isValid && view.isValid) layoutServerResult(hold, view, win === true);
+    });
     GameLog.shared.info("Mainline", "BattleEndLayer " + headline);
     return hold;
   } catch (err) {
     GameLog.shared.warn("Mainline", "BattleEndLayer " + messageOf(err));
     return null;
   }
+}
+
+/** The basic rules have no MVP, rating or role-level progress calculation.
+ * Reuse the result art while showing only the result and awarded server items. */
+function layoutServerResult(hold: Node, panel: Node, won: boolean): void {
+  fitVisibleRoot(hold);
+  const { width, height } = gameView.getVisibleSize();
+  hold.getComponent(UITransform)?.setContentSize(width, height);
+  const dim = hold.getChildByName("dim");
+  dim?.getComponent(UITransform)?.setContentSize(width, height);
+  const scale = Math.min(width * 0.9 / 640, height * 0.72 / 730);
+  panel.setScale(scale, scale, 1);
+  panel.setPosition(-320 * scale, -365 * scale + 35, 0);
+  for (const name of ["show_hero", "CCSprite_2", "CCSprite_3", "spr_photo", "spr_photo_bg", "role_exp", "CCScale9Sprite_1"])
+    hideShellText(panel, name);
+  const move = (name: string, x: number, y: number) => findDescendant(panel, name)?.setPosition(x, y, 0);
+  move("spr_bg", 320, 365);
+  move("spr_wing", 320, 650);
+  move("spr_result", 320, 640);
+  move("lbl_role_lv", 320, 505);
+  const level = findDescendant(panel, "lbl_role_lv");
+  if (level) {
+    level.getComponent(UITransform)?.setContentSize(400, 48);
+    const label = level.getComponent(Label);
+    if (label) { label.horizontalAlign = HorizontalTextAlignment.CENTER; label.fontSize = 28; label.lineHeight = 36; }
+  }
+  const rewardsTitle = findDescendant(panel, "CCSprite_1");
+  if (rewardsTitle) rewardsTitle.active = won;
+  move("CCSprite_1", 320, 430);
+  move("show_rich", 320, 300);
+  move("lbl_faild", 320, 340);
+  move("btn_confirm", 320, 90);
 }
 
 function paintStars(view: Node, win: boolean): void {
@@ -139,11 +178,11 @@ function paintResultBanner(view: Node, win: boolean | null): void {
   });
 }
 
-function paintRoleLevel(view: Node): void {
+function paintRoleLevel(view: Node, supplied?: number): void {
   const node = findDescendant(view, "lbl_role_lv");
   if (!node) return;
-  const synced = Session.source !== "wire" || Session.wireSync.level;
-  const level = Session.role ? Session.role.level : 0;
+  const synced = supplied !== undefined || Session.source !== "wire" || Session.wireSync.level;
+  const level = supplied !== undefined ? supplied : Session.role ? Session.role.level : 0;
   if (!synced || level < 1) {
     node.active = false;
     return;
@@ -157,8 +196,8 @@ function hideShellText(view: Node, name: string): void {
   if (node) node.active = false;
 }
 
-function paintClearRewards(view: Node, stageId: number | undefined): void {
-  const stacks = typeof stageId === "number" ? chapterClearReward(stageId) : null;
+function paintClearRewards(view: Node, stageId: number | undefined, supplied?: { itemType: number; num: number; icon: string }[]): void {
+  const stacks = supplied !== undefined ? supplied : typeof stageId === "number" ? chapterClearReward(stageId) : null;
   const host = findDescendant(view, "show_rich") || view;
   const old = host.getChildByName("EndRewards");
   if (old) old.destroy();
@@ -168,7 +207,7 @@ function paintClearRewards(view: Node, stageId: number | undefined): void {
   const shown = stacks.length < 6 ? stacks.length : 6;
   for (let i = 0; i < shown; i++) {
     const stack = stacks[i];
-    const icon = itemIconResource(stack.itemType, null) || "ui/bag/backpack_spr-default";
+    const icon = ("icon" in stack && typeof stack.icon === "string" ? stack.icon : itemIconResource(stack.itemType, null)) || "ui/bag/backpack_spr-default";
     const cell = uiNode("reward");
     const ui = cell.addComponent(UITransform);
     ui.setContentSize(64, 64);
@@ -176,13 +215,13 @@ function paintClearRewards(view: Node, stageId: number | undefined): void {
     sprite.sizeMode = Sprite.SizeMode.CUSTOM;
     place(cell, row, (i - (shown - 1) / 2) * 72, 0);
     paintFrame(cell, icon);
-    const count = createLabel(String(stack.num), 14, { color: new Color(255, 248, 220, 255), width: 56, height: 18 });
+    const count = createLabel(String(stack.num), supplied ? 20 : 14, { color: new Color(255, 248, 220, 255), width: 64, height: supplied ? 28 : 18 });
     const countLabel = count.getComponent(Label);
     if (countLabel) {
       countLabel.overflow = Overflow.SHRINK;
       countLabel.verticalAlign = VerticalTextAlignment.CENTER;
     }
-    place(count, cell, 0, -18);
+    place(count, cell, 0, supplied ? -48 : -18);
   }
 }
 

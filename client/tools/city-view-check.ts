@@ -167,7 +167,7 @@ function checkSources(): void {
   const leftPlate = findCityNode(buildCityMapLayout(null, null, null, { viewW: 590, viewH: 1280 }), "spr_map_bg1_1");
   assert(leftPlate !== null && leftPlate.x === 0 && leftPlate.ax === 0, "left foreground plate stays on the content left");
   assert(chrome.indexOf("main-scene-lang_lbl-fetters-unlock") >= 0, "chrome keeps the VIP caption");
-  assert(Math.abs(TAB_SELECTED_SCALE - 96 / 78) < 1e-6, "selected tab scale is 96/78");
+  assert(Math.abs(TAB_SELECTED_SCALE - 1.5) < 1e-6, "selected tab matches MainSceneCtr 1.5x checked size");
   assert(tabVisualScale(true) > tabVisualScale(false) * 1.2 && tabVisualScale(false) === 1, "only the selected tab grows");
   assert(chrome.indexOf('setCityTabSelected(button, state === "selected")') >= 0, "new chrome scales the selected tab");
   assert(chrome.indexOf("tabPaintState") >= 0, "new chrome keeps a single selected tab");

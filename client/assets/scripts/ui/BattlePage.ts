@@ -169,6 +169,7 @@ export interface BattlePrefabShell {
 
 export async function mountBattlePrefab(parent: Node): Promise<BattlePrefabShell> {
   const prefab = await loadPrefab(BATTLE_PREFAB_PATH);
+  if (!parent.isValid) throw new Error("战斗页面已关闭");
   const root = spawnPrefab(prefab, parent);
   try {
     return bindBattlePrefab(root);

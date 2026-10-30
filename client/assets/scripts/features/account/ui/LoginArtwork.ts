@@ -1,4 +1,6 @@
 import { _decorator, Component, Node, UITransform, view } from "cc";
+import { fitVisibleRoot } from "../../../ui/visibleFit";
+import { loginLayout } from "./LoginLayout";
 
 const { ccclass, property } = _decorator;
 
@@ -19,11 +21,11 @@ export class LoginArtwork extends Component {
   private fit(): void {
     const { width, height } = view.getVisibleSize();
     if (!(width > 0 && height > 0)) return;
-    // Same cover rule and width-based character scale as the Japanese LogoScene.
-    const cover = Math.max(width / 768, height / 1300);
-    this.backdrop?.setContentSize(768 * cover, 1300 * cover);
-    this.cast?.setScale(width / 770, width / 770, 1);
-    this.cast?.setPosition(0, height * 0.05, 0);
+    fitVisibleRoot(this.node);
+    const layout = loginLayout(width, height);
+    this.backdrop?.setContentSize(layout.backgroundWidth, layout.backgroundHeight);
+    this.cast?.setScale(layout.castScale, layout.castScale, 1);
+    this.cast?.setPosition(0, layout.castY, 0);
     const scale = Math.min(1, width / 640);
     this.controls?.setScale(scale, scale, 1);
     this.controls?.setPosition(0, -height / 2, 0);

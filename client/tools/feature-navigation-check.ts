@@ -21,7 +21,7 @@ async function main() {
       await job.promise; current = "hero";
     },
   }, { current: () => current, authorized: () => authorized, notice: text => { notice = text; } });
-  assert.equal(flow.open("bag"), false);
+  assert.equal(flow.open("clan"), false);
   assert.equal(flow.open("hero"), true); assert.equal(attempts, 0, "Start/session gate prevents feature work");
   authorized = true;
   flow.open("hero"); const cancelled = job!;

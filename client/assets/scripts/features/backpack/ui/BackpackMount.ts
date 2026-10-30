@@ -48,7 +48,7 @@ export async function mountBackpackPage(host: Node, layer: Prefab): Promise<Node
 }
 
 /** 详情盖在背包上。DimSheet 的 dim、InfoCard 都是这一层的直接子节点。 */
-export function openBagInfo(host: Node, dimPrefab: Prefab, infoPrefab: Prefab, face: BagFace, toast: (text: string) => void): Node | null {
+export function openBagInfo(host: Node, dimPrefab: Prefab, infoPrefab: Prefab, face: BagFace, toast: (text: string) => void, readOnly = false): Node | null {
   if (!host.isValid) return null;
   const old = host.getChildByName("InfoCard");
   if (old) old.destroy();
@@ -75,6 +75,7 @@ export function openBagInfo(host: Node, dimPrefab: Prefab, infoPrefab: Prefab, f
     return sheet;
   }
   info.show(face, close, toast);
+  info.setReadOnly(readOnly);
   return sheet;
 }
 

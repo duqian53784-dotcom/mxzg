@@ -3,11 +3,19 @@
  * 96/78 是预制里战斗格相对其它格的尺寸。选中态用这个倍数，不再把战斗格做死成 96。
  */
 export const TAB_REST_SIZE = 78;
-export const TAB_SELECTED_SIZE = 96;
+export const TAB_SELECTED_SIZE = 117;
 export const TAB_SELECTED_SCALE = TAB_SELECTED_SIZE / TAB_REST_SIZE;
 
 export function tabVisualScale(selected: boolean): number {
   return selected ? TAB_SELECTED_SCALE : 1;
+}
+
+/** MainSceneCtr: seven cells share 90% of the width; checked cell uses 1.5x. */
+export function cityTabLayout(width: number, index: number, selected: boolean) {
+  const step = width * 0.9 / 7;
+  const scale = step / TAB_REST_SIZE * tabVisualScale(selected);
+  return { x: -width * 0.45 + step * (index + 0.3125),
+    y: 13 + (selected ? step * 0.25 : 0), scale };
 }
 
 /**

@@ -29,6 +29,7 @@ import { mountBackpackPage, openBagInfo } from "./BackpackMount";
 import { UILayer } from "../../../framework/ui/UILayer";
 import { UIManager } from "../../../framework/ui/UIManager";
 import { view } from "../../../framework/ui/UIRegistry";
+import type { InventorySource, InventoryView } from "../InventoryController";
 
 const { ccclass, property } = _decorator;
 
@@ -56,7 +57,7 @@ export interface BagOpenArgs {
   mount: mountBackpackPage,
 })
 @ccclass("BackpackView")
-export class BackpackView extends BaseView<BagOpenArgs> {
+export class BackpackView extends BaseView<BagOpenArgs> implements InventoryView {
   @property(Node)
   sprBox: Node | null = null;
 
@@ -109,8 +110,17 @@ export class BackpackView extends BaseView<BagOpenArgs> {
   private offSync: (() => void) | null = null;
   private infoSheet: Node | null = null;
   private shownWatch: (() => void) | null = null;
+  private inventory: InventorySource | null = null;
+  private closed = false;
+
+  useInventory(source: InventorySource): void {
+    if (this.opened) throw new Error("背包数据源必须在开页前注入");
+    this.inventory = source;
+  }
+  refreshInventory(): void { if (!this.closed) this.refreshGrid(); }
 
   onOpen(args?: BagOpenArgs): void {
+    this.closed = false;
     this.args = args;
     if (args && args.tab) this.tab = args.tab;
     if (this.opened) {
@@ -119,10 +129,13 @@ export class BackpackView extends BaseView<BagOpenArgs> {
     }
     this.opened = true;
     this.beginOpen();
-    void this.start();
+    void this.initialize();
   }
 
   onClose(): void {
+    this.closed = true;
+    this.failOpen(new Error("页面已关"));
+    this.dismissInfo();
     this.clearShownWatch();
     if (this.offSync) {
       this.offSync();
@@ -130,15 +143,15 @@ export class BackpackView extends BaseView<BagOpenArgs> {
     }
   }
 
-  private async start(): Promise<void> {
+  private async initialize(): Promise<void> {
     try {
       this.dropHostMask();
       this.silenceMenu();
       this.bindClose();
       this.dressPortrait();
-      this.offSync = WireSession.onSync(() => this.refreshGrid());
+      if (!this.inventory) this.offSync = WireSession.onSync(() => this.refreshGrid());
       await this.ensurePrefabs();
-      if (!this.node || !this.node.isValid) {
+      if (this.closed || !this.node || !this.node.isValid) {
         this.failOpen(new Error("页面已关"));
         return;
       }
@@ -156,6 +169,7 @@ export class BackpackView extends BaseView<BagOpenArgs> {
    * 已经在场景里就当场铺。否则等下一帧进了场景再铺。whenReady 不等这一步，避免和进栈互相等。
    */
   private refreshGrid(): void {
+    if (this.closed) return;
     if (!this.node || !this.node.isValid || !this.cellPrefab || !this.tabPrefab) return;
     if (!this.node.activeInHierarchy) {
       this.watchShown();
@@ -326,6 +340,7 @@ export class BackpackView extends BaseView<BagOpenArgs> {
     if (this.bubble) this.bubble.active = true;
     if (!this.talk) return;
     this.talk.node.active = true;
+    if (this.inventory) { this.talk.string = this.inventory.message(); return; }
     const bag = GameStore.bag();
     this.talk.string = bag === null ? WIRE_BAG_UNSYNCED_TOAST : bagShopGreeting(languageRows());
   }
@@ -345,6 +360,7 @@ export class BackpackView extends BaseView<BagOpenArgs> {
       this.adoptLayer(node, this.tabContent.layer || Layers.Enum.UI_2D);
       tab.setTab(spec.title, spec.id === this.tab, () => {
         this.tab = spec.id;
+        if (this.inventory?.failed()) this.inventory.retry();
         this.refreshGrid();
       });
       this.tabs.push(tab);
@@ -359,8 +375,8 @@ export class BackpackView extends BaseView<BagOpenArgs> {
     const content = this.bagContent;
     if (!content || !content.isValid || !this.cellPrefab) return;
     this.clear(content);
-    const bag = GameStore.bag();
-    const rows = bag === null ? [] : rowsForBagTab(bag, this.tab) || [];
+    const bag = this.inventory ? this.inventory.rows(this.tab) : GameStore.bag();
+    const rows = this.inventory ? bag || [] : bag === null ? [] : rowsForBagTab(bag, this.tab) || [];
     if (bag === null || (this.picked && !rows.some((row) => sameBagItem(row, this.picked as StoreBagItem)))) {
       this.picked = null;
       this.dismissInfo();
@@ -383,10 +399,10 @@ export class BackpackView extends BaseView<BagOpenArgs> {
             this.refreshGrid();
           }
         : rows.length === 0
-          ? () => this.toast(bag === null ? WIRE_BAG_UNSYNCED_TOAST : emptyBagToast())
+          ? () => { if (this.inventory) this.inventory.retry(); else this.toast(bag === null ? WIRE_BAG_UNSYNCED_TOAST : emptyBagToast()); }
           : null;
       this.adoptLayer(node, layer);
-      cell.show(item, selected, onTap);
+      cell.show(item, selected, onTap, item && this.inventory ? this.inventory.face(item) : undefined);
       const seat = bagSlotPosition(i);
       node.setPosition(seat.x, seat.y, 0);
     }
@@ -402,7 +418,7 @@ export class BackpackView extends BaseView<BagOpenArgs> {
       GameLog.shared.warn("Bag", "背包详情预制没有绑定");
       return;
     }
-    this.infoSheet = openBagInfo(this.node, this.dimPrefab, this.infoPrefab, describeBagItem(item), (text) => this.toast(text));
+    this.infoSheet = openBagInfo(this.node, this.dimPrefab, this.infoPrefab, this.inventory ? this.inventory.face(item) : describeBagItem(item), (text) => this.toast(text), !!this.inventory);
   }
 
   private dismissInfo(): void {
