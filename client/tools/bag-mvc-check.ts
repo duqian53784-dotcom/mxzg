@@ -109,11 +109,11 @@ function checkEvents():void {
 
 async function checkSessionAndQuery():Promise<void> {
     const f=fixture();let notices=0;
-    const stop=EventDispatcher.instance.on(BagEvent.Changed,event=>{notices++;assert(event.revision<=f.model.snapshot.revision);if(event.revision===f.model.snapshot.revision)assert.equal(event.status,f.model.snapshot.status);});
+    const stop=EventDispatcher.instance.on(BagEvent.BagUpdate,event=>{notices++;assert(event.revision<=f.model.snapshot.revision);assert(event.reason==="session-reset"||f.model.snapshot.status==="ready");});
     await f.service.login("player_one","one");assert.equal(f.model.snapshot.status,"loading");
     f.requests[0].resolve(items(4));await tick();assert.equal(f.model.quantity(900101),4,"query updates without any View");
     let reentrant:Promise<boolean>|undefined;
-    EventDispatcher.instance.once(BagEvent.Changed,()=>{reentrant=f.c.refresh();});
+    EventDispatcher.instance.once(BagEvent.BagSyncStateChanged,()=>{reentrant=f.c.refresh();});
     const old=f.c.refresh();assert.equal(reentrant,old,"synchronous observers share an already recorded query");
     const newer=f.c.refresh(true);await tick();
     f.requests[2].resolve(items(7));assert.equal(await newer,true);
@@ -127,10 +127,10 @@ async function checkSessionAndQuery():Promise<void> {
     f.requests[6].resolve(items(20));await tick();assert.equal(f.model.snapshot.roleKey,"two/same-role");
     f.requests[5].reject(new HttpFailure(401,"expired old user"));await previous;
     assert.equal(f.model.quantity(900101),20);assert.equal(f.account.snapshot.role?.serverId,"two");
-    assert.equal(f.c.applyDelta(oldScope,"old-push",[{itemId:900101,delta:10}]),false);
-    const scope=f.c.captureSession();assert(f.c.applyDelta(scope,"push-1",[{itemId:900101,delta:2}]));
+    assert.equal(await f.c.applyDelta(oldScope,"old-push",[{itemId:900101,delta:10}]),false);
+    const scope=f.c.captureSession();assert(await f.c.applyDelta(scope,"push-1",[{itemId:900101,delta:2}]));
     const count=notices,revision=f.model.snapshot.revision;
-    assert.equal(f.c.applyDelta(scope,"push-1",[{itemId:900101,delta:2}]),false);
+    assert.equal(await f.c.applyDelta(scope,"push-1",[{itemId:900101,delta:2}]),false);
     assert.equal(notices,count);assert.equal(f.model.snapshot.revision,revision);assert.equal(f.model.quantity(900101),22);
     stop();f.service.logout();assert.equal(f.model.snapshot.roleKey,null);assert.equal(f.model.quantity(900101),0);f.stop();f.stop();
 }
@@ -142,13 +142,13 @@ async function checkOperation():Promise<void> {
     const update=()=>f.c.runInventoryUpdate("campaign-claim:one",()=>{requests++;return claim.promise;},result=>result.inventory,
         result=>{commits++;f.service.acceptRole({...f.account.snapshot.role!,gold:result.gold});});
     let reentrant:Promise<unknown>|undefined;
-    EventDispatcher.instance.once(BagEvent.Changed,()=>{reentrant=update();});
-    const operation=update(),duplicatePending=update();assert.equal(operation,duplicatePending);assert.equal(operation,reentrant,"notify observers only after registering in-flight deduplication");
+    EventDispatcher.instance.once(BagEvent.BagSyncStateChanged,()=>{reentrant=update();});
+    const operation=update(),duplicatePending=update();assert.equal(operation,duplicatePending);
     let bagSawWallet=false,walletSawBag=false;
-    const offBag=EventDispatcher.instance.on(BagEvent.Changed,event=>{if(event.status==="ready"){assert.equal(f.account.snapshot.role!.gold,100);bagSawWallet=true;}});
+    const offBag=EventDispatcher.instance.on(BagEvent.BagUpdate,event=>{if(event.reason!=="session-reset"){assert.equal(f.account.snapshot.role!.gold,100);bagSawWallet=true;}});
     const offAccount=f.account.subscribe(state=>{if(state.role?.gold===100){assert.equal(f.model.quantity(900101),9);walletSawBag=true;}});
     const oldRole=deferred<typeof profile>();f.setRoleRead(oldRole.promise);const refreshingRole=f.service.refreshRole();
-    claim.resolve({inventory:items(9),gold:100});await operation;
+    claim.resolve({inventory:items(9),gold:100});await operation;assert.equal(operation,reentrant,"state notification reentry shares the recorded operation");
     assert.equal(requests,1);assert.equal(commits,1);assert(bagSawWallet&&walletSawBag,"related Models commit before either event is delivered");
     oldRole.resolve({...profile,gold:0});await refreshingRole;assert.equal(f.account.snapshot.role!.gold,100,"late wallet GET cannot undo settlement");
     f.requests[1].resolve(items(5));await staleRead;assert.equal(f.model.quantity(900101),9,"read started before settlement cannot roll it back");

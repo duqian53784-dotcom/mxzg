@@ -121,7 +121,7 @@ export class CampaignController {
                 result => {
                     this.service.acceptRole(result.role);
                     if (this.accepts(epoch) && this.state) this.state = { ...this.state, stageId: result.stageId, pending: null };
-                });
+                }, "reward");
             if (!this.accepts(epoch))
                 return;
             this.report = null;

@@ -4,12 +4,25 @@
 
 ## 当前快照（优先阅读）
 
-- 最新范围：背包标准模块，使用 features/Bag、完整类名、BaseModel/BaseController、单一全局 EventDispatcher 和 EventScope；在现有未提交工作上整理，不扩展其他模块/玩法。
-- 技术结果：26/26 检查、Creator 3.8.8 strict 与类型负向断言通过；7456 + 18080 真实 MVC 和列表流程通过，浏览器错误 0。无包构建、数据库修改、提交推送或发布。
-- 修改入口见 [背包标准模块指南](bag-mvc-maintenance.md)，证据见 [bag-standard-20261030](validation/bag-standard-20261030/README.md)。架构/需求/路线只将完整名称及全局事件方案作为当前标准；下方缩写方案为已被替代的历史批次。
-- **人工代码阅读和 Prefab/Inspector 修改体验待用户验收**；出阵与旧列表的人工体验也不自动代签。先交完整样板，暂不继续迁移其他模块。
+- 最新范围：背包库存事件及必要调用方，沿用 features/Bag、完整名称、BaseModel/BaseController、全局 EventDispatcher/EventScope；不扩展全项目架构或玩法。
+- 技术结果：**27/27**、Creator 3.8.8 strict 通过；真实本机查询、开/关背包领奖、详情、旧 GET、重复领取、开关/换号/换服通过，两轮浏览器错误 0。没有构建包、提交推送、发布或修改后端/数据库结构。
+- 事件：BagAdd/BagRemove/BagQuantityChanged 按类聚合，最后一次 BagUpdate；首次和 reset 只汇总，重复相同库存不发库存事件，状态独立通知。Model 返回只读差异，Controller 派发，旧 Changed 路径删除。
+- 入口见 [事件规则](bag-inventory-events.md)、[维护指南](bag-mvc-maintenance.md)、[本批证据](validation/bag-events-20261030/README.md)。此前标准模块/列表样板是历史技术结果，人工阅读和 Inspector 体验仍待用户，未代签。
 
-## 2026-10-30 背包标准模块（当前批次，代码完成待人工验收）
+## 2026-10-30 背包库存批次事件（当前批次，技术验证通过）
+
+- 起始 main / 2022a566，工作区干净，上一批标准模块已提交。本批沿用已有实现，不新增私有派发器或窗口框架；Prefab、脚本 UUID、SuperScroll/SuperContent、HTTP 协议、后端和数据库结构保持不变。
+- 确认真实协议 itemId/quantity，服务端 game_inventory 以 role_id/item_id 为主键并查询 quantity>0。本批按当前角色内 itemId 比较，不给不存在的实例 ID 编造规则；未来实例协议需重新明确标识。
+- 新增 data/BagChangeSet：Model 全量/增量先整批校验、局部计算差异、一次提交并返回冻结清单。新增/删除完整条目，数量变化含旧/新/差值；Model 不派发。Controller 先校验会话与顺序，按 Add→Remove→QuantityChanged 聚合，最后 Update；无对应变化不发送细分事件。
+- 首次同步原因 initial-sync，只汇总且变化数组为空；角色 reset 以 session-reset 清理，只汇总，不当消耗。相同已同步库存不发库存事件；加载/失败/恢复用 BagSyncStateChanged。战斗调用显式传 reward，其他未明确来源默认 unknown，不根据数量正负推断。
+- Controller 通知保护持续到全局派发器完成本批汇总回调，再放行同步回调排队的新库存提交，覆盖直接派发和外层 batchNotifications 场景。查询代数、串行写入、重复响应和跨号隔离保留；applyDelta 为 Promise<boolean>，等待进行中写入并要求调用方 await。
+- BagView 打开先监听 BagUpdate 再读 Model；状态事件只更新提示，不重新排列列表。只使用汇总刷新而不同时监听全部细分，BaseView 清理本页两类监听，其他模块订阅保留。
+- 专项检查覆盖首次、增加多条、已有数量增/减、归零移除、混合三类变化、重复库存、非法快照/增量、失败恢复、旧会话、回调重入下一批与重置；每个库存回调断言 Model 版本/整批数据一致，事件次数与参数匹配，包含不可变和 TS 负向约束。
+- 初次真实预览明确读到旧 Changed 常量，探针停止并保留失败日志；用户完成 Creator 导入刷新后，新契约实测通过。两种领奖路径均有真实服务器响应：新增三种条目聚合为一次 Add、已有两种数量变化聚合为一次 QuantityChanged、最后一次 Update，回调读取钱包与完整库存一致。打开背包时仅一次列表刷新，相同查询只更新加载/恢复文字，零次列表刷新；奖励后详情显示真实新数量。
+- 两轮还通过闭页查询、立即打开、三轮开关、状态监听清理/外部监听保留、旧 GET 在领奖后真实交付不回滚、重复实际领取、退出/换号/同账号换服。运行错误 0，源码和日志见本批证据。
+- 未验证：真实库存删除/消耗的服务器功能尚无入口，删除/减量/混合与回调重入由可控业务检查覆盖；未让真实服务器故意返回非法响应/401/断网，相关保护由业务检查覆盖。未重复整套中性列表运行矩阵，未构建任何三端包、评估大库存性能或迁移其他模块。
+
+## 2026-10-30 背包标准模块（历史批次，事件以顶部新规则为准）
 
 - 基线 main / d7ea90a0 + 上一批未提交修改；先保存当前差异及背包源文件副本，不重置现有人工工作。源 Prefab、SuperScroll/SuperContent、资源路径和 UUID 绑定不改；10 个移动脚本的 meta UUID 逐一核对保留，目录实际大小写及导入统一 features/Bag。
 - UI 为 BagView/BagItemView/BagInfoView/BagTabView；库存、状态和事件参数进入 data。BagModel 不再从 API 文件取校验；readBagItems 在 data/BagItemData，网络适配与 Model 共用。现有 BagApi、BagItemCatalog、ui/BagMount 明确保留为 HTTP、配置与挂载辅助，不是平行状态或新增转发层。

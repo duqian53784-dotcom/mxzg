@@ -13,7 +13,7 @@
 
 ## 当前快照
 
-- 最新用户优先级：本批统一 features/Bag 的 BagController/BagModel/BagView，落实 BaseModel/BaseController、单一全局 EventDispatcher 与 EventScope，接查询与战斗领奖库存，保留通用列表和 Prefab 编辑入口。26/26、strict 与真实本机运行通过，状态是代码完成待人工验收；代码阅读和 Inspector 体验由用户确认后再扩大迁移。入口见 [背包 MVC 指南](bag-mvc-maintenance.md)。
+- 最新用户优先级：本批只完善背包四类库存事件与独立状态通知，Model 返回只读差异、Controller 整批提交后通知、BagView 以汇总刷新。27/27、strict、两种真实领奖与详情流程通过；不扩展其他模块、不构建包。人工样板体验仍待用户确认。入口见 [事件规则](bag-inventory-events.md)。
 - 最新执行方式：本机 Creator 预览优先。后续不构建 H5 或其他任何包，等用户明确需要时再执行。已有 H5 技术证据保留，当前源码的新包验收未执行，不将旧产物或中止构建记成本批通过。
 
 - 先前功能验收：[2026-10-30 登录、选服、背包与战斗](night-acceptance-2026-10-30.md)。最新结果见 development-progress；准确提交/推送状态以 Git 为准。
@@ -67,6 +67,7 @@
 - P1-07【代码完成待验收】建立 HeroSelectLayer 人工维护样板：静态配置归 Prefab、显式绑定、集中适配、动态列表参数可编辑；Creator 与独立 H5 的源布局修改和切页重开技术验证通过，提供节点/代码/正式服差异指南。用户要求暂停最终默认 H5 重复构建，本机预览优先。技术结果见 development-progress；人工修改体验必须由用户亲手验收，不能由自动化代签。
 - P1-08【代码完成待验收】SuperScroll/SuperContent 接入 BackpackLayer。源 Prefab 的三列/间距/边距修改及默认四列均通过本机实际运行；原生引擎覆盖竖向/横向/两种网格、空/单/不足与超过一屏/缩短、拖动抑制、刷新复用、兼容 Cell 和背包回归。25/25 与 strict 通过。无任何包构建，编辑器人工体验待用户确认。
 - P1-09【代码完成待验收】背包标准模块：features/Bag 与完整类名、data 类型、BaseModel/BaseController、单一全局 EventDispatcher/EventScope，模块 Controller 脱离窗口生命周期。真实查询和战斗领奖同一库存链，清除缩写/旧事件实例，保留 UUID/列表参数。26/26、strict 与实际 MVC/列表通过，证据见 bag-standard-20261030。账号/英雄/阵容/主线/挂机未迁移；人工阅读与编辑体验等用户验收。
+- P1-10【代码完成待验收】背包批次库存事件：Add/Remove/QuantityChanged 聚合后最终 Update，首次/reset/重复/状态分离；保护通知中回调重入、保持会话/读写/奖励幂等，BagView 与领奖接入。27/27、strict、真实闭页/开页领奖及详情通过，证据见 bag-events-20261030。实际消耗/删除后端入口尚无，相关边界以业务检查验证。
 
 阶段出口：完整录屏或逐步截图证明加载、登录、点击开始、主城、退出、再登录可用；断网和失败不黑屏、不进入错误角色。未经实际预览不关闭本阶段。
 

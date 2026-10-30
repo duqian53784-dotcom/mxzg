@@ -1,16 +1,20 @@
 import { BagEvent } from "../BagEvent";
-import type { BagStatus } from "./BagState";
+import type { BagChangeSet } from "./BagChangeSet";
+import type { BagState } from "./BagState";
 
-export interface BagEventData {
-    readonly roleKey: string | null;
-    readonly revision: number;
-    readonly status: BagStatus;
-    readonly source: "session" | "query" | "operation" | "delta" | "failure";
-}
+export type BagChangeReason = "initial-sync" | "query" | "reward" | "consume" | "session-reset" | "unknown";
+export interface BagUpdateData extends BagChangeSet { readonly reason: BagChangeReason; }
+export type BagAddData = Pick<BagUpdateData, "roleKey" | "revision" | "reason" | "added">;
+export type BagRemoveData = Pick<BagUpdateData, "roleKey" | "revision" | "reason" | "removed">;
+export type BagQuantityChangedData = Pick<BagUpdateData, "roleKey" | "revision" | "reason" | "quantityChanged">;
+export type BagSyncStateChangedData = Pick<BagState, "roleKey" | "revision" | "status" | "synced" | "error">;
 
-/** Extend the single dispatcher's types without making framework depend on a feature. */
 declare module "../../../framework/EventDispatcher" {
     interface EventPayloads {
-        [BagEvent.Changed]: Readonly<BagEventData>;
+        [BagEvent.BagUpdate]: Readonly<BagUpdateData>;
+        [BagEvent.BagAdd]: Readonly<BagAddData>;
+        [BagEvent.BagRemove]: Readonly<BagRemoveData>;
+        [BagEvent.BagQuantityChanged]: Readonly<BagQuantityChangedData>;
+        [BagEvent.BagSyncStateChanged]: Readonly<BagSyncStateChangedData>;
     }
 }

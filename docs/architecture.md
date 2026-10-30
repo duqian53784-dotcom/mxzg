@@ -6,7 +6,7 @@
 
 2026-10-30 最新用户基线：模块使用完整名称和固定目录，不再使用 BagC/BagM/BagV 缩写，也不再让业务 Controller 按页面开关生命周期工作。本文旧的强制 Service/Presenter 分层以及上一轮模块私有 TypedEvents 方案已被替代。当前只落实背包样板，不代表全项目完成。
 
-`features/Bag/` 包含 `BagController.ts`、`BagModel.ts`、`BagEvent.ts`；`ui/` 是 BagView、BagItemView、BagInfoView、BagTabView，`data/` 是 BagItemData、BagState、BagEventData。已有必要手写请求适配保留为 BagApi，配置查询保留为 BagItemCatalog，页面挂载辅助为 ui/BagMount；这些有实际用途，不是额外业务层或状态副本。底层 HTTP 仍在 platform/http，既有生成协议不搬入 Model。
+`features/Bag/` 包含 `BagController.ts`、`BagModel.ts`、`BagEvent.ts`；`ui/` 是 BagView、BagItemView、BagInfoView、BagTabView，`data/` 是 BagItemData、BagState、BagChangeSet、BagEventData。已有必要手写请求适配保留为 BagApi，配置查询保留为 BagItemCatalog，页面挂载辅助为 ui/BagMount；这些有实际用途，不是额外业务层或状态副本。底层 HTTP 仍在 platform/http，既有生成协议不搬入 Model。
 
 - BagController 继承 BaseController，处理请求、回包校验、失败、查询代数、库存写入顺序与响应去重；先更新 Model，再派发事件。请求队列和奖励边界是背包职责，不上提基类。
 - BagModel 继承 BaseModel，保存当前角色唯一库存与同步/错误状态，提供冻结的只读查询、全量和必要增量更新。它不引用 Controller、View 或网络 API 文件；校验在 data/BagItemData，API 和 Model 共用。
@@ -27,13 +27,19 @@ UIRegistry.createController 和 BaseView.attachController 的 show/close 契约�
 
 ## 单一全局事件与数据顺序
 
-`framework/EventDispatcher.ts` 由原 TypedEvents 改造，整个背包只用 EventDispatcher.instance。提供 on/once/emit，订阅返回可重复安全调用的解除函数；once 在回调前退订，支持提前取消。没有模块私有派发器或全局 clear。事件名在 BagEvent，类型在 data/BagEventData，通过 TypeScript interface augmentation 接入 EventPayloads，框架无需反向导入业务。其他功能直接监听 BagEvent.Changed，不访问 Controller 内部事件对象。
+`framework/EventDispatcher.ts` 由原 TypedEvents 改造，整个背包只用 EventDispatcher.instance。提供 on/once/emit，订阅返回可重复安全调用的解除函数；once 在回调前退订，支持提前取消。没有模块私有派发器或全局 clear。事件名在 BagEvent，类型在 data/BagEventData，通过 TypeScript interface augmentation 接入 EventPayloads，框架无需反向导入业务。其他功能直接监听 BagEvent.BagUpdate，不访问 Controller 内部事件对象。
 
-先提交数据再通知。batchNotifications 让账号和库存等相关状态同步提交完后再投递；每次 emit 均作为通知交付，不作为事件历史仓库。V 打开仍须主动读 Model。单个监听异常记录事件名与堆栈，不阻断其他监听。事件用于通知，不替代明确的业务方法。
+背包一次有效库存提交：Controller 校验会话/响应和顺序 → Model 校验整批数据、计算差异并一次性提交 → 返回只读 BagChangeSet → Controller 按 Add、Remove、QuantityChanged 聚合派发（只发有变化的类型）→ 最后一次 BagUpdate。加载/失败/恢复另用 BagSyncStateChanged；普通 BagView 只监听汇总事件刷新列表，状态事件只更新提示，不同时订阅全部细分事件。
 
-BagModel 区分 idle、loading、ready（允许空）和 error；刷新失败保留上次有效快照并显示失败状态。返回值冻结，外部不能改内部数量。角色会话按 serverId/roleId 管理，退出/换号/换服/过期会 reset，旧会话迟到读写不可提交；同角色内另有查询代数和库存操作顺序，旧 GET 也不能覆盖新奖励。
+事件常量为 BagEvent.BagUpdate / BagAdd / BagRemove / BagQuantityChanged，字符串统一 bag 命名空间。只有原本不存在的新条目才是 Add；仍存在的条目数量加减都归 QuantityChanged；删除保留原条目数据。Model 无事件派发，也不逐条提交。当前协议及 game_inventory 主键是角色内 itemId 聚合库存；没有假设英雄/装备实例永远按模板区分，协议扩展实例时必须同步调整身份与差异比较。准确参数、语义与业务方法见 [库存事件说明](bag-inventory-events.md)。
 
-全量 replaceAll 与带唯一响应标识的 applyDelta 分开；不按收到事件累加资产。战斗领奖由 CampaignController.claim 将现有请求交给 BagController.runInventoryUpdate，校验后同步提交 AccountService.acceptRole 与 BagModel.replaceAll，再通知全局事件。窗口关闭不取消模块结果处理。批处理仅延后同步通知，不提供回滚；服务端事务、幂等、鉴权、阵容 409 和持久化保持原有规则。
+首次同步只发一个原因 initial-sync 的 BagUpdate，变化数组为空，不把初始快照当获得；会话 reset 清库后只发原因 session-reset 的汇总，不当消耗。已同步的相同库存无增删改或汇总事件，加载/恢复通过状态通知表达。查询有差异时原因 query；战斗领取明确传 reward；未明确来源默认 unknown，不推断正数就是奖励。
+
+BagController 的通知保护持续到所有已排入全局派发器的本批回调完成，再执行回调中排队的下一次库存/状态更新。包括外层 batchNotifications 已在投递的情形，不只包住 emit 调用。全量/增量/会话清理均走同一个保护；applyDelta 返回 Promise<boolean>，调用方须 await，进行中写入结束后再应用，旧会话/重复标识返回 false。
+
+BagModel 区分 idle、loading、ready（允许空）和 error；失败保留上次有效库存。返回条目、变化数组及数量变化对象冻结。BagUpdate 的 revision 与回调读取的当前 Model 版本一致；版本沿用 BaseModel，状态提交也推进版本，并非每次库存事件只加一。V 打开先监听再主动读 Model，事件不是历史仓库。单个监听异常由全局派发器记录，不阻断其他监听；不为展示事件能力新增效果。
+
+全量 replaceAll 与带唯一响应标识的 applyDelta 分开；不按收到事件累加资产。旧会话读写、旧账号 401、同角色查询乱序、串行写入及重复响应保护保留。战斗领奖由 CampaignController.claim 把原 HTTP 请求交给 BagController.runInventoryUpdate(..., "reward")；校验后先在 batchNotifications 中提交账号/库存，再通知，页面关闭仍处理有效结果。奖励弹窗/演出沿用真实战报和领奖结果，不由 BagAdd 推断。批处理只延后通知，不提供回滚；服务器事务、鉴权、阵容 409、幂等和持久化不变。
 
 ## Prefab 与通用列表
 

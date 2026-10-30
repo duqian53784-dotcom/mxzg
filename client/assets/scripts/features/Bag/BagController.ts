@@ -3,12 +3,14 @@ import { SessionChanged } from "../account/AccountService";
 import type { AccountAuthorization } from "../account/AccountService";
 import { BaseController } from "../../framework/BaseController";
 import type { ControllerSession } from "../../framework/BaseController";
-import { batchNotifications } from "../../framework/EventDispatcher";
+import { batchNotifications, publishNotification } from "../../framework/EventDispatcher";
 import { BagModel } from "./BagModel";
 import { BagEvent } from "./BagEvent";
 import { readBagItems } from "./data/BagItemData";
 import type { BagItemData, BagItemDelta } from "./data/BagItemData";
-import type { BagEventData } from "./data/BagEventData";
+import type { BagChangeReason } from "./data/BagEventData";
+import type { BagChangeSet } from "./data/BagChangeSet";
+import type { BagState } from "./data/BagState";
 
 export interface BagGateway { list(token: string): Promise<readonly BagItemData[]>; }
 export interface BagDependencies {
@@ -29,6 +31,8 @@ export class BagController extends BaseController {
     private writeTail: Promise<void> = Promise.resolve();
     private inFlight = new Map<string, Promise<unknown>>();
     private receipts = new Set<string>();
+    private notifying = false;
+    private deferredMutations: Array<() => void> = [];
 
     constructor(private readonly model: BagModel) { super(); }
 
@@ -53,15 +57,25 @@ export class BagController extends BaseController {
         this.syncSession();
     }
 
+    resetSession(roleKey: string | null): void {
+        if (this.notifying) { this.deferredMutations.push(() => this.resetSession(roleKey)); return; }
+        super.resetSession(roleKey);
+    }
+
+    dispose(): void {
+        if (this.notifying) { this.deferredMutations.push(() => this.dispose()); return; }
+        super.dispose();
+    }
+
     protected onResetSession(roleKey: string | null): void {
+        const previous = this.model.snapshot;
         this.invalidateRead();
         this.writeCount = 0;
         this.writeTail = Promise.resolve();
         this.inFlight.clear();
         this.receipts.clear();
-        if (this.isInitialized) this.model.reset(roleKey);
-        else this.model.dispose();
-        this.changed("session");
+        const changes = this.isInitialized ? this.model.reset(roleKey) : this.model.dispose();
+        this.notify(changes, "session-reset", previous);
     }
 
     protected onDispose(): void {
@@ -74,6 +88,8 @@ export class BagController extends BaseController {
     refresh(force = false): Promise<boolean> {
         if (!this.model.snapshot.roleKey || !this.authorization || !this.api) return Promise.resolve(false);
         const session = this.captureSession();
+        if (this.pendingRead && !force) return this.pendingRead;
+        if (this.notifying) return this.afterBatch(() => this.isCurrent(session) ? this.refresh(force) : false);
         if (this.writeCount) return this.writeTail.then(() => this.isCurrent(session) ? this.refresh(force) : false);
         if (this.pendingRead && !force) return this.pendingRead;
         const epoch = ++this.readEpoch;
@@ -83,8 +99,7 @@ export class BagController extends BaseController {
         const request = Promise.resolve().then(() => this.read(session, epoch, authorization, api));
         this.pendingRead = request;
         void request.then(() => { if (this.pendingRead === request) this.pendingRead = null; });
-        this.model.beginSync();
-        this.changed("query");
+        this.beginSync();
         return request;
     }
 
@@ -94,12 +109,16 @@ export class BagController extends BaseController {
      * A closed window does not cancel this role-session operation.
      */
     runInventoryUpdate<T>(responseId: string, request: () => Promise<T>, inventory: (result: T) => readonly BagItemData[],
-        commitRelated: (result: T) => void): Promise<T> {
+        commitRelated: (result: T) => void, reason: BagChangeReason = "unknown"): Promise<T> {
         if (!responseId) return Promise.reject(new Error("库存操作缺少唯一响应标识"));
         const current = this.inFlight.get(responseId);
         if (current) return current as Promise<T>;
         if (!this.model.roleKey || !this.authorization) return Promise.reject(new SessionChanged());
         const session = this.captureSession();
+        if (this.notifying) return this.afterBatch(() => {
+            if (!this.isCurrent(session)) throw new SessionChanged();
+            return this.runInventoryUpdate(responseId, request, inventory, commitRelated, reason);
+        });
         const previous = this.writeTail;
         const duplicate = this.receipts.has(responseId);
         if (!duplicate) {
@@ -113,19 +132,21 @@ export class BagController extends BaseController {
                 const result = await request();
                 if (!this.isCurrent(session)) throw new SessionChanged();
                 const items = readBagItems(inventory(result));
-                if (!this.receipts.has(responseId)) {
+                await this.afterBatch(() => {
+                    if (!this.isCurrent(session)) throw new SessionChanged();
+                    if (this.receipts.has(responseId)) return;
                     batchNotifications(() => {
+                        const previous = this.model.snapshot;
                         commitRelated(result);
-                        this.model.replaceAll(items);
+                        const changes = this.model.replaceAll(items);
                         this.receipts.add(responseId);
-                        this.changed("operation");
+                        this.notify(changes, reason, previous);
                     });
-                }
+                });
                 return result;
             } catch (error) {
                 if (!duplicate && this.isCurrent(session) && !(error instanceof SessionChanged)) {
-                    this.model.fail(error instanceof Error ? error.message : "背包更新失败");
-                    this.changed("failure");
+                    await this.afterBatch(() => { if (this.isCurrent(session)) this.fail(error, "背包更新失败"); });
                 }
                 throw error;
             } finally {
@@ -137,38 +158,50 @@ export class BagController extends BaseController {
         const release = () => { if (this.inFlight.get(responseId) === operation) this.inFlight.delete(responseId); };
         void operation.then(release, release);
         if (!duplicate) {
-            this.model.beginSync();
-            this.changed("operation");
+            this.beginSync();
         }
         return operation;
     }
 
-    /** For future typed push/delta protocols. Not wired to an invented server message this batch. */
-    applyDelta(session: ControllerSession, responseId: string, changes: readonly BagItemDelta[]): boolean {
-        if (!this.isCurrent(session) || this.receipts.has(responseId)) return false;
-        if (!responseId || this.writeCount) throw new Error("增量需有唯一标识，且不能跨越进行中的库存操作");
-        this.model.applyDelta(changes);
-        this.invalidateRead();
-        this.receipts.add(responseId);
-        this.changed("delta");
-        return true;
+    /** Explicit delta entry; no invented server push is connected this batch. */
+    applyDelta(session: ControllerSession, responseId: string, changes: readonly BagItemDelta[], reason: BagChangeReason = "unknown"): Promise<boolean> {
+        if (!this.isCurrent(session) || this.receipts.has(responseId)) return Promise.resolve(false);
+        if (!responseId) return Promise.reject(new Error("增量缺少唯一响应标识"));
+        const input = changes.map(change => Object.freeze({ ...change }));
+        if (this.writeCount) return this.writeTail.then(() => this.applyDelta(session, responseId, input, reason));
+        return this.afterBatch(() => {
+            if (!this.isCurrent(session) || this.receipts.has(responseId)) return false;
+            if (this.writeCount) return this.writeTail.then(() => this.applyDelta(session, responseId, input, reason));
+            const previous = this.model.snapshot;
+            const result = this.model.applyDelta(input);
+            this.invalidateRead();
+            this.receipts.add(responseId);
+            this.notify(result, reason, previous);
+            return true;
+        });
     }
 
     private async read(session: ControllerSession, epoch: number, authorization: AccountAuthorization, api: BagGateway): Promise<boolean> {
         try {
             const items = await authorization.authenticated(token => api.list(token));
-            if (!this.isCurrent(session) || epoch !== this.readEpoch) return false;
-            this.model.replaceAll(items);
-            this.changed("query");
-            return true;
+            return await this.afterBatch(() => {
+                if (!this.isCurrent(session) || epoch !== this.readEpoch) return false;
+                const previous = this.model.snapshot;
+                const changes = this.model.replaceAll(items);
+                this.notify(changes, "query", previous);
+                return true;
+            });
         } catch (error) {
-            if (!this.isCurrent(session) || epoch !== this.readEpoch || error instanceof SessionChanged) return false;
-            this.model.fail(error instanceof Error ? error.message : "背包读取失败");
-            this.changed("failure");
-            return false;
+            return this.afterBatch(() => {
+                if (!this.isCurrent(session) || epoch !== this.readEpoch || error instanceof SessionChanged) return false;
+                this.fail(error, "背包读取失败");
+                return false;
+            });
         }
     }
+
     private syncSession(): void {
+        if (this.notifying) { this.deferredMutations.push(() => this.syncSession()); return; }
         const state = this.account?.snapshot;
         const key = state?.role && !state.busy ? (state.role.serverId || "") + "/" + state.role.id : null;
         if (key === this.model.roleKey) return;
@@ -181,8 +214,51 @@ export class BagController extends BaseController {
         this.pendingRead = null;
     }
 
-    private changed(source: BagEventData["source"]): void {
-        const state = this.model.snapshot;
-        this.emit(BagEvent.Changed, Object.freeze({ roleKey: state.roleKey, status: state.status, revision: state.revision, source }));
+    private beginSync(): void {
+        const previous = this.model.snapshot;
+        this.model.beginSync();
+        this.notify(null, "unknown", previous);
+    }
+
+    private fail(error: unknown, fallback: string): void {
+        const previous = this.model.snapshot;
+        this.model.fail(error instanceof Error ? error.message : fallback);
+        this.notify(null, "unknown", previous);
+    }
+
+    /** Keep every callback of this batch on the same committed Model, even under the global flush. */
+    private notify(changes: BagChangeSet | null, reason: BagChangeReason, previous: BagState): void {
+        this.notifying = true;
+        batchNotifications(() => {
+            const state = this.model.snapshot;
+            if (previous.roleKey !== state.roleKey || previous.status !== state.status || previous.synced !== state.synced || previous.error !== state.error) {
+                this.emit(BagEvent.BagSyncStateChanged, Object.freeze({ roleKey: state.roleKey, revision: state.revision,
+                    status: state.status, synced: state.synced, error: state.error }));
+            }
+            if (changes && (changes.initialSync || reason === "session-reset" || changes.added.length || changes.quantityChanged.length || changes.removed.length)) {
+                const effectiveReason = changes.initialSync ? "initial-sync" : reason;
+                const update = Object.freeze({ ...changes, reason: effectiveReason });
+                const header = { roleKey: update.roleKey, revision: update.revision, reason: update.reason };
+                if (update.added.length) this.emit(BagEvent.BagAdd, Object.freeze({ ...header, added: update.added }));
+                if (update.removed.length) this.emit(BagEvent.BagRemove, Object.freeze({ ...header, removed: update.removed }));
+                if (update.quantityChanged.length) this.emit(BagEvent.BagQuantityChanged, Object.freeze({ ...header, quantityChanged: update.quantityChanged }));
+                this.emit(BagEvent.BagUpdate, update);
+            }
+            // Queued after the summary, not merely after enqueueing emit(). This also works in an outer batch.
+            publishNotification(this.finishNotifications);
+        });
+    }
+
+    private finishNotifications = (): void => {
+        this.notifying = false;
+        while (!this.notifying && this.deferredMutations.length) this.deferredMutations.shift()!();
+    };
+
+    private afterBatch<T>(action: () => T | PromiseLike<T>): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            const run = () => { try { resolve(action()); } catch (error) { reject(error); } };
+            if (this.notifying) this.deferredMutations.push(run);
+            else run();
+        });
     }
 }

@@ -99,7 +99,10 @@ export class BagView extends BaseView<BagOpenArgs> {
         this.closed = false;
         this.args = args;
         if (!this.offBag) {
-            const stop = EventDispatcher.instance.on(BagEvent.Changed, () => this.refreshFromModel());
+            const stop = EventDispatcher.instance.on(BagEvent.BagUpdate, () => this.refreshFromModel());
+            this.ownListener(EventDispatcher.instance.on(BagEvent.BagSyncStateChanged, () => {
+                if (!this.closed && this.catalog) this.writeTalk();
+            }));
             this.offBag = stop;
             this.ownListener(() => { stop(); this.offBag = null; });
         }

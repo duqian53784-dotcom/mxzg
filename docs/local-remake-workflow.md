@@ -21,7 +21,7 @@
 
 本批出阵页的 Prefab、节点、Inspector 参数和修改验证步骤见 [出阵页人工维护指南](formation-ui-authoring.md)。修改源 Prefab 后，Creator 预览需要等待导入；独立 H5 需要重新构建，两者不要混为同一个产物。
 
-当前批次的模块职责、请求/领奖链和退役边界见 [背包 MVC 维护指南](bag-mvc-maintenance.md)。沿用的背包列表入口、布局参数和无业务数据的编辑器预览见 [SuperScroll 维护指南](super-scroll-authoring.md)。本批仅进行本机预览及代码检查。
+当前批次库存事件的参数、顺序与订阅见 [事件规则](bag-inventory-events.md)。模块职责、请求/领奖链和退役边界见 [背包 MVC 维护指南](bag-mvc-maintenance.md)。沿用的背包列表入口、布局参数和无业务数据的编辑器预览见 [SuperScroll 维护指南](super-scroll-authoring.md)。本批仅进行本机预览及代码检查。
 
 ## 构建如何隔离
 
