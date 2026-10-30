@@ -4,13 +4,17 @@
 
 ## 现在怎么打开
 
-1. 双击 `F:\project\mxzg\scripts\start-remake-backend.bat`。默认 API 为 `http://127.0.0.1:18080`。已有服务器占用时脚本会提示，不会自动杀进程；要更新旧服务，先在它的窗口 Ctrl+C，再重新双击。
+1. 双击 `F:\project\mxzg\scripts\start-remake-backend.bat`。默认 API 为 `http://127.0.0.1:18080`。检测到可用重做后端时输出 READY 并复用，不再报错；未知端口占用或旧版接口会提示，不会自动杀进程。要更新旧服务，先停止它再重新双击。
 2. Creator 3.8.8 打开 `client`，等资源导入完成后预览 `assets/scenes/Remake.scene`。新脚本导入期间短暂出现 SystemJS unresolved 时，等导入结束后刷新预览。不要进入旧 Boot/Main 路线。
 3. 等资源/配置加载完，停在登录页。点击服务器条打开“本地开发区”，选择开发一服或开发二服。它们是同一个本机后端里的两个独立角色空间，不代表两套已部署的正式游戏服。
 4. 点击开始游戏进入主城。右上“开发账号”可输入 3–32 位英文/数字/下划线/连字符，或清除保存身份后换账号。相同账号在同一服恢复相同角色，切到另一服获得独立角色。
 5. 底栏可进入英雄、背包、战斗。副本、公会、VIP 等仍锁定。
 
 没有网页管理后台。当前登录是本机开发身份，正式渠道登录另有任务。
+
+## 10 月 30 日补充说明
+
+底栏“战斗”正式应进入挂机界面，再经出阵进入主线，结算后返回挂机。本批直接接入基础主线的方式尚未完成该导航与挂机循环。最新推进顺序见实施路线，不把本批基础闭环当成正式挂机还原。当前 H2 为开发文件库，MySQL 仍需独立验证。
 
 ## 五项要求的结果
 
@@ -74,4 +78,4 @@ MySQL 的迁移/并发/备份恢复仍是 P3-03/P3-06，未把 H2 验证当成�
 - 背包：`features/backpack/InventoryController.ts`、`InventoryApi.ts`、`ItemCatalog.ts`；既有 BackpackView 通过注入数据源继续复用。
 - 战斗：`features/battle/CampaignController.ts` / `CampaignApi.ts`，View 与 CampaignField 只负责表现；后端 campaign 包负责规则与事务。
 - 配置来源：`python tools/export_campaign_rules.py` 校验投影，明确检查后用 `--write` 重建服务器规则文件。
-- 下一阶段继续英雄详情/出阵、材料升级、完整技能与成长，再进行三端与 MySQL 专项验证；固定任务号见实施路线 P3–P5。
+- 下一阶段先完成独立 H5 预览、完整挂机/出阵/主线路线，并提前做 MySQL 验证；再接养成与技能。固定任务号见实施路线 P3–P5/P7。

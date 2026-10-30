@@ -5,7 +5,8 @@ title mxzg-remake-backend
 echo ============================================================
 echo   mxzg remake backend - local development
 echo   Address: http://127.0.0.1:18080
-echo   Keep this window open. Press Ctrl+C to stop.
+echo   Existing compatible backend: reuse it without starting twice.
+echo   New backend: keep this window open. Press Ctrl+C to stop.
 echo ============================================================
 echo.
 rem ExecutionPolicy applies only to this child process, not system settings.
