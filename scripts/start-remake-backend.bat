@@ -12,9 +12,10 @@ echo.
 rem ExecutionPolicy applies only to this child process, not system settings.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\backend\dev.ps1" -Action run
 set "BACKEND_EXIT=%ERRORLEVEL%"
-if "%BACKEND_EXIT%"=="0" goto :Done
+if "%BACKEND_EXIT%"=="0" goto :KeepWindow
 echo.
 echo Backend did not start or stopped with an error. Read the output above.
+:KeepWindow
+echo.
 pause
-:Done
 endlocal & exit /b %BACKEND_EXIT%
