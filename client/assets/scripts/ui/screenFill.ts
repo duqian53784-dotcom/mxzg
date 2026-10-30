@@ -57,8 +57,6 @@ const HERO_STAR_BOARD = "prefabs/ui/hero/HeroInfoUpStarLayer";
 const HERO_SKILL_BOARD = "prefabs/ui/hero/HeroSkillInfoLayer";
 const HERO_ATTR_BOARD = "prefabs/ui/hero/HeroInfoAttrLayer";
 const BAG_INFO_BOARD = "prefabs/ui/backpack/BackpackInfoLayer";
-const BAG_CELL = "prefabs/ui/backpack/BackpackItemCell";
-const BAG_TAB = "prefabs/ui/backpack/BackpackTabButton";
 const HERO_CELL = "prefabs/ui/hero/HeroIconCell";
 const CATALOG_CELL = "prefabs/ui/hero/CatalogIconCell";
 const DRAGON_CARD = "prefabs/ui/hero/DragonCard";
@@ -75,11 +73,6 @@ const COLS = 4;
 const HERO_PITCH_X = 108;
 const HERO_PITCH_Y = 112;
 /** 格子 96。日服设计宽下 pitch ≈ rare-0 加边距再加 10（约 129×131）。118 是底栏之上仍能看见第 5 行大半的间距。 */
-const BAG_PITCH_X = 118;
-const BAG_PITCH_Y = 118;
-const BAG_MIN_ROWS = 5;
-const BAG_ORIGIN_X = -177;
-const BAG_ORIGIN_Y = -56;
 /** language 2101–2105。elem 0 是筛选里的全部。六个钮是全部、火、水、木、光、暗。 */
 const ELEM_NAME = ["", "火", "水", "木", "光", "暗"];
 const HERO_ELEM_BUTTONS = 6;
@@ -1187,99 +1180,12 @@ function fillHero(view: Node, openHero: (hero: StoreHero) => void): void {
 function fillBag(view: Node): void {
   silenceBigMenus(view);
   hideDebugBubble(view);
-  dressBagTalk(view);
-  const fit = fitParchmentWindow(view);
-  let tab: BagTab = "item";
-  let picked: StoreBagItem | null = null;
-  let cellPrefab: Prefab | null = null;
-  const content = bagScrollContent(view, fit);
-  const tabHost = bagTabHost(view);
-  if (!tabHost) GameLog.shared.warn("Bag", "btn_scroll_view 下没有 content，不另造页签条");
-  const tabs: Node[] = [];
-  const paint = () => {
-    if (!content || !content.isValid || !cellPrefab) return;
-    clearChildren(content);
-    for (let i = 0; i < tabs.length; i++) paintTab(tabs[i], BAG_TABS[i].id === tab);
-    const rows = bagRows(tab);
-    if (picked && !rows.some((row) => sameBag(row, picked as StoreBagItem))) picked = null;
-    const shown = paddedSlots(rows.length, BAG_MIN_ROWS);
-    for (let i = 0; i < shown; i++) {
-      const item = i < rows.length ? rows[i] : null;
-      const cell = spawnPrefab(cellPrefab, content);
-      const selected = item !== null && picked !== null && sameBag(item, picked);
-      const onTap = item
-        ? () => {
-            picked = item;
-            showBagInfo(view, item);
-            paint();
-          }
-        : rows.length === 0
-          ? () => flashToast(view, emptyBagToast())
-          : null;
-      if (content.layer) adoptLayer(cell, content.layer);
-      bindBagCell(cell, item, selected, onTap);
-      place(cell, content, gridX(i, BAG_ORIGIN_X, BAG_PITCH_X), gridY(i, BAG_ORIGIN_Y, BAG_PITCH_Y));
-    }
-    sizeScroll(content, slotRows(shown, BAG_MIN_ROWS) * BAG_PITCH_Y + 24, 400 + fit.extra);
-    pinBagScroll(content);
-  };
-  void Promise.all([loadPrefab(BAG_CELL), loadPrefab(BAG_TAB)]).then(
-    (loaded) => {
-      if (!view.isValid || !tabHost || !tabHost.isValid) return;
-      cellPrefab = loaded[0];
-      const tabPrefab = loaded[1];
-      for (let i = 0; i < BAG_TABS.length; i++) {
-        const spec = BAG_TABS[i];
-        const button = spawnPrefab(tabPrefab, tabHost);
-        const title = findNamed(button, "lbl_title");
-        if (title) setText(title, spec.title);
-        place(button, tabHost, 64 + i * 120, -24);
-        tabs.push(button);
-        if (!button.getComponent(Button)) button.addComponent(Button);
-        button.on(Button.EventType.CLICK, () => {
-          tab = spec.id;
-          paint();
-        });
-      }
-      paint();
-    },
-    (err) => {
-      GameLog.shared.warn("Bag", "背包格子预制没挂上 " + messageOf(err));
-    }
-  );
-  const offBag = WireSession.onSync(() => paint());
-  view.once(Node.EventType.NODE_DESTROYED, () => offBag());
-}
-
-/**
- * spr_box/BagScroll 写在 BackpackLayer 里。不另造滚动节点。
- * 预制把 content 和空的 view 并列，遮罩在宿主上。Creator 的 ScrollView 只裁 content 的父节点。
- * content 收进 view，本地坐标钉在 (0,0)。壳还没进场景时改 parent 会留下错误的世界坐标，格子被裁出视口。
- * BagScroll 上的 Mask 不能只设 enabled=false：节点这时还不在场景里，onDisable 不会跑。
- * 进场景后 onLoad 仍会装一个空的 Graphics 模板（onEnable 才描矩形），空模板把子节点全部裁掉。
- * 所以把宿主 Mask 组件卸掉，只留 view 上、进场景后会 onEnable 的那块矩形。
- */
-function bagScrollContent(view: Node, fit: ParchmentFit): Node | null {
-  const box = findNamed(view, "spr_box");
-  const scroll = box ? box.getChildByName("BagScroll") : null;
-  if (!box || !scroll) {
-    GameLog.shared.warn("Bag", "BackpackLayer 的 spr_box 下没有 BagScroll");
-    return null;
-  }
-  const content = seatPrefabScroll(scroll, 520, bagPortHeight(box, scroll, fit), "Bag");
-  if (!content) GameLog.shared.warn("Bag", "BackpackLayer 的 spr_box 下没有 BagScroll");
-  return content;
-}
-
-/** 视口高度跟 spr_box。空账号按 5 行要高，盒子不够时才收到内缘里。 */
-function bagPortHeight(box: Node, scroll: Node, fit: ParchmentFit): number {
-  const boxSize = positiveUiSize(box.getComponent(UITransform));
-  const topInset = scroll.position.y < 0 ? -scroll.position.y : 0;
-  const room = boxSize ? boxSize.height - topInset - topInset : 0;
-  const rows = BAG_MIN_ROWS * BAG_PITCH_Y + 24;
-  const want = Math.max(400 + fit.extra, rows);
-  if (room > 80) return Math.min(want, room);
-  return want;
+  fitParchmentWindow(view);
+  const bag = view.getComponent("BackpackView") as import("../features/backpack/ui/BackpackView").BackpackView | null;
+  if (!bag) throw new Error("assets/prefabs/ui/backpack/BackpackLayer.prefab: 缺少 BackpackView");
+  bag.runOpen();
+  void bag.whenReady().catch(error => GameLog.shared.warn("Bag", messageOf(error)));
+  view.once(Node.EventType.NODE_DESTROYED, () => bag.runDispose());
 }
 
 /**
@@ -1359,10 +1265,6 @@ function adoptLayer(node: Node, layer: number): void {
   for (let i = 0; i < kids.length; i++) adoptLayer(kids[i], layer);
 }
 
-function pinBagScroll(content: Node): void {
-  content.setPosition(0, 0, 0);
-}
-
 /**
  * spr_box/HeroScroll 写在 HeroListHeroLayer 里。
  * 预制把 content 和空的 view 并列，遮罩在宿主上。跟背包一样收进 view，卸掉宿主上的空模板。
@@ -1413,44 +1315,6 @@ function bagShopLine(): string {
     if (text) return text;
   }
   return BAG_SHOP_FALLBACK;
-}
-
-function bindBagCell(cell: Node, item: StoreBagItem | null, selected: boolean, onTap: (() => void) | null): void {
-  const frame = findNamed(cell, "spr_frame");
-  const icon = findNamed(cell, "spr_icon");
-  const count = findNamed(cell, "lbl_count");
-  const mark = findNamed(cell, "spr_select");
-  if (mark) mark.active = selected;
-  if (!item) {
-    if (frame) {
-      frame.active = true;
-      paintSprite(frame, "ui/common/other_spr-null");
-    }
-    if (icon) icon.active = false;
-    if (count) {
-      count.active = false;
-      setText(count, "");
-    }
-  } else {
-    const profile = itemProfile(item.itemType, item.itemId);
-    if (frame) paintSprite(frame, rareFrame(profile ? profile.rare : 0));
-    if (icon) {
-      icon.active = true;
-      const path = itemIconResource(item.itemType, item.itemId);
-      if (path) paintFirst(icon, [path, "ui/bag/backpack_spr-default"]);
-      else if (item.itemId) paintFirst(icon, ["ui/bag/backpack_" + item.itemId, "ui/bag/backpack_spr-default"]);
-      else paintSprite(icon, "ui/bag/backpack_spr-default");
-    }
-    if (count) {
-      const text = item.num === null ? "" : String(item.num);
-      count.active = text.length > 0;
-      setText(count, text);
-    }
-  }
-  if (onTap) {
-    if (!cell.getComponent(Button)) cell.addComponent(Button);
-    cell.on(Button.EventType.CLICK, onTap);
-  }
 }
 
 function paintFormationGrid(view: Node, elem: number, selected: number[], cells: Prefab, toggle: (id: number) => void): void {

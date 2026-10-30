@@ -1,17 +1,13 @@
-import { _decorator, Button, director, Director, Graphics, Label, Layers, Mask, Node, Prefab, ScrollView, UITransform } from "cc";
+import { _decorator, Button, director, Director, Label, Layers, Node, Prefab, UITransform } from "cc";
 import { ConfigDb } from "../../../config/ConfigLoader";
 import { BagTabKind } from "../../../config/gameCatalog";
 import { messageOf } from "../../../core/errors";
 import { GameLog } from "../../../core/GameLog";
 import { GameStore, StoreBagItem } from "../../../core/GameStore";
 import {
-  BAG_MIN_ROWS,
-  BAG_PITCH_Y,
   BAG_TABS,
-  bagContentHeight,
   bagShopGreeting,
   bagSlotCount,
-  bagSlotPosition,
   describeBagItem,
   rowsForBagTab,
   sameBagItem,
@@ -19,9 +15,9 @@ import {
 import { emptyBagToast } from "../../../module/bag/items";
 import { WIRE_BAG_UNSYNCED_TOAST } from "../../../net/protocol/wireBag";
 import { WireSession } from "../../../net/WireSession";
-import { loadPrefab, spawnPrefab } from "../../../ui/prefabLoad";
+import { spawnPrefab } from "../../../ui/prefabLoad";
 import { mountNamedSpine } from "../../../ui/battleSpine";
-import { assignContentSize, positiveUiSize } from "../../../ui/visibleFit";
+import { SuperScroll } from "../../../framework/ui/SuperScroll";
 import { BackpackItemCellView } from "./BackpackItemCellView";
 import { BackpackTabButtonView } from "./BackpackTabButtonView";
 import { BaseView } from "../../../framework/ui/BaseView";
@@ -33,21 +29,13 @@ import type { InventorySource, InventoryView } from "../InventoryController";
 
 const { ccclass, property } = _decorator;
 
-const BAG_CELL = "prefabs/ui/backpack/BackpackItemCell";
-const BAG_TAB = "prefabs/ui/backpack/BackpackTabButton";
-const BAG_INFO = "prefabs/ui/backpack/BackpackInfoLayer";
-const BAG_DIM = "prefabs/ui/common/DimSheet";
 const BAG_PORTRAIT = "shangcheng";
 
 export interface BagOpenArgs {
   tab?: BagTabKind;
 }
 
-/**
- * 背包页。格子、页签、滚动和店员都绑在 BackpackLayer 上。
- * 数据只读 GameStore。同步信号用来重画，不在这里解协议。
- * 格子要等页面进了场景再挂。提前改父节点会把世界坐标留在视口外面，羊皮纸中间只剩米色。
- */
+/** Backpack data, selection and tabs. SuperContent owns the item list layout. */
 @view({
   id: "bag",
   prefab: "prefabs/ui/backpack/BackpackLayer",
@@ -61,14 +49,8 @@ export class BackpackView extends BaseView<BagOpenArgs> implements InventoryView
   @property(Node)
   sprBox: Node | null = null;
 
-  @property(Node)
-  bagScroll: Node | null = null;
-
-  @property(Node)
-  bagPort: Node | null = null;
-
-  @property(Node)
-  bagContent: Node | null = null;
+  @property(SuperScroll)
+  bagScroll: SuperScroll | null = null;
 
   @property(Node)
   tabContent: Node | null = null;
@@ -89,9 +71,6 @@ export class BackpackView extends BaseView<BagOpenArgs> implements InventoryView
   btnClose: Button | null = null;
 
   @property(Prefab)
-  cellPrefab: Prefab | null = null;
-
-  @property(Prefab)
   tabPrefab: Prefab | null = null;
 
   @property(Prefab)
@@ -106,7 +85,7 @@ export class BackpackView extends BaseView<BagOpenArgs> implements InventoryView
   private tabsBuilt = false;
   private opened = false;
   private portraitOn = false;
-  private scrollReady = false;
+  private resetScroll = true;
   private offSync: (() => void) | null = null;
   private infoSheet: Node | null = null;
   private shownWatch: (() => void) | null = null;
@@ -145,12 +124,10 @@ export class BackpackView extends BaseView<BagOpenArgs> implements InventoryView
 
   private async initialize(): Promise<void> {
     try {
-      this.dropHostMask();
-      this.silenceMenu();
+      this.validateBindings();
       this.bindClose();
       this.dressPortrait();
       if (!this.inventory) this.offSync = WireSession.onSync(() => this.refreshGrid());
-      await this.ensurePrefabs();
       if (this.closed || !this.node || !this.node.isValid) {
         this.failOpen(new Error("页面已关"));
         return;
@@ -163,20 +140,14 @@ export class BackpackView extends BaseView<BagOpenArgs> implements InventoryView
     }
   }
 
-  /**
-   * UIManager 在页面进栈之前就 onOpen。这时壳还不在场景里。
-   * 进场景前收 content、摆格子，世界坐标会错，遮罩把格子裁没，只剩 spr_box 的米色。
-   * 已经在场景里就当场铺。否则等下一帧进了场景再铺。whenReady 不等这一步，避免和进栈互相等。
-   */
+  /** Layout runs after mounting; no reparenting, mask creation or size repair. */
   private refreshGrid(): void {
     if (this.closed) return;
-    if (!this.node || !this.node.isValid || !this.cellPrefab || !this.tabPrefab) return;
+    if (!this.node || !this.node.isValid || !this.bagScroll || !this.tabPrefab) return;
     if (!this.node.activeInHierarchy) {
       this.watchShown();
       return;
     }
-    if (!this.scrollReady) this.scrollReady = this.prepareScroll();
-    if (!this.scrollReady) return;
     this.buildTabs();
     this.paint();
   }
@@ -203,126 +174,22 @@ export class BackpackView extends BaseView<BagOpenArgs> implements InventoryView
     this.shownWatch = null;
   }
 
-  private async ensurePrefabs(): Promise<void> {
-    if (!this.cellPrefab) {
-      GameLog.shared.warn("Bag", "cellPrefab 未绑定，改走路径加载");
-      this.cellPrefab = await loadPrefab(BAG_CELL);
+  private validateBindings(): void {
+    const path = "assets/prefabs/ui/backpack/BackpackLayer.prefab / BackpackView: ";
+    for (const [field, value] of Object.entries({bagScroll:this.bagScroll,tabContent:this.tabContent,
+      tabPrefab:this.tabPrefab,infoPrefab:this.infoPrefab,dimPrefab:this.dimPrefab})) {
+      if (!value) throw new Error(path + "缺失绑定 " + field);
     }
-    if (!this.tabPrefab) {
-      GameLog.shared.warn("Bag", "tabPrefab 未绑定，改走路径加载");
-      this.tabPrefab = await loadPrefab(BAG_TAB);
-    }
-    if (!this.infoPrefab) {
-      GameLog.shared.warn("Bag", "infoPrefab 未绑定，改走路径加载");
-      this.infoPrefab = await loadPrefab(BAG_INFO);
-    }
-    if (!this.dimPrefab) {
-      GameLog.shared.warn("Bag", "dimPrefab 未绑定，改走路径加载");
-      this.dimPrefab = await loadPrefab(BAG_DIM);
-    }
+    this.bagScroll!.validateBindings();
+    const cell = this.bagScroll!.list.cellPrefab!.data as Node;
+    const component = cell.getComponent(BackpackItemCellView);
+    if (!component) throw new Error(path + "bagScroll.Content.SuperContent.cellPrefab [" + cell.name + "] 缺少 BackpackItemCellView");
+    component.validateBindings();
   }
 
   private bindClose(): void {
     if (!this.btnClose) return;
     this.btnClose.node.on(Button.EventType.CLICK, () => this.close());
-  }
-
-  /** 宿主遮罩在进场景前就卸掉。进场景后 onLoad 会装一块空模板，把格子全部裁掉。 */
-  private dropHostMask(): void {
-    const scroll = this.bagScroll;
-    if (!scroll) return;
-    const hostMask = scroll.getComponent(Mask);
-    if (hostMask) scroll.removeComponent(hostMask);
-  }
-
-  private prepareScroll(): boolean {
-    const scroll = this.bagScroll;
-    const port = this.bagPort;
-    const content = this.bagContent;
-    if (!scroll || !port || !content) {
-      GameLog.shared.warn("Bag", "BackpackLayer 的 spr_box 下没有 BagScroll");
-      return false;
-    }
-    this.dropHostMask();
-    if (content.parent !== port) content.parent = port;
-    content.setPosition(0, 0, 0);
-    const scrollUi = scroll.getComponent(UITransform);
-    const scrollSize = positiveUiSize(scrollUi);
-    const height = this.portHeight();
-    const width = scrollSize && scrollSize.width > 0 ? scrollSize.width : 520;
-    assignContentSize(scrollUi, width, height);
-    const viewUi = port.getComponent(UITransform);
-    const viewSize = positiveUiSize(viewUi);
-    assignContentSize(viewUi, viewSize && viewSize.width > 0 ? viewSize.width : width, height);
-    this.armMask(port);
-    const scroller = scroll.getComponent(ScrollView);
-    if (!scroller) GameLog.shared.warn("Bag", "BagScroll 没有 ScrollView");
-    else if (scroller.content !== content) scroller.content = content;
-    return true;
-  }
-
-  /** 视口高度跟 spr_box。羊皮纸保持设计缩放，不再额外拉高。 */
-  private portHeight(): number {
-    const boxUi = this.sprBox ? this.sprBox.getComponent(UITransform) : null;
-    const boxSize = positiveUiSize(boxUi);
-    const topInset = this.bagScroll && this.bagScroll.position.y < 0 ? -this.bagScroll.position.y : 0;
-    const room = boxSize ? boxSize.height - topInset - topInset : 0;
-    const rows = BAG_MIN_ROWS * BAG_PITCH_Y + 24;
-    const want = Math.max(400, rows);
-    if (room > 80) return Math.min(want, room);
-    return want;
-  }
-
-  /**
-   * 矩形遮罩要等节点进了场景再描。提前加组件时模板经常是空的。
-   * 跟原来的背包滚动一样：进场景后仍没有 Graphics，就把遮罩关掉，格子才看得见。
-   */
-  private armMask(node: Node): void {
-    const draw = () => {
-      if (!node.isValid) return false;
-      let mask = node.getComponent(Mask);
-      if (!mask) mask = node.addComponent(Mask);
-      if (!node.activeInHierarchy) return false;
-      const ui = node.getComponent(UITransform);
-      const size = positiveUiSize(ui);
-      if (!ui || !size) {
-        mask.enabled = false;
-        return false;
-      }
-      mask.enabled = true;
-      if (mask.type !== Mask.Type.GRAPHICS_RECT) mask.type = Mask.Type.GRAPHICS_RECT;
-      assignContentSize(ui, size.width, size.height);
-      return !!node.getComponent(Graphics);
-    };
-    if (draw()) return;
-    let frames = 0;
-    const retry = () => {
-      if (!node.isValid) {
-        director.off(Director.EVENT_AFTER_UPDATE, retry);
-        return;
-      }
-      frames += 1;
-      const drawn = draw();
-      if (drawn || frames > 45) {
-        if (!drawn && node.isValid && !node.getComponent(Graphics)) {
-          const mask = node.getComponent(Mask);
-          if (mask) mask.enabled = false;
-        }
-        director.off(Director.EVENT_AFTER_UPDATE, retry);
-      }
-    };
-    director.on(Director.EVENT_AFTER_UPDATE, retry);
-    node.once(Node.EventType.NODE_DESTROYED, () => {
-      director.off(Director.EVENT_AFTER_UPDATE, retry);
-    });
-  }
-
-  private silenceMenu(): void {
-    if (!this.hitMenu) return;
-    const ui = this.hitMenu.getComponent(UITransform);
-    const size = positiveUiSize(ui);
-    if (!ui || !size || size.width < 500 || size.height < 500) return;
-    ui.setContentSize(0, 0);
   }
 
   private dressPortrait(): void {
@@ -359,6 +226,7 @@ export class BackpackView extends BaseView<BagOpenArgs> implements InventoryView
       node.setPosition(64 + i * 120, -24, 0);
       this.adoptLayer(node, this.tabContent.layer || Layers.Enum.UI_2D);
       tab.setTab(spec.title, spec.id === this.tab, () => {
+        if (this.tab !== spec.id) this.resetScroll = true;
         this.tab = spec.id;
         if (this.inventory?.failed()) this.inventory.retry();
         this.refreshGrid();
@@ -372,45 +240,26 @@ export class BackpackView extends BaseView<BagOpenArgs> implements InventoryView
     for (let i = 0; i < this.tabs.length; i++) {
       this.tabs[i].setSelected(BAG_TABS[i].id === this.tab);
     }
-    const content = this.bagContent;
-    if (!content || !content.isValid || !this.cellPrefab) return;
-    this.clear(content);
+    const list = this.bagScroll!.list;
     const bag = this.inventory ? this.inventory.rows(this.tab) : GameStore.bag();
     const rows = this.inventory ? bag || [] : bag === null ? [] : rowsForBagTab(bag, this.tab) || [];
     if (bag === null || (this.picked && !rows.some((row) => sameBagItem(row, this.picked as StoreBagItem)))) {
       this.picked = null;
       this.dismissInfo();
     }
-    const shown = bagSlotCount(rows.length);
-    const layer = content.layer || Layers.Enum.UI_2D;
-    for (let i = 0; i < shown; i++) {
-      const item = i < rows.length ? rows[i] : null;
-      const node = spawnPrefab(this.cellPrefab, content);
-      const cell = node.getComponent(BackpackItemCellView);
-      if (!cell) {
-        GameLog.shared.warn("Bag", "BackpackItemCell 上没有 BackpackItemCellView");
-        continue;
-      }
+    // Empty-slot padding belongs to the bag, never to the generic list component.
+    const entries = Array.from({ length: bagSlotCount(rows.length) }, (_, index) => rows[index] || null);
+    list.setData(entries, (node, item) => {
+      const cell = node.getComponent(BackpackItemCellView)!;
       const selected = item !== null && this.picked !== null && sameBagItem(item, this.picked);
       const onTap = item
-        ? () => {
-            this.picked = item;
-            this.showInfo(item);
-            this.refreshGrid();
-          }
+        ? () => { this.picked = item; this.showInfo(item); this.refreshGrid(); }
         : rows.length === 0
           ? () => { if (this.inventory) this.inventory.retry(); else this.toast(bag === null ? WIRE_BAG_UNSYNCED_TOAST : emptyBagToast()); }
           : null;
-      this.adoptLayer(node, layer);
       cell.show(item, selected, onTap, item && this.inventory ? this.inventory.face(item) : undefined);
-      const seat = bagSlotPosition(i);
-      node.setPosition(seat.x, seat.y, 0);
-    }
-    const ui = content.getComponent(UITransform);
-    const size = positiveUiSize(ui);
-    const width = size && size.width > 0 ? size.width : 448;
-    assignContentSize(ui, width, bagContentHeight(shown));
-    content.setPosition(0, 0, 0);
+    });
+    if (this.resetScroll) { this.bagScroll!.toStart(); this.resetScroll = false; }
   }
 
   private showInfo(item: StoreBagItem): void {
@@ -429,11 +278,6 @@ export class BackpackView extends BaseView<BagOpenArgs> implements InventoryView
   private toast(text: string): void {
     GameLog.shared.info("Bag", text);
     UIManager.instance.toast(text);
-  }
-
-  private clear(node: Node): void {
-    const old = node.children.slice();
-    for (let i = 0; i < old.length; i++) old[i].destroy();
   }
 
   /** 格子和页签的子节点也要留在 UI 层，只改根节点时图标不会画出来。 */

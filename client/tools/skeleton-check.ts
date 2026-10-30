@@ -27576,51 +27576,21 @@ function checkCityHub(): void {
     "hero and bag shells bind the read-only boards and do not send upgrade, use, or 3013"
   );
   const bagFillAt = fillSrc.indexOf("function fillBag");
-  const bagFillEnd = fillSrc.indexOf("function dressBagTalk");
+  const bagFillEnd = fillSrc.indexOf("function seatPrefabScroll");
   const bagFill = bagFillAt >= 0 && bagFillEnd > bagFillAt ? fillSrc.slice(bagFillAt, bagFillEnd) : "";
   const bagLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "backpack", "BackpackLayer.prefab");
   const bagPaths = prefabChildPaths(bagLayer);
   assert(
-    bagPaths.indexOf("spr_box/BagScroll") >= 0 &&
-      bagPaths.indexOf("spr_box/BagScroll/view") >= 0 &&
-      bagPaths.indexOf("spr_box/BagScroll/content") >= 0 &&
-      bagScrollWired(bagLayer) &&
-      bagFill.indexOf("gridScroll") < 0 &&
-      bagFill.indexOf('uiNode("BagScroll")') < 0 &&
-      bagFill.indexOf('uiNode("BagFill")') < 0 &&
-      bagFill.indexOf('getChildByName("BagScroll")') >= 0 &&
-      bagFill.indexOf("content.parent = port") >= 0 &&
-      bagFill.indexOf("content.setPosition(0, 0, 0)") >= 0 &&
-      bagFill.indexOf("removeComponent(hostMask)") >= 0 &&
-      bagFill.indexOf("hostMask.enabled = false") < 0 &&
-      bagFill.indexOf("GRAPHICS_RECT") >= 0 &&
-      bagFill.indexOf("activeInHierarchy") >= 0 &&
-      fillSrc.indexOf("other_spr-null") >= 0 &&
-      fillSrc.indexOf("function gridScroll") < 0,
-    "bag scroll lives under spr_box and fillBag does not build BagScroll"
-  );
-  assert(
-    bagFrameFits(bagLayer) &&
-      fillSrc.indexOf("const BAG_PITCH_X = 118") >= 0 &&
-      fillSrc.indexOf("const BAG_PITCH_Y = 118") >= 0 &&
-      fillSrc.indexOf("const BAG_MIN_ROWS = 5") >= 0 &&
-      fillSrc.indexOf("paddedSlots(rows.length, BAG_MIN_ROWS)") >= 0 &&
-      fillSrc.indexOf("BAG_MIN_ROWS * BAG_PITCH_Y + 24") >= 0 &&
-      fillSrc.indexOf("const COLS = 4") >= 0,
-    "bag beige sits inside the frame and one screen keeps four columns by about five rows"
+    bagPaths.includes("spr_box/BagScroll/view/content") && bagScrollWired(bagLayer) &&
+      bagFill.includes('getComponent("BackpackView")') && bagFill.includes("bag.runOpen()") &&
+      !bagFill.includes("content.parent") && !bagFill.includes("content.setPosition") && !bagFill.includes("removeComponent"),
+    "legacy bag uses the shared authored hierarchy and view, without repairing or resetting scroll"
   );
   const bagBoardSrc = readFileSync(join(process.cwd(), "client", "assets", "scripts", "module", "bag", "bagBoard.ts"), "utf8");
-  assert(
-    bagBoardSrc.indexOf("export const BAG_COLS = 4") >= 0 &&
-      bagBoardSrc.indexOf("export const BAG_PITCH_X = 118") >= 0 &&
-      bagBoardSrc.indexOf("export const BAG_PITCH_Y = 118") >= 0 &&
-      bagBoardSrc.indexOf("export const BAG_MIN_ROWS = 5") >= 0 &&
-      bagBoardSrc.indexOf("export const BAG_ORIGIN_X = -177") >= 0 &&
-      bagBoardSrc.indexOf("export const BAG_ORIGIN_Y = -56") >= 0 &&
-      bagBoardSrc.indexOf("x: BAG_ORIGIN_X + (index % BAG_COLS) * BAG_PITCH_X") >= 0 &&
-      bagBoardSrc.indexOf("y: BAG_ORIGIN_Y - Math.floor(index / BAG_COLS) * BAG_PITCH_Y") >= 0,
-    "default bag board pitch matches fillBag"
-  );
+  const bagViewSrc = readFileSync(join(process.cwd(), "client", "assets", "scripts", "features", "backpack", "ui", "BackpackView.ts"), "utf8");
+  assert(bagFrameFits(bagLayer) && bagBoardSrc.includes("BAG_MIN_SLOTS = 20") && bagViewSrc.includes("bagSlotCount(rows.length)") &&
+    !bagViewSrc.includes("bagSlotPosition") && !bagViewSrc.includes("prepareScroll") && !bagBoardSrc.includes("BAG_PITCH"),
+    "bag retains its empty-slot policy while all item geometry belongs to Inspector components");
   const heroListLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroListHeroLayer.prefab");
   const heroInfoLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroInfoLayer.prefab");
   const heroLevelLayer = join(process.cwd(), "client", "assets", "prefabs", "ui", "hero", "HeroInfoUpLevelLayer.prefab");
@@ -28294,78 +28264,20 @@ function bagFrameFits(file: string): boolean {
 }
 
 function bagScrollWired(file: string): boolean {
-  const data = JSON.parse(readFileSync(file, "utf8")) as Array<{
-    __type__?: string;
-    _name?: string;
-    _parent?: { __id__?: number } | null;
-    _children?: { __id__?: number }[];
-    _components?: { __id__?: number }[];
-    _lpos?: { y?: number };
-    node?: { __id__?: number } | null;
-    _content?: { __id__?: number } | null;
-    vertical?: boolean;
-    horizontal?: boolean;
-    _anchorPoint?: { x?: number; y?: number };
-    _contentSize?: { width?: number; height?: number };
-  }>;
-  let scrollId = -1;
-  for (let i = 0; i < data.length; i++) {
-    const node = data[i];
-    if (node.__type__ !== "cc.Node" || node._name !== "BagScroll") continue;
-    const parent = node._parent;
-    const parentNode = parent && typeof parent.__id__ === "number" ? data[parent.__id__] : null;
-    if (!parentNode || parentNode._name !== "spr_box") continue;
-    scrollId = i;
-    break;
-  }
-  if (scrollId < 0) return false;
-  const scroll = data[scrollId];
-  if (!scroll._lpos || scroll._lpos.y !== -5) return false;
-  let contentId = -1;
-  let sawView = false;
-  const kids = scroll._children || [];
-  for (let i = 0; i < kids.length; i++) {
-    const childId = kids[i].__id__;
-    if (typeof childId !== "number") continue;
-    const child = data[childId];
-    if (!child || child.__type__ !== "cc.Node") continue;
-    if (child._name === "view") sawView = true;
-    if (child._name === "content") contentId = childId;
-    if (child._name === "view" || child._name === "content") {
-      const childComps = child._components || [];
-      let sized = false;
-      for (let c = 0; c < childComps.length; c++) {
-        const compId = childComps[c].__id__;
-        if (typeof compId !== "number") continue;
-        const comp = data[compId];
-        if (!comp || comp.__type__ !== "cc.UITransform") continue;
-        const anchor = comp._anchorPoint;
-        const box = comp._contentSize;
-        sized = !!anchor && anchor.x === 0.5 && anchor.y === 1 && !!box && box.width === 520 && box.height === 555;
-      }
-      if (!sized) return false;
-    }
-  }
-  if (!sawView || contentId < 0) return false;
-  const comps = scroll._components || [];
-  let anchorOk = false;
-  let scrollOk = false;
-  for (let i = 0; i < comps.length; i++) {
-    const compId = comps[i].__id__;
-    if (typeof compId !== "number") continue;
-    const comp = data[compId];
-    if (!comp) continue;
-    if (comp.__type__ === "cc.UITransform") {
-      const anchor = comp._anchorPoint;
-      const box = comp._contentSize;
-      anchorOk = !!anchor && anchor.x === 0.5 && anchor.y === 1 && !!box && box.width === 520 && box.height === 555;
-    }
-    if (comp.__type__ === "cc.ScrollView") {
-      const content = comp._content;
-      scrollOk = comp.vertical === true && comp.horizontal === false && !!content && content.__id__ === contentId;
-    }
-  }
-  return anchorOk && scrollOk;
+  const data = JSON.parse(readFileSync(file, "utf8")) as any[];
+  const scrollId=data.findIndex(row=>row.__type__==="cc.Node"&&row._name==="BagScroll");
+  const scroll=data[scrollId];if(!scroll||data[scroll._parent?.__id__]?._name!=="spr_box")return false;
+  const viewId=scroll._children.map((ref:any)=>ref.__id__).find((id:number)=>data[id]._name==="view");
+  const port=data[viewId];if(!port)return false;
+  const contentId=port._children.map((ref:any)=>ref.__id__).find((id:number)=>data[id]._name==="content");
+  if(contentId===undefined||data[contentId]._parent?.__id__!==viewId)return false;
+  const viewportComponents=port._components.map((ref:any)=>data[ref.__id__]);
+  const hostComponents=scroll._components.map((ref:any)=>data[ref.__id__]);
+  const contentComponents=data[contentId]._components.map((ref:any)=>data[ref.__id__]);
+  return viewportComponents.some((row:any)=>row.__type__==="cc.Mask"&&row._enabled) &&
+    !hostComponents.some((row:any)=>row.__type__==="cc.Mask") &&
+    hostComponents.some((row:any)=>row.__type__!=="cc.ScrollView"&&row._content?.__id__===contentId) &&
+    contentComponents.some((row:any)=>row.cellPrefab?.__uuid__&&Number.isInteger(row.columns)&&row.columns>0&&row.previewCount===0);
 }
 
 function prefabChildPaths(file: string): string[] {

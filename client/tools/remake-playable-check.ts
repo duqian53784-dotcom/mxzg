@@ -90,12 +90,22 @@ async function checkInventory() {
   assert.equal(source.face(source.rows("item")[0]).icon,"ui/bag/backpack_900101");
   assert.throws(() => readInventory([{ itemId:1,quantity:1 },{ itemId:1,quantity:2 }]),/无效/);
   assert.throws(() => readInventory([{ itemId:1,quantity:"2" }]),/无效/);
-  status = 503; await controller.refresh(); assert(source.failed()); assert.equal(source.rows("item").length,0);
+  status = 503; await controller.refresh(); assert(source.failed()); assert.equal(source.rows("item").length,2);
+  assert(source.message().includes("显示上次库存"),"failed refresh must identify the retained snapshot");
   status = 200; source.retry(); await settle(); assert(!source.failed());
   late = deferred<unknown>(); const pending = controller.refresh();
+  assert.equal(source.rows("item").length,2,"pending same-role refresh cannot temporarily shrink the list");
   controller.close(); const closedRenders = renders;
   late.resolve(response); await pending; assert.equal(renders,closedRenders);
   assert.equal(source.rows("item").length,0);
+  late=null;
+  let second!:InventorySource;
+  const switched=new InventoryController(model,service,api,catalog,{useInventory:value=>{second=value;},refreshInventory:()=>{}});
+  switched.show();await settle();assert.equal(second.rows("item").length,2);
+  late=deferred<unknown>();const switching=switched.refresh();
+  service.logout();assert.equal(second.rows("item").length,0,"identity change must immediately clear retained inventory");
+  late.resolve(response);await switching;
+  assert.equal(second.rows("item").length,0,"late reply cannot restore the previous role's inventory");switched.close();
 }
 
 async function checkCampaign() {

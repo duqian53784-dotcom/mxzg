@@ -43,6 +43,10 @@ foreach ($name in @('package.json', 'tsconfig.json')) {
     Copy-Item -LiteralPath (Join-Path $clientRoot $name) -Destination $workspace -Force
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'remake-h5.build.json') -Destination (Join-Path $workspace 'remake-h5.build.json') -Force
+$sourceSha256 = [ordered]@{}
+foreach ($inputPath in @('assets/prefabs/ui/hero/HeroSelectLayer.prefab', 'assets/prefabs/ui/hero/HeroIconCell.prefab', 'assets/scripts/features/hero/ui/FormationView.ts', 'assets/scripts/features/hero/ui/FormationSlotView.ts')) {
+    $sourceSha256[$inputPath] = (Get-FileHash -LiteralPath (Join-Path $workspace $inputPath) -Algorithm SHA256).Hash.ToLowerInvariant()
+}
 $stdout = Join-Path $logs 'creator.stdout.log'
 $stderr = Join-Path $logs 'creator.stderr.log'
 Write-Host "[BUILD] Creator 3.8.8 / web-mobile / Remake.scene. Logs: $logs"
@@ -65,6 +69,7 @@ Sync-BuildDirectory $result $published
 [ordered]@{
     application = 'mxzg-remake-h5'; creator = '3.8.8'; builtAt = [DateTime]::UtcNow.ToString('o')
     entryScene = 'db://assets/scenes/Remake.scene'; sourceCommit = $sourceCommit; sourceDirty = $sourceDirty
+    sourceSha256 = $sourceSha256
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $published 'mxzg-build.json') -Encoding UTF8
 Write-Host "[READY] H5 build published to $published"
 } finally { $buildLock.Dispose() }

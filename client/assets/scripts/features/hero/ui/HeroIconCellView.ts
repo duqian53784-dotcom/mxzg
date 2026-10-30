@@ -11,6 +11,8 @@ const ELEM_SPRITE = "ui/hero/hero-icon_elem-";
  */
 @ccclass("HeroIconCellView")
 export class HeroIconCellView extends Component {
+  @property(Button)
+  button: Button | null = null;
   @property(Node)
   face: Node | null = null;
 
@@ -32,12 +34,22 @@ export class HeroIconCellView extends Component {
   @property(Node)
   battle: Node | null = null;
 
-  @property(Label)
-  mark: Label | null = null;
-
   private tap: (() => void) | null = null;
 
+  validateBindings(): void {
+    const fields = { button: this.button, face: this.face, nameLabel: this.nameLabel, elem: this.elem,
+      levelLabel: this.levelLabel, lock: this.lock, battle: this.battle };
+    for (const [field, value] of Object.entries(fields)) {
+      if (!value) throw new Error("assets/prefabs/ui/hero/HeroIconCell.prefab / HeroIconCellView: 缺失绑定 " + field);
+    }
+    if (this.stars.length !== 5 || this.stars.some(star => !star))
+      throw new Error("assets/prefabs/ui/hero/HeroIconCell.prefab / HeroIconCellView: stars 必须绑定五颗星");
+    if (!this.face!.getComponent(Sprite))
+      throw new Error("assets/prefabs/ui/hero/HeroIconCell.prefab / HeroIconCellView: face 缺少 Sprite");
+  }
+
   show(cell: HeroCellModel, onTap: (() => void) | null): void {
+    this.validateBindings();
     const empty = cell.kind === "empty";
     this.paintFace(cell, empty);
     this.paintName(cell, empty);
@@ -46,7 +58,6 @@ export class HeroIconCellView extends Component {
     this.paintLevel(empty ? null : cell.level);
     if (this.lock) this.lock.active = !empty && cell.locked;
     if (this.battle) this.battle.active = !empty && cell.deployed && !cell.locked;
-    if (this.mark) this.mark.node.active = false;
     this.bindTap(empty || !onTap ? null : onTap);
   }
 
@@ -56,13 +67,11 @@ export class HeroIconCellView extends Component {
       this.node.off(Button.EventType.CLICK, this.tap);
       this.tap = null;
     }
-    let button = this.node.getComponent(Button);
+    const button = this.button!;
     if (!onTap) {
       if (button) button.interactable = false;
       return;
     }
-    if (!button) button = this.node.addComponent(Button);
-    button.transition = Button.Transition.NONE;
     button.interactable = true;
     const run = () => onTap();
     this.tap = run;
@@ -101,7 +110,6 @@ export class HeroIconCellView extends Component {
       const star = this.stars[i];
       if (!star) continue;
       star.active = i < n;
-      if (i < n) star.setPosition((i - (n - 1) / 2) * 15, -40, 0);
     }
   }
 

@@ -12,7 +12,8 @@
     "lib": ["ES2017", "DOM"],
     "baseUrl": ".",
     "paths": {
-      "cc": ["./cc-runtime.ts"]
+      "cc": ["./cc-runtime.ts"],
+      "cc/env": ["./cc-env.ts"]
     }
   },
   "include": ["cc-shim.d.ts", "../assets/scripts/**/*.ts"]

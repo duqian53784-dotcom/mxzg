@@ -30,17 +30,34 @@ export class FormationController {
     private saving = false;
     private epoch = 0;
     private disposers: Array<() => void> = [];
-    constructor(private readonly account: AccountModel, private readonly service: AccountService, private readonly heroes: HeroApi, private readonly api: LineupApi, private readonly catalog: HeroCatalog, private readonly view: FormationScreen) { }
+    constructor(
+        private readonly account: AccountModel,
+        private readonly service: AccountService,
+        private readonly heroes: HeroApi,
+        private readonly api: LineupApi,
+        private readonly catalog: HeroCatalog,
+        private readonly view: FormationScreen,
+    ) { }
     show(): void {
         const role = this.account.snapshot.role?.id;
-        this.disposers = [this.view.bind({ toggle: id => this.toggle(id), remove: pos => this.remove(pos), confirm: () => { void this.save(); }, cancel: () => { if (!this.saving)
-                    this.view.complete(false); }, retry: () => { void this.load(); } }, this.catalog),
-            this.account.subscribe(state => { if (!state.role || state.role.id !== role || state.busy)
-                this.view.complete(false); })];
+        const actions: FormationActions = {
+            toggle: id => this.toggle(id),
+            remove: position => this.remove(position),
+            confirm: () => { void this.save(); },
+            cancel: () => { if (!this.saving) this.view.complete(false); },
+            retry: () => { void this.load(); },
+        };
+        this.disposers = [
+            this.view.bind(actions, this.catalog),
+            this.account.subscribe(state => {
+                if (!state.role || state.role.id !== role || state.busy) this.view.complete(false);
+            }),
+        ];
         void this.load();
     }
-    private paint(): void { if (!this.closed)
-        this.view.render(this.state); }
+    private paint(): void {
+        if (!this.closed) this.view.render(this.state);
+    }
     private async load(): Promise<void> {
         const epoch = ++this.epoch;
         this.state = { ...this.state, busy: true, message: "正在读取阵容…" };
@@ -75,13 +92,13 @@ export class FormationController {
             this.paint();
             return;
         }
-        this.state = { ...this.state, lineup: { ...this.state.lineup, slots: [...this.state.lineup.slots, { position, heroId: id }] }, message: "阵容尚未保存，点击战斗确认" };
+        this.state = { ...this.state, lineup: { ...this.state.lineup, slots: [...this.state.lineup.slots, { position, heroId: id }] }, message: "阵容尚未保存，点击出阵确认" };
         this.paint();
     }
     private remove(position: number): void {
         if (this.state.busy || this.closed)
             return;
-        this.state = { ...this.state, lineup: { ...this.state.lineup, slots: this.state.lineup.slots.filter(slot => slot.position !== position) }, message: "阵容尚未保存，点击战斗确认" };
+        this.state = { ...this.state, lineup: { ...this.state.lineup, slots: this.state.lineup.slots.filter(slot => slot.position !== position) }, message: "阵容尚未保存，点击出阵确认" };
         this.paint();
     }
     private async save(): Promise<void> {
@@ -123,9 +140,12 @@ export class FormationController {
             return;
         // A failed/ambiguous save must be re-read before another save; never overwrite a newer version.
         this.loaded = false;
-        this.state = { ...this.state, busy: false, message: (error instanceof Error ? error.message : "阵容读取失败") + "，点击战斗重新读取" };
+        this.state = { ...this.state, busy: false, message: (error instanceof Error ? error.message : "阵容读取失败") + "，点击出阵重新读取" };
         this.paint();
     }
-    close(): void { this.closed = true; this.epoch++; for (const off of this.disposers.splice(0))
-        off(); }
+    close(): void {
+        this.closed = true;
+        this.epoch++;
+        for (const off of this.disposers.splice(0)) off();
+    }
 }

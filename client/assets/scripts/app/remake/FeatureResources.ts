@@ -8,7 +8,7 @@ const groups = {
         "prefabs/ui/backpack/BackpackInfoLayer", "prefabs/ui/common/DimSheet", "prefabs/ui/common/PagePrefabShell", "prefabs/ui/common/ListBackdrop"],
     campaign: ["prefabs/ui/battle/BattlePanelLayer", "prefabs/ui/battle/BattlePage", "prefabs/ui/battle/BattleEndLayer", "prefabs/ui/common/PagePrefabShell"],
     servers: ["prefabs/ui/login/ChooseServerLayer"],
-    formation: ["prefabs/ui/hero/HeroSelectLayer","prefabs/ui/hero/HeroIconCell","prefabs/ui/common/DimSheet"],
+    formation: ["prefabs/ui/hero/HeroSelectLayer","prefabs/ui/hero/HeroIconCell"],
 } as const;
 const allowed = new Set<string>([...groups.bag, ...groups.campaign, ...groups.servers, ...groups.formation]);
 const pool = new ResourcePool<Prefab>({

@@ -14,6 +14,9 @@ import { BaseView } from "../assets/scripts/framework/ui/BaseView";
 import { BackpackInfoView } from "../assets/scripts/features/backpack/ui/BackpackInfoView";
 import { BackpackItemCellView } from "../assets/scripts/features/backpack/ui/BackpackItemCellView";
 import { BackpackTabButtonView } from "../assets/scripts/features/backpack/ui/BackpackTabButtonView";
+import { SuperScroll } from "../assets/scripts/framework/ui/SuperScroll";
+import { SuperContent } from "../assets/scripts/framework/ui/SuperContent";
+import { fillPageShell } from "../assets/scripts/ui/screenFill";
 import { BackpackView } from "../assets/scripts/features/backpack/ui/BackpackView";
 import { bagViewFromSearch, setUseBackpackView, useBackpackView } from "../assets/scripts/features/backpack/config/BackpackFeatureFlag";
 import { UILayer } from "../assets/scripts/framework/ui/UILayer";
@@ -200,16 +203,16 @@ function checkPrefabBindings(): void {
   const view = componentOn(layer, VIEW_TYPE);
   assertRootOwns(layer, view.index);
   assertNodeRef(layer, view.comp, "sprBox", 10, "spr_box");
-  assertNodeRef(layer, view.comp, "bagScroll", 101, "BagScroll");
-  assertNodeRef(layer, view.comp, "bagPort", 105, "view");
-  assertNodeRef(layer, view.comp, "bagContent", 109, "content");
+  assertCompRef(layer, view.comp, "bagScroll", 115, layer[115].__type__);
+  assert(idOf(layer[109]._parent) === 105 && idOf(layer[105]._parent) === 101, "Prefab saves BagScroll/view/content hierarchy");
+  assert(idOf(layer[113].node) === 105, "Mask belongs to viewport in the source Prefab");
   assertNodeRef(layer, view.comp, "tabContent", 41, "content");
   assertNodeRef(layer, view.comp, "bubble", 83, "spr_bubble_bg");
   assertCompRef(layer, view.comp, "talk", 99, "cc.Label");
   assertNodeRef(layer, view.comp, "portrait", 91, "node_portrait");
   assertNodeRef(layer, view.comp, "hitMenu", 48, "UIMenu_1");
   assert(view.comp.btnClose === null, "BackpackLayer 没有关闭按钮，btnClose 应是 null");
-  assert(uuidOf(view.comp.cellPrefab) === CELL_UUID, "cellPrefab uuid");
+  assert(uuidOf(layer.find(row => "overrideCellSize" in row)!.cellPrefab) === CELL_UUID, "SuperContent.cellPrefab uuid");
   assert(uuidOf(view.comp.tabPrefab) === TAB_UUID, "tabPrefab uuid");
   assert(uuidOf(view.comp.infoPrefab) === INFO_UUID, "infoPrefab uuid");
   assert(uuidOf(view.comp.dimPrefab) === DIM_UUID, "dimPrefab uuid");
@@ -279,18 +282,11 @@ function checkSources(): void {
   assert(mount.indexOf("findNamed") < 0, "backpackMount 不应整树搜索");
   const fill = read("client/assets/scripts/ui/screenFill.ts");
   const bagStart = fill.indexOf("function fillBag");
-  const bagEnd = fill.indexOf("function dressBagTalk");
-  assert(bagStart >= 0 && bagEnd > bagStart, "fillBag 还在");
+  const bagEnd = fill.indexOf("function seatPrefabScroll");
+  assert(bagStart >= 0 && bagEnd > bagStart, "legacy bag entry exists");
   const bag = fill.slice(bagStart, bagEnd);
-  assert(bag.indexOf('getChildByName("BagScroll")') >= 0, "旧背包仍找 BagScroll");
-  assert(bag.indexOf("content.parent = port") >= 0, "旧背包仍把 content 放进 view");
-  assert(bag.indexOf("content.setPosition(0, 0, 0)") >= 0, "旧背包仍把 content 归零");
-  assert(bag.indexOf("removeComponent(hostMask)") >= 0, "旧背包仍摘掉宿主 Mask");
-  assert(bag.indexOf("GRAPHICS_RECT") >= 0, "旧背包仍用矩形遮罩");
-  assert(bag.indexOf("activeInHierarchy") >= 0, "旧背包仍等进场景再描遮罩");
-  assert(bag.indexOf("hostMask.enabled = false") < 0, "旧背包不能只把宿主 Mask 关掉");
-  assert(bag.indexOf("function gridScroll") < 0, "旧背包不能改回 gridScroll");
-  assert(bag.indexOf('uiNode("BagScroll")') < 0 && bag.indexOf('uiNode("BagFill")') < 0, "旧背包不能再造滚动节点");
+  assert(bag.includes('getComponent("BackpackView")') && bag.includes("bag.runOpen()"), "legacy entry delegates to the same bag view");
+  assert(!bag.includes("setPosition") && !bag.includes("removeComponent") && !bag.includes("content.parent"), "legacy entry cannot repair or override list authoring");
   const main = read("client/assets/scripts/ui/MainApp.ts");
   assert(main.indexOf("USE_PAGE_PREFAB_SHELL") >= 0, "MainApp 仍有页面壳开关");
   assert(main.indexOf("attachPagePrefabShell") >= 0, "MainApp 仍挂旧壳");
@@ -390,6 +386,7 @@ function fakePrefab(build: (node: Node) => void): Prefab {
     build(node);
     return node;
   };
+  (prefab as any).data = prefab._instantiate();
   return prefab;
 }
 
@@ -403,15 +400,15 @@ function makeView(): BackpackView {
   const view = host.addComponent(BackpackView);
   view.sprBox = sized("spr_box", 560, 520);
   view.sprBox.parent = host;
-  view.bagScroll = sized("BagScroll", 520, 400);
-  view.bagScroll.setPosition(0, -12, 0);
-  view.bagScroll.parent = view.sprBox;
-  view.bagScroll.addComponent(Mask);
-  view.bagScroll.addComponent(ScrollView);
-  view.bagPort = sized("view", 520, 400);
-  view.bagPort.parent = view.bagScroll;
-  view.bagContent = sized("content", 448, 80);
-  view.bagContent.parent = view.bagScroll;
+  const scrollNode = sized("BagScroll",520,555); scrollNode.parent=view.sprBox;
+  const port=sized("view",520,555); port.parent=scrollNode;
+  (port.getComponent(UITransform) as UITransform).setAnchorPoint(0.5,1); port.addComponent(Mask);
+  const content=sized("content",520,555); content.parent=port; content.setPosition(-260,0,0);
+  (content.getComponent(UITransform) as UITransform).setAnchorPoint(0,1);
+  const list=content.addComponent(SuperContent) as SuperContent;
+  list.spacingX=22;list.spacingY=22;list.paddingLeft=35;list.paddingRight=35;list.paddingTop=8;list.paddingBottom=38;
+  view.bagScroll=scrollNode.addComponent(SuperScroll) as SuperScroll;
+  view.bagScroll.content=content;
   view.tabContent = new Node("tabs");
   view.tabContent.layer = Layers.Enum.UI_2D;
   view.tabContent.parent = host;
@@ -421,11 +418,13 @@ function makeView(): BackpackView {
   if (view.talk.node) view.talk.node.parent = host;
   view.portrait = new Node("node_portrait");
   view.portrait.parent = host;
-  view.hitMenu = sized("UIMenu_1", 640, 960);
+  view.hitMenu = sized("UIMenu_1", 0, 0);
   view.hitMenu.parent = host;
   view.btnClose = null;
-  view.cellPrefab = fakePrefab((node) => {
+  list.cellPrefab = fakePrefab((node) => {
+    node.addComponent(UITransform).setContentSize(96,96);
     const cell = node.addComponent(BackpackItemCellView);
+    cell.button = node.addComponent(Button);
     cell.frame = new Node("spr_frame");
     cell.frame.addComponent(Sprite);
     cell.frame.parent = node;
@@ -475,6 +474,7 @@ function makeView(): BackpackView {
     dimUi.setAnchorPoint(0.5, 0.5);
     dim.parent = node;
   });
+  view.bagScroll.onEnable();
   return view;
 }
 
@@ -483,7 +483,7 @@ function pump(frames: number): void {
 }
 
 function cells(view: BackpackView): BackpackItemCellView[] {
-  const content = view.bagContent;
+  const content = view.bagScroll!.content;
   if (!content) return [];
   const out: BackpackItemCellView[] = [];
   for (let i = 0; i < content.children.length; i++) {
@@ -647,12 +647,12 @@ async function checkBehavior(): Promise<void> {
     { itemId: 22, itemType: 22, num: null },
   ]);
   const view = await openView();
-  assert(view.bagContent !== null && view.bagPort !== null && view.bagContent.parent === view.bagPort, "content 进了 view");
-  assert(view.bagContent.position.x === 0 && view.bagContent.position.y === 0, "content 位置归零");
-  assert(view.bagScroll !== null && view.bagScroll.getComponent(Mask) === null, "BagScroll 上的 Mask 要摘掉");
-  const portMask = view.bagPort.getComponent(Mask) as Mask | null;
+  assert(view.bagScroll!.content !== null && view.bagScroll!.content!.parent !== null && view.bagScroll!.content.parent === view.bagScroll!.content!.parent, "content 进了 view");
+  assert(view.bagScroll!.content.position.x === -260 && view.bagScroll!.content.position.y === 0, "content 位置归零");
+  assert(view.bagScroll !== null && view.bagScroll.node.getComponent(Mask) === null, "BagScroll 上的 Mask 要摘掉");
+  const portMask = view.bagScroll!.content!.parent.getComponent(Mask) as Mask | null;
   assert(portMask !== null && portMask.type === Mask.Type.GRAPHICS_RECT, "视口用矩形遮罩");
-  assert(portMask.enabled === false, "检查环境没有 Graphics 时遮罩要关掉，格子才看得见");
+  assert(portMask.enabled === true, "保留源 Prefab 裁剪，不为让格子出现而关闭 Mask");
   const menuUi = view.hitMenu ? (view.hitMenu.getComponent(UITransform) as UITransform) : null;
   assert(menuUi !== null && menuUi.contentSize.width === 0 && menuUi.contentSize.height === 0, "全屏 menu 要收成 0");
   assert(view.talk !== null && view.talk.string === "店里欢迎光临", "台词读 language 5788");
@@ -664,9 +664,9 @@ async function checkBehavior(): Promise<void> {
   const potion = shown.filter((cell) => cell.count && cell.count.string === "3");
   const unknown = shown.filter((cell) => cell.count && cell.count.node && cell.count.node.active === false);
   assert(potion.length === 1 && unknown.length === 1, "数量 3 要写出来，没同步的数量不要写成 0");
-  assert(itemCells[0].node.position.x === -177 && itemCells[0].node.position.y === -56, "四列按 118 间距居中，第一格在 -177/-56");
-  assert(itemCells[16].node.position.x === -177 && itemCells[16].node.position.y === -528, "第五行保持 118 行距并与首列对齐");
-  const contentUi = view.bagContent.getComponent(UITransform) as UITransform;
+  assert(itemCells[0].node.position.x === 83 && itemCells[0].node.position.y === -56, "四列按 118 间距居中，第一格在 -177/-56");
+  assert(itemCells[16].node.position.x === 83 && itemCells[16].node.position.y === -528, "第五行保持 118 行距并与首列对齐");
+  const contentUi = view.bagScroll!.content.getComponent(UITransform) as UITransform;
   assert(contentUi.contentSize.height === 614, "五行格子和滚动留白完整纳入内容高度");
 
   const tabRow = tabs(view);
@@ -767,9 +767,9 @@ async function checkBehavior(): Promise<void> {
   const appeared = cells(hidden);
   assert(appeared.length === 20, "进场景后铺出 4×5 格子");
   assert(activeIcons(appeared).length === 1 && appeared[0].count !== null && appeared[0].count.string === "3", "进场景后画出背包里的药");
-  assert(appeared[0].node.position.x === -177 && appeared[0].node.position.y === -56, "进场景后四列格子保持居中且落在视口里");
-  assert(hidden.bagContent !== null && hidden.bagContent.parent === hidden.bagPort, "进场景后 content 在 view 里");
-  assert(hidden.bagScroll !== null && hidden.bagScroll.getComponent(Mask) === null, "进场景前就要卸掉宿主遮罩");
+  assert(appeared[0].node.position.x === 83 && appeared[0].node.position.y === -56, "进场景后四列格子保持居中且落在视口里");
+  assert(hidden.bagScroll!.content !== null && hidden.bagScroll!.content.parent === hidden.bagScroll!.content!.parent, "进场景后 content 在 view 里");
+  assert(hidden.bagScroll !== null && hidden.bagScroll.node.getComponent(Mask) === null, "进场景前就要卸掉宿主遮罩");
   hidden.node.destroy();
 }
 
@@ -876,15 +876,7 @@ async function checkOpenFailure(): Promise<void> {
         const prefab = new Prefab() as Prefab & { _instantiate: () => Node };
         prefab._instantiate = () => {
           const node = new Node(inner);
-          if (inner.indexOf("BackpackLayer") >= 0) {
-            const view = node.addComponent(BackpackView);
-            const piece = new Prefab() as Prefab & { _instantiate: () => Node };
-            piece._instantiate = () => new Node("piece");
-            view.cellPrefab = piece;
-            view.tabPrefab = piece;
-            view.infoPrefab = piece;
-            view.dimPrefab = piece;
-          }
+          if (inner.indexOf("BackpackLayer") >= 0) return makeView().node;
           return node;
         };
         done(null, prefab);
@@ -961,17 +953,9 @@ function blankPiece(): Prefab {
 }
 
 function bagNode(inner: string, withCells: boolean): Node {
+  if (inner.indexOf("BackpackLayer") >= 0 && withCells) return makeView().node;
   const node = new Node(inner);
-  if (inner.indexOf("BackpackLayer") >= 0) {
-    const view = node.addComponent(BackpackView);
-    if (withCells) {
-      const piece = blankPiece();
-      view.cellPrefab = piece;
-      view.tabPrefab = piece;
-      view.infoPrefab = piece;
-      view.dimPrefab = piece;
-    }
-  }
+  if (inner.indexOf("BackpackLayer") >= 0) node.addComponent(BackpackView);
   return node;
 }
 
@@ -1194,6 +1178,14 @@ async function main(): Promise<void> {
   checkSources();
   checkRegistry();
   await checkBehavior();
+  // The shared Prefab's ?bag=old route must still consume the legacy GameStore.
+  noteBag([{itemId:20,itemType:20,num:3}]);
+  const legacy=makeView();
+  fillPageShell("bag",legacy.node,()=>{});await legacy.whenReady();pump(1);
+  assert(cells(legacy).length===20&&activeIcons(cells(legacy)).length===1,"legacy entry uses the same list and real GameStore snapshot");
+  activeIcons(cells(legacy))[0].node.emit(Button.EventType.CLICK);
+  assert(infoCard(legacy).propName.string==="红药","legacy entry retains item details");
+  legacy.node.destroy();
   await checkOpenFailure();
   await checkOpenRaces();
   GameStore.reset();

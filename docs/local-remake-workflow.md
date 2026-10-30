@@ -2,6 +2,8 @@
 
 本页只对应新后端与 `Remake.scene`，旧 Java 8 / WebSocket 链路仍使用原有脚本。H5 是本地开发构建；MySQL、App、微信小游戏和生产部署另行验收。
 
+**最新约定（2026-10-30）：后续不自动构建 H5 或其他任何包，等用户需要时再说。** 当前开发优先用 Creator 本机预览。以下构建/静态服务脚本是保留的操作说明，不是要求本批执行；旧 18081 产物不代表当前 SuperScroll 源码已通过独立 H5 验收。
+
 ## 日常入口
 
 脚本均在 `F:\project\mxzg\scripts`，双击后不要求先切换目录：
@@ -17,6 +19,10 @@
 
 当前 H5 是调试构建，会显示性能统计和开发账号入口；不是正式发行包。关闭 Creator 不影响已启动的 18080 后端和 18081 静态预览，但应保留实际运行这两个服务的窗口。
 
+本批出阵页的 Prefab、节点、Inspector 参数和修改验证步骤见 [出阵页人工维护指南](formation-ui-authoring.md)。修改源 Prefab 后，Creator 预览需要等待导入；独立 H5 需要重新构建，两者不要混为同一个产物。
+
+当前批次的背包列表入口、布局参数和无业务数据的编辑器预览见 [SuperScroll 维护指南](super-scroll-authoring.md)。本批仅进行本机预览及代码检查。
+
 ## 构建如何隔离
 
 需要本机 Creator 3.8.8、Windows PowerShell、robocopy 和 Python 3.9 以上。Creator 默认位置为 `C:\ProgramData\cocos\editors\Creator\3.8.8\CocosCreator.exe`，其他安装位置可通过 `MXZG_CREATOR_PATH` 指定。
@@ -24,6 +30,8 @@
 固定参数在 `client/tools/remake-h5.build.json`，只包含 Remake 场景。脚本把 assets/settings/package 复制到忽略的 `client/temp/remake-h5-project`，不借用用户已打开的编辑器，也不修改它的场景/构建面板。临时工程保留自己的导入缓存，后续构建复用；镜像同步只允许在已检查的临时工程和 remake-h5 输出目录内进行。
 
 Creator 官方命令行成功退出码是 36（见 [官方命令行发布文档](https://docs.cocos.com/creator/3.8/manual/zh/editor/publish/publish-in-command-line.html)）。脚本检查成功码、index.html、launchScene 及 Bundle 包内 UUID/重定向引用后才复制产物，写入 `mxzg-build.json` 记录时间、场景、源提交和是否有未提交源码。失败不把旧构建当作本次成功。构建参数为本地调试用途，尚未进行发行包体优化。
+
+构建记录还包含出阵 Prefab、共享 Cell、FormationView 和 FormationSlotView 的输入 SHA256，取自隔离工程在构建前的快照。`sourceCommit` 与 `sourceDirty=true` 必须一起理解：有未提交源码时，不能把产物直接等同于该提交；可对照输入 SHA 核实本页版本。
 
 独立服务只绑定 127.0.0.1，Windows 使用独占监听，重复启动先核对身份后复用；不提供目录列表或工程源码。响应禁用浏览器缓存，构建身份可在 `/__mxzg_preview__` 查看。新后端仅在 local 配置允许 7456、18081 的 localhost/127.0.0.1 来源。其他端口不自动放开。
 

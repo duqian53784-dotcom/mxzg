@@ -1,4 +1,4 @@
-import { _decorator, Button, Component, Label, Node } from "cc";
+import { _decorator, Button, Component, Label, Node, Sprite } from "cc";
 import { StoreBagItem } from "../../../core/GameStore";
 import { itemIconResource, itemProfile } from "../../../config/gameCatalog";
 import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
@@ -11,6 +11,8 @@ const { ccclass, property } = _decorator;
  */
 @ccclass("BackpackItemCellView")
 export class BackpackItemCellView extends Component {
+  @property(Button)
+  button: Button | null = null;
   @property(Node)
   frame: Node | null = null;
 
@@ -23,12 +25,30 @@ export class BackpackItemCellView extends Component {
   @property(Node)
   selectMark: Node | null = null;
 
+  private tap: (() => void) | null = null;
+  private revision = 0;
+
+  validateBindings(): void {
+    for (const [field, value] of Object.entries({button:this.button,frame:this.frame,icon:this.icon,count:this.count,selectMark:this.selectMark})) {
+      if (!value) throw new Error("BackpackItemCell.prefab [" + this.node.name + "]: 缺失绑定 " + field);
+    }
+    if (!this.frame!.getComponent(Sprite) || !this.icon!.getComponent(Sprite))
+      throw new Error("BackpackItemCell.prefab [" + this.node.name + "]: frame/icon 缺少 Sprite");
+  }
+
   show(item: StoreBagItem | null, selected: boolean, onTap: (() => void) | null, face?: BagFace): void {
+    this.validateBindings();
+    const revision = ++this.revision;
+    const current = () => this.isValid && this.revision === revision;
+    if (this.tap) this.node.off(Button.EventType.CLICK, this.tap);
+    this.tap = onTap;
+    this.button!.interactable = !!onTap;
+    if (onTap) this.node.on(Button.EventType.CLICK, onTap);
     if (this.selectMark) this.selectMark.active = selected;
     if (!item) {
       if (this.frame) {
         this.frame.active = true;
-        paintSpritePaths(this.frame, [SLOT_PLATE]);
+        paintSpritePaths(this.frame, [SLOT_PLATE], current);
       }
       if (this.icon) this.icon.active = false;
       if (this.count) {
@@ -37,13 +57,14 @@ export class BackpackItemCellView extends Component {
       }
     } else {
       const profile = face ? null : itemProfile(item.itemType, item.itemId);
-      if (this.frame) paintSpritePaths(this.frame, [face?.frame || rareFrame(profile ? profile.rare : 0)]);
+      if (this.frame) paintSpritePaths(this.frame, [face?.frame || rareFrame(profile ? profile.rare : 0)], current);
       if (this.icon) {
         this.icon.active = true;
+        this.icon.getComponent(Sprite)!.spriteFrame = null;
         const path = face?.icon || itemIconResource(item.itemType, item.itemId);
-        if (path) paintSpritePaths(this.icon, [path, "ui/bag/backpack_spr-default"]);
-        else if (item.itemId) paintSpritePaths(this.icon, ["ui/bag/backpack_" + item.itemId, "ui/bag/backpack_spr-default"]);
-        else paintSpritePaths(this.icon, ["ui/bag/backpack_spr-default"]);
+        if (path) paintSpritePaths(this.icon, [path, "ui/bag/backpack_spr-default"], current);
+        else if (item.itemId) paintSpritePaths(this.icon, ["ui/bag/backpack_" + item.itemId, "ui/bag/backpack_spr-default"], current);
+        else paintSpritePaths(this.icon, ["ui/bag/backpack_spr-default"], current);
       }
       if (this.count) {
         const text = item.num === null ? "" : String(item.num);
@@ -51,9 +72,12 @@ export class BackpackItemCellView extends Component {
         this.count.node.active = text.length > 0;
       }
     }
-    if (!onTap) return;
-    if (!this.node.getComponent(Button)) this.node.addComponent(Button);
-    this.node.on(Button.EventType.CLICK, onTap);
+  }
+
+  onDestroy(): void {
+    this.revision++;
+    if (this.tap) this.node.off(Button.EventType.CLICK, this.tap);
+    this.tap = null;
   }
 }
 

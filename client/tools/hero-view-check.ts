@@ -316,6 +316,7 @@ function fakePrefab(build: (node: Node) => void): Prefab {
 function makeCell(node: Node): void {
   node.name = "HeroIconCell";
   const cell = node.addComponent(HeroIconCellView);
+  cell.button = node.addComponent(Button);
   cell.face = new Node("spr_face");
   cell.face.addComponent(Sprite);
   cell.face.parent = node;
@@ -336,8 +337,6 @@ function makeCell(node: Node): void {
   cell.lock.parent = node;
   cell.battle = new Node("spr_battle");
   cell.battle.parent = node;
-  cell.mark = labelOn(new Node("lbl_mark"), "");
-  if (cell.mark.node) cell.mark.node.parent = node;
 }
 
 function makeBoard(node: Node): HeroListBoardView {

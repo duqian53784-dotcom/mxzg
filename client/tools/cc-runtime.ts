@@ -45,7 +45,11 @@ type Listener = (...args: unknown[]) => void;
 /** 检查里核对失败打开有没有留下壳。游戏包不引用这个文件。 */
 export const createdNodes: Node[] = [];
 
+export const Enum = (value: unknown) => value;
+export const CCObject = { Flags: { DontSave: 8, EditorOnly: 16 } };
+
 export const _decorator = {
+  executeInEditMode: (ctor: any) => ctor,
   ccclass(_name?: string): ClassDecorator {
     return (ctor) => ctor;
   },
@@ -86,9 +90,13 @@ export class Node {
     TOUCH_CANCEL: "touch-cancel",
     NODE_DESTROYED: "node-destroyed",
     CHILD_ADDED: "child-added",
+    SIZE_CHANGED: "size-changed",
   };
 
   name: string;
+  hideFlags = 0;
+  eulerAngles = { x: 0, y: 0, z: 0 };
+  getPathInHierarchy(): string { return this.parent ? this.parent.getPathInHierarchy() + "/" + this.name : this.name; }
   layer = 0;
   active = true;
   isValid = true;
@@ -151,7 +159,7 @@ export class Node {
   getComponent(type: new (...args: unknown[]) => Component): Component | null {
     for (let i = 0; i < this.components.length; i++) {
       const comp = this.components[i];
-      if (comp instanceof type || comp.constructor === type) return comp;
+      if (typeof type === "string" ? comp.constructor.name === type : comp instanceof type || comp.constructor === type) return comp;
     }
     return null;
   }
@@ -229,6 +237,10 @@ export class Node {
 
 export class UITransform extends Component {
   contentSize = { width: 0, height: 0 };
+  get width(): number { return this.contentSize.width; }
+  set width(value: number) { this.setContentSize(value, this.contentSize.height); }
+  get height(): number { return this.contentSize.height; }
+  set height(value: number) { this.setContentSize(this.contentSize.width, value); }
   _contentSize: { width: number; height: number } | null = null;
   anchorX = 0.5;
   anchorY = 0.5;
@@ -239,7 +251,8 @@ export class UITransform extends Component {
     this._contentSize = this.contentSize;
   }
 
-  setContentSize(width: number, height: number): void {
+  setContentSize(width: number | { width: number; height: number }, height?: number): void {
+    if (typeof width === "object") { height = width.height; width = width.width; }
     this.contentSize.width = width;
     this.contentSize.height = height;
     if (!this._contentSize) this._contentSize = this.contentSize;
@@ -311,7 +324,97 @@ export class ScrollView extends Component {
   elastic = true;
   cancelInnerEvents = true;
   content: Node | null = null;
-  scrollToTop(_time?: number): void {}
+  onEnable(): void {}
+  onDisable(): void {}
+  stopAutoScroll(): void {}
+  getMaxScrollOffset(): Vec2 {
+    const ui = this.content?.getComponent(UITransform) as UITransform;
+    const port = this.content?.parent?.getComponent(UITransform) as UITransform;
+    return new Vec2(Math.max(0,ui.width-port.width),Math.max(0,ui.height-port.height));
+  }
+  getScrollOffset(): Vec2 {
+    if (!this.content) return new Vec2();
+    const ui=this.content.getComponent(UITransform) as UITransform;
+    const port=this.content.parent.getComponent(UITransform) as UITransform;
+    return new Vec2(this.content.position.x-ui.width*ui.anchorX+port.width*port.anchorX,
+      this.content.position.y+ui.height*(1-ui.anchorY)-port.height*(1-port.anchorY));
+  }
+  scrollToOffset(offset: Vec2,_time?: number): void {
+    const ui=this.content.getComponent(UITransform) as UITransform;
+    const port=this.content.parent.getComponent(UITransform) as UITransform;
+    this.content.setPosition(-port.width*port.anchorX+ui.width*ui.anchorX-offset.x,
+      port.height*(1-port.anchorY)-ui.height*(1-ui.anchorY)+offset.y,0);
+  }
+  scrollToTop(_time?: number): void { if(this.content) this.scrollToOffset(new Vec2()); }
+}
+
+/** Only the fixed-grid subset exercised by component checks. Real engine acceptance is separate. */
+export class Layout extends Component {
+  static Type={NONE:0,HORIZONTAL:1,VERTICAL:2,GRID:3};
+  static ResizeMode={NONE:0,CONTAINER:1,CHILDREN:2};
+  static AxisDirection={HORIZONTAL:0,VERTICAL:1};
+  static HorizontalDirection={LEFT_TO_RIGHT:0,RIGHT_TO_LEFT:1};
+  static VerticalDirection={BOTTOM_TO_TOP:0,TOP_TO_BOTTOM:1};
+  static Constraint={NONE:0,FIXED_ROW:1,FIXED_COL:2};
+  private _type = 0;
+  get type() {return this._type;}
+  set type(value) {this._type=value;}
+  private _resizeMode = 0;
+  get resizeMode() {return this._resizeMode;}
+  set resizeMode(value) {this._resizeMode=value;}
+  private _startAxis = 0;
+  get startAxis() {return this._startAxis;}
+  set startAxis(value) {this._startAxis=value;}
+  private _constraint = 0;
+  get constraint() {return this._constraint;}
+  set constraint(value) {this._constraint=value;}
+  private _constraintNum = 2;
+  get constraintNum() {return this._constraintNum;}
+  set constraintNum(value) {this._constraintNum=value;}
+  private _cellSize = new Size(40,40);
+  get cellSize() {return this._cellSize;}
+  set cellSize(value) {this._cellSize=value;}
+  private _affectedByScale = false;
+  get affectedByScale() {return this._affectedByScale;}
+  set affectedByScale(value) {this._affectedByScale=value;}
+  private _horizontalDirection = 0;
+  get horizontalDirection() {return this._horizontalDirection;}
+  set horizontalDirection(value) {this._horizontalDirection=value;}
+  private _verticalDirection = 1;
+  get verticalDirection() {return this._verticalDirection;}
+  set verticalDirection(value) {this._verticalDirection=value;}
+  private _spacingX = 0;
+  get spacingX() {return this._spacingX;}
+  set spacingX(value) {this._spacingX=value;}
+  private _spacingY = 0;
+  get spacingY() {return this._spacingY;}
+  set spacingY(value) {this._spacingY=value;}
+  private _paddingTop = 0;
+  get paddingTop() {return this._paddingTop;}
+  set paddingTop(value) {this._paddingTop=value;}
+  private _paddingBottom = 0;
+  get paddingBottom() {return this._paddingBottom;}
+  set paddingBottom(value) {this._paddingBottom=value;}
+  private _paddingLeft = 0;
+  get paddingLeft() {return this._paddingLeft;}
+  set paddingLeft(value) {this._paddingLeft=value;}
+  private _paddingRight = 0;
+  get paddingRight() {return this._paddingRight;}
+  set paddingRight(value) {this._paddingRight=value;}
+  protected onEnable(): void {}
+  protected onDisable(): void {}
+  updateLayout(_force?: boolean): void {
+    const ui=this.node.getComponent(UITransform) as UITransform;
+    this.node.children.filter(child=>child.activeInHierarchy).forEach((child,index)=>{
+      const cell=child.getComponent(UITransform) as UITransform;
+      if(!cell)return;
+      const vertical=this.startAxis===0;
+      const col=vertical? index%this.constraintNum:Math.floor(index/this.constraintNum);
+      const row=vertical? Math.floor(index/this.constraintNum):index%this.constraintNum;
+      child.setPosition(-ui.width*ui.anchorX+this.paddingLeft+col*(cell.width*child.scale.x+this.spacingX)+cell.width*child.scale.x*cell.anchorX,
+        ui.height*(1-ui.anchorY)-this.paddingTop-row*(cell.height*child.scale.y+this.spacingY)-cell.height*child.scale.y*(1-cell.anchorY),0);
+    });
+  }
 }
 
 export class Button extends Component {
@@ -378,7 +481,12 @@ export class EventTouch {
   }
 }
 
+export class Size {
+  constructor(public width=0,public height=0) {}
+}
+
 export class Vec2 {
+  static get ZERO(): Vec2 { return new Vec2(); }
   x: number;
   y: number;
   constructor(x = 0, y = 0) {

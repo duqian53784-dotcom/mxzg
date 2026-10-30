@@ -38,6 +38,9 @@
       },
       {
         "__id__": 30
+      },
+      {
+        "__id__": 32
       }
     ],
     "_prefab": {
@@ -707,6 +710,35 @@
     },
     "selectMark": {
       "__id__": 11
+    },
+    "button": {
+      "__id__": 32
     }
+  },
+  {
+    "__type__": "cc.CompPrefabInfo",
+    "fileId": "1d0cc116-3437-47dd-82a"
+  },
+  {
+    "__type__": "cc.Button",
+    "_name": "",
+    "_objFlags": 0,
+    "__editorExtras__": {},
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "__prefab": {
+      "__id__": 31
+    },
+    "clickEvents": [],
+    "_interactable": true,
+    "_transition": 0,
+    "_duration": 0.1,
+    "_zoomScale": 1.1,
+    "_target": {
+      "__id__": 1
+    },
+    "_id": ""
   }
 ]

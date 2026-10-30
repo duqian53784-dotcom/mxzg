@@ -24,7 +24,10 @@ export function readMainLineup(value: unknown): MainLineup {
 }
 export class LineupApi {
     constructor(private readonly http: JsonClient) { }
-    async current(token: string): Promise<MainLineup> { return readMainLineup(await this.http.request("/api/v1/lineups/main", undefined, token)); }
+    /** GET: the version returned here is required by the subsequent PUT. */
+    async current(token: string): Promise<MainLineup> {
+        return readMainLineup(await this.http.request("/api/v1/lineups/main", undefined, token));
+    }
     async save(token: string, lineup: MainLineup): Promise<MainLineup> {
         return readMainLineup(await this.http.request("/api/v1/lineups/main", { expectedVersion: lineup.version, slots: lineup.slots }, token, "PUT"));
     }

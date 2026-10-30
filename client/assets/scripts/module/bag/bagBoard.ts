@@ -7,13 +7,8 @@ import { plainTalk } from "../../ui/idleHangTalkPlan";
 const BAG_SHOP_LAN = "5788";
 const BAG_SHOP_FALLBACK = "欢迎光临～";
 
-export const BAG_COLS = 4;
-/** 与 screenFill.fillBag 同一套。格子 96，缝约 22。日服设计宽 pitch 约 129，118 仍能露出第 5 行大半。 */
-export const BAG_PITCH_X = 118;
-export const BAG_PITCH_Y = 118;
-export const BAG_MIN_ROWS = 5;
-export const BAG_ORIGIN_X = -177;
-export const BAG_ORIGIN_Y = -56;
+const BAG_MIN_SLOTS = 20;
+const BAG_SLOT_BATCH = 4;
 
 export const BAG_TABS: { id: BagTabKind; title: string }[] = [
   { id: "equip", title: "装备" },
@@ -52,23 +47,9 @@ export function sameBagItem(a: StoreBagItem, b: StoreBagItem): boolean {
   return a.itemId === b.itemId && a.itemType === b.itemType;
 }
 
-/** 至少 5 行。多出来的行按 4 列补满。 */
+/** Empty-slot policy: at least 20 entries, padded in batches of four. No geometry here. */
 export function bagSlotCount(count: number): number {
-  const filled = Math.max(count, BAG_COLS * BAG_MIN_ROWS);
-  const rows = Math.max(BAG_MIN_ROWS, Math.ceil(filled / BAG_COLS));
-  return rows * BAG_COLS;
-}
-
-export function bagSlotPosition(index: number): { x: number; y: number } {
-  return {
-    x: BAG_ORIGIN_X + (index % BAG_COLS) * BAG_PITCH_X,
-    y: BAG_ORIGIN_Y - Math.floor(index / BAG_COLS) * BAG_PITCH_Y,
-  };
-}
-
-export function bagContentHeight(slots: number): number {
-  const rows = Math.max(BAG_MIN_ROWS, Math.ceil(Math.max(slots, 1) / BAG_COLS));
-  return Math.max(400, rows * BAG_PITCH_Y + 24);
+  return Math.ceil(Math.max(count, BAG_MIN_SLOTS) / BAG_SLOT_BATCH) * BAG_SLOT_BATCH;
 }
 
 export function bagTabTitle(tab: BagTabKind): string {

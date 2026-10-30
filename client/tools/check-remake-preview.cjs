@@ -4,7 +4,8 @@
  * Screenshots/logs belong under ignored client/temp/project-checks.
  */
 const { resolve } = require('node:path');
-const { mkdirSync } = require('node:fs');
+const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const assert = require('node:assert/strict');
 process.chdir(resolve(__dirname, '../..'));
 mkdirSync('client/temp/project-checks', { recursive: true });
 const { chromium } = require(process.env.MXZG_PLAYWRIGHT_MODULE || 'playwright');
@@ -12,11 +13,21 @@ const previewUrl = process.env.MXZG_PREVIEW_URL || 'http://localhost:7456/';
 const shotPrefix = process.env.MXZG_SCREENSHOT_PREFIX || 'night';
 if (!/^[a-z0-9-]+$/i.test(shotPrefix)) throw Error('Invalid screenshot prefix');
 const standalone = new URL(previewUrl).port === '18081';
+const formationExpected = process.env.MXZG_FORMATION_EXPECT ? JSON.parse(readFileSync(process.env.MXZG_FORMATION_EXPECT, 'utf8')) : null;
 (async () => {
     const browser = await chromium.launch({ headless: true, channel: 'chrome' });
     let page;
     const errors = [];
     try {
+        if (standalone) {
+            const response = await fetch(new URL('/__mxzg_preview__', previewUrl));
+            if (!response.ok) throw Error('Standalone preview identity is unavailable');
+            const identity = await response.json();
+            identity.captureMode = process.env.MXZG_CAPTURE_CLEAN === '1' ? 'engine profiler hidden for screenshots' : 'default debug HUD';
+            writeFileSync('client/temp/project-checks/' + shotPrefix + '-build.json', JSON.stringify(identity,null,2));
+            if (formationExpected?.prefabSha256) assert.equal(identity.build.sourceSha256?.['assets/prefabs/ui/hero/HeroSelectLayer.prefab'], formationExpected.prefabSha256, 'wrong formation source in H5 build');
+            if (formationExpected?.cellSha256) assert.equal(identity.build.sourceSha256?.['assets/prefabs/ui/hero/HeroIconCell.prefab'], formationExpected.cellSha256, 'wrong Cell source in H5 build');
+        }
         page = await browser.newPage({ viewport: standalone ? { width: 393, height: 852 } : { width: 1280, height: 1024 } });
         if (standalone) {
             // Prove this run cannot silently fall back to the editor's preview server.
@@ -35,8 +46,20 @@ const standalone = new URL(previewUrl).port === '18081';
         });
         async function connectEngine() {
             await page.waitForFunction(() => window.cc?.director || window.System?.import, { timeout: 30000 });
-            await page.evaluate(async () => { if (!window.cc?.director) window.cc = await window.System.import('cc'); });
-            await page.waitForTimeout(9000);
+            // The legacy global may expose director without all native UI classes.
+            await page.evaluate(async () => { window.cc = await window.System.import('cc'); });
+            // Source imports can make editor startup slower; wait for the actual gate.
+            await page.waitForFunction(() => {
+                let ready = false;
+                function walk(node) {
+                    if (!node?.activeInHierarchy) return;
+                    if ((node._components || []).some(c => ['AccountLoginView', 'RemakeHomeView'].includes(c.constructor?.name))) ready = true;
+                    for (const child of node.children) walk(child);
+                }
+                walk(window.cc?.director?.getScene());
+                return ready;
+            }, null, { timeout: 30000 });
+            if (process.env.MXZG_CAPTURE_CLEAN === '1') await page.evaluate(() => window.cc.profiler.hideStats());
         }
         await page.goto(previewUrl, { waitUntil: 'load' });
         await connectEngine();
@@ -98,7 +121,8 @@ const standalone = new URL(previewUrl).port === '18081';
             await page.waitForTimeout(600);
         }
         async function snap(name) {
-            await page.screenshot({ path: 'client/temp/project-checks/' + shotPrefix + '-' + name + '.png' });
+            const capture = process.env.MXZG_CAPTURE_CANVAS === '1' ? page.locator('canvas') : page;
+            await capture.screenshot({ path: 'client/temp/project-checks/' + shotPrefix + '-' + name + '.png' });
             console.log('SHOT', name);
             if (standalone && name === 'login') {
                 console.log('H5 login asset transfer', await page.evaluate(() => {
@@ -169,6 +193,12 @@ const standalone = new URL(previewUrl).port === '18081';
         if (!(await state()).some(v => v.view === 'BackpackView'))
             throw Error('bag absent');
         await snap('bag');
+        if (process.argv.includes('--backpack-list')) {
+            await require('./super-scroll-preview.cjs')(page, {clickTarget,snap,state,prefix:shotPrefix});
+            if (errors.length) throw Error('browser runtime errors');
+            console.log('PASS backpack-list preview; runtime errors: 0');
+            return;
+        }
         }
         await clickTarget('CityChromeShell', 'tabBattle');
         await page.waitForTimeout(3500);
@@ -185,9 +215,56 @@ const standalone = new URL(previewUrl).port === '18081';
         await snap('idle-march');
         await snap('battle');
         await clickTarget('CampaignView', 'fightButton');
+        async function waitForFormation() {
+            await page.waitForFunction(() => {
+                let ready = false;
+                function walk(n) { if (!n?.activeInHierarchy) return; for (const c of n._components || []) if (c.constructor?.name === 'FormationView' && c.state && !c.state.busy && c.grid?.children.length) ready = true; for (const child of n.children) walk(child); }
+                walk(window.cc?.director?.getScene()); return ready;
+            }, null, {timeout:30000});
+        }
+        async function formationSnapshot() {
+            return page.evaluate(() => {
+                let component;
+                function walk(n) { if (!n?.activeInHierarchy) return; for (const c of n._components || []) if (c.constructor?.name === 'FormationView') component = c; for (const child of n.children) walk(child); }
+                walk(window.cc.director.getScene());
+                if (!component) throw Error('FormationView absent');
+                const node = value => { const n = value?.node || value; const ui = n?.getComponent('cc.UITransform'); return n ? { name: n.name, parent: n.parent?.name, position: {x:n.position.x,y:n.position.y}, scale:{x:n.scale.x,y:n.scale.y}, size:ui ? {width:ui.width,height:ui.height}:null, anchor:ui ? {x:ui.anchorX,y:ui.anchorY}:null } : null; };
+                return { root:node(component.node), title:{...node(component.titleLabel),text:component.titleLabel?.string,fontSize:component.titleLabel?.fontSize}, confirm:node(component.confirmButton),
+                    content:node(component.scrollContent), port:node(component.scrollPort), grid:node(component.grid), cells:component.grid?.children.map(node),
+                    visibleStarCount:component.grid?.children[0]?._components.find(c=>c.constructor?.name==='HeroIconCellView')?.stars.filter(star=>star.activeInHierarchy).length,
+                    columns:component.columns,cellStep:component.cellStep,firstCellPosition:component.firstCellPosition,cellScale:component.cellScale,lineup:component.state?.lineup };
+            });
+        }
+        function assertAuthored(layout) {
+            if (!formationExpected) return;
+            if (formationExpected.requireVisibleStars) assert.equal(layout.visibleStarCount,1,'new account one-star heroes must show their star');
+            assert.equal(layout.title.fontSize, formationExpected.titleFontSize);
+            assert.equal(layout.confirm.position.x, formationExpected.confirmX);
+            assert.equal(layout.confirm.position.y, formationExpected.confirmY);
+            assert.equal(layout.columns, formationExpected.columns);
+            assert.equal(layout.cellStep.x, formationExpected.stepX);
+            assert.equal(layout.cellStep.y, formationExpected.stepY);
+            assert.equal(layout.cells[1].position.x - layout.cells[0].position.x, formationExpected.stepX);
+            if (layout.columns === 2) assert.equal(layout.cells[0].position.y - layout.cells[2].position.y, formationExpected.stepY);
+        }
+        await waitForFormation();
+        const firstFormation = await formationSnapshot();
+        assertAuthored(firstFormation);
+        await clickTarget('HeroIconCellView');
+        assert.notDeepEqual((await formationSnapshot()).lineup.slots, firstFormation.lineup.slots, 'draft must change before Cancel');
         await clickTarget('FormationView', 'closeButton');
         await waitForCampaign(1, 'idle');
+        await clickTarget('CityChromeShell', 'tabHero');
+        await page.waitForTimeout(2000);
+        if (!(await state()).some(v => v.view === 'HeroListView')) throw Error('hero absent after formation Cancel');
+        await clickTarget('CityChromeShell', 'tabBattle');
+        await waitForCampaign(1, 'idle');
         await clickTarget('CampaignView', 'fightButton');
+        await waitForFormation();
+        const reopenedFormation = await formationSnapshot();
+        assert.deepEqual(reopenedFormation.lineup, firstFormation.lineup, 'Cancel must discard the draft');
+        assertAuthored(reopenedFormation);
+        writeFileSync('client/temp/project-checks/' + shotPrefix + '-formation-layout.json', JSON.stringify(reopenedFormation,null,2));
         await clickTarget('HeroIconCellView');
         await snap('formation');
         await clickTarget('FormationView', 'confirmButton');
@@ -253,7 +330,7 @@ const standalone = new URL(previewUrl).port === '18081';
         await page.reload();
         await connectEngine();
         if (!(await state()).some(v => v.view === 'AccountLoginView') || (await state()).some(v => v.view === 'RemakeHomeView'))
-            throw Error('restore entered home without Start');
+            throw Error('restore did not stop at Login before Start');
         await snap('restored-login');
         await clickTarget('AccountLoginView', 'loginButton');
         await clickTarget('CityChromeShell', 'tabBattle');

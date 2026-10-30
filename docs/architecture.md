@@ -20,11 +20,18 @@
 
 ## UI 必须能由人在 Creator 中维护
 
+本批只把 HeroSelectLayer 及必要组件做成样板，技术结果与人工修改体验分开记录。新增功能依次经过需求、协议约定、接口/类型生成、Prefab、View 绑定和业务实现；不能依靠运行时补节点来跳过可编辑的界面设计。
+
 - 布局、层级、尺寸、锚点、图片、字体、按钮和滚动区保存在 Prefab；使用编辑器可见的属性绑定。
 - View 启动时明确检查必需绑定，缺失就报告“哪个 Prefab 的哪个字段未绑定”，不静默生成替代界面。
 - 列表使用可编辑 Cell Prefab。允许运行时实例化和渲染列表，不用脚本重建整页的固定结构。
 - 使用明确的 Layout、Widget 与安全区规则适配屏幕，避免到处散落坐标补偿和按名字递归搜索。
+- 必须使用代码的屏幕适配和动态列表排布集中处理，参数暴露在 Inspector，并写明具体控制哪些属性。不得在打开、重开或渲染数据时恢复静态按钮坐标、标题字体、Mask/ScrollView 结构。动态内容高度、选中态、数据文字与动画可以更新。
 - 命名对应实际作用，例如 heroList、upgradeButton、levelLabel；注释解释规则和原因，避免保留批次编号和历史补丁叙述。
+
+出阵样板的具体节点、代码入口、动态属性边界和用户验收清单见 [出阵页维护指南](formation-ui-authoring.md)。现有阵位用一个小组件绑定位置编号和图文状态，不增加 Manager 或多层基类；已有阵容 Controller/API 的职责保留。
+
+背包物品列表现在由 SuperScroll（继承 ScrollView）与 SuperContent（继承 Layout）维护，见 [背包列表维护指南](super-scroll-authoring.md)。Content 只绑定一次；滚动方向从布局推导，间距/边距使用原生 Layout 的同一份属性。SuperContent 维护 content 和 Cell 根尺寸，原生 Layout 维护 Cell 位置，ScrollView 维护 content 滚动位置，业务仅提交数据/渲染回调。没有新增列表 Manager，也未同时迁移其他列表。
 
 Creator 的 Prefab 与 Inspector 支持节点、组件与属性的编辑和保存，布局以此为基础，见官方[Prefab](https://docs.cocos.com/creator/3.8/manual/en/asset/prefab.html)和[Inspector](https://docs.cocos.com/creator/3.8/manual/en/editor/inspector/)。表现与领域分离的取舍参考 [Separated Presentation](https://martinfowler.com/eaaDev/SeparatedPresentation.html)，实际分工以本文为准。
 

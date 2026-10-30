@@ -30,7 +30,7 @@ export class InventoryController {
             rows: tab => this.items.filter(item => { const face = catalog.face(item.itemId, item.quantity); return !face.wallet && face.category === tab; })
                 .map(item => ({ itemId: item.itemId, itemType: item.itemId, num: item.quantity })),
             face: item => catalog.face(item.itemId!, item.num!),
-            message: () => this.status === "loading" ? "正在同步背包…" : this.status === "error" ? this.error + "，点击分类重试" : this.items.length ? catalog.greeting : "背包为空",
+            message: () => this.status === "loading" ? "正在同步背包…" : this.status === "error" ? this.error + (this.items.length ? "，显示上次库存" : "") + "，点击分类重试" : this.items.length ? catalog.greeting : "背包为空",
             retry: () => { void this.refresh(); }, failed: () => this.status === "error",
         });
     }
@@ -53,7 +53,8 @@ export class InventoryController {
         const epoch = ++this.epoch;
         this.pending = true;
         this.status = "loading";
-        this.items = [];
+        // Keep the last accepted snapshot during a same-role refresh. Clearing it here
+        // temporarily shrinks the list and loses scroll position before the reply arrives.
         this.view.refreshInventory();
         try {
             const items = await this.service.authenticated(token => this.api.list(token));

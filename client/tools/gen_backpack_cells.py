@@ -549,6 +549,11 @@ def patch_layer():
 
 
 def main():
+    layer_path = os.path.join(OUT, "BackpackLayer.prefab")
+    if os.path.exists(layer_path):
+        with open(layer_path, encoding="utf-8") as source:
+            if any("overrideCellSize" in row for row in json.load(source)):
+                raise SystemExit("BackpackLayer is manually authored with SuperContent. Edit its Prefabs in Creator; this legacy generator must not overwrite them.")
     frames = {key: sprite_uuid(rel) for key, rel in SPRITES.items()}
     cell_uuid = write_prefab("BackpackItemCell", build_cell(frames), CELL_UUID)
     tab_uuid = write_prefab("BackpackTabButton", build_tab(frames), TAB_UUID)
