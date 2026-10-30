@@ -50,7 +50,7 @@
         "rawWidth": 30,
         "rawHeight": 1,
         "borderTop": 1,
-        "borderBottom": 1,
+        "borderBottom": 0,
         "borderLeft": 3,
         "borderRight": 3,
         "packable": true,
@@ -92,14 +92,14 @@
             0
           ],
           "nuv": [
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-            0.0,
-            1.0,
-            1.0,
-            1.0
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            1,
+            1
           ],
           "minPos": [
             -15,

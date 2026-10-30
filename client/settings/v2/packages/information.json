@@ -4,7 +4,7 @@
     "customSplash": {
       "id": "customSplash",
       "label": "customSplash",
-      "enable": false,
+      "enable": true,
       "customSplash": {
         "complete": false,
         "form": "https://creator-api.cocos.com/api/form/show?"
@@ -13,7 +13,7 @@
     "removeSplash": {
       "id": "removeSplash",
       "label": "removeSplash",
-      "enable": false,
+      "enable": true,
       "removeSplash": {
         "complete": false,
         "form": "https://creator-api.cocos.com/api/form/show?"
