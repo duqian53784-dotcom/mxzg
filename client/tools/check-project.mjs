@@ -10,6 +10,7 @@ const output = resolve(root, "client/temp/project-checks");
 const suites = [
   ["account", "ts", "client/tools/account-check.ts"],
   ["hero-roster", "ts", "client/tools/hero-roster-check.ts"],
+  ["formation", "ts", "client/tools/formation-check.ts"],
   ["remake-playable", "ts", "client/tools/remake-playable-check.ts"],
   ["campaign-rules", "python", "tools/export_campaign_rules.py"],
   ["remake-navigation", "ts", "client/tools/remake-navigation-check.ts"],

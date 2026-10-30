@@ -152,7 +152,7 @@ export class RemakeHomeView extends BaseView implements HomeView {
     const { width, height } = view.getVisibleSize();
     const scale = Math.min(1, width / 640);
     this.accountTools?.setScale(scale, scale, 1);
-    this.accountTools?.setPosition(0, height / 2 - 180 * scale, 0);
+    this.accountTools?.setPosition(0, height / 2 - 112 * scale, 0);
   }
 
   onClose(): void {

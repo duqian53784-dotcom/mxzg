@@ -288,6 +288,23 @@ function fitChromeChildren(root: Node, width: number): void {
       else squeezeWideNode(node, width);
     }
   }
+  layoutCityHeader(root, width);
+}
+
+/** MainSceneCtr places the background centre on the top edge (half is outside
+ * the viewport). Drawing the entire 146px art below that edge doubled its height. */
+export function layoutCityHeader(root: Node, width: number): void {
+  const top = root.getChildByName("TopBar");
+  if (!top) return;
+  const background = top.getChildByName("Bg");
+  background?.setPosition(0, 40, 0);
+  background?.getComponent(UITransform)?.setContentSize(width, width * 146 / 616);
+  const positions: Record<string,number> = { NameBg:-0.285,LblName:-0.285,LblSub:-0.285,
+    PowerSlot:-0.055,CurrencyGold:0.129,CurrencyGem:0.33,Avatar:-0.435,LevelBg:-0.435,LblLevel:-0.435 };
+  for (const name of Object.keys(positions)) {
+    const node = top.getChildByName(name);
+    if (node) node.setPosition(width * positions[name],node.position.y,0);
+  }
 }
 
 function paintAvatar(root: Node, icon: string | null): void {

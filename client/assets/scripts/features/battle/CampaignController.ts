@@ -2,7 +2,7 @@ import { AccountModel } from "../account/AccountModel";
 import { AccountService, SessionChanged } from "../account/AccountService";
 import { CampaignApi } from "./CampaignApi";
 import type { CampaignState, CampaignReport } from "./CampaignApi";
-export type CampaignPhase = "loading" | "idle" | "challenging" | "replaying" | "result" | "claiming" | "error";
+export type CampaignPhase = "loading" | "idle" | "formation" | "challenging" | "replaying" | "result" | "claiming" | "error";
 export interface CampaignActions {
     fight(): void;
     speed(): void;
@@ -16,6 +16,7 @@ export interface CampaignScreen {
     dismissResult(): void;
     nextSpeed(): void;
     skipReplay(): void;
+    prepareFight?(): Promise<boolean>;
 }
 function requestId(): string {
     // Idempotency identifier, not a credential. WeChat runtimes may not provide Web Crypto.
@@ -65,7 +66,7 @@ export class CampaignController {
         }
     }
     private async fight(): Promise<void> {
-        if (this.closed || ["loading", "challenging", "replaying", "result", "claiming"].includes(this.phase))
+        if (this.closed || ["loading", "formation", "challenging", "replaying", "result", "claiming"].includes(this.phase))
             return;
         if (!this.state) {
             await this.load();
@@ -76,10 +77,14 @@ export class CampaignController {
             await this.play(this.report, epoch).catch(error => this.fail(epoch, error));
             return;
         }
-        this.request = this.request || requestId();
         this.notice("");
-        this.paint("challenging");
         try {
+            this.paint("formation");
+            const confirmed = this.view.prepareFight ? await this.view.prepareFight() : true;
+            if (!this.accepts(epoch)) return;
+            if (!confirmed) { await this.load(); return; }
+            this.request = this.request || requestId();
+            this.paint("challenging");
             const report = await this.service.authenticated(token => this.api.challenge(token, this.request!));
             if (!this.accepts(epoch))
                 return;

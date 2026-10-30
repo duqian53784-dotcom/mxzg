@@ -1,7 +1,7 @@
-import { instantiate, Node, UITransform, view } from "cc";
+import { instantiate, Label, Node, UITransform, view } from "cc";
 import { mountBattlePrefab } from "../../../ui/BattlePage";
 import type { BattlePrefabShell } from "../../../ui/BattlePage";
-import { mountBattleSpine } from "../../../ui/battleSpine";
+import { mountBattleSpine, mountNamedSpine } from "../../../ui/battleSpine";
 import type { SpineActor } from "../../../ui/battleSpine";
 import { fitVisibleRoot } from "../../../ui/visibleFit";
 import { paintSpritePaths } from "../../../framework/kit/SpritePaint";
@@ -9,6 +9,8 @@ import { setText } from "../../../ui/UiKit";
 import { paintBattleFloats, paintBattleSkillName, clearBattleOverhead } from "../../../ui/battlePresentView";
 import { hangFormationPoint } from "../../../ui/idleHangSkirmishPlan";
 import { hpFillLayout, HP_FILL_HEIGHT } from "../../../ui/battlePrefabLayout";
+import { mountIdleSkirmish } from "../../../ui/idleHangSkirmish";
+import type { IdleSkirmish } from "../../../ui/idleHangSkirmish";
 import type { CampaignReport, CampaignUnit, CampaignHit } from "../CampaignApi";
 /** Rendering only: animations consume immutable server events and never calculate damage. */
 export class CampaignField {
@@ -16,11 +18,16 @@ export class CampaignField {
         actor: SpineActor;
         unit: CampaignUnit;
         index: number;
+        hp: number;
+        pose: number;
     }>();
     private cancelPlayback: (() => void) | null = null;
     private closed = false;
     private speed = 1;
     private onSkip: (() => void) | null = null;
+    private idle: IdleSkirmish | null = null;
+    private idleKey = "";
+    private poseTimers = new Set<ReturnType<typeof setTimeout>>();
     private constructor(private readonly shell: BattlePrefabShell) { }
     static async open(parent: Node): Promise<CampaignField> {
         const shell = await mountBattlePrefab(parent);
@@ -40,6 +47,10 @@ export class CampaignField {
         }
         if (bg)
             paintSpritePaths(bg, ["ui/chapter/hang/map01_B"]);
+        // Match the retained idle hall: the sky is a short distant layer, while
+        // the transparent foreground/floor covers the entire portrait viewport.
+        if (bg) { bg.name = "IdleSky"; bg.setPosition(0,430,0); bg.getComponent(UITransform)?.setContentSize(Math.max(640,view.getVisibleSize().width),420); }
+        if (floor) floor.name = "IdleFloor";
         for (const path of ["LayerAppear", "LayerHud/TopBar", "LayerHud/BtnRetreat", "LayerHud/TopBar/BtnClose", "LayerHud/SkillBars"]) {
             const node = shell.root.getChildByPath(path);
             if (node)
@@ -65,6 +76,8 @@ export class CampaignField {
         return field;
     }
     show(units: CampaignUnit[]): void {
+        this.stopIdle();
+        this.clearPoseTimers();
         this.cancel();
         for (const entry of this.actors.values())
             if (entry.actor.node.isValid)
@@ -98,23 +111,50 @@ export class CampaignField {
                     label.active = true;
                     setText(label, unit.name);
                 } }, { face: ally ? 1 : -1, scale: 0.36, seatY: 0 });
-                this.actors.set(unit.id, { actor, unit, index });
+                this.actors.set(unit.id, { actor, unit, index, hp:unit.maxHp, pose:0 });
                 this.hp(unit.id, unit.maxHp);
             });
         }
         setText(this.shell.logLabel, "");
         this.clearPresent();
     }
+    startIdle(units: CampaignUnit[]): void {
+        const key = JSON.stringify(units.map(unit => [unit.id,unit.templateId,unit.position,unit.maxHp]));
+        if (this.idle && key === this.idleKey) return;
+        this.show(units.filter(unit => unit.ally));
+        this.idleKey = key;
+        for (const entry of this.actors.values()) {
+            const slot = entry.actor.node.parent as Node & { mxzgHangPos?: number };
+            slot.mxzgHangPos = entry.unit.position;
+        }
+        this.idle = mountIdleSkirmish(this.shell.root,{ plans: () => units.filter(unit => !unit.ally).slice(0,7).map((unit,index) => ({
+            stem:String(unit.templateId),spot:index,face:-1 as const,maxHp:unit.maxHp,
+        })) });
+        this.idle.retarget([...this.actors.values()].map(entry => entry.actor));
+    }
+    pauseIdle(): void { this.idle?.pause(); }
+    resumeIdle(): void { this.idle?.resume(); }
+    private stopIdle(): void {
+        this.idle?.stop(); this.idle = null; this.idleKey = "";
+        for (const name of ["IdleFoes","IdleSkirmishFx"]) this.shell.root.getChildByName(name)?.destroy();
+    }
     private hp(id: string, value: number): void {
         const entry = this.actors.get(id);
         if (!entry)
             return;
         const side = entry.unit.ally ? "ally" : "enemy";
+        entry.hp = value;
         const label = this.hpLabel(side, entry.index);
         if (label) {
-            setText(label, String(value));
+            // The official hall shows the hero's level beside a compact HP bar.
+            setText(label, String(entry.unit.level));
+            const number = label.getComponent(Label);
+            if (number) { number.fontSize = 28; number.lineHeight = 36; }
+            label.getComponent(UITransform)?.setContentSize(50,40);
+            label.setPosition(-98,0,0);
             if (label.parent) {
                 label.parent.active = true;
+                label.parent.setScale(.7,.7,1);
                 const point = hangFormationPoint(entry.unit.position, entry.unit.ally);
                 label.parent.setPosition(point.x, point.y + 100, 0);
             }
@@ -157,6 +197,12 @@ export class CampaignField {
     }
     replay(report: CampaignReport): Promise<void> {
         this.show(report.units);
+        const intro = this.shell.root.getChildByName("LayerAppear");
+        if (intro) {
+            for (const child of intro.children) child.active = false;
+            intro.setPosition(0,180,0); intro.active = true;
+            mountNamedSpine(intro,"ZDKS","stand",{loop:false,onComplete:()=>{if(intro.isValid)intro.active=false;},onFail:()=>{if(intro.isValid)intro.active=false;}});
+        }
         const skip = this.shell.root.getChildByPath("LayerHud/BtnSkip");
         if (skip)
             skip.active = true;
@@ -170,6 +216,7 @@ export class CampaignField {
                     clearTimeout(timer);
                 if (skip?.isValid)
                     skip.active = false;
+                if (intro?.isValid) intro.active = false;
                 this.cancelPlayback = null;
                 this.onSkip = null;
                 resolve();
@@ -190,7 +237,7 @@ export class CampaignField {
             };
             this.cancelPlayback = finish;
             this.onSkip = final;
-            step();
+            timer = setTimeout(() => { if (intro?.isValid) intro.active=false; step(); },700);
         });
     }
     private hit(hit: CampaignHit, animate: boolean): void {
@@ -202,17 +249,30 @@ export class CampaignField {
         if (animate) {
             attacker.actor.play("attack");
             target.actor.play(hit.remainingHp ? "hit" : "die");
+            const attackerPose = ++attacker.pose, targetPose = ++target.pose;
+            this.afterPose(() => { if (attacker.pose === attackerPose && attacker.hp > 0 && attacker.actor.node.isValid) attacker.actor.play("stand"); });
+            this.afterPose(() => {
+                if (target.pose !== targetPose || !target.actor.node.isValid) return;
+                if (target.hp > 0) target.actor.play("stand");
+                else target.actor.node.active = false;
+            });
             const point = hangFormationPoint(target.unit.position, target.unit.ally);
             paintBattleFloats(this.shell.present, [{ anchor: target.index, hurt: -hit.damage, crit: false }], [{ x: point.x, y: point.y }]);
             paintBattleSkillName(this.shell.present, "普通攻击");
         }
         if (!hit.remainingHp)
             target.actor.gesture("die");
+        if (!animate && !hit.remainingHp) target.actor.node.active = false;
     }
+    private afterPose(run: () => void): void {
+        const timer = setTimeout(() => { this.poseTimers.delete(timer); if (!this.closed) run(); },350 / this.speed);
+        this.poseTimers.add(timer);
+    }
+    private clearPoseTimers(): void { for (const timer of this.poseTimers) clearTimeout(timer); this.poseTimers.clear(); }
     nextSpeed(): number { this.speed = this.speed === 3 ? 1 : this.speed + 1; return this.speed; }
     skip(): void { this.onSkip?.(); }
     private cancel(): void { this.cancelPlayback?.(); }
     private clearPresent(): void { paintBattleFloats(this.shell.present, []); paintBattleSkillName(this.shell.present, null); }
-    dispose(): void { this.closed = true; this.cancel(); if (this.shell.root.isValid)
+    dispose(): void { this.closed = true; this.clearPoseTimers(); this.stopIdle(); this.cancel(); if (this.shell.root.isValid)
         this.shell.root.destroy(); }
 }

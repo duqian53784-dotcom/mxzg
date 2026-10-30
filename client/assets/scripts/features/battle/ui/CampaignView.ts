@@ -30,12 +30,16 @@ export class CampaignView extends BaseView implements CampaignScreen {
     private closed = false;
     private actions: CampaignActions | null = null;
     private roleLevel: () => number = () => 1;
+    private chooseFormation: () => Promise<boolean> = async () => false;
+    private closeFormation: () => void = () => {};
     private last: {
         state: CampaignState | null;
         phase: CampaignPhase;
         error: string;
     } | null = null;
-    configure(catalog: ItemCatalog, roleLevel: () => number): void { this.catalog = catalog; this.roleLevel = roleLevel; }
+    configure(catalog: ItemCatalog, roleLevel: () => number, chooseFormation: () => Promise<boolean>, closeFormation: () => void): void {
+        this.catalog = catalog; this.roleLevel = roleLevel; this.chooseFormation = chooseFormation; this.closeFormation = closeFormation;
+    }
     onOpen(): void {
         this.beginOpen();
         if (!this.fightButton || !this.stageLabel || !this.statusLabel || !this.node.parent)
@@ -77,14 +81,19 @@ export class CampaignView extends BaseView implements CampaignScreen {
             this.stageLabel.string = state ? "第 " + state.stageId + " 关" : "—";
         if (this.statusLabel)
             this.statusLabel.string = error || ({ loading: "正在读取关卡…", idle: state?.available ? "首通奖励" : "当前章节已完成",
-                challenging: "正在生成战报…", replaying: "战斗进行中", result: "等待结算", claiming: "正在保存奖励…", error: "读取失败，请点击战斗重试" })[phase];
+                formation: "正在准备出阵…", challenging: "正在生成战报…", replaying: "战斗进行中", result: "等待结算", claiming: "正在保存奖励…", error: "读取失败，请点击战斗重试" })[phase];
         if (this.fightButton)
             this.fightButton.interactable = phase === "error" || (phase === "idle" && !!state?.available);
         for (const [label, id] of [[this.goldLabel, 900001], [this.heroExpLabel, 900101], [this.roleExpLabel, 900003]] as const)
             if (label)
                 label.string = state ? String(state.rewards.find(reward => reward.itemId === id)?.quantity || 0) : "—";
         if (phase === "idle" && state)
-            this.field?.show(state.units);
+            this.field?.startIdle(state.units);
+    }
+    async prepareFight(): Promise<boolean> {
+        this.field?.pauseIdle();
+        try { return await this.chooseFormation(); }
+        finally { if (!this.closed) this.field?.resumeIdle(); }
     }
     async replay(report: CampaignReport): Promise<void> {
         await this.whenReady();
@@ -114,6 +123,7 @@ export class CampaignView extends BaseView implements CampaignScreen {
     skipReplay(): void { this.field?.skip(); }
     onClose(): void {
         this.closed = true;
+        this.closeFormation();
         this.failOpen(new Error("页面已关"));
         this.dismissResult();
         this.field?.dispose();

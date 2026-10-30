@@ -49,8 +49,13 @@ const ENTER_STEPS = 8;
 
 export interface IdleSkirmish {
   retarget(actors: SpineActor[]): void;
+  pause(): void;
+  resume(): void;
   stop(): void;
 }
+
+/** New applications supply server-owned encounter templates without legacy stores. */
+export interface IdleSkirmishSource { plans(): IdleFoePlan[]; }
 
 interface WaveFoe {
   node: Node;
@@ -75,7 +80,7 @@ export function resumeIdleSkirmishes(): void {
 }
 
 /** 挂到 IdleHang 上。英雄换装时 retarget。节点销毁时停。 */
-export function mountIdleSkirmish(hang: Node): IdleSkirmish {
+export function mountIdleSkirmish(hang: Node, source?: IdleSkirmishSource): IdleSkirmish {
   const foes = place(uiNode("IdleFoes"), hang, 0, 0);
   const fx = place(uiNode("IdleSkirmishFx"), hang, 0, 0);
   const floats = place(uiNode("IdleSkirmishFloats"), fx, 0, 0);
@@ -123,6 +128,8 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
   controls.push(control);
 
   const api: IdleSkirmish = {
+    pause: () => control.pause(),
+    resume: () => control.resume(),
     retarget(next: SpineActor[]): void {
       actors = next.slice();
       plantAllies();
@@ -306,10 +313,14 @@ export function mountIdleSkirmish(hang: Node): IdleSkirmish {
       return;
     }
     stopStrikeFx();
-    const chapter = GameStore.chapter();
-    const stage = idleSkirmishStageIdx(GameStore.mockStageId(), chapter.nowIdx, chapter.maxIdx);
-    const monsters = chapterEnemies(stage);
-    const plans = planIdleWave(monsters, (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
+    let plans: IdleFoePlan[];
+    if (source) plans = source.plans();
+    else {
+      const chapter = GameStore.chapter();
+      const stage = idleSkirmishStageIdx(GameStore.mockStageId(), chapter.nowIdx, chapter.maxIdx);
+      plans = planIdleWave(chapterEnemies(stage), (stem) => wireSpineHasClip(stem, "stand"), WIRE_SPINE_ENEMY_STEMS);
+    }
+    if (!plans.length) { arm(IDLE_SKIRMISH_GAP_MS, beginCycle); return; }
     const gen = waveGen;
     fightStarted = false;
     waveFoes = [];

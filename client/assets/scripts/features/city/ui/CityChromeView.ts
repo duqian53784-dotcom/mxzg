@@ -5,7 +5,7 @@ import { GameLog } from "../../../core/GameLog";
 import { BaseView } from "../../../framework/ui/BaseView";
 import { UILayer } from "../../../framework/ui/UILayer";
 import { view } from "../../../framework/ui/UIRegistry";
-import { CityChrome, CityChromeActions, isCityTab, layoutCityTab, prepareCityTab, setCityTabSelected, TabState } from "../../../ui/CityChrome";
+import { CityChrome, CityChromeActions, isCityTab, layoutCityTab, layoutCityHeader, prepareCityTab, setCityTabSelected, TabState } from "../../../ui/CityChrome";
 import { tabPaintState } from "../../../ui/cityTabScale";
 import { CITY_CHROME_PREFAB_PATH, bindClick, tintSprite } from "../../../ui/prefabLoad";
 import { createLabel, setText, uiNode } from "../../../ui/UiKit";
@@ -343,6 +343,7 @@ export class CityChromeView extends BaseView<CityChromeOpenArgs> implements City
         else squeezeWideNode(node, width);
       }
     }
+    layoutCityHeader(this.node,width);
   }
 
   private paintAvatar(icon: string | null): void {

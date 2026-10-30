@@ -43,6 +43,9 @@ import { ItemCatalog } from "../../features/backpack/ItemCatalog";
 import { CampaignController } from "../../features/battle/CampaignController";
 import { CampaignView } from "../../features/battle/ui/CampaignView";
 import { mountCampaignPage } from "../../features/battle/ui/CampaignMount";
+import { FormationView } from "../../features/hero/ui/FormationView";
+import { FormationController } from "../../features/hero/FormationController";
+import { LineupApi } from "../../features/hero/LineupApi";
 
 const { ccclass, property } = _decorator;
 const SESSION_KEY = "mxzg.remake.developmentSession";
@@ -155,10 +158,19 @@ export class RemakeApp extends Component {
     }));
     const itemCatalog = () => new ItemCatalog(remakeConfig.get<{rows:Record<string,unknown>[]}>("config/item")!,
       remakeConfig.get<{rows:Record<string,unknown>[]}>("config/language")!);
-    const loadFeature = (group: "bag" | "campaign") => {
+    const loadFeature = (group: "bag" | "campaign" | "formation") => {
       if (!this.featureResources) this.featureResources = createFeatureResourceScope();
       return loadFeaturePage(this.featureResources,group);
     };
+    this.unregisterViews.push(registerView(FormationView, {
+      id:"remake-formation",prefab:"prefabs/ui/hero/HeroSelectLayer",layer:UILayer.Popup,hostId:"remake-modal",cache:false,allowMultiple:false,
+      load:()=>loadFeature("formation"),
+      createController:view=>new FormationController(model,service,new HeroApi(http),new LineupApi(http),
+        new HeroCatalog(remakeConfig.get("config/herotype"),remakeConfig.get("config/item")),view as FormationView),
+    }));
+    const chooseFormation = () => new Promise<boolean>((resolve,reject)=>{
+      void ui.openById("remake-formation",{complete:resolve}).catch(reject);
+    });
     this.unregisterViews.push(registerView(BackpackView, {
       id:"bag",prefab:"prefabs/ui/backpack/BackpackLayer",layer:UILayer.Page,cache:false,allowMultiple:false,
       mount:mountBackpackPage,load:() => loadFeature("bag"),
@@ -168,7 +180,7 @@ export class RemakeApp extends Component {
       id:"remake-campaign",prefab:"prefabs/ui/battle/BattlePanelLayer",layer:UILayer.Page,cache:false,allowMultiple:false,
       mount:mountCampaignPage,load:() => loadFeature("campaign"),
       createController:view => {
-        (view as CampaignView).configure(itemCatalog(),() => model.snapshot.role?.level || 1);
+        (view as CampaignView).configure(itemCatalog(),() => model.snapshot.role?.level || 1,chooseFormation,()=>{ui.closeById("remake-formation");});
         return new CampaignController(model,service,campaignApi,view as CampaignView,text => homeView?.showNotice(text));
       },
     }));
@@ -305,6 +317,7 @@ export class RemakeApp extends Component {
     this.offAccount?.(); this.offAccount = null;
     this.features?.dispose(); this.features = null;
     UIManager.instance.closeById("server-picker");
+    UIManager.instance.closeById("remake-formation");
     this.navigation?.dispose(); this.navigation = null;
     this.homeResources?.dispose(); this.homeResources = null;
     this.heroResources?.dispose(); this.heroResources = null;

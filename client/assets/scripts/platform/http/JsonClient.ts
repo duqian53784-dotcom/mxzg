@@ -1,5 +1,5 @@
 export interface JsonRequest {
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "PUT";
   url: string;
   headers: Record<string, string>;
   body?: string;
@@ -17,11 +17,11 @@ export class JsonClient {
     if (!/^https?:\/\/[^\s?#]+$/.test(baseUrl)) throw new Error("Invalid API address");
   }
 
-  async request(path: string, body?: unknown, token?: string): Promise<unknown> {
+  async request(path: string, body?: unknown, token?: string, method?: JsonRequest["method"]): Promise<unknown> {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
     if (token) headers.Authorization = "Bearer " + token;
-    const response = await this.adapter({ method: body === undefined ? "GET" : "POST",
+    const response = await this.adapter({ method: method || (body === undefined ? "GET" : "POST"),
       url: this.baseUrl.replace(/\/$/, "") + path, headers,
       body: body === undefined ? undefined : JSON.stringify(body) });
     if (response.status < 200 || response.status >= 300) {
